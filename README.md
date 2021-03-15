@@ -1,4 +1,4 @@
-# Master-s-Thesis-Code
+# Master's Thesis Code
 
 ## Dependencies
 
