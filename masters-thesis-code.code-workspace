@@ -7,5 +7,30 @@
 	"settings": {
 		"files.insertFinalNewline": true,
 		"files.trimTrailingWhitespace": true
+	},
+	"extensions": {
+		"recommendations": [
+			"haskell.haskell",
+			"justusadam.language-haskell"
+		]
+	},
+	"tasks": {
+		"version": "2.0.0",
+		"tasks": [
+			{
+				"label": "build",
+				"type": "shell",
+				"args": [
+					"build",
+					"all"
+				],
+				"group": {
+					"kind": "build",
+					"isDefault": true
+				},
+				"command": "cabal",
+				"problemMatcher": []
+			}
+		]
 	}
 }
