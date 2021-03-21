@@ -6,7 +6,8 @@
 	],
 	"settings": {
 		"files.insertFinalNewline": true,
-		"files.trimTrailingWhitespace": true
+		"files.trimTrailingWhitespace": true,
+		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--)\\s*($TAGS)|^\\s*- \\[ \\])"
 	},
 	"extensions": {
 		"recommendations": [
