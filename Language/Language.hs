@@ -59,6 +59,7 @@ data Formal a = Formal (Maybe Kind) (Maybe Invariant) (Type a) (Name a) a
 data Actual a = Actual (Maybe Kind) (Expr a) a
 
 newtype Kind = Kind String -- can be IEEE 754, integer, floating point, qubite, oracle byte, etc.
+-- TODO: should be a part of inference?
 
 data KindName a = KindName (Maybe Kind) (Name a) a
 
@@ -68,7 +69,7 @@ data Stmt a = EmptyStmt a
             | IfStmt (Expr a) (Body a) (Maybe (Body a)) a
             | SwitchStmt (Expr a) [Arm a] a
             | SpanStmt (Expr a) (Expr a) (Body a) a
-            | AssignStmt [LValue a] [Expr a] a -- TODO: maybe list of tuples?
+            | AssignStmt [LValue a] [Expr a] a -- TODO?: maybe list of tuples
             | PrimOpStmt [LValue a] (Name a) [Flow a] a
             | CallStmt [KindName a] (Maybe Conv) (Expr a) [Actual a] (Maybe (Targets a)) [Either (Flow a) (Alias a)] a
             | JumpStmt (Maybe Conv) (Expr a)  [Actual a] (Maybe (Targets a)) a
@@ -82,14 +83,15 @@ data Arm a = Arm [Range a] (Body a) a
 
 data Range a = Range (Expr a) (Maybe (Expr a)) a
 
-data LValue a = LVName (Name a) a -- TODO: name
-              | LVRef (Type a) (Expr a) (Maybe (Asserts a)) a -- TODO: name
+data LValue a = LVName (Name a) a -- TODO?: name
+              | LVRef (Type a) (Expr a) (Maybe (Asserts a)) a -- TODO?: name
 
 data Flow a = AlsoCutsTo [Name a] a -- at least one
             | AlsoUnwindsTo [Name a] a -- at least one
             | AlsoReturnsTo [Name a] a -- at least one
             | AlsoAbsorbs a
             | NeverReturns a
+-- TODO: should be a part of inference?
 
 data Alias a = Reads [Name a] a | Writes [Name a] a
 
@@ -103,14 +105,14 @@ data Expr a = LitExpr (Lit a) (Maybe (Type a)) a
             | ComExpr (Expr a) a
             | NegExpr (Expr a) a
             | InfixExpr (Expr a) (Name a) (Expr a) a
-            | PrefixExpr (Name a) [Actual a] a -- TODO: name
+            | PrefixExpr (Name a) [Actual a] a
 
-data Lit a = LitInt Int a -- TODO: think more
+data Lit a = LitInt Int a -- TODO?: think more
            | LitFloat Float a
            | LitChar Char a
 
-data Type a = TBits Int a -- TODO: name
-            | TName (Name a) a -- TODO: name
+data Type a = TBits Int a -- TODO?: name
+            | TName (Name a) a -- TODO?: name
 
 newtype String16 = String16 String -- TODO: implement String16
 
