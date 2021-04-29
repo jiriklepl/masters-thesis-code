@@ -25,7 +25,7 @@ data Decl a = ImportDecl [Import a] a -- at least one
             | TargetDecl [TargetDirective a] a
 
 data TargetDirective a = MemSize Int a
-                       | BiteOrder Endian a
+                       | ByteOrder Endian a
                        | PointerSize Int a
                        | WordSize Int a
 
