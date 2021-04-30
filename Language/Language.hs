@@ -51,9 +51,9 @@ data Size a = Size (Maybe (Expr a)) a
 
 data Body a = Body [BodyItem a] a
 
-data BodyItem a = BodyDecl (Decl a) a
-                | BodyStackDecl (StackDecl a) a
-                | BodyStmt (Stmt a) a
+data BodyItem a = BodyDecl (Decl a)
+                | BodyStackDecl (StackDecl a)
+                | BodyStmt (Stmt a)
 
 data Procedure a = Procedure (Maybe Conv) Name [Formal a] (Body a) a
 
@@ -92,7 +92,7 @@ data LValue a = LVName Name a -- TODO?: name
 data Flow a = AlsoCutsTo [Name] a -- at least one
             | AlsoUnwindsTo [Name] a -- at least one
             | AlsoReturnsTo [Name] a -- at least one
-            | AlsoAbsorbs a
+            | AlsoAborts a
             | NeverReturns a
 -- TODO: should be a part of inference?
 
@@ -115,7 +115,7 @@ data Lit a = LitInt Int a -- TODO?: think more
            | LitChar Char a
 
 data Type a = TBits Int a -- TODO?: name
-            | TName (Name) a -- TODO?: name
+            | TName Name a -- TODO?: name
 
 newtype String16 = String16 Text -- TODO: implement String16
 
@@ -127,4 +127,4 @@ data Op = AddOp | SubOp | MulOp | DivOp | ModOp | AndOp | OrOp | NorOp | ShLOp |
 
 newtype Name = Name Text -- TODO: consult this with the manual (and mirek) (and also add hash etc?)
 
-data Pragma a -- TODO: the manual doesn't specify at all
+data Pragma a -- TODO: the manual does not specify at all

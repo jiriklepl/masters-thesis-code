@@ -12,6 +12,9 @@ import Data.Text (Text)
 import qualified Control.Monad.State as State
 import Language
 
+-- TODO: add ;s and ,s where you forgot
+-- TODO: rename refExpr to derefExpr?
+
 data ParserState = ParserState
     { dummy1 :: [String]
     , dummy2 :: [String]
@@ -46,6 +49,9 @@ braces = between (symbol (T.pack "{")) (symbol (T.pack "}"))
 
 parens :: Parser a -> Parser a
 parens = between (symbol (T.pack "(")) (symbol (T.pack ")"))
+
+brackets :: Parser a -> Parser a
+brackets = between (symbol (T.pack "[")) (symbol (T.pack "]"))
 
 integer :: Parser (Int, Bool)
 integer = lexeme $
@@ -103,10 +109,12 @@ constDecl = do
     try (do
         t <- type_
         declName <- Name <$> name
+        symbol (T.pack "=")
         expr <- expression
         return $ ConstDecl (Just t) declName expr pos)
       <|> do
         declName <- Name <$> name
+        symbol (T.pack "=")
         expr <- expression
         return $ ConstDecl Nothing declName expr pos
 
@@ -177,6 +185,25 @@ procedure = do
     procBody <- braces body
     return $ Procedure conv procName formals procBody pos
 
+formal :: Parser (Formal SourcePos)
+formal = do
+    k <- optional kind
+    invar <- optional (keyword (T.pack "invariant"))
+    t <- type_
+    pos <- getSourcePos
+    formalName <- Name <$> name
+    return $ Formal k (Invariant <$ invar) t formalName pos
+
+actual :: Parser (Actual SourcePos)
+actual = do
+    k <- optional kind
+    pos <- getSourcePos
+    expr <- expression
+    return $ Actual k expr pos
+
+convention :: Parser Conv
+convention = keyword (T.pack "foreign") >> Foreign <$> stringLiteral
+
 import_ :: Parser (Import SourcePos)
 import_ = do
     as <-  optional (name >>= (\n -> keyword (T.pack "as") >> return n))
@@ -198,21 +225,309 @@ body = do
     return $ Body items pos
 
 bodyItem :: Parser (BodyItem SourcePos)
-bodyItem = undefined -- TODO
-
-formal = undefined
-
-convention :: Parser Conv
-convention = undefined -- TODO
+bodyItem = BodyDecl <$> decl <|> BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
 
 secSpan = undefined -- TODO
-datum = undefined -- TODO
 
+datum = alignDatum <|> try labelDatum <|> justDatum
 
-registerDecl = undefined -- TODO
-type_ = undefined -- TODO
-expression = undefined -- TODO
+alignDatum :: Parser (Datum SourcePos)
+alignDatum = do
+    pos <- getSourcePos
+    keyword (T.pack "align")
+    (align, False) <- integer
+    return $ DatumAlign align pos
+
+labelDatum :: Parser (Datum SourcePos )
+labelDatum = do
+    pos <- getSourcePos
+    labelName <- Name <$> name
+    return $ DatumLabel labelName pos
+
+justDatum :: Parser (Datum SourcePos )
+justDatum = do
+    pos <- getSourcePos
+    t <- type_
+    s <- optional size
+    i <- optional init_
+    return $ Datum t s i pos
+
+init_ :: Parser (Init SourcePos)
+init_ = stringInit <|> string16Init <|> initList
+
+initList :: Parser (Init SourcePos)
+initList = braces $ do
+    pos <- getSourcePos
+    exprs <- sepBy1 expression (symbol (T.pack ","))
+    return $ ExprInit exprs pos
+
+stringInit :: Parser (Init SourcePos)
+stringInit = do
+    pos <- getSourcePos
+    str <- stringLiteral
+    return $ StrInit str pos
+
+string16Init :: Parser (Init SourcePos)
+string16Init = do
+    pos <- getSourcePos
+    keyword (T.pack "unicode")
+    str <- parens stringLiteral
+    return $ Str16Init (String16 str) pos -- TODO
+
+size :: Parser (Size SourcePos)
+size = brackets $ do
+    pos <- getSourcePos
+    expr <-  optional expression
+    return $ Size expr pos
+
+registerDecl :: Parser (Decl SourcePos)
+registerDecl = do
+    invar <- optional (keyword (T.pack "invariant"))
+    pos <- getSourcePos
+    regs <- registers
+    return $ RegDecl (Invariant <$ invar) regs pos
+
+registers :: Parser (Registers SourcePos)
+registers = do
+    k <- optional kind
+    t <- type_
+    pos <- getSourcePos
+    nvals <- sepEndBy1 ( do
+        n <- Name <$> name
+        val <- optional $ do
+            symbol (T.pack "=")
+            stringLiteral
+        return (n, val)) (symbol (T.pack ","))
+    return $ Registers k t nvals pos
+
+type_ = bitsType <|> nameType
+
+bitsType = do
+    pos <- getSourcePos
+    string (T.pack "bits")
+    bits <- L.decimal
+    return $ TBits bits pos
+
+nameType = do
+    pos <- getSourcePos
+    n <- Name <$> name
+    return $ TName n pos
+
+kind :: Parser Kind
+kind = Kind <$> stringLiteral
+
 pragma = undefined -- TODO
+
+
+stackDecl :: Parser (StackDecl SourcePos)
+stackDecl = do
+    keyword (T.pack "stackdata")
+    pos <- getSourcePos
+    datums <- braces $ many datum
+    return $ StackDecl datums pos
+
+stmt :: Parser (Stmt SourcePos)
+stmt = emptyStmt <|> ifStmt <|> switchStmt <|> spanStmt <|> assignStmt <|> primOpStmt <|> callStmt <|> jumpStmt <|> returnStmt <|> labelStmt <|> contStmt <|> gotoStmt <|> cutToStmt
+
+emptyStmt :: Parser (Stmt SourcePos)
+emptyStmt = do
+    pos <- getSourcePos
+    symbol (T.pack ";")
+    return $ EmptyStmt pos
+
+ifStmt :: Parser (Stmt SourcePos)
+ifStmt = do
+    pos <- getSourcePos
+    keyword (T.pack "if")
+    expr <- expression
+    b <- braces body
+    els <- optional $ keyword (T.pack "else") >> braces body
+    return $ IfStmt expr b els pos
+
+switchStmt = do
+    pos <- getSourcePos
+    keyword (T.pack "switch")
+    expr <- expression
+    arms <- braces $ many arm
+    return $ SwitchStmt expr arms pos
+
+spanStmt = do
+    pos <- getSourcePos
+    keyword (T.pack "span")
+    lExpr <- expression
+    rExpr <- expression
+    b <- braces body
+    return $ SpanStmt lExpr rExpr b pos
+
+assignStmt = undefined -- TODO
+primOpStmt = undefined -- TODO
+callStmt = undefined -- TODO
+jumpStmt = undefined -- TODO
+returnStmt = undefined -- TODO
+
+labelStmt :: Parser (Stmt SourcePos)
+labelStmt = do
+    pos <- getSourcePos
+    n <- Name <$> name
+    symbol (T.pack ":")
+    return $ LabelStmt n pos
+
+contStmt :: Parser (Stmt SourcePos)
+contStmt = do
+    keyword (T.pack "continuation")
+    pos <- getSourcePos
+    n <- Name <$> name
+    params <- parens $ optional kindedNames
+    return $ ContStmt n (fromMaybe [] params) pos
+
+gotoStmt :: Parser (Stmt SourcePos)
+gotoStmt = do
+    keyword (T.pack "goto")
+    pos <- getSourcePos
+    expr <- expression
+    mTargets  <- optional targets
+    return $ GotoStmt expr mTargets pos
+
+cutToStmt :: Parser (Stmt SourcePos)
+cutToStmt = do
+    keyword (T.pack "cut")
+    keyword (T.pack "to")
+    pos <- getSourcePos
+    expr <- expression
+    actuals <- parens $ sepBy actual (symbol (T.pack ","))
+    mFlow <- many flow
+    return $ CutToStmt expr actuals mFlow pos
+
+kindedNames :: Parser [KindName SourcePos]
+kindedNames = sepBy1 (do
+    k <- optional kind
+    pos <- getSourcePos
+    n <- Name <$> name
+    return $ KindName k n pos) (symbol (T.pack ","))
+
+arm :: Parser (Arm SourcePos)
+arm = do
+    pos <- getSourcePos
+    keyword (T.pack "case")
+    ranges <- sepBy1 range (symbol (T.pack ","))
+    symbol (T.pack ":")
+    b <- braces body
+    return $ Arm ranges b pos
+
+range :: Parser (Range SourcePos)
+range = do
+    pos <- getSourcePos
+    lExpr <- expression
+    rExpr <- optional ( do
+        symbol (T.pack "..")
+        expression)
+    return $ Range lExpr rExpr pos
+
+flow :: Parser (Flow SourcePos)
+flow = alsoFlow <|> neverReturns
+
+alsoFlow :: Parser (Flow SourcePos)
+alsoFlow = keyword (T.pack "also") >> (alsoCutsTo <|> alsoUnwindsTo <|> alsoReturnsTo <|> alsoAborts)
+
+alsoCutsTo :: Parser (Flow SourcePos)
+alsoCutsTo = do
+    pos <- getSourcePos
+    keyword (T.pack "cuts")
+    keyword (T.pack "to")
+    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    return $ AlsoCutsTo names pos
+
+alsoUnwindsTo :: Parser (Flow SourcePos)
+alsoUnwindsTo = do
+    pos <- getSourcePos
+    keyword (T.pack "unwinds")
+    keyword (T.pack "to")
+    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    return $ AlsoUnwindsTo names pos
+
+alsoReturnsTo :: Parser (Flow SourcePos)
+alsoReturnsTo = do
+    pos <- getSourcePos
+    keyword (T.pack "returns")
+    keyword (T.pack "to")
+    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    return $ AlsoReturnsTo names pos
+
+alsoAborts :: Parser (Flow SourcePos)
+alsoAborts = do
+    pos <- getSourcePos
+    keyword (T.pack "aborts")
+    optional (symbol (T.pack ","))
+    return $ AlsoAborts pos
+
+neverReturns :: Parser (Flow SourcePos)
+neverReturns = do
+    pos <- getSourcePos
+    keyword (T.pack "never")
+    keyword (T.pack "returns")
+    optional (symbol (T.pack ","))
+    return $ NeverReturns pos
+
+alias :: Parser (Alias SourcePos)
+alias = readsAlias <|> writesAlias
+
+readsAlias :: Parser (Alias SourcePos)
+readsAlias = do
+    pos <- getSourcePos
+    keyword (T.pack "reads")
+    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    return $ Reads names pos
+
+writesAlias :: Parser (Alias SourcePos)
+writesAlias = do
+    pos <- getSourcePos
+    keyword (T.pack "writes")
+    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    return $ Writes names pos
+
+targets :: Parser (Targets SourcePos)
+targets = do
+    pos <- getSourcePos
+    keyword (T.pack "targets")
+    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    return $ Targets names pos
+
+expression :: Parser (Expr SourcePos)
+expression = litExpr <|> nameExpr <|> refExpr <|> parExpr <|> binOpExpr <|> comExpr <|> negExpr <|> infixExpr <|> prefixExpr
+
+litExpr = undefined -- TODO
+
+nameExpr :: Parser (Expr SourcePos)
+nameExpr = do
+    pos <- getSourcePos
+    n <- Name <$> name
+    return $ NameExpr n pos
+
+refExpr = undefined -- TODO
+
+parExpr :: Parser (Expr SourcePos)
+parExpr = do
+    pos <- getSourcePos
+    pExpr <- parens  expression
+    return $ ParExpr pExpr pos
+binOpExpr = undefined -- TODO
+
+comExpr :: Parser (Expr SourcePos)
+comExpr = do
+    pos <- getSourcePos
+    symbol (T.pack "~")
+    expr <- expression
+    return $ ComExpr expr pos
+
+negExpr :: Parser (Expr SourcePos)
+negExpr = do
+    pos <- getSourcePos
+    symbol (T.pack "-")
+    expr <- expression
+    return $ NegExpr expr pos
+infixExpr = undefined -- TODO
+prefixExpr = undefined -- TODO
+
 
 
 someFunc :: IO ()
