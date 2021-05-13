@@ -1,6 +1,7 @@
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Parser (someFunc) where
+module Parser where
 
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -24,7 +25,7 @@ type StateMonad = State ParserState
 type Parser a = ParsecT Void Text StateMonad a
 
 sc :: Parser ()
-sc = L.space space1 (L.skipLineComment (T.pack "//")) (L.skipBlockComment (T.pack "/*") (T.pack "*/"))
+sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
 
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
@@ -40,29 +41,30 @@ stringLiteral = char '"' >> T.pack <$> manyTill L.charLiteral (char '"')
 
 name :: Parser Text
 name = do
-    n <- letterChar <|> oneOf "_.$@"
-    ame <- T.pack <$> many (alphaNumChar <|> oneOf "_.$@")
+    n <- letterChar <|> otherChars
+    ame <- T.pack <$> many (alphaNumChar <|> otherChars)
     return $ n `T.cons` ame
+    where otherChars = oneOf ['_','.','$','@']
 
 braces :: Parser a -> Parser a
-braces = between (symbol (T.pack "{")) (symbol (T.pack "}"))
+braces = between (symbol "{") (symbol "}")
 
 parens :: Parser a -> Parser a
-parens = between (symbol (T.pack "(")) (symbol (T.pack ")"))
+parens = between (symbol "(") (symbol ")")
 
 brackets :: Parser a -> Parser a
-brackets = between (symbol (T.pack "[")) (symbol (T.pack "]"))
+brackets = between (symbol "[") (symbol "]")
 
 integer :: Parser (Int, Bool)
 integer = lexeme $
-    do char '0' >> oneOf "xX" >> (, False) <$> L.hexadecimal
+    do char '0' >> oneOf ['x','X'] >> (, False) <$> L.hexadecimal
     <|> do char '0' >> (, False) <$> L.octal
     <|> do decimal
 
 decimal :: Parser (Int, Bool)
 decimal = do
     nums <- L.decimal
-    unsigned <- optional (oneOf "uU")
+    unsigned <- optional $ oneOf ['u','U']
     return (nums, isNothing unsigned)
 
 -- | Parses the whole 'Unit'
@@ -76,7 +78,7 @@ topLevel :: Parser (TopLevel SourcePos)
 topLevel = sectionTopLevel <|> TopDecl <$> decl <|> TopProcedure <$> procedure
 
 sectionTopLevel = do
-    keyword (T.pack "section")
+    keyword "section"
     pos <- getSourcePos
     name <- stringLiteral
     sections <- braces $ many section
@@ -90,45 +92,45 @@ decl = importDecl <|> exportDecl <|> constDecl <|> typedefDecl <|> pragmaDecl <|
 
 importDecl :: Parser (Decl SourcePos)
 importDecl = do
-    keyword (T.pack "import")
+    keyword "import"
     pos <- getSourcePos
-    imports <- sepBy1 import_ (symbol (T.pack ","))
+    imports <- sepBy1 import_ (symbol ",")
     return $ ImportDecl imports pos
 
 exportDecl :: Parser (Decl SourcePos)
 exportDecl = do
-    keyword (T.pack "export")
+    keyword "export"
     pos <- getSourcePos
-    exports <- sepBy1 export (symbol (T.pack ","))
+    exports <- sepBy1 export (symbol ",")
     return $ ExportDecl exports pos
 
 constDecl :: Parser (Decl SourcePos)
 constDecl = do
-    keyword (T.pack "const")
+    keyword "const"
     pos <- getSourcePos
     try (do
         t <- type_
         declName <- Name <$> name
-        symbol (T.pack "=")
+        symbol "="
         expr <- expression
         return $ ConstDecl (Just t) declName expr pos)
       <|> do
         declName <- Name <$> name
-        symbol (T.pack "=")
+        symbol "="
         expr <- expression
         return $ ConstDecl Nothing declName expr pos
 
 typedefDecl :: Parser (Decl SourcePos)
 typedefDecl = do
-    keyword (T.pack "typedef")
+    keyword "typedef"
     pos <- getSourcePos
     t <- type_
-    names <- sepBy1 (Name <$> name) (symbol (T.pack ","))
+    names <- sepBy1 (Name <$> name) (symbol ",")
     return $ TypedefDecl t names pos
 
 pragmaDecl :: Parser (Decl SourcePos)
 pragmaDecl = do
-    keyword (T.pack "pragma")
+    keyword "pragma"
     pos <- getSourcePos
     pragmaName <- Name <$> name
     p <- braces pragma
@@ -136,7 +138,7 @@ pragmaDecl = do
 
 targetDecl :: Parser (Decl SourcePos)
 targetDecl = do
-    keyword (T.pack "target")
+    keyword "target"
     pos <- getSourcePos
     directives <- many targetDirective
     return $ TargetDecl directives pos
@@ -146,32 +148,32 @@ targetDirective = memSizeDirective <|> byteOrderDirective <|> pointerSizeDirecti
 
 memSizeDirective :: Parser (TargetDirective SourcePos)
 memSizeDirective = do
-    keyword (T.pack "memsize")
+    keyword "memsize"
     pos <- getSourcePos
     (memSize, False) <- integer
     return $ MemSize memSize pos
 
 byteOrderDirective :: Parser (TargetDirective SourcePos)
 byteOrderDirective = do
-    keyword (T.pack "byteorder")
+    keyword "byteorder"
     pos <- getSourcePos
     e <- endian
     return $ ByteOrder e pos
 
 endian :: Parser Endian
-endian = do keyword (T.pack "little") >> return Little
-    <|> do keyword (T.pack "big") >> return Big
+endian = do keyword "little" >> return Little
+    <|> do keyword "big" >> return Big
 
 pointerSizeDirective :: Parser (TargetDirective SourcePos)
 pointerSizeDirective = do
-    keyword (T.pack "pointersize")
+    keyword "pointersize"
     pos <- getSourcePos
     (pointerSize, False) <- integer
     return $ PointerSize pointerSize pos
 
 wordSizeDirective :: Parser (TargetDirective SourcePos)
 wordSizeDirective = do
-    keyword (T.pack "wordsize")
+    keyword "wordsize"
     pos <- getSourcePos
     (wordSize, False) <- integer
     return $ PointerSize wordSize pos
@@ -181,14 +183,14 @@ procedure = do
     conv <- optional convention
     pos <- getSourcePos
     procName <- Name <$> name
-    formals <- parens $ sepBy formal (symbol (T.pack ","))
+    formals <- parens $ sepBy formal (symbol ",")
     procBody <- braces body
     return $ Procedure conv procName formals procBody pos
 
 formal :: Parser (Formal SourcePos)
 formal = do
     k <- optional kind
-    invar <- optional (keyword (T.pack "invariant"))
+    invar <- optional (keyword "invariant")
     t <- type_
     pos <- getSourcePos
     formalName <- Name <$> name
@@ -202,11 +204,11 @@ actual = do
     return $ Actual k expr pos
 
 convention :: Parser Conv
-convention = keyword (T.pack "foreign") >> Foreign <$> stringLiteral
+convention = keyword "foreign" >> Foreign <$> stringLiteral
 
 import_ :: Parser (Import SourcePos)
 import_ = do
-    as <-  optional (name >>= (\n -> keyword (T.pack "as") >> return n))
+    as <-  optional (name >>= (\n -> keyword "as" >> return n))
     pos <- getSourcePos
     importName  <- Name <$> name
     return $ Import as importName pos
@@ -215,7 +217,7 @@ export :: Parser (Export SourcePos)
 export = do
     pos <- getSourcePos
     exportName  <- Name <$> name
-    as <-  optional (keyword (T.pack "as") >> name)
+    as <-  optional (keyword "as" >> name)
     return $ Export exportName as pos
 
 body :: Parser (Body SourcePos)
@@ -234,7 +236,7 @@ datum = alignDatum <|> try labelDatum <|> justDatum
 alignDatum :: Parser (Datum SourcePos)
 alignDatum = do
     pos <- getSourcePos
-    keyword (T.pack "align")
+    keyword "align"
     (align, False) <- integer
     return $ DatumAlign align pos
 
@@ -258,7 +260,7 @@ init_ = stringInit <|> string16Init <|> initList
 initList :: Parser (Init SourcePos)
 initList = braces $ do
     pos <- getSourcePos
-    exprs <- sepBy1 expression (symbol (T.pack ","))
+    exprs <- sepBy1 expression (symbol ",")
     return $ ExprInit exprs pos
 
 stringInit :: Parser (Init SourcePos)
@@ -270,7 +272,7 @@ stringInit = do
 string16Init :: Parser (Init SourcePos)
 string16Init = do
     pos <- getSourcePos
-    keyword (T.pack "unicode")
+    keyword "unicode"
     str <- parens stringLiteral
     return $ Str16Init (String16 str) pos -- TODO
 
@@ -282,7 +284,7 @@ size = brackets $ do
 
 registerDecl :: Parser (Decl SourcePos)
 registerDecl = do
-    invar <- optional (keyword (T.pack "invariant"))
+    invar <- optional (keyword "invariant")
     pos <- getSourcePos
     regs <- registers
     return $ RegDecl (Invariant <$ invar) regs pos
@@ -295,16 +297,16 @@ registers = do
     nvals <- sepEndBy1 ( do
         n <- Name <$> name
         val <- optional $ do
-            symbol (T.pack "=")
+            symbol "="
             stringLiteral
-        return (n, val)) (symbol (T.pack ","))
+        return (n, val)) (symbol ",")
     return $ Registers k t nvals pos
 
 type_ = bitsType <|> nameType
 
 bitsType = do
     pos <- getSourcePos
-    string (T.pack "bits")
+    string "bits"
     bits <- L.decimal
     return $ TBits bits pos
 
@@ -321,7 +323,7 @@ pragma = undefined -- TODO
 
 stackDecl :: Parser (StackDecl SourcePos)
 stackDecl = do
-    keyword (T.pack "stackdata")
+    keyword "stackdata"
     pos <- getSourcePos
     datums <- braces $ many datum
     return $ StackDecl datums pos
@@ -332,28 +334,28 @@ stmt = emptyStmt <|> ifStmt <|> switchStmt <|> spanStmt <|> assignStmt <|> primO
 emptyStmt :: Parser (Stmt SourcePos)
 emptyStmt = do
     pos <- getSourcePos
-    symbol (T.pack ";")
+    symbol ";"
     return $ EmptyStmt pos
 
 ifStmt :: Parser (Stmt SourcePos)
 ifStmt = do
     pos <- getSourcePos
-    keyword (T.pack "if")
+    keyword "if"
     expr <- expression
     b <- braces body
-    els <- optional $ keyword (T.pack "else") >> braces body
+    els <- optional $ keyword "else" >> braces body
     return $ IfStmt expr b els pos
 
 switchStmt = do
     pos <- getSourcePos
-    keyword (T.pack "switch")
+    keyword "switch"
     expr <- expression
     arms <- braces $ many arm
     return $ SwitchStmt expr arms pos
 
 spanStmt = do
     pos <- getSourcePos
-    keyword (T.pack "span")
+    keyword "span"
     lExpr <- expression
     rExpr <- expression
     b <- braces body
@@ -369,12 +371,12 @@ labelStmt :: Parser (Stmt SourcePos)
 labelStmt = do
     pos <- getSourcePos
     n <- Name <$> name
-    symbol (T.pack ":")
+    symbol ":"
     return $ LabelStmt n pos
 
 contStmt :: Parser (Stmt SourcePos)
 contStmt = do
-    keyword (T.pack "continuation")
+    keyword "continuation"
     pos <- getSourcePos
     n <- Name <$> name
     params <- parens $ optional kindedNames
@@ -382,7 +384,7 @@ contStmt = do
 
 gotoStmt :: Parser (Stmt SourcePos)
 gotoStmt = do
-    keyword (T.pack "goto")
+    keyword "goto"
     pos <- getSourcePos
     expr <- expression
     mTargets  <- optional targets
@@ -390,11 +392,11 @@ gotoStmt = do
 
 cutToStmt :: Parser (Stmt SourcePos)
 cutToStmt = do
-    keyword (T.pack "cut")
-    keyword (T.pack "to")
+    keyword "cut"
+    keyword "to"
     pos <- getSourcePos
     expr <- expression
-    actuals <- parens $ sepBy actual (symbol (T.pack ","))
+    actuals <- parens $ sepBy actual (symbol ",")
     mFlow <- many flow
     return $ CutToStmt expr actuals mFlow pos
 
@@ -403,14 +405,14 @@ kindedNames = sepBy1 (do
     k <- optional kind
     pos <- getSourcePos
     n <- Name <$> name
-    return $ KindName k n pos) (symbol (T.pack ","))
+    return $ KindName k n pos) (symbol ",")
 
 arm :: Parser (Arm SourcePos)
 arm = do
     pos <- getSourcePos
-    keyword (T.pack "case")
-    ranges <- sepBy1 range (symbol (T.pack ","))
-    symbol (T.pack ":")
+    keyword "case"
+    ranges <- sepBy1 range (symbol ",")
+    symbol ":"
     b <- braces body
     return $ Arm ranges b pos
 
@@ -419,7 +421,7 @@ range = do
     pos <- getSourcePos
     lExpr <- expression
     rExpr <- optional ( do
-        symbol (T.pack "..")
+        symbol ".."
         expression)
     return $ Range lExpr rExpr pos
 
@@ -427,45 +429,45 @@ flow :: Parser (Flow SourcePos)
 flow = alsoFlow <|> neverReturns
 
 alsoFlow :: Parser (Flow SourcePos)
-alsoFlow = keyword (T.pack "also") >> (alsoCutsTo <|> alsoUnwindsTo <|> alsoReturnsTo <|> alsoAborts)
+alsoFlow = keyword "also" >> (alsoCutsTo <|> alsoUnwindsTo <|> alsoReturnsTo <|> alsoAborts)
 
 alsoCutsTo :: Parser (Flow SourcePos)
 alsoCutsTo = do
     pos <- getSourcePos
-    keyword (T.pack "cuts")
-    keyword (T.pack "to")
-    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    keyword "cuts"
+    keyword "to"
+    names <- sepEndBy1 (Name <$> name) (symbol ",")
     return $ AlsoCutsTo names pos
 
 alsoUnwindsTo :: Parser (Flow SourcePos)
 alsoUnwindsTo = do
     pos <- getSourcePos
-    keyword (T.pack "unwinds")
-    keyword (T.pack "to")
-    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    keyword "unwinds"
+    keyword "to"
+    names <- sepEndBy1 (Name <$> name) (symbol ",")
     return $ AlsoUnwindsTo names pos
 
 alsoReturnsTo :: Parser (Flow SourcePos)
 alsoReturnsTo = do
     pos <- getSourcePos
-    keyword (T.pack "returns")
-    keyword (T.pack "to")
-    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    keyword "returns"
+    keyword "to"
+    names <- sepEndBy1 (Name <$> name) (symbol ",")
     return $ AlsoReturnsTo names pos
 
 alsoAborts :: Parser (Flow SourcePos)
 alsoAborts = do
     pos <- getSourcePos
-    keyword (T.pack "aborts")
-    optional (symbol (T.pack ","))
+    keyword "aborts"
+    optional (symbol ",")
     return $ AlsoAborts pos
 
 neverReturns :: Parser (Flow SourcePos)
 neverReturns = do
     pos <- getSourcePos
-    keyword (T.pack "never")
-    keyword (T.pack "returns")
-    optional (symbol (T.pack ","))
+    keyword "never"
+    keyword "returns"
+    optional (symbol ",")
     return $ NeverReturns pos
 
 alias :: Parser (Alias SourcePos)
@@ -474,22 +476,22 @@ alias = readsAlias <|> writesAlias
 readsAlias :: Parser (Alias SourcePos)
 readsAlias = do
     pos <- getSourcePos
-    keyword (T.pack "reads")
-    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    keyword "reads"
+    names <- sepEndBy1 (Name <$> name) (symbol ",")
     return $ Reads names pos
 
 writesAlias :: Parser (Alias SourcePos)
 writesAlias = do
     pos <- getSourcePos
-    keyword (T.pack "writes")
-    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    keyword "writes"
+    names <- sepEndBy1 (Name <$> name) (symbol ",")
     return $ Writes names pos
 
 targets :: Parser (Targets SourcePos)
 targets = do
     pos <- getSourcePos
-    keyword (T.pack "targets")
-    names <- sepEndBy1 (Name <$> name) (symbol (T.pack ","))
+    keyword "targets"
+    names <- sepEndBy1 (Name <$> name) (symbol ",")
     return $ Targets names pos
 
 expression :: Parser (Expr SourcePos)
@@ -515,20 +517,15 @@ binOpExpr = undefined -- TODO
 comExpr :: Parser (Expr SourcePos)
 comExpr = do
     pos <- getSourcePos
-    symbol (T.pack "~")
+    symbol "~"
     expr <- expression
     return $ ComExpr expr pos
 
 negExpr :: Parser (Expr SourcePos)
 negExpr = do
     pos <- getSourcePos
-    symbol (T.pack "-")
+    symbol "-"
     expr <- expression
     return $ NegExpr expr pos
 infixExpr = undefined -- TODO
 prefixExpr = undefined -- TODO
-
-
-
-someFunc :: IO ()
-someFunc = putStrLn "someFunc"
