@@ -3,7 +3,7 @@
 
 module Parser where
 
-import Text.Megaparsec
+import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Control.Monad.Combinators.Expr
@@ -13,6 +13,7 @@ import qualified Data.Text as T
 import Data.Text (Text)
 import Control.Applicative hiding (many)
 import qualified Control.Monad.State as State
+import Control.Monad.State (State)
 import Language
 
 -- TODO: add ;s and ,s where you forgot
@@ -22,6 +23,10 @@ data ParserState = ParserState
     { dummy1 :: [String]
     , dummy2 :: [String]
     }
+    deriving (Show)
+
+initState :: ParserState
+initState = ParserState { dummy1 = [], dummy2 = [] }
 
 type StateMonad = State ParserState
 type Parser a = ParsecT Void Text StateMonad a
@@ -39,7 +44,10 @@ keyword :: Text -> Parser Text
 keyword = lexeme . string
 
 stringLiteral :: Parser Text
-stringLiteral = char '"' >> T.pack <$> manyTill L.charLiteral (char '"')
+stringLiteral = lexeme $ char '"' >> T.pack <$> manyTill L.charLiteral (char '"')
+
+charLiteral :: Parser Char
+charLiteral = lexeme $ char '\'' *> L.charLiteral <* char '\''
 
 name :: Parser Text
 name = do
@@ -82,6 +90,7 @@ unit = do
 topLevel :: Parser (TopLevel SourcePos)
 topLevel = sectionTopLevel <|> TopDecl <$> decl <|> TopProcedure <$> procedure
 
+sectionTopLevel :: Parser (TopLevel SourcePos)
 sectionTopLevel = do
     keyword "section"
     pos <- getSourcePos
@@ -213,7 +222,7 @@ convention = keyword "foreign" >> Foreign <$> stringLiteral
 
 import_ :: Parser (Import SourcePos)
 import_ = do
-    as <-  optional (name >>= (\n -> keyword "as" >> return n))
+    as <-  optional (stringLiteral >>= (\n -> keyword "as" >> return n))
     pos <- getSourcePos
     importName  <- Name <$> name
     return $ Import as importName pos
@@ -222,7 +231,7 @@ export :: Parser (Export SourcePos)
 export = do
     pos <- getSourcePos
     exportName  <- Name <$> name
-    as <-  optional (keyword "as" >> name)
+    as <-  optional (keyword "as" >> stringLiteral)
     return $ Export exportName as pos
 
 body :: Parser (Body SourcePos)
@@ -309,14 +318,17 @@ registers = do
         return (n, val)) (symbol ",")
     return $ Registers k t nvals pos
 
+type_ :: Parser (Type SourcePos)
 type_ = bitsType <|> nameType
 
+bitsType :: Parser (Type SourcePos)
 bitsType = do
     pos <- getSourcePos
     string "bits"
     bits <- L.decimal
     return $ TBits bits pos
 
+nameType :: Parser (Type SourcePos)
 nameType = do
     pos <- getSourcePos
     n <- Name <$> name
@@ -353,6 +365,7 @@ ifStmt = do
     els <- optional $ keyword "else" >> braces body
     return $ IfStmt expr b els pos
 
+switchStmt :: Parser (Stmt SourcePos)
 switchStmt = do
     pos <- getSourcePos
     keyword "switch"
@@ -360,6 +373,7 @@ switchStmt = do
     arms <- braces $ many arm
     return $ SwitchStmt expr arms pos
 
+spanStmt :: Parser (Stmt SourcePos)
 spanStmt = do
     pos <- getSourcePos
     keyword "span"
@@ -368,6 +382,7 @@ spanStmt = do
     b <- braces body
     return $ SpanStmt lExpr rExpr b pos
 
+assignStmt :: Parser (Stmt SourcePos)
 assignStmt = do
     pos <- getSourcePos
     lvals <- sepEndBy1 lvalue (symbol ",")
@@ -376,6 +391,7 @@ assignStmt = do
     symbol ";"
     return $ AssignStmt lvals exprs pos
 
+primOpStmt :: Parser (Stmt SourcePos)
 primOpStmt = do
     pos <- getSourcePos
     lName <- Name <$> name
@@ -414,6 +430,7 @@ jumpStmt = do
 
 
 
+returnStmt :: Parser (Stmt SourcePos)
 returnStmt = do
     pos <- getSourcePos
     mConv <- optional convention
@@ -577,9 +594,25 @@ targets = do
     return $ Targets names pos
 
 expression :: Parser (Expr SourcePos)
-expression = litExpr <|> nameExpr <|> refExpr <|> parExpr <|> binOpExpr <|> comExpr <|> negExpr <|> infixExpr <|> prefixExpr
+expression = litExpr
+         <|> nameExpr
+         <|> refExpr
+         <|> parExpr
+         <|> binOpExpr
+         <|> comExpr
+         <|> negExpr
+         <|> infixExpr
+         <|> prefixExpr
 
-litExpr = undefined -- TODO
+litExpr = getSourcePos <**> liftA2 LitExpr (intExpr <|> floatExpr <|> charExpr) (optional $ symbol "::" *> type_)
+
+intExpr :: Parser (Lit SourcePos)
+intExpr = getSourcePos <**>  (LitInt . fst <$> integer)
+
+floatExpr = undefined
+
+charExpr :: Parser (Lit SourcePos)
+charExpr = getSourcePos <**> (LitChar <$> charLiteral)
 
 nameExpr :: Parser (Expr SourcePos)
 nameExpr = do
@@ -587,6 +620,7 @@ nameExpr = do
     n <- Name <$> name
     return $ NameExpr n pos
 
+refExpr :: Parser (Expr SourcePos)
 refExpr = do
     pos <- getSourcePos
     t <- type_
@@ -598,6 +632,8 @@ parExpr = do
     pos <- getSourcePos
     pExpr <- parens  expression
     return $ ParExpr pExpr pos
+
+binOpExpr :: Parser (Expr SourcePos)
 binOpExpr = makeExprParser expression binOpTable
 
 binOpTable = [ [ prefix "-" $ flip NegExpr
