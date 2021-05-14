@@ -20,6 +20,12 @@ executable Compiler
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >= 4.13 && < 4.15
+  build-depends:       base >= 4.13 && < 4.15,
+                       text ^>=1.2.4.0,
+                       mtl ^>=2.2.2,
+                       megaparsec ^>=9.0.1,
+
+                       Language,
+                       Parser,
   -- hs-source-dirs:
   default-language:    Haskell2010
