@@ -7,7 +7,26 @@
 	"settings": {
 		"files.insertFinalNewline": true,
 		"files.trimTrailingWhitespace": true,
-		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--)\\s*($TAGS)|^\\s*- \\[ \\])"
+		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--)\\s*($TAGS)|^\\s*- \\[ \\])",
+		"cSpell.words": [
+			"Actuals",
+			"Targs",
+			"annots",
+			"byteorder",
+			"conv",
+			"deref",
+			"kinded",
+			"lvals",
+			"lvalue",
+			"memsize",
+			"nums",
+			"nvals",
+			"parens",
+			"pointersize",
+			"regs",
+			"stackdata",
+			"wordsize"
+		]
 	},
 	"extensions": {
 		"recommendations": [

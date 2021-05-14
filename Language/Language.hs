@@ -61,8 +61,7 @@ data Formal a = Formal (Maybe Kind) (Maybe Invariant) (Type a) Name a
 
 data Actual a = Actual (Maybe Kind) (Expr a) a
 
-newtype Kind = Kind Text -- can be IEEE 754, integer, floating point, qubite, oracle byte, etc.
--- TODO: should be a part of inference?
+newtype Kind = Kind Text
 
 data KindName a = KindName (Maybe Kind) Name a
 
@@ -73,7 +72,7 @@ data Stmt a = EmptyStmt a
             | SwitchStmt (Expr a) [Arm a] a
             | SpanStmt (Expr a) (Expr a) (Body a) a
             | AssignStmt [LValue a] [Expr a] a -- TODO?: maybe list of tuples
-            | PrimOpStmt [LValue a] Name [Flow a] a
+            | PrimOpStmt Name Name [Actual a] [Flow a] a
             | CallStmt [KindName a] (Maybe Conv) (Expr a) [Actual a] (Maybe (Targets a)) [Either (Flow a) (Alias a)] a
             | JumpStmt (Maybe Conv) (Expr a)  [Actual a] (Maybe (Targets a)) a
             | ReturnStmt (Maybe Conv) (Maybe (Expr a, Expr a)) [Actual a] a
@@ -122,8 +121,9 @@ newtype String16 = String16 Text -- TODO: implement String16
 newtype Conv = Foreign Text
 
 data Asserts a = AlignAssert Int [Name] a
+               | InAssert [Name] (Maybe Int) a
 
-data Op = AddOp | SubOp | MulOp | DivOp | ModOp | AndOp | OrOp | NorOp | ShLOp | ShROp | EqOp | NeqOp | GtOp | LtOp | GeOp | LeOp
+data Op = AddOp | SubOp | MulOp | DivOp | ModOp | AndOp | OrOp | XorOp | ShLOp | ShROp | EqOp | NeqOp | GtOp | LtOp | GeOp | LeOp
 
 newtype Name = Name Text -- TODO: consult this with the manual (and mirek) (and also add hash etc?)
 

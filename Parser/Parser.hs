@@ -6,10 +6,12 @@ module Parser where
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
+import Control.Monad.Combinators.Expr
 import Data.Void
 import Data.Maybe
 import qualified Data.Text as T
 import Data.Text (Text)
+import Control.Applicative hiding (many)
 import qualified Control.Monad.State as State
 import Language
 
@@ -54,6 +56,9 @@ parens = between (symbol "(") (symbol ")")
 
 brackets :: Parser a -> Parser a
 brackets = between (symbol "[") (symbol "]")
+
+angles :: Parser a -> Parser a
+angles = between (symbol "<") (symbol ">")
 
 integer :: Parser (Int, Bool)
 integer = lexeme $
@@ -229,8 +234,10 @@ body = do
 bodyItem :: Parser (BodyItem SourcePos)
 bodyItem = BodyDecl <$> decl <|> BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
 
-secSpan = undefined -- TODO
+secSpan :: Parser (Section SourcePos)
+secSpan = getSourcePos <**> liftA3 SecSpan expression expression (many section)
 
+datum :: Parser (Datum SourcePos)
 datum = alignDatum <|> try labelDatum <|> justDatum
 
 alignDatum :: Parser (Datum SourcePos)
@@ -361,11 +368,88 @@ spanStmt = do
     b <- braces body
     return $ SpanStmt lExpr rExpr b pos
 
-assignStmt = undefined -- TODO
-primOpStmt = undefined -- TODO
-callStmt = undefined -- TODO
-jumpStmt = undefined -- TODO
-returnStmt = undefined -- TODO
+assignStmt = do
+    pos <- getSourcePos
+    lvals <- sepEndBy1 lvalue (symbol ",")
+    symbol "="
+    exprs <- sepEndBy1 expression (symbol ",")
+    symbol ";"
+    return $ AssignStmt lvals exprs pos
+
+primOpStmt = do
+    pos <- getSourcePos
+    lName <- Name <$> name
+    symbol "="
+    symbol "%%"
+    rName <- Name <$> name
+    mActuals <- optional . parens $ sepEndBy actual (symbol ",")
+    flows <- many flow
+    symbol ";"
+    return $ PrimOpStmt lName rName (fromMaybe [] mActuals) flows pos
+
+
+callStmt :: Parser (Stmt SourcePos)
+callStmt = do
+    pos <- getSourcePos
+    mKindNames <- optional (kindedNames <* symbol "=")
+    mConv <- optional convention
+    expr <- expression
+    actuals <- parens $ sepEndBy actual (symbol ",")
+    mTargs <- optional targets
+    annots <- many $ Left <$> flow <|> Right <$> alias
+    symbol ";"
+    return $ CallStmt (fromMaybe [] mKindNames) mConv expr actuals mTargs annots pos
+
+jumpStmt :: Parser (Stmt SourcePos)
+jumpStmt = do
+    pos <- getSourcePos
+    mConv <- optional convention
+    keyword "jump"
+    expr <- expression
+    mActuals <- optional . parens $ sepEndBy actual (symbol ",")
+    mTargs <- optional targets
+    symbol ";"
+    return $ JumpStmt mConv expr (fromMaybe [] mActuals) mTargs pos
+
+
+
+
+returnStmt = do
+    pos <- getSourcePos
+    mConv <- optional convention
+    keyword "return"
+    mExprs <- optional . angles $ liftA2 (,) expression expression
+    mActuals <- optional . parens $ sepEndBy actual (symbol ",")
+    symbol ";"
+    return $ ReturnStmt mConv mExprs (fromMaybe [] mActuals) pos
+
+lvalue :: Parser (LValue SourcePos)
+lvalue = try lvRef <|> lvName
+
+lvRef :: Parser (LValue SourcePos)
+lvRef = do
+    pos <- getSourcePos
+    t <- type_
+    (expr, mAsserts) <- brackets $ liftA2 (,) expression (optional assertions)
+    return $ LVRef t expr mAsserts pos
+
+lvName :: Parser (LValue SourcePos)
+lvName = do
+    pos <- getSourcePos
+    n <- Name <$> name
+    return $ LVName n pos
+
+assertions = alignAssert <|> inAssert
+
+alignAssert :: Parser (Asserts SourcePos)
+alignAssert = getSourcePos <**> liftA2 AlignAssert
+    (keyword "aligned" *> (fst <$> integer))
+    (fromMaybe  [] <$> optional (keyword "in" *> sepBy1 (Name <$> name) (symbol ",")))
+
+inAssert :: Parser (Asserts SourcePos)
+inAssert = getSourcePos <**> liftA2 InAssert
+    (keyword "in" *> sepBy1 (Name <$> name) (symbol ","))
+    (optional (keyword "aligned" *> (fst <$> integer)))
 
 labelStmt :: Parser (Stmt SourcePos)
 labelStmt = do
@@ -420,9 +504,7 @@ range :: Parser (Range SourcePos)
 range = do
     pos <- getSourcePos
     lExpr <- expression
-    rExpr <- optional ( do
-        symbol ".."
-        expression)
+    rExpr <- optional $ symbol ".." >> expression
     return $ Range lExpr rExpr pos
 
 flow :: Parser (Flow SourcePos)
@@ -505,14 +587,54 @@ nameExpr = do
     n <- Name <$> name
     return $ NameExpr n pos
 
-refExpr = undefined -- TODO
+refExpr = do
+    pos <- getSourcePos
+    t <- type_
+    (expr, mAsserts) <- brackets $ liftA2 (,) expression (optional assertions)
+    return $ RefExpr t expr mAsserts pos
 
 parExpr :: Parser (Expr SourcePos)
 parExpr = do
     pos <- getSourcePos
     pExpr <- parens  expression
     return $ ParExpr pExpr pos
-binOpExpr = undefined -- TODO
+binOpExpr = makeExprParser expression binOpTable
+
+binOpTable = [ [ prefix "-" $ flip NegExpr
+               , prefix "~" $ flip ComExpr
+               ]
+             , [ binary "/" . flip3 $ flip BinOpExpr DivOp
+               , binary "*" . flip3 $ flip BinOpExpr MulOp
+               , binary "%" . flip3 $ flip BinOpExpr ModOp
+               ]
+             , [ binary "-" . flip3 $ flip BinOpExpr SubOp
+               , binary "+" . flip3 $ flip BinOpExpr AddOp
+               ]
+             , [ binary ">>" . flip3 $ flip BinOpExpr ShROp
+               , binary "<<" . flip3 $ flip BinOpExpr ShLOp
+               ]
+             , [ binary "&" . flip3 $ flip BinOpExpr AndOp
+               ]
+             , [ binary "^" . flip3 $ flip BinOpExpr XorOp
+               ]
+             , [ binary "|" . flip3 $ flip BinOpExpr OrOp
+               ]
+             , [ binary ">=" . flip3 $ flip BinOpExpr GeOp
+               , binary ">" . flip3 $ flip BinOpExpr GtOp
+               , binary "<=" . flip3 $ flip BinOpExpr LeOp
+               , binary "<" . flip3 $ flip BinOpExpr LtOp
+               , binary "!=" . flip3 $ flip BinOpExpr NeqOp
+               , binary "==" . flip3 $ flip BinOpExpr EqOp
+               ]
+            ]
+
+prefix name f = Prefix (f <$ symbol name <*> getSourcePos)
+
+binary name f = InfixL (f <$ symbol name <*> getSourcePos)
+
+compare name f = InfixN (f <$ symbol name <*> getSourcePos)
+
+flip3 f c a b = f a b c
 
 comExpr :: Parser (Expr SourcePos)
 comExpr = do
@@ -527,5 +649,14 @@ negExpr = do
     symbol "-"
     expr <- expression
     return $ NegExpr expr pos
-infixExpr = undefined -- TODO
-prefixExpr = undefined -- TODO
+
+infixExpr :: Parser (Expr SourcePos)
+infixExpr = getSourcePos <**> liftA3 InfixExpr expression (symbol "`" *> (Name <$> name) <* symbol "`") expression
+
+prefixExpr = do
+    pos <- getSourcePos
+    symbol "%"
+    n <- Name <$> name
+    mActuals <- optional . parens $ sepEndBy actual (symbol ",")
+    return $ PrefixExpr n (fromMaybe [] mActuals) pos
+
