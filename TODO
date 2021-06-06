@@ -1,6 +1,5 @@
 # TODO
 
-- demodularize the project
 - add (semi-)colons where forgotten
 - rename refExpr to derefExpr?
 - categorize names? (different namespaces for variables, operators, etc)
