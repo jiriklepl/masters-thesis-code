@@ -3,8 +3,6 @@ module Language where
 import qualified Data.Text as T
 import Data.Text (Text)
 
--- TODO: categorize names? (different namespaces for variables, operators, etc)
-
 data Unit a = Unit [TopLevel a] a
             deriving (Show)
 
@@ -34,7 +32,7 @@ data TargetDirective a = MemSize Int a
                        | WordSize Int a
                        deriving (Show)
 
-data Endian = Little | Big -- TODO: or just Bool?
+data Endian = Little | Big
             deriving (Show)
 
 data Import a = Import (Maybe Text) Name a

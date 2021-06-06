@@ -16,9 +16,6 @@ import qualified Control.Monad.State as State
 import Control.Monad.State (State)
 import Language
 
--- TODO: add ;s and ,s where you forgot
--- TODO: rename refExpr to derefExpr?
-
 data ParserState = ParserState
     { dummy1 :: [String]
     , dummy2 :: [String]
@@ -222,7 +219,7 @@ convention = keyword "foreign" >> Foreign <$> stringLiteral
 
 import_ :: Parser (Import SourcePos)
 import_ = do
-    as <-  optional (stringLiteral >>= (\n -> keyword "as" >> return n))
+    as <-  optional (stringLiteral <* keyword "as")
     pos <- getSourcePos
     importName  <- Name <$> name
     return $ Import as importName pos
@@ -403,7 +400,6 @@ primOpStmt = do
     symbol ";"
     return $ PrimOpStmt lName rName (fromMaybe [] mActuals) flows pos
 
-
 callStmt :: Parser (Stmt SourcePos)
 callStmt = do
     pos <- getSourcePos
@@ -469,11 +465,10 @@ inAssert = getSourcePos <**> liftA2 InAssert
     (optional (keyword "aligned" *> (fst <$> integer)))
 
 labelStmt :: Parser (Stmt SourcePos)
-labelStmt = do
-    pos <- getSourcePos
+labelStmt = getSourcePos <**> do
     n <- Name <$> name
     symbol ":"
-    return $ LabelStmt n pos
+    return $ LabelStmt n
 
 contStmt :: Parser (Stmt SourcePos)
 contStmt = do
@@ -695,4 +690,3 @@ prefixExpr = do
     n <- Name <$> name
     mActuals <- optional . parens $ sepEndBy actual (symbol ",")
     return $ PrefixExpr n (fromMaybe [] mActuals) pos
-
