@@ -16,17 +16,7 @@ import qualified Control.Monad.State as State
 import Control.Monad.State (State)
 import Language
 
-data ParserState = ParserState
-    { dummy1 :: [String]
-    , dummy2 :: [String]
-    }
-    deriving (Show)
-
-initState :: ParserState
-initState = ParserState { dummy1 = [], dummy2 = [] }
-
-type StateMonad = State ParserState
-type Parser a = ParsecT Void Text StateMonad a
+type Parser a = Parsec Void Text a
 
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
@@ -105,14 +95,16 @@ importDecl :: Parser (Decl SourcePos)
 importDecl = do
     keyword "import"
     pos <- getSourcePos
-    imports <- sepBy1 import_ (symbol ",")
+    imports <- sepEndBy1 import_ (symbol ",")
+    symbol ";"
     return $ ImportDecl imports pos
 
 exportDecl :: Parser (Decl SourcePos)
 exportDecl = do
     keyword "export"
     pos <- getSourcePos
-    exports <- sepBy1 export (symbol ",")
+    exports <- sepEndBy1 export (symbol ",")
+    symbol ";"
     return $ ExportDecl exports pos
 
 constDecl :: Parser (Decl SourcePos)
@@ -124,11 +116,13 @@ constDecl = do
         declName <- Name <$> name
         symbol "="
         expr <- expression
+        symbol ";"
         return $ ConstDecl (Just t) declName expr pos)
       <|> do
         declName <- Name <$> name
         symbol "="
         expr <- expression
+        symbol ";"
         return $ ConstDecl Nothing declName expr pos
 
 typedefDecl :: Parser (Decl SourcePos)
@@ -136,7 +130,8 @@ typedefDecl = do
     keyword "typedef"
     pos <- getSourcePos
     t <- type_
-    names <- sepBy1 (Name <$> name) (symbol ",")
+    names <- sepEndBy1 (Name <$> name) (symbol ",")
+    symbol ";"
     return $ TypedefDecl t names pos
 
 pragmaDecl :: Parser (Decl SourcePos)
@@ -152,10 +147,19 @@ targetDecl = do
     keyword "target"
     pos <- getSourcePos
     directives <- many targetDirective
+    symbol ";"
     return $ TargetDecl directives pos
 
 targetDirective :: Parser (TargetDirective SourcePos)
 targetDirective = memSizeDirective <|> byteOrderDirective <|> pointerSizeDirective <|> wordSizeDirective
+
+registerDecl :: Parser (Decl SourcePos)
+registerDecl = do
+    invar <- optional (keyword "invariant")
+    pos <- getSourcePos
+    regs <- registers
+    symbol ";"
+    return $ RegDecl (Invariant <$ invar) regs pos
 
 memSizeDirective :: Parser (TargetDirective SourcePos)
 memSizeDirective = do
@@ -194,7 +198,7 @@ procedure = do
     conv <- optional convention
     pos <- getSourcePos
     procName <- Name <$> name
-    formals <- parens $ sepBy formal (symbol ",")
+    formals <- parens $ formal `sepEndBy` symbol "," -- TODO: discuss later
     procBody <- braces body
     return $ Procedure conv procName formals procBody pos
 
@@ -251,12 +255,14 @@ alignDatum = do
     pos <- getSourcePos
     keyword "align"
     (align, False) <- integer
+    symbol ";"
     return $ DatumAlign align pos
 
 labelDatum :: Parser (Datum SourcePos )
 labelDatum = do
     pos <- getSourcePos
     labelName <- Name <$> name
+    symbol ":"
     return $ DatumLabel labelName pos
 
 justDatum :: Parser (Datum SourcePos )
@@ -265,6 +271,7 @@ justDatum = do
     t <- type_
     s <- optional size
     i <- optional init_
+    symbol ";"
     return $ Datum t s i pos
 
 init_ :: Parser (Init SourcePos)
@@ -273,7 +280,7 @@ init_ = stringInit <|> string16Init <|> initList
 initList :: Parser (Init SourcePos)
 initList = braces $ do
     pos <- getSourcePos
-    exprs <- sepBy1 expression (symbol ",")
+    exprs <- expression `sepEndBy1` symbol ","
     return $ ExprInit exprs pos
 
 stringInit :: Parser (Init SourcePos)
@@ -294,13 +301,6 @@ size = brackets $ do
     pos <- getSourcePos
     expr <-  optional expression
     return $ Size expr pos
-
-registerDecl :: Parser (Decl SourcePos)
-registerDecl = do
-    invar <- optional (keyword "invariant")
-    pos <- getSourcePos
-    regs <- registers
-    return $ RegDecl (Invariant <$ invar) regs pos
 
 registers :: Parser (Registers SourcePos)
 registers = do
@@ -423,9 +423,6 @@ jumpStmt = do
     symbol ";"
     return $ JumpStmt mConv expr (fromMaybe [] mActuals) mTargs pos
 
-
-
-
 returnStmt :: Parser (Stmt SourcePos)
 returnStmt = do
     pos <- getSourcePos
@@ -476,6 +473,7 @@ contStmt = do
     pos <- getSourcePos
     n <- Name <$> name
     params <- parens $ optional kindedNames
+    symbol ":"
     return $ ContStmt n (fromMaybe [] params) pos
 
 gotoStmt :: Parser (Stmt SourcePos)
@@ -484,6 +482,7 @@ gotoStmt = do
     pos <- getSourcePos
     expr <- expression
     mTargets  <- optional targets
+    symbol ";"
     return $ GotoStmt expr mTargets pos
 
 cutToStmt :: Parser (Stmt SourcePos)
@@ -492,12 +491,13 @@ cutToStmt = do
     keyword "to"
     pos <- getSourcePos
     expr <- expression
-    actuals <- parens $ sepBy actual (symbol ",")
+    actuals <- parens $ sepEndBy actual (symbol ",")
     mFlow <- many flow
+    symbol ";"
     return $ CutToStmt expr actuals mFlow pos
 
 kindedNames :: Parser [KindName SourcePos]
-kindedNames = sepBy1 (do
+kindedNames = sepEndBy1 (do
     k <- optional kind
     pos <- getSourcePos
     n <- Name <$> name
@@ -507,7 +507,7 @@ arm :: Parser (Arm SourcePos)
 arm = do
     pos <- getSourcePos
     keyword "case"
-    ranges <- sepBy1 range (symbol ",")
+    ranges <- sepEndBy1 range (symbol ",")
     symbol ":"
     b <- braces body
     return $ Arm ranges b pos

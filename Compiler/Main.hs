@@ -10,4 +10,4 @@ import Parser
 main :: IO ()
 main = do
     contents <- T.getContents
-    print . flip State.runState initState $ runParserT unit "stdin" contents
+    print $ runParser unit "stdin" contents
