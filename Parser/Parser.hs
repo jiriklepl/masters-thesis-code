@@ -336,7 +336,6 @@ kind = Kind <$> stringLiteral
 
 pragma = undefined -- TODO
 
-
 stackDecl :: Parser (StackDecl SourcePos)
 stackDecl = do
     keyword "stackdata"
