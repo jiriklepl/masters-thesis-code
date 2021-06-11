@@ -1,13 +1,13 @@
 cradle:
   cabal:
-    - path: "Compiler/./Main.hs"
+    - path: "./Compiler/Main.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "Inference/./"
-      component: "lib:Inference"
+    - path: "Parser/Parser.hs"
+      component: "Compiler:exe:Compiler"
 
-    - path: "Language/./"
-      component: "lib:Language"
+    - path: "Language/Language.hs"
+      component: "Compiler:exe:Compiler"
 
-    - path: "Parser/./"
-      component: "lib:Parser"
+    - path: "Inference/Inference.hs"
+      component: "Compiler:exe:Compiler"
