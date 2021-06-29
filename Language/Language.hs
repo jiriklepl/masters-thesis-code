@@ -37,7 +37,7 @@ instance AST Section where
 data Decl a = ImportDecl [Import a] a -- at least one
             | ExportDecl [Export a] a -- at least one
             | ConstDecl (Maybe (Type a)) Name (Expr a)
-            | TypedefDecl (Type a) [Name] a -- at least one
+            | TypedefDecl (Type a) [Name] -- at least one
             | RegDecl (Maybe Invariant) (Registers a)
             | PragmaDecl Name (Pragma a)
             | TargetDecl [TargetDirective a] a
@@ -47,7 +47,7 @@ instance AST Decl where
   takePos (ImportDecl _ pos) = pos
   takePos (ExportDecl _ pos) = pos
   takePos (ConstDecl _ _ expr) = takePos expr
-  takePos (TypedefDecl _ _ pos) = pos
+  takePos (TypedefDecl t _) = takePos t
   takePos (RegDecl _ registers) = takePos registers
   takePos (PragmaDecl _ pragma) = takePos pragma -- TODO: simplify this
   takePos (TargetDecl _ pos) = pos

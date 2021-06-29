@@ -22,7 +22,7 @@ executable Compiler
                        Language,
                        Inference
   -- other-extensions:
-  build-depends:       base >= 4.13 && < 4.15,
+  build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,
                        mtl ^>=2.2.2,
                        text ^>=1.2.4.0,
