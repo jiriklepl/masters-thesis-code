@@ -1,0 +1,3 @@
+[submodule "vendor/llvm-hs-pretty"]
+	path = vendor/llvm-hs-pretty
+	url = https://github.com/jiriklepl/llvm-hs-pretty.git
