@@ -27,6 +27,8 @@ executable Compiler
                        mtl ^>=2.2.2,
                        text ^>=1.2.4.0,
                        parser-combinators ^>=1.3.0,
+                       llvm-hs-pure ^>=9.0.0,
+                       llvm-hs-pretty ^>=0.9.0.0,
   hs-source-dirs:      .,
                        Parser,
                        Language,
