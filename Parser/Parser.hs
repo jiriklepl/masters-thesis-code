@@ -81,7 +81,7 @@ unit = getSourcePos <**> (do
     return $ Unit topLevels)
 
 topLevel :: Parser (SourcePos -> TopLevel SourcePos)
-topLevel = sectionTopLevel <|> (TopDecl .) <$> decl <|> (TopProcedure .) <$> procedure
+topLevel = sectionTopLevel <|> try ((TopProcedure .) <$> procedure) <|> (TopDecl .) <$> decl
 
 sectionTopLevel :: Parser (SourcePos -> TopLevel SourcePos)
 sectionTopLevel = do
@@ -224,12 +224,10 @@ export = do
     return $ Export exportName as
 
 body :: Parser (SourcePos -> Body SourcePos)
-body = do
-    items <- many (getSourcePos <**> bodyItem)
-    return $ Body items
+body = Body <$> many (getSourcePos <**> bodyItem)
 
 bodyItem :: Parser (SourcePos -> BodyItem SourcePos)
-bodyItem = (BodyDecl .) <$> decl <|> (BodyStackDecl .) <$> stackDecl <|> (BodyStmt .) <$> stmt
+bodyItem = (BodyStackDecl .) <$> stackDecl <|> (BodyStmt .) <$> stmt
 
 secSpan :: Parser (SourcePos -> Section SourcePos)
 secSpan = do
@@ -316,7 +314,7 @@ stackDecl =
     braces (StackDecl <$> many (getSourcePos <**> datum))
 
 stmt :: Parser (SourcePos -> Stmt SourcePos)
-stmt = emptyStmt <|> ifStmt <|> switchStmt <|> spanStmt <|> assignStmt <|> primOpStmt <|> callStmt <|> jumpStmt <|> returnStmt <|> labelStmt <|> contStmt <|> gotoStmt <|> cutToStmt
+stmt = emptyStmt <|> ifStmt <|> switchStmt <|> spanStmt <|> try assignStmt <|> try primOpStmt <|> try jumpStmt <|> try returnStmt <|> try labelStmt <|> try contStmt <|> try gotoStmt <|> try cutToStmt <|> callStmt -- TODO: this is utter BS
 
 emptyStmt :: Parser (SourcePos -> Stmt SourcePos)
 emptyStmt = symbol ";" $> EmptyStmt
@@ -520,7 +518,7 @@ litExpr = do
 intExpr :: Parser (SourcePos -> Lit SourcePos)
 intExpr = LitInt . fst <$> integer
 
-floatExpr = undefined -- TODO
+floatExpr = intExpr -- TODO
 
 charExpr :: Parser (SourcePos -> Lit SourcePos)
 charExpr = LitChar <$> charLiteral
