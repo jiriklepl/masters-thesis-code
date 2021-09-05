@@ -44,6 +44,9 @@ name = do
     return $ n `T.cons` ame
     where otherChars = oneOf ['_','.','$','@']
 
+sourcePos :: Parser (SourcePos -> a) -> Parser a
+sourcePos parser = getSourcePos <**> parser
+
 identifier :: Parser Name
 identifier = Name <$> lexeme name
 
@@ -76,8 +79,8 @@ decimal = do
 
 -- | Parses the whole 'Unit'
 unit :: Parser (Unit SourcePos)
-unit = getSourcePos <**> (do
-    topLevels <- many (getSourcePos <**> topLevel)
+unit = sourcePos (do
+    topLevels <- many (sourcePos topLevel)
     return $ Unit topLevels)
 
 topLevel :: Parser (SourcePos -> TopLevel SourcePos)
@@ -87,7 +90,7 @@ sectionTopLevel :: Parser (SourcePos -> TopLevel SourcePos)
 sectionTopLevel = do
     keyword "section"
     name <- stringLiteral
-    sections <- braces $ many (getSourcePos <**> section)
+    sections <- braces $ many (sourcePos section)
     return $ TopSection name sections
 
 section :: Parser (SourcePos -> Section SourcePos)
@@ -99,14 +102,14 @@ decl = importDecl <|> exportDecl <|> constDecl <|> typedefDecl <|> pragmaDecl <|
 importDecl :: Parser (SourcePos -> Decl SourcePos)
 importDecl = do
     keyword "import"
-    imports <- sepEndBy1 (getSourcePos <**> import_) (symbol ",")
+    imports <- sepEndBy1 (sourcePos import_) (symbol ",")
     symbol ";"
     return $ ImportDecl imports
 
 exportDecl :: Parser (SourcePos -> Decl SourcePos)
 exportDecl = do
     keyword "export"
-    exports <- sepEndBy1 (getSourcePos <**> export) (symbol ",")
+    exports <- sepEndBy1 (sourcePos export) (symbol ",")
     symbol ";"
     return $ ExportDecl exports
 
@@ -114,7 +117,7 @@ constDecl :: Parser (SourcePos -> Decl SourcePos)
 constDecl = do
     keyword "const"
     try (do
-        t <- getSourcePos <**> type_
+        t <- sourcePos type_
         declName <- identifier
         symbol "="
         expr <- expression
@@ -145,7 +148,7 @@ pragmaDecl = do
 targetDecl :: Parser (SourcePos -> Decl SourcePos)
 targetDecl = do
     keyword "target"
-    directives <- many (getSourcePos <**> targetDirective)
+    directives <- many (sourcePos targetDirective)
     symbol ";"
     return $ TargetDecl directives
 
@@ -190,7 +193,7 @@ procedure :: Parser (SourcePos -> Procedure SourcePos)
 procedure = do
     conv <- optional convention
     procName <- identifier
-    formals <- parens $ (getSourcePos <**> formal) `sepEndBy` symbol "," -- TODO: discuss later
+    formals <- parens $ (sourcePos formal) `sepEndBy` symbol "," -- TODO: discuss later
     procBody <- braces body
     return $ Procedure conv procName formals . procBody
 
@@ -224,7 +227,7 @@ export = do
     return $ Export exportName as
 
 body :: Parser (SourcePos -> Body SourcePos)
-body = Body <$> many (getSourcePos <**> bodyItem)
+body = Body <$> many (sourcePos bodyItem)
 
 bodyItem :: Parser (SourcePos -> BodyItem SourcePos)
 bodyItem = (BodyStackDecl .) <$> stackDecl <|> (BodyStmt .) <$> stmt
@@ -232,8 +235,8 @@ bodyItem = (BodyStackDecl .) <$> stackDecl <|> (BodyStmt .) <$> stmt
 secSpan :: Parser (SourcePos -> Section SourcePos)
 secSpan = do
     left <- expression
-    right <- getSourcePos <**> expression
-    sections <- many (getSourcePos <**> section)
+    right <- sourcePos expression
+    sections <- many (sourcePos section)
     return (\sourcePos -> SecSpan (left sourcePos) right sections)
 
 datum :: Parser (SourcePos -> Datum SourcePos)
@@ -255,8 +258,8 @@ labelDatum = do
 justDatum :: Parser (SourcePos -> Datum SourcePos)
 justDatum = do
     t <- type_
-    s <- optional (getSourcePos <**> size)
-    i <- optional (getSourcePos <**> init_)
+    s <- optional (sourcePos size)
+    i <- optional (sourcePos init_)
     symbol ";"
     return (\sourcePos -> Datum (t sourcePos) s i)
 
@@ -265,7 +268,7 @@ init_ = stringInit <|> string16Init <|> initList
 
 initList :: Parser (SourcePos -> Init SourcePos)
 initList = braces $ do
-    exprs <- (getSourcePos <**> expression) `sepEndBy1` symbol ","
+    exprs <- (sourcePos expression) `sepEndBy1` symbol ","
     return $ ExprInit exprs
 
 stringInit :: Parser (SourcePos -> Init SourcePos)
@@ -279,7 +282,7 @@ string16Init = do
 
 size :: Parser (SourcePos -> Size SourcePos)
 size = brackets $ do
-    expr <-  optional (getSourcePos <**> expression)
+    expr <-  optional (sourcePos expression)
     return $ Size expr
 
 registers :: Parser (SourcePos -> Registers SourcePos)
@@ -311,7 +314,7 @@ pragma = undefined -- TODO
 stackDecl :: Parser (SourcePos -> StackDecl SourcePos)
 stackDecl =
     keyword "stackdata" *>
-    braces (StackDecl <$> many (getSourcePos <**> datum))
+    braces (StackDecl <$> many (sourcePos datum))
 
 stmt :: Parser (SourcePos -> Stmt SourcePos)
 stmt = emptyStmt <|> ifStmt <|> switchStmt <|> spanStmt <|> try assignStmt <|> try primOpStmt <|> try jumpStmt <|> try returnStmt <|> try labelStmt <|> try contStmt <|> try gotoStmt <|> try cutToStmt <|> callStmt -- TODO: this is utter BS
@@ -322,31 +325,31 @@ emptyStmt = symbol ";" $> EmptyStmt
 ifStmt :: Parser (SourcePos -> Stmt SourcePos)
 ifStmt = do
     keyword "if"
-    expr <- getSourcePos <**> expression
+    expr <- sourcePos expression
     ifBody <- braces body
-    elseBody <- optional $ keyword "else" >> braces (getSourcePos <**> body)
+    elseBody <- optional $ keyword "else" >> braces (sourcePos body)
     return $ flip (IfStmt expr) elseBody . ifBody
 
 switchStmt :: Parser (SourcePos -> Stmt SourcePos)
 switchStmt = do
     keyword "switch"
     expr <- expression
-    arms <- braces $ many (getSourcePos <**> arm)
+    arms <- braces $ many (sourcePos arm)
     return $ flip SwitchStmt arms . expr
 
 spanStmt :: Parser (SourcePos -> Stmt SourcePos)
 spanStmt = do
     keyword "span"
     lExpr <- expression
-    rExpr <- getSourcePos <**> expression
-    b <- braces (getSourcePos <**> body)
+    rExpr <- sourcePos expression
+    b <- braces (sourcePos body)
     return (\sourcePos -> SpanStmt (lExpr sourcePos) rExpr b)
 
 assignStmt :: Parser (SourcePos -> Stmt SourcePos)
 assignStmt = do
-    lvals <- sepEndBy1 (getSourcePos <**> lvalue) (symbol ",")
+    lvals <- sepEndBy1 (sourcePos lvalue) (symbol ",")
     symbol "="
-    exprs <- sepEndBy1 (getSourcePos <**> expression) (symbol ",")
+    exprs <- sepEndBy1 (sourcePos expression) (symbol ",")
     symbol ";"
     return $ AssignStmt lvals exprs
 
@@ -356,8 +359,8 @@ primOpStmt = do
     symbol "="
     symbol "%%"
     rName <- identifier
-    mActuals <- optional . parens $ sepEndBy (getSourcePos <**> actual) (symbol ",")
-    flows <- many (getSourcePos <**> flow)
+    mActuals <- optional . parens $ sepEndBy (sourcePos actual) (symbol ",")
+    flows <- many (sourcePos flow)
     symbol ";"
     return $ PrimOpStmt lName rName (fromMaybe [] mActuals) flows
 
@@ -366,9 +369,9 @@ callStmt = do
     mKindNames <- optional (kindedNames <* symbol "=")
     mConv <- optional convention
     expr <- expression
-    actuals <- parens $ sepEndBy (getSourcePos <**> actual) (symbol ",")
-    mTargs <- optional (getSourcePos <**> targets)
-    annots <- many $ getSourcePos <**> ((Left .) <$> flow <|> (Right .) <$> alias)
+    actuals <- parens $ sepEndBy (sourcePos actual) (symbol ",")
+    mTargs <- optional (sourcePos targets)
+    annots <- many $ sourcePos ((Left .) <$> flow <|> (Right .) <$> alias)
     symbol ";"
     return (\sourcePos -> CallStmt (fromMaybe [] mKindNames) mConv (expr sourcePos) actuals mTargs annots)
 
@@ -377,8 +380,8 @@ jumpStmt = do
     mConv <- optional convention
     keyword "jump"
     expr <- expression
-    mActuals <- optional . parens $ sepEndBy (getSourcePos <**> actual) (symbol ",")
-    mTargs <- optional (getSourcePos <**> targets)
+    mActuals <- optional . parens $ sepEndBy (sourcePos actual) (symbol ",")
+    mTargs <- optional (sourcePos targets)
     symbol ";"
     return (\sourcePos -> JumpStmt mConv (expr sourcePos) (fromMaybe [] mActuals) mTargs)
 
@@ -386,8 +389,8 @@ returnStmt :: Parser (SourcePos -> Stmt SourcePos)
 returnStmt = do
     mConv <- optional convention
     keyword "return"
-    mExprs <- optional . angles $ liftA2 (,) (getSourcePos <**> expression) (getSourcePos <**> expression)
-    mActuals <- optional . parens $ sepEndBy (getSourcePos <**> actual) (symbol ",")
+    mExprs <- optional . angles $ liftA2 (,) (sourcePos expression) (sourcePos expression)
+    mActuals <- optional . parens $ sepEndBy (sourcePos actual) (symbol ",")
     symbol ";"
     return $ ReturnStmt mConv mExprs (fromMaybe [] mActuals)
 
@@ -396,22 +399,23 @@ lvalue = try lvRef <|> lvName
 
 lvRef :: Parser (SourcePos -> LValue SourcePos)
 lvRef = do
-    t <- getSourcePos <**> type_
+    t <- sourcePos type_
     (expr, mAsserts) <- brackets $ liftA2 (,) expression (optional assertions)
     return $ flip (LVRef t) mAsserts . expr
 
 lvName :: Parser (SourcePos -> LValue SourcePos)
 lvName = LVName <$> identifier
 
-assertions = alignAssert <|> inAssert
+assertions :: Parser (Asserts SourcePos)
+assertions = sourcePos $ alignAssert <|> inAssert
 
-alignAssert :: Parser (Asserts SourcePos)
-alignAssert = getSourcePos <**> liftA2 AlignAssert
+alignAssert :: Parser (SourcePos -> Asserts SourcePos)
+alignAssert = liftA2 AlignAssert
     (keyword "aligned" *> (fst <$> integer))
     (fromMaybe  [] <$> optional (keyword "in" *> sepBy1 identifier (symbol ",")))
 
-inAssert :: Parser (Asserts SourcePos)
-inAssert = getSourcePos <**> liftA2 InAssert
+inAssert :: Parser (SourcePos -> Asserts SourcePos)
+inAssert = liftA2 InAssert
     (keyword "in" *> sepBy1 identifier (symbol ","))
     (optional (keyword "aligned" *> (fst <$> integer)))
 
@@ -430,7 +434,7 @@ gotoStmt :: Parser (SourcePos -> Stmt SourcePos)
 gotoStmt = do
     keyword "goto"
     expr <- expression
-    mTargets  <- optional (getSourcePos <**> targets)
+    mTargets  <- optional (sourcePos targets)
     symbol ";"
     return $ flip GotoStmt mTargets . expr
 
@@ -439,8 +443,8 @@ cutToStmt = do
     keyword "cut"
     keyword "to"
     expr <- expression
-    actuals <- parens $ sepEndBy (getSourcePos <**> actual) (symbol ",")
-    mFlow <- many (getSourcePos <**> flow)
+    actuals <- parens $ sepEndBy (sourcePos actual) (symbol ",")
+    mFlow <- many (sourcePos flow)
     symbol ";"
     return (\sourcePos -> CutToStmt (expr sourcePos) actuals mFlow)
 
@@ -454,7 +458,7 @@ kindedNames = sepEndBy1 (do
 arm :: Parser (SourcePos -> Arm SourcePos)
 arm = do
     keyword "case"
-    ranges <- sepEndBy1 (getSourcePos <**> range) (symbol ",")
+    ranges <- sepEndBy1 (sourcePos range) (symbol ",")
     symbol ":"
     b <- braces body
     return $ Arm ranges . b
@@ -462,7 +466,7 @@ arm = do
 range :: Parser (SourcePos -> Range SourcePos)
 range = do
     lExpr <- expression
-    rExpr <- optional $ symbol ".." >> (getSourcePos <**> expression)
+    rExpr <- optional $ symbol ".." >> (sourcePos expression)
     return $ flip Range rExpr . lExpr
 
 flow :: Parser (SourcePos -> Flow SourcePos)
@@ -499,20 +503,22 @@ targets :: Parser (SourcePos -> Targets SourcePos)
 targets = keyword "targets" *> (Targets <$> identifiers)
 
 expression :: Parser (SourcePos -> Expr SourcePos)
-expression = litExpr
-         <|> nameExpr
-         <|> refExpr
-         <|> parExpr
+expression = try infixExpr
          <|> binOpExpr
-         <|> comExpr
-         <|> negExpr
-         <|> infixExpr
-         <|> prefixExpr
+
+simpleExpr :: Parser (SourcePos -> Expr SourcePos)
+simpleExpr = choice
+    [ litExpr
+    , parExpr
+    , prefixExpr
+    , try refExpr
+    , nameExpr
+    ]
 
 litExpr :: Parser (SourcePos -> Expr SourcePos)
 litExpr = do
     literal <- intExpr <|> floatExpr <|> charExpr
-    t <- optional $ symbol "::" *> (getSourcePos <**> type_)
+    t <- optional $ symbol "::" *> (sourcePos type_)
     return (\sourcePos -> LitExpr (literal sourcePos) t)
 
 intExpr :: Parser (SourcePos -> Lit SourcePos)
@@ -528,7 +534,7 @@ nameExpr = NameExpr <$> identifier
 
 refExpr :: Parser (SourcePos -> Expr SourcePos)
 refExpr = do
-    t <- getSourcePos <**> type_
+    t <- sourcePos type_
     (expr, mAsserts) <- brackets $ liftA2 (,) expression (optional assertions)
     return (\sourcePos -> RefExpr t (expr sourcePos) mAsserts)
 
@@ -538,7 +544,7 @@ parExpr = do
     return $ ParExpr . pExpr
 
 binOpExpr :: Parser (SourcePos -> Expr SourcePos)
-binOpExpr = makeExprParser expression binOpTable
+binOpExpr = makeExprParser simpleExpr binOpTable
 
 binOpTable = [ [ prefix "-" NegExpr
                , prefix "~" ComExpr
@@ -559,12 +565,12 @@ binOpTable = [ [ prefix "-" NegExpr
                ]
              , [ binary "|" $ flip BinOpExpr OrOp
                ]
-             , [ binary ">=" $ flip BinOpExpr GeOp
-               , binary ">" $ flip BinOpExpr GtOp
-               , binary "<=" $ flip BinOpExpr LeOp
-               , binary "<" $ flip BinOpExpr LtOp
-               , binary "!=" $ flip BinOpExpr NeqOp
-               , binary "==" $ flip BinOpExpr EqOp
+             , [ comparison ">=" $ flip BinOpExpr GeOp
+               , comparison ">" $ flip BinOpExpr GtOp
+               , comparison "<=" $ flip BinOpExpr LeOp
+               , comparison "<" $ flip BinOpExpr LtOp
+               , comparison "!=" $ flip BinOpExpr NeqOp
+               , comparison "==" $ flip BinOpExpr EqOp
                ]
             ]
 
@@ -572,24 +578,19 @@ prefix name f = Prefix ((f .) <$ symbol name)
 
 binary name f = InfixL ((\left right sourcePos -> f (left sourcePos) (right sourcePos)) <$ symbol name)
 
-compare name f = InfixN ((\left right sourcePos -> f (left sourcePos) (right sourcePos)) <$ symbol name)
-
-comExpr :: Parser (SourcePos -> Expr SourcePos)
-comExpr = symbol "~" *> ((ComExpr .) <$> expression)
-
-negExpr :: Parser (SourcePos -> Expr SourcePos)
-negExpr = symbol "-" *> ((NegExpr .) <$> expression)
+comparison name f = InfixN ((\left right sourcePos -> f (left sourcePos) (right sourcePos)) <$ symbol name)
 
 infixExpr :: Parser (SourcePos -> Expr SourcePos)
 infixExpr = do
-    left <- expression
+    left <- binOpExpr
     n <- symbol "`" *> (Name <$> name) <* symbol "`"
-    right <- getSourcePos <**> expression
+    right <- sourcePos binOpExpr
     return (\sourcePos -> InfixExpr (left sourcePos) n right)
 
 prefixExpr :: Parser (SourcePos -> Expr SourcePos)
 prefixExpr = do
     symbol "%"
     n <- identifier
-    mActuals <- optional . parens $ sepEndBy (getSourcePos <**> actual) (symbol ",")
+    mActuals <- optional . parens $ sepEndBy (sourcePos actual) (symbol ",")
     return $ PrefixExpr n (fromMaybe [] mActuals)
+
