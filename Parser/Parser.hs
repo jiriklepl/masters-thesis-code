@@ -79,39 +79,29 @@ decimal = do
 
 -- | Parses the whole 'Unit'
 unit :: Parser (Unit SourcePos)
-unit = sourcePos (do
-    topLevels <- many (sourcePos topLevel)
-    return $ Unit topLevels)
+unit = sourcePos (Unit <$> many (sourcePos topLevel))
 
 topLevel :: Parser (SourcePos -> TopLevel SourcePos)
-topLevel = sectionTopLevel <|> try ((TopProcedure .) <$> procedure) <|> (TopDecl .) <$> decl
+topLevel = choice
+    [ sectionTopLevel
+    , try $ (TopProcedure .) <$> procedure
+    , (TopDecl .) <$> decl
+    ]
 
 sectionTopLevel :: Parser (SourcePos -> TopLevel SourcePos)
-sectionTopLevel = do
-    keyword "section"
-    name <- stringLiteral
-    sections <- braces $ many (sourcePos section)
-    return $ TopSection name sections
+sectionTopLevel = keyword "section" *> (TopSection <$> stringLiteral <*> braces (many $ sourcePos section))
 
 section :: Parser (SourcePos -> Section SourcePos)
-section = (SecDecl .) <$> decl <|> secSpan <|> try ((SecProcedure .) <$> procedure) <|> (SecDatum .) <$> datum
+section = choice [(SecDecl .) <$> decl, secSpan, try ((SecProcedure .) <$> procedure), (SecDatum .) <$> datum]
 
 decl :: Parser (SourcePos -> Decl SourcePos)
-decl = importDecl <|> exportDecl <|> constDecl <|> typedefDecl <|> pragmaDecl <|> targetDecl <|> registerDecl
+decl = choice [importDecl, exportDecl, constDecl, typedefDecl, pragmaDecl, targetDecl, registerDecl]
 
 importDecl :: Parser (SourcePos -> Decl SourcePos)
-importDecl = do
-    keyword "import"
-    imports <- sepEndBy1 (sourcePos import_) (symbol ",")
-    symbol ";"
-    return $ ImportDecl imports
+importDecl = keyword "import" *> (ImportDecl <$> sepEndBy1 (sourcePos import_) (symbol ",")) <* symbol ";"
 
 exportDecl :: Parser (SourcePos -> Decl SourcePos)
-exportDecl = do
-    keyword "export"
-    exports <- sepEndBy1 (sourcePos export) (symbol ",")
-    symbol ";"
-    return $ ExportDecl exports
+exportDecl = keyword "export" *> (ExportDecl <$> sepEndBy1 (sourcePos export) (symbol ",")) <* symbol ";"
 
 constDecl :: Parser (SourcePos -> Decl SourcePos)
 constDecl = do
@@ -153,7 +143,7 @@ targetDecl = do
     return $ TargetDecl directives
 
 targetDirective :: Parser (SourcePos -> TargetDirective SourcePos)
-targetDirective = memSizeDirective <|> byteOrderDirective <|> pointerSizeDirective <|> wordSizeDirective
+targetDirective = choice [memSizeDirective, byteOrderDirective, pointerSizeDirective, wordSizeDirective]
 
 registerDecl :: Parser (SourcePos -> Decl SourcePos)
 registerDecl = do
@@ -240,7 +230,7 @@ secSpan = do
     return (\sourcePos -> SecSpan (left sourcePos) right sections)
 
 datum :: Parser (SourcePos -> Datum SourcePos)
-datum = alignDatum <|> try labelDatum <|> justDatum
+datum = choice [alignDatum, try labelDatum, justDatum]
 
 alignDatum :: Parser (SourcePos -> Datum SourcePos)
 alignDatum = do
@@ -264,7 +254,7 @@ justDatum = do
     return (\sourcePos -> Datum (t sourcePos) s i)
 
 init_ :: Parser (SourcePos -> Init SourcePos)
-init_ = stringInit <|> string16Init <|> initList
+init_ = choice [stringInit, string16Init, initList]
 
 initList :: Parser (SourcePos -> Init SourcePos)
 initList = braces $ do
@@ -317,7 +307,20 @@ stackDecl =
     braces (StackDecl <$> many (sourcePos datum))
 
 stmt :: Parser (SourcePos -> Stmt SourcePos)
-stmt = emptyStmt <|> ifStmt <|> switchStmt <|> spanStmt <|> try assignStmt <|> try primOpStmt <|> try jumpStmt <|> try returnStmt <|> try labelStmt <|> try contStmt <|> try gotoStmt <|> try cutToStmt <|> callStmt -- TODO: this is utter BS
+stmt = choice
+    [ emptyStmt
+    , ifStmt
+    , switchStmt
+    , spanStmt
+    , try assignStmt
+    , try primOpStmt
+    , try jumpStmt
+    , try returnStmt
+    , try labelStmt
+    , try contStmt
+    , try gotoStmt
+    , try cutToStmt
+    , callStmt ] -- TODO: this is utter BS
 
 emptyStmt :: Parser (SourcePos -> Stmt SourcePos)
 emptyStmt = symbol ";" $> EmptyStmt
@@ -473,7 +476,7 @@ flow :: Parser (SourcePos -> Flow SourcePos)
 flow = alsoFlow <|> neverReturns
 
 alsoFlow :: Parser (SourcePos -> Flow SourcePos)
-alsoFlow = keyword "also" *> (alsoCutsTo <|> alsoUnwindsTo <|> alsoReturnsTo <|> alsoAborts)
+alsoFlow = keyword "also" *> choice [alsoCutsTo, alsoUnwindsTo, alsoReturnsTo, alsoAborts]
 
 alsoCutsTo :: Parser (SourcePos -> Flow SourcePos)
 alsoCutsTo = keyword "cuts" *> keyword "to" *> (AlsoCutsTo <$> identifiers)
@@ -503,8 +506,7 @@ targets :: Parser (SourcePos -> Targets SourcePos)
 targets = keyword "targets" *> (Targets <$> identifiers)
 
 expression :: Parser (SourcePos -> Expr SourcePos)
-expression = try infixExpr
-         <|> binOpExpr
+expression = try infixExpr <|> binOpExpr
 
 simpleExpr :: Parser (SourcePos -> Expr SourcePos)
 simpleExpr = choice
@@ -517,7 +519,7 @@ simpleExpr = choice
 
 litExpr :: Parser (SourcePos -> Expr SourcePos)
 litExpr = do
-    literal <- intExpr <|> floatExpr <|> charExpr
+    literal <- choice [intExpr, floatExpr, charExpr]
     t <- optional $ symbol "::" *> (sourcePos type_)
     return (\sourcePos -> LitExpr (literal sourcePos) t)
 
@@ -593,4 +595,3 @@ prefixExpr = do
     n <- identifier
     mActuals <- optional . parens $ sepEndBy (sourcePos actual) (symbol ",")
     return $ PrefixExpr n (fromMaybe [] mActuals)
-
