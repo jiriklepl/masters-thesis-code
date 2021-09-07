@@ -1,6 +1,5 @@
 # TODO
 
 - propagate `getSourcePos` upwards
-- rename `refExpr` to `derefExpr`?
 - categorize names? (different namespaces for variables, operators, etc)
 - `justDatum` sounds weirs
