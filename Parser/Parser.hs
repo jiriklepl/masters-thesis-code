@@ -17,14 +17,6 @@ import qualified Control.Monad.State as State
 import Control.Monad.State (State)
 import Language
 
--- | Functional composition for applicative functors
-(<*<) :: Applicative f => f (b -> c) -> f (a -> b) -> f (a -> c)
-(<*<) = liftA2 (.)
-
--- | Functional composition for applicative functors (reversed)
-(>*>) :: Applicative f => f (a -> b) -> f (b -> c) -> f (a -> c)
-(>*>) = liftA2 (flip (.))
-
 type Parser a = Parsec Void Text a
 type SourceParser a = Parser (Annot SourcePos a)
 type ULocParser a = Parser (a SourcePos)
