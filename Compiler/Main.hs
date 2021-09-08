@@ -32,4 +32,4 @@ import LLVM.IRBuilder.Instruction
 main :: IO ()
 main = do
     contents <- T.getContents
-    print $ runParser unit "stdin" contents
+    print $ runParser program "stdin" contents

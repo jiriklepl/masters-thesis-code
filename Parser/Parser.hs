@@ -81,6 +81,9 @@ decimal = do
     unsigned <- optional $ oneOf ['u','U']
     return (nums, isNothing unsigned)
 
+program :: SourceParser Unit
+program = sc *> unit
+
 -- | Parses the whole 'Unit'
 unit :: SourceParser Unit
 unit = withSourcePos (Unit <$> many (withSourcePos topLevel))
@@ -253,7 +256,7 @@ string16Init :: ULocParser Init
 string16Init = do
     keyword "unicode"
     str <- parens stringLiteral
-    return $ Str16Init (String16 str) -- TODO
+    return $ Str16Init (String16 str) -- TODO: 16bit strings not yet implemented
 
 size :: ULocParser Size
 size = brackets $ Size <$> optional expression
