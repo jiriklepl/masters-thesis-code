@@ -1,13 +1,19 @@
 cradle:
   cabal:
-    - path: "./Compiler/Main.hs"
+    - path: "src/Compiler/Main.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "Parser/Parser.hs"
+    - path: "src/Language/Parser.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "Language/Language.hs"
+    - path: "src/Language/AST.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "Inference/Inference.hs"
+    - path: "src/Inference/Inference.hs"
       component: "Compiler:exe:Compiler"
+
+    - path: "vendor/llvm-hs-pretty/src"
+      component: "lib:llvm-hs-pretty"
+
+    - path: "vendor/llvm-hs-pretty/tests"
+      component: "llvm-hs-pretty:test:test"
