@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module Language where
+module Language.AST where
 
 import qualified Data.Text as T
 import Data.Text (Text)

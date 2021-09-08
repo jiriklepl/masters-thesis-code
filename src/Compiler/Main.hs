@@ -8,7 +8,7 @@ import Data.Text as T
 import Data.Text.IO as T
 import Control.Monad.State as State
 
-import Parser
+import Language.Parser
 
 -- import Data.Text.Lazy.IO as T
 

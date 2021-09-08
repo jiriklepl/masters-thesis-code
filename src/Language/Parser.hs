@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser where
+module Language.Parser where
 
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
@@ -15,7 +15,8 @@ import Data.Text (Text)
 import Control.Applicative hiding (many)
 import qualified Control.Monad.State as State
 import Control.Monad.State (State)
-import Language
+
+import Language.AST
 
 type Parser a = Parsec Void Text a
 type SourceParser a = Parser (Annot SourcePos a)
