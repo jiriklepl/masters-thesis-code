@@ -6,7 +6,7 @@ cradle:
     - path: "src/Language/Parser.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/AST.hs"
+    - path: "src/Language/CMM.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/Inference/Inference.hs"

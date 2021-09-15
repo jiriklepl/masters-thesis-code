@@ -1,18 +1,15 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
-module Language.AST where
+module Language.CMM where
 
-import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Data
-import LLVM.AST.Global (Global(section))
-
-takeAnnot :: Annot annot node -> annot
-takeAnnot (Annot annot node) = annot
 
 data Annotation annot node = Annot annot node deriving (Show, Data)
 type Annot annot node = Annotation annot (node annot)
+
+takeAnnot :: Annot annot node -> annot
+takeAnnot (Annot annot _) = annot
 
 newtype Unit a = Unit [Annot a TopLevel]
                deriving (Show, Data)
