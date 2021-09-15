@@ -1,4 +1,6 @@
-module Inference.Inference (someFunc) where
+module Inference.Inference
+  ( someFunc
+  ) where
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
