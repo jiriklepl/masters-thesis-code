@@ -15,6 +15,7 @@ import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
+import Data.Foldable
 import Language.CMM
 
 type Parser = Parsec Void Text
@@ -38,18 +39,20 @@ symbol = void . L.symbol sc
 keyword :: Text -> Parser ()
 keyword = void . lexeme . string
 
+keywords :: [Text] -> Parser ()
+keywords = traverse_ keyword
+
 stringLiteral :: Parser Text
 stringLiteral =
-  lexeme $ char '"' >> T.pack <$> manyTill L.charLiteral (char '"')
+  lexeme $ char '"' *> (T.pack <$> manyTill L.charLiteral (char '"'))
 
 charLiteral :: Parser Char
 charLiteral = lexeme $ char '\'' *> L.charLiteral <* char '\''
 
 name :: Parser Text
-name = do
-  n <- letterChar <|> otherChars
-  ame <- T.pack <$> many (alphaNumChar <|> otherChars)
-  return $ n `T.cons` ame
+name =
+  T.pack <$>
+  liftA2 (:) (letterChar <|> otherChars) (many (alphaNumChar <|> otherChars))
   where
     otherChars = oneOf ['_', '.', '$', '@']
 
@@ -75,10 +78,16 @@ angles :: Parser a -> Parser a
 angles = between (symbol "<") (symbol ">")
 
 comma :: Parser ()
-comma = void $ symbol ","
+comma = symbol ","
 
 semicolon :: Parser ()
-semicolon = void $ symbol ";"
+semicolon = symbol ";"
+
+eqSign :: Parser ()
+eqSign = symbol "="
+
+colon :: Parser ()
+colon = symbol ":"
 
 commaList :: Parser a -> Parser [a]
 commaList = (`sepEndBy1` comma)
@@ -89,14 +98,14 @@ integer =
   (char '0' *>
    ((oneOf ['x', 'X'] *> ((, False) <$> L.hexadecimal)) <|>
     (, False) <$> L.octal <|>
-    (,) 0 . isNothing <$> optional (oneOf ['u', 'U']))) <|>
+    (0, ) <$> unsignedSpec)) <|>
   decimal
 
 decimal :: Parser (Int, Bool)
-decimal = do
-  nums <- L.decimal
-  unsigned <- optional $ oneOf ['u', 'U']
-  return (nums, isNothing unsigned)
+decimal = liftA2 (,) L.decimal unsignedSpec
+
+unsignedSpec :: Parser Bool
+unsignedSpec = isNothing <$> optional (oneOf ['u', 'U'])
 
 program :: SourceParser Unit
 program = sc *> unit
@@ -112,7 +121,7 @@ topLevel =
 
 sectionTopLevel :: ULocParser TopLevel
 sectionTopLevel =
-  keyword "section" *> (TopSection <$> stringLiteral <*> braces (many section))
+  keyword "section" *> liftA2 TopSection stringLiteral (braces (many section))
 
 section :: SourceParser Section
 section =
@@ -144,31 +153,21 @@ exportDecl :: ULocParser Decl
 exportDecl = keyword "export" *> (ExportDecl <$> commaList export) <* semicolon
 
 constDecl :: ULocParser Decl
-constDecl = do
-  keyword "const"
-  try
-    (do t <- typeToken
-        declName <- identifier
-        symbol "="
-        expr <- expression
-        semicolon
-        return $ ConstDecl (Just t) declName expr) <|> do
-    declName <- identifier
-    symbol "="
-    expr <- expression
-    semicolon
-    return $ ConstDecl Nothing declName expr
+constDecl =
+  keyword "const" *>
+  liftA2
+    (uncurry ConstDecl)
+    (try (liftA2 (,) (optional typeToken) identifier) <|>
+     (Nothing, ) <$> identifier)
+    (eqSign *> expression) <*
+  semicolon
 
 typedefDecl :: ULocParser Decl
 typedefDecl =
-  keyword "typedef" *> (TypedefDecl <$> typeToken <*> identifiers) <* semicolon
+  keyword "typedef" *> liftA2 TypedefDecl typeToken identifiers <* semicolon
 
 pragmaDecl :: ULocParser Decl
-pragmaDecl = do
-  keyword "pragma"
-  pragmaName <- identifier
-  p <- braces pragma
-  return $ PragmaDecl pragmaName p
+pragmaDecl = keyword "pragma" *> liftA2 PragmaDecl identifier (braces pragma)
 
 targetDecl :: ULocParser Decl
 targetDecl =
@@ -185,9 +184,7 @@ targetDirective =
     ]
 
 registerDecl :: ULocParser Decl
-registerDecl =
-  ((RegDecl . (Invariant <$) <$> optional (keyword "invariant")) <*> registers) <*
-  semicolon
+registerDecl = liftA2 RegDecl invariant registers <* semicolon
 
 memSizeDirective :: ULocParser TargetDirective
 memSizeDirective = do
@@ -215,38 +212,37 @@ wordSizeDirective = do
 
 procedure :: SourceParser Procedure
 procedure =
-  withSourcePos $ do
-    conv <- optional convention
-    procName <- identifier
-    formals <- parens $ formal `sepEndBy` comma -- TODO: discuss later
-    Procedure conv procName formals <$> body
+  withSourcePos $
+  Procedure <$> optional convention <*> identifier <*>
+  parens (formal `sepEndBy` comma) <*>
+  body
 
 formal :: SourceParser Formal
 formal =
-  withSourcePos $ do
-    k <- optional kind
-    invar <- optional (keyword "invariant")
-    t <- typeToken
-    Formal k (Invariant <$ invar) t <$> identifier
+  withSourcePos $
+  Formal <$> optional kind <*> invariant <*> typeToken <*> identifier
+
+invariant :: Parser Bool
+invariant = isJust <$> optional (keyword "invariant")
 
 actual :: SourceParser Actual
-actual = withSourcePos $ (Actual <$> optional kind) <*> expression
+actual = withSourcePos $ liftA2 Actual (optional kind) expression
 
 actuals :: Parser [Annot SourcePos Actual]
 actuals = parens $ actual `sepEndBy` comma
 
 convention :: Parser Conv
-convention = keyword "foreign" >> Foreign <$> stringLiteral
+convention = keyword "foreign" *> (Foreign <$> stringLiteral)
 
 import_ :: SourceParser Import
 import_ =
   withSourcePos $
-  Import <$> optional (stringLiteral <* keyword "as") <*> identifier
+  liftA2 Import (optional (stringLiteral <* keyword "as")) identifier
 
 export :: SourceParser Export
 export =
   withSourcePos $
-  Export <$> identifier <*> optional (keyword "as" *> stringLiteral)
+  liftA2 Export identifier (optional (keyword "as" *> stringLiteral))
 
 body :: SourceParser Body
 body = withSourcePos . braces $ Body <$> many bodyItem
@@ -272,11 +268,10 @@ alignDatum = do
   return $ DatumAlign align
 
 labelDatum :: ULocParser Datum
-labelDatum = DatumLabel <$> identifier <* symbol ":"
+labelDatum = DatumLabel <$> identifier <* colon
 
 justDatum :: ULocParser Datum
-justDatum =
-  Datum <$> typeToken <*> optional size <*> optional init_ <* semicolon
+justDatum = liftA3 Datum typeToken (optional size) (optional init_) <* semicolon
 
 init_ :: SourceParser Init
 init_ = withSourcePos $ choice [stringInit, string16Init, initList]
@@ -302,20 +297,14 @@ registers =
     k <- optional kind
     t <- typeToken
     nvals <-
-      commaList
-        (do n <- identifier
-            val <-
-              optional $ do
-                symbol "="
-                stringLiteral
-            return (n, val))
+      commaList (liftA2 (,) identifier (optional $ eqSign *> stringLiteral))
     return $ Registers k t nvals
 
 typeToken :: SourceParser Type
 typeToken = withSourcePos $ bitsType <|> nameType
 
 bitsType :: ULocParser Type
-bitsType = lexeme $ string "bits" >> TBits <$> L.decimal
+bitsType = lexeme $ string "bits" *> (TBits <$> L.decimal)
 
 nameType :: ULocParser Type
 nameType = TName <$> identifier
@@ -353,31 +342,28 @@ emptyStmt :: ULocParser Stmt
 emptyStmt = semicolon $> EmptyStmt
 
 ifStmt :: ULocParser Stmt
-ifStmt = do
-  keyword "if"
-  expr <- expression
-  ifBody <- body
-  elseBody <- optional $ keyword "else" >> body
-  return $ IfStmt expr ifBody elseBody
+ifStmt =
+  keyword "if" *>
+  liftA3 IfStmt expression body (optional $ keyword "else" *> body)
 
 switchStmt :: ULocParser Stmt
 switchStmt =
-  keyword "switch" *> (SwitchStmt <$> expression <*> braces (many arm))
+  keyword "switch" *> liftA2 SwitchStmt expression (braces (many arm))
 
 spanStmt :: ULocParser Stmt
-spanStmt = keyword "span" *> (SpanStmt <$> expression <*> expression <*> body)
+spanStmt = keyword "span" *> liftA3 SpanStmt expression expression body
 
 assignStmt :: ULocParser Stmt
 assignStmt =
   liftA2
     AssignStmt
-    (commaList lvalue <* symbol "=")
+    (commaList lvalue <* eqSign)
     (commaList expression <* semicolon)
 
 primOpStmt :: ULocParser Stmt
 primOpStmt = do
   lName <- identifier
-  symbol "="
+  eqSign
   symbol "%%"
   rName <- identifier
   mActuals <- optional actuals
@@ -387,7 +373,7 @@ primOpStmt = do
 
 callStmt :: ULocParser Stmt
 callStmt = do
-  mKindNames <- optional kindedNames <* symbol "="
+  mKindNames <- optional kindedNames <* eqSign
   mConv <- optional convention
   expr <- expression
   acts <- actuals
@@ -410,7 +396,8 @@ returnStmt :: ULocParser Stmt
 returnStmt = do
   mConv <- optional convention
   keyword "return"
-  mExprs <- optional . angles $ liftA2 (,) expression expression
+  mExprs <-
+    optional . angles $ liftA2 (,) (restrictedExpr <* symbol "/") restrictedExpr
   mActuals <- optional actuals
   semicolon
   return $ ReturnStmt mConv mExprs (maybeToMonoid mActuals)
@@ -420,7 +407,7 @@ lvalue = withSourcePos $ try lvRef <|> lvName
 
 lvRef :: ULocParser LValue
 lvRef =
-  (LVRef <$> typeToken <*> (symbol "[" *> expression) <*> optional assertions) <*
+  liftA3 LVRef typeToken (symbol "[" *> expression) (optional assertions) <*
   symbol "]"
 
 lvName :: ULocParser LValue
@@ -444,50 +431,34 @@ inAssert =
     (optional (keyword "aligned" *> (fst <$> integer)))
 
 labelStmt :: ULocParser Stmt
-labelStmt = LabelStmt <$> identifier <* symbol ":"
+labelStmt = LabelStmt <$> identifier <* colon
 
 contStmt :: ULocParser Stmt
-contStmt = do
-  keyword "continuation"
-  n <- identifier
-  params <- parens $ optional kindedNames
-  symbol ":"
-  return $ ContStmt n (maybeToMonoid params)
+contStmt =
+  keyword "continuation" *>
+  liftA2 ContStmt identifier (maybeToMonoid <$> parens (optional kindedNames)) <*
+  colon
 
 gotoStmt :: ULocParser Stmt
-gotoStmt = do
-  keyword "goto"
-  expr <- expression
-  mTargets <- optional targets
-  semicolon
-  return $ GotoStmt expr mTargets
+gotoStmt =
+  keyword "goto" *> liftA2 GotoStmt expression (optional targets) <* semicolon
 
 cutToStmt :: ULocParser Stmt
-cutToStmt = do
-  keyword "cut"
-  keyword "to"
-  expr <- expression
-  acts <- actuals
-  mFlow <- many flow
+cutToStmt =
+  keywords ["cut", "to"] *> liftA3 CutToStmt expression actuals (many flow) <*
   semicolon
-  return $ CutToStmt expr acts mFlow
 
 kindedNames :: Parser [Annot SourcePos KindName]
 kindedNames =
-  commaList
-    (do k <- optional kind
-        pos <- getSourcePos
-        Annot pos . KindName k <$> identifier)
+  commaList . withSourcePos $ liftA2 KindName (optional kind) identifier
 
 arm :: SourceParser Arm
 arm =
-  withSourcePos $
-  keyword "case" *> (Arm <$> commaList range <* symbol ":") <*> body
+  withSourcePos $ keyword "case" *> liftA2 Arm (commaList range <* colon) body
 
 range :: SourceParser Range
 range =
-  withSourcePos $
-  (Range <$> expression) <*> optional (symbol ".." *> expression)
+  withSourcePos $ liftA2 Range expression (optional (symbol ".." *> expression))
 
 flow :: SourceParser Flow
 flow = withSourcePos $ alsoFlow <|> neverReturns
@@ -498,22 +469,19 @@ alsoFlow =
   choice [alsoCutsTo, alsoUnwindsTo, alsoReturnsTo, alsoAborts]
 
 alsoCutsTo :: ULocParser Flow
-alsoCutsTo = keyword "cuts" *> keyword "to" *> (AlsoCutsTo <$> identifiers)
+alsoCutsTo = keywords ["cuts", "to"] *> (AlsoCutsTo <$> identifiers)
 
 alsoUnwindsTo :: ULocParser Flow
-alsoUnwindsTo =
-  keyword "unwinds" *> keyword "to" *> (AlsoUnwindsTo <$> identifiers)
+alsoUnwindsTo = keywords ["unwinds", "to"] *> (AlsoUnwindsTo <$> identifiers)
 
 alsoReturnsTo :: ULocParser Flow
-alsoReturnsTo =
-  keyword "returns" *> keyword "to" *> (AlsoReturnsTo <$> identifiers)
+alsoReturnsTo = keywords ["returns", "to"] *> (AlsoReturnsTo <$> identifiers)
 
 alsoAborts :: ULocParser Flow
 alsoAborts = keyword "aborts" *> optional comma $> AlsoAborts
 
 neverReturns :: ULocParser Flow
-neverReturns =
-  keyword "never" *> keyword "returns" *> optional comma $> NeverReturns
+neverReturns = keywords ["never", "returns"] *> optional comma $> NeverReturns
 
 alias :: SourceParser Alias
 alias = withSourcePos $ readsAlias <|> writesAlias
@@ -533,11 +501,16 @@ expression = try infixExpr <|> binOpExpr
 simpleExpr :: SourceParser Expr
 simpleExpr = choice [litExpr, parExpr, prefixExpr, try refExpr, nameExpr]
 
+restrictedExpr :: SourceParser Expr
+restrictedExpr = choice [litExpr, parExpr, nameExpr]
+
 litExpr :: SourceParser Expr
-litExpr = do
-  literal <- choice [intExpr, floatExpr, charExpr]
-  mType <- optional $ symbol "::" *> typeToken
-  withSourcePos . return $ LitExpr literal mType
+litExpr =
+  withSourcePos $
+  liftA2
+    LitExpr
+    (choice [intExpr, floatExpr, charExpr])
+    (optional $ symbol "::" *> typeToken)
 
 intExpr :: SourceParser Lit
 intExpr = withSourcePos $ LitInt . fst <$> integer
@@ -549,14 +522,10 @@ charExpr :: SourceParser Lit
 charExpr = withSourcePos $ LitChar <$> charLiteral
 
 nameExpr :: SourceParser Expr
-nameExpr = withSourcePos $ NameExpr <$> identifier
+nameExpr = withSourcePos $ LVExpr <$> withSourcePos lvName
 
 refExpr :: SourceParser Expr
-refExpr =
-  withSourcePos $ do
-    t <- typeToken
-    (expr, mAsserts) <- brackets $ liftA2 (,) expression (optional assertions)
-    return $ RefExpr t expr mAsserts
+refExpr = withSourcePos $ LVExpr <$> withSourcePos lvRef
 
 parExpr :: SourceParser Expr
 parExpr = withSourcePos $ ParExpr <$> parens expression
@@ -606,14 +575,16 @@ comparison op f =
   InfixN ((\left@(Annot a _) right -> Annot a (f left right)) <$ symbol op)
 
 infixExpr :: SourceParser Expr
-infixExpr = do
-  left <- binOpExpr
-  n <- symbol "`" *> (Name <$> name) <* symbol "`"
-  withSourcePos $ InfixExpr left n <$> binOpExpr
+infixExpr =
+  withSourcePos $
+  liftA3
+    InfixExpr
+    binOpExpr
+    (symbol "`" *> (Name <$> name) <* symbol "`")
+    binOpExpr
 
 prefixExpr :: SourceParser Expr
-prefixExpr = do
-  symbol "%"
-  n <- identifier
-  mActuals <- optional actuals
-  withSourcePos . return $ PrefixExpr n (maybeToMonoid mActuals)
+prefixExpr =
+  withSourcePos $
+  symbol "%" *>
+  liftA2 PrefixExpr identifier (maybeToMonoid <$> optional actuals)

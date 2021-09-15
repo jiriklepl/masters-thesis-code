@@ -36,7 +36,7 @@ data Decl a
   | ExportDecl [Annot a Export] -- at least one
   | ConstDecl (Maybe (Annot a Type)) Name (Annot a Expr)
   | TypedefDecl (Annot a Type) [Name] -- at least one
-  | RegDecl (Maybe Invariant) (Annot a Registers)
+  | RegDecl Bool (Annot a Registers)
   | PragmaDecl Name (Annot a Pragma)
   | TargetDecl [Annot a TargetDirective]
   deriving (Show, Data)
@@ -59,10 +59,6 @@ data Import a =
 
 data Export a =
   Export Name (Maybe Text)
-  deriving (Show, Data)
-
-data Invariant =
-  Invariant -- TODO: or it can be just Bool?
   deriving (Show, Data)
 
 data Datum a
@@ -100,7 +96,7 @@ data Procedure a =
   deriving (Show, Data)
 
 data Formal a =
-  Formal (Maybe Kind) (Maybe Invariant) (Annot a Type) Name
+  Formal (Maybe Kind) Bool (Annot a Type) Name
   deriving (Show, Data)
 
 data Actual a =
@@ -181,8 +177,7 @@ newtype Targets a =
 
 data Expr a
   = LitExpr (Annot a Lit) (Maybe (Annot a Type))
-  | NameExpr Name
-  | RefExpr (Annot a Type) (Annot a Expr) (Maybe (Annot a Asserts))
+  | LVExpr (Annot a LValue)
   | ParExpr (Annot a Expr)
   | BinOpExpr Op (Annot a Expr) (Annot a Expr)
   | ComExpr (Annot a Expr)
