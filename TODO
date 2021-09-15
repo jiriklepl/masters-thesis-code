@@ -1,5 +1,4 @@
 # TODO
 
-- propagate `getSourcePos` upwards
 - categorize names? (different namespaces for variables, operators, etc)
-- `justDatum` sounds weirs
+- `justDatum` sounds weird

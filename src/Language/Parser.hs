@@ -23,6 +23,9 @@ type SourceParser a = Parser (Annot SourcePos a)
 
 type ULocParser a = Parser (a SourcePos)
 
+maybeToMonoid :: Monoid a => Maybe a -> a
+maybeToMonoid = fromMaybe mempty
+
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
 
@@ -78,7 +81,7 @@ semicolon :: Parser ()
 semicolon = void $ symbol ";"
 
 commaList :: Parser a -> Parser [a]
-commaList = flip sepEndBy1 comma
+commaList = (`sepEndBy1` comma)
 
 integer :: Parser (Int, Bool)
 integer =
@@ -100,32 +103,30 @@ program = sc *> unit
 
 -- | Parses the whole 'Unit'
 unit :: SourceParser Unit
-unit = withSourcePos (Unit <$> many (withSourcePos topLevel))
+unit = withSourcePos $ Unit <$> many topLevel
 
-topLevel :: ULocParser TopLevel
+topLevel :: SourceParser TopLevel
 topLevel =
-  choice
-    [ sectionTopLevel
-    , try $ TopProcedure <$> withSourcePos procedure
-    , TopDecl <$> withSourcePos decl
-    ]
+  withSourcePos $
+  choice [sectionTopLevel, try $ TopProcedure <$> procedure, TopDecl <$> decl]
 
 sectionTopLevel :: ULocParser TopLevel
 sectionTopLevel =
-  keyword "section" *>
-  (TopSection <$> stringLiteral <*> braces (many $ withSourcePos section))
+  keyword "section" *> (TopSection <$> stringLiteral <*> braces (many section))
 
-section :: ULocParser Section
+section :: SourceParser Section
 section =
+  withSourcePos $
   choice
-    [ SecDecl <$> withSourcePos decl
+    [ SecDecl <$> decl
     , secSpan
-    , try $ SecProcedure <$> withSourcePos procedure
-    , SecDatum <$> withSourcePos datum
+    , try $ SecProcedure <$> procedure
+    , SecDatum <$> datum
     ]
 
-decl :: ULocParser Decl
+decl :: SourceParser Decl
 decl =
+  withSourcePos $
   choice
     [ importDecl
     , exportDecl
@@ -137,20 +138,16 @@ decl =
     ]
 
 importDecl :: ULocParser Decl
-importDecl =
-  keyword "import" *> (ImportDecl <$> commaList (withSourcePos import_)) <*
-  semicolon
+importDecl = keyword "import" *> (ImportDecl <$> commaList import_) <* semicolon
 
 exportDecl :: ULocParser Decl
-exportDecl =
-  keyword "export" *> (ExportDecl <$> commaList (withSourcePos export)) <*
-  semicolon
+exportDecl = keyword "export" *> (ExportDecl <$> commaList export) <* semicolon
 
 constDecl :: ULocParser Decl
 constDecl = do
   keyword "const"
   try
-    (do t <- withSourcePos typeToken
+    (do t <- typeToken
         declName <- identifier
         symbol "="
         expr <- expression
@@ -164,9 +161,7 @@ constDecl = do
 
 typedefDecl :: ULocParser Decl
 typedefDecl =
-  keyword "typedef" *>
-  (withSourcePos typeToken <**> (flip TypedefDecl <$> identifiers)) <*
-  semicolon
+  keyword "typedef" *> (TypedefDecl <$> typeToken <*> identifiers) <* semicolon
 
 pragmaDecl :: ULocParser Decl
 pragmaDecl = do
@@ -177,11 +172,11 @@ pragmaDecl = do
 
 targetDecl :: ULocParser Decl
 targetDecl =
-  keyword "target" *> (TargetDecl <$> many (withSourcePos targetDirective)) <*
-  semicolon
+  keyword "target" *> (TargetDecl <$> many targetDirective) <* semicolon
 
-targetDirective :: ULocParser TargetDirective
+targetDirective :: SourceParser TargetDirective
 targetDirective =
+  withSourcePos $
   choice
     [ memSizeDirective
     , byteOrderDirective
@@ -191,8 +186,7 @@ targetDirective =
 
 registerDecl :: ULocParser Decl
 registerDecl =
-  ((RegDecl . (Invariant <$) <$> optional (keyword "invariant")) <*>
-   withSourcePos registers) <*
+  ((RegDecl . (Invariant <$) <$> optional (keyword "invariant")) <*> registers) <*
   semicolon
 
 memSizeDirective :: ULocParser TargetDirective
@@ -219,49 +213,56 @@ wordSizeDirective = do
   (wordSize, False) <- integer
   return $ PointerSize wordSize
 
-procedure :: ULocParser Procedure
-procedure = do
-  conv <- optional convention
-  procName <- identifier
-  formals <- parens $ withSourcePos formal `sepEndBy` comma -- TODO: discuss later
-  procBody <- withSourcePos $ braces body
-  return $ Procedure conv procName formals procBody
+procedure :: SourceParser Procedure
+procedure =
+  withSourcePos $ do
+    conv <- optional convention
+    procName <- identifier
+    formals <- parens $ formal `sepEndBy` comma -- TODO: discuss later
+    Procedure conv procName formals <$> body
 
-formal :: ULocParser Formal
-formal = do
-  k <- optional kind
-  invar <- optional (keyword "invariant")
-  t <- withSourcePos typeToken
-  Formal k (Invariant <$ invar) t <$> identifier
+formal :: SourceParser Formal
+formal =
+  withSourcePos $ do
+    k <- optional kind
+    invar <- optional (keyword "invariant")
+    t <- typeToken
+    Formal k (Invariant <$ invar) t <$> identifier
 
-actual :: ULocParser Actual
-actual = (Actual <$> optional kind) <*> expression
+actual :: SourceParser Actual
+actual = withSourcePos $ (Actual <$> optional kind) <*> expression
+
+actuals :: Parser [Annot SourcePos Actual]
+actuals = parens $ actual `sepEndBy` comma
 
 convention :: Parser Conv
 convention = keyword "foreign" >> Foreign <$> stringLiteral
 
-import_ :: ULocParser Import
-import_ = Import <$> optional (stringLiteral <* keyword "as") <*> identifier
+import_ :: SourceParser Import
+import_ =
+  withSourcePos $
+  Import <$> optional (stringLiteral <* keyword "as") <*> identifier
 
-export :: ULocParser Export
-export = Export <$> identifier <*> optional (keyword "as" *> stringLiteral)
+export :: SourceParser Export
+export =
+  withSourcePos $
+  Export <$> identifier <*> optional (keyword "as" *> stringLiteral)
 
-body :: ULocParser Body
-body = Body <$> many (withSourcePos bodyItem)
+body :: SourceParser Body
+body = withSourcePos . braces $ Body <$> many bodyItem
 
-bodyItem :: ULocParser BodyItem
-bodyItem =
-  BodyStackDecl <$> withSourcePos stackDecl <|> BodyStmt <$> withSourcePos stmt
+bodyItem :: SourceParser BodyItem
+bodyItem = withSourcePos $ BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
 
 secSpan :: ULocParser Section
 secSpan = do
   left <- expression
   right <- expression
-  sections <- many (withSourcePos section)
+  sections <- many section
   return $ SecSpan left right sections
 
-datum :: ULocParser Datum
-datum = choice [alignDatum, try labelDatum, justDatum]
+datum :: SourceParser Datum
+datum = withSourcePos $ choice [try alignDatum, try labelDatum, justDatum]
 
 alignDatum :: ULocParser Datum
 alignDatum = do
@@ -275,12 +276,10 @@ labelDatum = DatumLabel <$> identifier <* symbol ":"
 
 justDatum :: ULocParser Datum
 justDatum =
-  Datum <$> withSourcePos typeToken <*> optional (withSourcePos size) <*>
-  optional (withSourcePos init_) <*
-  semicolon
+  Datum <$> typeToken <*> optional size <*> optional init_ <* semicolon
 
-init_ :: ULocParser Init
-init_ = choice [stringInit, string16Init, initList]
+init_ :: SourceParser Init
+init_ = withSourcePos $ choice [stringInit, string16Init, initList]
 
 initList :: ULocParser Init
 initList = braces $ ExprInit <$> commaList expression
@@ -292,27 +291,28 @@ string16Init :: ULocParser Init
 string16Init = do
   keyword "unicode"
   str <- parens stringLiteral
-  return $ Str16Init (String16 str) -- TODO: 16bit strings not yet implemented
+  return . Str16Init $ String16 str -- TODO: 16bit strings not yet implemented
 
-size :: ULocParser Size
-size = brackets $ Size <$> optional expression
+size :: SourceParser Size
+size = withSourcePos . brackets $ Size <$> optional expression
 
-registers :: ULocParser Registers
-registers = do
-  k <- optional kind
-  t <- withSourcePos typeToken
-  nvals <-
-    commaList
-      (do n <- identifier
-          val <-
-            optional $ do
-              symbol "="
-              stringLiteral
-          return (n, val))
-  return $ Registers k t nvals
+registers :: SourceParser Registers
+registers =
+  withSourcePos $ do
+    k <- optional kind
+    t <- typeToken
+    nvals <-
+      commaList
+        (do n <- identifier
+            val <-
+              optional $ do
+                symbol "="
+                stringLiteral
+            return (n, val))
+    return $ Registers k t nvals
 
-typeToken :: ULocParser Type
-typeToken = bitsType <|> nameType
+typeToken :: SourceParser Type
+typeToken = withSourcePos $ bitsType <|> nameType
 
 bitsType :: ULocParser Type
 bitsType = lexeme $ string "bits" >> TBits <$> L.decimal
@@ -326,17 +326,18 @@ kind = Kind <$> stringLiteral
 pragma :: Parser a
 pragma = undefined -- TODO pragmas not yet specified and with no explanation of functionality
 
-stackDecl :: ULocParser StackDecl
+stackDecl :: SourceParser StackDecl
 stackDecl =
-  keyword "stackdata" *> braces (StackDecl <$> many (withSourcePos datum))
+  withSourcePos $ keyword "stackdata" *> braces (StackDecl <$> many datum)
 
-stmt :: ULocParser Stmt
+stmt :: SourceParser Stmt
 stmt =
+  withSourcePos $
   choice
     [ emptyStmt
-    , ifStmt
+    , try ifStmt
     , try switchStmt
-    , spanStmt
+    , try spanStmt
     , try assignStmt
     , try primOpStmt
     , try jumpStmt
@@ -355,28 +356,22 @@ ifStmt :: ULocParser Stmt
 ifStmt = do
   keyword "if"
   expr <- expression
-  ifBody <- withSourcePos $ braces body
-  elseBody <- optional $ keyword "else" >> braces (withSourcePos body)
+  ifBody <- body
+  elseBody <- optional $ keyword "else" >> body
   return $ IfStmt expr ifBody elseBody
 
 switchStmt :: ULocParser Stmt
 switchStmt =
-  keyword "switch" *>
-  (expression <**> (flip SwitchStmt <$> braces (many (withSourcePos arm))))
+  keyword "switch" *> (SwitchStmt <$> expression <*> braces (many arm))
 
 spanStmt :: ULocParser Stmt
-spanStmt = do
-  keyword "span"
-  lExpr <- expression
-  rExpr <- expression
-  b <- braces (withSourcePos body)
-  return $ SpanStmt lExpr rExpr b
+spanStmt = keyword "span" *> (SpanStmt <$> expression <*> expression <*> body)
 
 assignStmt :: ULocParser Stmt
 assignStmt =
   liftA2
     AssignStmt
-    (commaList (withSourcePos lvalue) <* symbol "=")
+    (commaList lvalue <* symbol "=")
     (commaList expression <* semicolon)
 
 primOpStmt :: ULocParser Stmt
@@ -385,49 +380,48 @@ primOpStmt = do
   symbol "="
   symbol "%%"
   rName <- identifier
-  mActuals <- optional . parens $ sepEndBy (withSourcePos actual) comma
-  flows <- many (withSourcePos flow)
+  mActuals <- optional actuals
+  flows <- many flow
   semicolon
-  return $ PrimOpStmt lName rName (fromMaybe [] mActuals) flows
+  return $ PrimOpStmt lName rName (maybeToMonoid mActuals) flows
 
 callStmt :: ULocParser Stmt
 callStmt = do
   mKindNames <- optional kindedNames <* symbol "="
   mConv <- optional convention
   expr <- expression
-  actuals <- parens $ sepEndBy (withSourcePos actual) comma
-  mTargs <- optional (withSourcePos targets)
-  annots <- many (Left <$> withSourcePos flow <|> Right <$> withSourcePos alias)
+  acts <- actuals
+  mTargs <- optional targets
+  annots <- many (Left <$> flow <|> Right <$> alias)
   semicolon
-  return $ CallStmt (fromMaybe [] mKindNames) mConv expr actuals mTargs annots
+  return $ CallStmt (maybeToMonoid mKindNames) mConv expr acts mTargs annots
 
 jumpStmt :: ULocParser Stmt
 jumpStmt = do
   mConv <- optional convention
   keyword "jump"
   expr <- expression
-  mActuals <- optional . parens $ sepEndBy (withSourcePos actual) comma
-  mTargs <- optional (withSourcePos targets)
+  mActuals <- optional actuals
+  mTargs <- optional targets
   semicolon
-  return $ JumpStmt mConv expr (fromMaybe [] mActuals) mTargs
+  return $ JumpStmt mConv expr (maybeToMonoid mActuals) mTargs
 
 returnStmt :: ULocParser Stmt
 returnStmt = do
   mConv <- optional convention
   keyword "return"
   mExprs <- optional . angles $ liftA2 (,) expression expression
-  mActuals <- optional . parens $ sepEndBy (withSourcePos actual) comma
+  mActuals <- optional actuals
   semicolon
-  return $ ReturnStmt mConv mExprs (fromMaybe [] mActuals)
+  return $ ReturnStmt mConv mExprs (maybeToMonoid mActuals)
 
-lvalue :: ULocParser LValue
-lvalue = try lvRef <|> lvName
+lvalue :: SourceParser LValue
+lvalue = withSourcePos $ try lvRef <|> lvName
 
 lvRef :: ULocParser LValue
-lvRef = do
-  t <- withSourcePos typeToken
-  (expr, mAsserts) <- brackets $ liftA2 (,) expression (optional assertions)
-  return $ LVRef t expr mAsserts
+lvRef =
+  (LVRef <$> typeToken <*> (symbol "[" *> expression) <*> optional assertions) <*
+  symbol "]"
 
 lvName :: ULocParser LValue
 lvName = LVName <$> identifier
@@ -440,13 +434,13 @@ alignAssert =
   liftA2
     AlignAssert
     (keyword "aligned" *> (fst <$> integer))
-    (fromMaybe [] <$> optional (keyword "in" *> sepBy1 identifier comma))
+    (maybeToMonoid <$> optional (keyword "in" *> (identifier `sepBy1` comma)))
 
 inAssert :: ULocParser Asserts
 inAssert =
   liftA2
     InAssert
-    (keyword "in" *> sepBy1 identifier comma)
+    (keyword "in" *> (identifier `sepBy1` comma))
     (optional (keyword "aligned" *> (fst <$> integer)))
 
 labelStmt :: ULocParser Stmt
@@ -458,13 +452,13 @@ contStmt = do
   n <- identifier
   params <- parens $ optional kindedNames
   symbol ":"
-  return $ ContStmt n (fromMaybe [] params)
+  return $ ContStmt n (maybeToMonoid params)
 
 gotoStmt :: ULocParser Stmt
 gotoStmt = do
   keyword "goto"
   expr <- expression
-  mTargets <- optional (withSourcePos targets)
+  mTargets <- optional targets
   semicolon
   return $ GotoStmt expr mTargets
 
@@ -473,10 +467,10 @@ cutToStmt = do
   keyword "cut"
   keyword "to"
   expr <- expression
-  actuals <- parens $ sepEndBy (withSourcePos actual) comma
-  mFlow <- many (withSourcePos flow)
+  acts <- actuals
+  mFlow <- many flow
   semicolon
-  return $ CutToStmt expr actuals mFlow
+  return $ CutToStmt expr acts mFlow
 
 kindedNames :: Parser [Annot SourcePos KindName]
 kindedNames =
@@ -485,16 +479,18 @@ kindedNames =
         pos <- getSourcePos
         Annot pos . KindName k <$> identifier)
 
-arm :: ULocParser Arm
+arm :: SourceParser Arm
 arm =
-  keyword "case" *> (Arm <$> commaList (withSourcePos range) <* symbol ":") <*>
-  withSourcePos (braces body)
+  withSourcePos $
+  keyword "case" *> (Arm <$> commaList range <* symbol ":") <*> body
 
-range :: ULocParser Range
-range = expression <**> (flip Range <$> optional (symbol ".." *> expression))
+range :: SourceParser Range
+range =
+  withSourcePos $
+  (Range <$> expression) <*> optional (symbol ".." *> expression)
 
-flow :: ULocParser Flow
-flow = alsoFlow <|> neverReturns
+flow :: SourceParser Flow
+flow = withSourcePos $ alsoFlow <|> neverReturns
 
 alsoFlow :: ULocParser Flow
 alsoFlow =
@@ -519,8 +515,8 @@ neverReturns :: ULocParser Flow
 neverReturns =
   keyword "never" *> keyword "returns" *> optional comma $> NeverReturns
 
-alias :: ULocParser Alias
-alias = readsAlias <|> writesAlias
+alias :: SourceParser Alias
+alias = withSourcePos $ readsAlias <|> writesAlias
 
 readsAlias :: ULocParser Alias
 readsAlias = keyword "reads" *> (Reads <$> identifiers)
@@ -528,8 +524,8 @@ readsAlias = keyword "reads" *> (Reads <$> identifiers)
 writesAlias :: ULocParser Alias
 writesAlias = keyword "writes" *> (Writes <$> identifiers)
 
-targets :: ULocParser Targets
-targets = keyword "targets" *> (Targets <$> identifiers)
+targets :: SourceParser Targets
+targets = withSourcePos $ keyword "targets" *> (Targets <$> identifiers)
 
 expression :: SourceParser Expr
 expression = try infixExpr <|> binOpExpr
@@ -540,7 +536,7 @@ simpleExpr = choice [litExpr, parExpr, prefixExpr, try refExpr, nameExpr]
 litExpr :: SourceParser Expr
 litExpr = do
   literal <- choice [intExpr, floatExpr, charExpr]
-  mType <- optional $ symbol "::" *> withSourcePos typeToken
+  mType <- optional $ symbol "::" *> typeToken
   withSourcePos . return $ LitExpr literal mType
 
 intExpr :: SourceParser Lit
@@ -558,15 +554,12 @@ nameExpr = withSourcePos $ NameExpr <$> identifier
 refExpr :: SourceParser Expr
 refExpr =
   withSourcePos $ do
-    t <- withSourcePos typeToken
+    t <- typeToken
     (expr, mAsserts) <- brackets $ liftA2 (,) expression (optional assertions)
     return $ RefExpr t expr mAsserts
 
 parExpr :: SourceParser Expr
-parExpr =
-  withSourcePos $ do
-    pExpr <- parens expression
-    return $ ParExpr pExpr
+parExpr = withSourcePos $ ParExpr <$> parens expression
 
 binOpExpr :: SourceParser Expr
 binOpExpr = makeExprParser simpleExpr binOpTable
@@ -622,5 +615,5 @@ prefixExpr :: SourceParser Expr
 prefixExpr = do
   symbol "%"
   n <- identifier
-  mActuals <- optional . parens $ sepEndBy (withSourcePos actual) comma
-  withSourcePos . return $ PrefixExpr n (fromMaybe [] mActuals)
+  mActuals <- optional actuals
+  withSourcePos . return $ PrefixExpr n (maybeToMonoid mActuals)
