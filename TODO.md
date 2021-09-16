@@ -1,4 +1,5 @@
 # TODO
 
 - categorize names? (different namespaces for variables, operators, etc)
-- `justDatum` sounds weird
+- add comments
+- write unit tests
