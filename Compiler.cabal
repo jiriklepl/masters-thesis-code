@@ -23,7 +23,7 @@ executable Compiler
   import:              common-options
   main-is:             Compiler/Main.hs
   other-modules:       Language.Parser,
-                       Language.CMM,
+                       Language.AST,
                        Inference.Inference
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.16,

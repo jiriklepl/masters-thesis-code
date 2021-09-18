@@ -18,7 +18,7 @@ import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
 import Data.Foldable
-import Language.CMM
+import Language.AST
 
 type Parser = Parsec Void Text
 
@@ -573,8 +573,8 @@ class OpImpl a where
 instance OpImpl (Op, Text) where
   opRestInner (op, str) next = flip (BinOpExpr op) <$> (symbol str *> next)
 
-instance OpImpl [(Op, Text)] where
-  opRestInner opstrs next = foldl1 (<|>) (flip opRestInner next <$> opstrs)
+instance OpImpl x => OpImpl [x] where
+  opRestInner xs next = foldl1 (<|>) (flip opRestInner next <$> xs)
 
 instance OpImpl Text where
   opRestInner "`" next =
@@ -616,9 +616,8 @@ mulExpr = opImplL [(DivOp, "/" :: Text), (MulOp, "*"), (ModOp, "%")] negExpr
 
 negExpr :: SourceParser Expr
 negExpr =
-  withSourcePos
-    ((symbol "-" *> (NegExpr <$> negExpr)) <|>
-     (symbol "~" *> (ComExpr <$> negExpr))) <|>
+  withSourcePos (symbol "-" *> (NegExpr <$> negExpr)) <|>
+  withSourcePos (symbol "~" *> (ComExpr <$> negExpr)) <|>
   simpleExpr
 
 prefixExpr :: SourceParser Expr
