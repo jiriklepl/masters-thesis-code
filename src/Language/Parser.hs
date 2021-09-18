@@ -2,7 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Parser where
 
@@ -55,6 +55,16 @@ liftA6 ::
   -> f g
   -> f h
 liftA6 f a b c d e g = liftA5 f a b c d e <*> g
+
+infixl 4 <*<
+
+(<*<) :: Parser (b -> c) -> Parser (a -> b) -> Parser (a -> c)
+(<*<) = liftA2 (.)
+
+infixl 4 >*>
+
+(>*>) :: Parser (a -> b) -> Parser (b -> c) -> Parser (a -> c)
+(>*>) = liftA2 (flip (.))
 
 sc :: Parser ()
 sc = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
@@ -373,8 +383,8 @@ spanStmt = keyword "span" *> liftA3 SpanStmt expression expression body
 
 assignStmt :: ULocParser Stmt
 assignStmt =
-  AssignStmt <$>
-  liftA2 zip (commaList lvalue <* eqSign) (commaList expression <* semicolon)
+  AssignStmt <$> liftA2 zip (commaList lvalue <* eqSign) (commaList expression) <*
+  semicolon
 
 primOpStmt :: ULocParser Stmt
 primOpStmt =
@@ -512,7 +522,7 @@ targets :: SourceParser Targets
 targets = withSourcePos $ keyword "targets" *> (Targets <$> identifiers)
 
 expression :: SourceParser Expr
-expression = try infixExpr <|> binOpExpr
+expression = infixExpr
 
 simpleExpr :: SourceParser Expr
 simpleExpr = choice [litExpr, parExpr, prefixExpr, try refExpr, nameExpr]
@@ -546,98 +556,69 @@ refExpr = withSourcePos $ LVExpr <$> withSourcePos lvRef
 parExpr :: SourceParser Expr
 parExpr = withSourcePos $ ParExpr <$> parens expression
 
-binOpExpr :: SourceParser Expr
-binOpExpr = try cmpExpr <|> orExpr
+class OpImpl a where
+  opImplL :: a -> SourceParser Expr -> SourceParser Expr
+  opImplL x next = next <**> opRestImplL x next
+  opImplN :: a -> SourceParser Expr -> SourceParser Expr
+  opImplN x next = next <**> opRestImplN x next
+  opRestImplL ::
+       a
+    -> SourceParser Expr
+    -> Parser (Annot SourcePos Expr -> Annot SourcePos Expr)
+  opRestImplL x next =
+    Annot <$> getSourcePos <*< opRestInner x next >*> opRestImplL x next <|>
+    pure id
+  opRestImplN ::
+       a
+    -> SourceParser Expr
+    -> Parser (Annot SourcePos Expr -> Annot SourcePos Expr)
+  opRestImplN x next = Annot <$> getSourcePos <*< opRestInner x next <|> pure id
+  opRestInner ::
+       a -> SourceParser Expr -> Parser (Annot SourcePos Expr -> Expr SourcePos)
+
+instance OpImpl (Op, Text) where
+  opRestInner (op, str) next = flip (BinOpExpr op) <$> (symbol str *> next)
+
+instance OpImpl [(Op, Text)] where
+  opRestInner opstrs next = foldl1 (<|>) (flip opRestInner next <$> opstrs)
+
+instance OpImpl Text where
+  opRestInner "`" next =
+    symbol "`" *> (flip . InfixExpr . Name <$> name) <* symbol "`" <*> next
+  opRestInner _ _ = undefined
+
+infixExpr :: SourceParser Expr
+infixExpr = opImplN ("`" :: Text) cmpExpr
 
 cmpExpr :: SourceParser Expr
 cmpExpr =
-  withSourcePos $
-  flip
-    (\case
-       ">=" -> BinOpExpr GeOp
-       ">" -> BinOpExpr GtOp
-       "<=" -> BinOpExpr LeOp
-       "<" -> BinOpExpr LtOp
-       "!=" -> BinOpExpr NeqOp
-       _ -> BinOpExpr EqOp) <$>
-  orExpr <*>
-  choice (symbol <$> [">=", ">", "<=", "<", "!=", "=="]) <*>
-  orExpr
-
--- TODO: change right associativity to left
+  opImplN
+    [ (GeOp, ">=" :: Text)
+    , (GtOp, ">")
+    , (LeOp, "<=")
+    , (LtOp, "<")
+    , (NeqOp, "!=")
+    , (EqOp, "==")
+    ]
+    orExpr
 
 orExpr :: SourceParser Expr
-orExpr =
-  try
-    (do left <- xorExpr
-        let annot = takeAnnot left
-        symbol_ "|"
-        right <- orExpr
-        return . Annot annot $ BinOpExpr OrOp left right) <|>
-  xorExpr
+orExpr = opImplL (OrOp, "|" :: Text) xorExpr
 
 xorExpr :: SourceParser Expr
-xorExpr =
-  try
-    (do left <- andExpr
-        let annot = takeAnnot left
-        symbol_ "^"
-        right <- xorExpr
-        return . Annot annot $ BinOpExpr XorOp left right) <|>
-  andExpr
+xorExpr = opImplL (XorOp, "^" :: Text) andExpr
 
 andExpr :: SourceParser Expr
-andExpr =
-  try
-    (do left <- shExpr
-        let annot = takeAnnot left
-        symbol_ "&"
-        right <- andExpr
-        return . Annot annot $ BinOpExpr AndOp left right) <|>
-  shExpr
+andExpr = opImplL (XorOp, "&" :: Text) shExpr
 
 shExpr :: SourceParser Expr
-shExpr =
-  try
-    (do left <- addExpr
-        let annot = takeAnnot left
-        middle <- choice [symbol ">>", symbol "<<"]
-        right <- shExpr
-        return . Annot annot $
-          (\case
-             ">>" -> BinOpExpr ShROp left right
-             _ -> BinOpExpr ShLOp left right)
-            middle) <|>
-  addExpr
+shExpr = opImplL [(ShLOp, "<<" :: Text), (ShROp, ">>")] addExpr
 
 addExpr :: SourceParser Expr
-addExpr =
-  try
-    (do left <- mulExpr
-        let annot = takeAnnot left
-        middle <- choice [symbol "-", symbol "+"]
-        right <- addExpr
-        return . Annot annot $
-          (\case
-             "-" -> BinOpExpr SubOp left right
-             _ -> BinOpExpr AddOp left right)
-            middle) <|>
-  mulExpr
+addExpr = opImplL [(AddOp, "+" :: Text), (SubOp, "-")] mulExpr
 
 mulExpr :: SourceParser Expr
-mulExpr =
-  try
-    (do left <- negExpr
-        let annot = takeAnnot left
-        middle <- choice [symbol "/", symbol "*", symbol "%"]
-        right <- mulExpr
-        return . Annot annot $
-          (\case
-             "/" -> BinOpExpr DivOp left right
-             "*" -> BinOpExpr MulOp left right
-             _ -> BinOpExpr ModOp left right)
-            middle) <|>
-  negExpr
+mulExpr = opImplL [(DivOp, "/" :: Text), (MulOp, "*"), (ModOp, "%")] negExpr
 
 negExpr :: SourceParser Expr
 negExpr =
@@ -645,15 +626,6 @@ negExpr =
     ((symbol "-" *> (NegExpr <$> negExpr)) <|>
      (symbol "~" *> (ComExpr <$> negExpr))) <|>
   simpleExpr
-
-infixExpr :: SourceParser Expr
-infixExpr =
-  withSourcePos $
-  liftA3
-    InfixExpr
-    binOpExpr
-    (symbol "`" *> (Name <$> name) <* symbol "`")
-    binOpExpr
 
 prefixExpr :: SourceParser Expr
 prefixExpr =

@@ -185,7 +185,7 @@ data Expr a
   | BinOpExpr Op (Annot a Expr) (Annot a Expr)
   | ComExpr (Annot a Expr)
   | NegExpr (Annot a Expr)
-  | InfixExpr (Annot a Expr) Name (Annot a Expr)
+  | InfixExpr Name (Annot a Expr) (Annot a Expr)
   | PrefixExpr Name [Annot a Actual]
   deriving stock (Show, Data)
 
