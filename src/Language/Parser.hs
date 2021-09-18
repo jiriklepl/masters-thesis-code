@@ -26,8 +26,8 @@ type SourceParser a = Parser (Annot SourcePos a)
 
 type ULocParser a = Parser (a SourcePos)
 
-maybeToMonoid :: Monoid a => Maybe a -> a
-maybeToMonoid = fromMaybe mempty
+optionalL :: Parser [a] -> Parser [a]
+optionalL = (fromMaybe [] <$>) . optional
 
 liftA4 ::
      Applicative f => (a -> b -> c -> d -> e) -> f a -> f b -> f c -> f d -> f e
@@ -207,7 +207,7 @@ constDecl =
     (uncurry ConstDecl)
     (try (liftA2 (,) (optional typeToken) identifier) <|>
      (Nothing, ) <$> identifier)
-    (eqSign *> expression) <*
+    (eqSign *> expr) <*
   semicolon
 
 typedefDecl :: ULocParser Decl
@@ -255,8 +255,7 @@ procedure =
   withSourcePos $ liftA4 Procedure (optional convention) identifier formals body
 
 formal :: SourceParser Formal
-formal =
-  withSourcePos $ liftA4 Formal (optional kind) invariant typeToken identifier
+formal = withSourcePos $ liftA4 Formal mKind invariant typeToken identifier
 
 formals :: Parser [Annot SourcePos Formal]
 formals = parens $ formal `sepEndBy` comma
@@ -265,7 +264,7 @@ invariant :: Parser Bool
 invariant = try (keyword "invariant") $> True <|> pure False
 
 actual :: SourceParser Actual
-actual = withSourcePos $ liftA2 Actual (optional kind) expression
+actual = withSourcePos $ liftA2 Actual mKind expr
 
 actuals :: Parser [Annot SourcePos Actual]
 actuals = parens $ actual `sepEndBy` comma
@@ -290,7 +289,7 @@ bodyItem :: SourceParser BodyItem
 bodyItem = withSourcePos $ BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
 
 secSpan :: ULocParser Section
-secSpan = liftA3 SecSpan expression expression (many section)
+secSpan = liftA3 SecSpan expr expr (many section)
 
 datum :: SourceParser Datum
 datum = withSourcePos $ choice [try alignDatum, try labelDatum, justDatum]
@@ -308,7 +307,7 @@ init_ :: SourceParser Init
 init_ = withSourcePos $ choice [stringInit, string16Init, initList]
 
 initList :: ULocParser Init
-initList = braces $ ExprInit <$> commaList expression
+initList = braces $ ExprInit <$> commaList expr
 
 stringInit :: ULocParser Init
 stringInit = StrInit <$> stringLiteral
@@ -317,14 +316,14 @@ string16Init :: ULocParser Init
 string16Init = keyword "unicode" *> (Str16Init <$> parens stringLiteral)
 
 size :: SourceParser Size
-size = withSourcePos . brackets $ Size <$> optional expression
+size = withSourcePos . brackets $ Size <$> optional expr
 
 registers :: SourceParser Registers
 registers =
   withSourcePos $
   liftA3
     Registers
-    (optional kind)
+    mKind
     typeToken
     (commaList (liftA2 (,) identifier (optional $ eqSign *> stringLiteral)))
 
@@ -337,8 +336,8 @@ bitsType = lexeme $ string "bits" *> (TBits <$> L.decimal)
 nameType :: ULocParser Type
 nameType = TName <$> identifier
 
-kind :: Parser Kind
-kind = Kind <$> stringLiteral
+mKind :: Parser (Maybe Kind)
+mKind = optional $ Kind <$> stringLiteral
 
 pragma :: Parser a
 pragma = undefined -- TODO pragmas not yet specified and with no explanation of functionality
@@ -371,19 +370,17 @@ emptyStmt = semicolon $> EmptyStmt
 
 ifStmt :: ULocParser Stmt
 ifStmt =
-  keyword "if" *>
-  liftA3 IfStmt expression body (optional $ keyword "else" *> body)
+  keyword "if" *> liftA3 IfStmt expr body (optional $ keyword "else" *> body)
 
 switchStmt :: ULocParser Stmt
-switchStmt =
-  keyword "switch" *> liftA2 SwitchStmt expression (braces (many arm))
+switchStmt = keyword "switch" *> liftA2 SwitchStmt expr (braces (many arm))
 
 spanStmt :: ULocParser Stmt
-spanStmt = keyword "span" *> liftA3 SpanStmt expression expression body
+spanStmt = keyword "span" *> liftA3 SpanStmt expr expr body
 
 assignStmt :: ULocParser Stmt
 assignStmt =
-  AssignStmt <$> liftA2 zip (commaList lvalue <* eqSign) (commaList expression) <*
+  AssignStmt <$> liftA2 zip (commaList lvalue <* eqSign) (commaList expr) <*
   semicolon
 
 primOpStmt :: ULocParser Stmt
@@ -392,7 +389,7 @@ primOpStmt =
     PrimOpStmt
     (identifier <* eqSign)
     (symbol "%%" *> identifier)
-    (maybeToMonoid <$> optional actuals)
+    (optionalL actuals)
     (many flow) <*
   semicolon
 
@@ -400,9 +397,9 @@ callStmt :: ULocParser Stmt
 callStmt =
   liftA6
     CallStmt
-    (maybeToMonoid <$> (optional kindedNames <* eqSign))
+    (optionalL kindedNames <* eqSign)
     (optional convention)
-    expression
+    expr
     actuals
     (optional targets)
     (many (Left <$> flow <|> Right <$> alias)) <*
@@ -413,8 +410,8 @@ jumpStmt =
   liftA4
     JumpStmt
     (optional convention <* keyword "jump")
-    expression
-    (maybeToMonoid <$> optional actuals)
+    expr
+    (optionalL actuals)
     (optional targets) <*
   semicolon
 
@@ -425,7 +422,7 @@ returnStmt =
     (optional convention <* keyword "return")
     (optional . angles $
      liftA2 (,) (restrictedExpr <* symbol "/") restrictedExpr)
-    (maybeToMonoid <$> optional actuals) <*
+    (optionalL actuals) <*
   semicolon
 
 lvalue :: SourceParser LValue
@@ -433,21 +430,20 @@ lvalue = withSourcePos $ try lvRef <|> lvName
 
 lvRef :: ULocParser LValue
 lvRef =
-  liftA3 LVRef typeToken (symbol "[" *> expression) (optional assertions) <*
-  symbol "]"
+  liftA3 LVRef typeToken (symbol "[" *> expr) (optional asserts) <* symbol "]"
 
 lvName :: ULocParser LValue
 lvName = LVName <$> identifier
 
-assertions :: Parser (Annot SourcePos Asserts)
-assertions = withSourcePos $ alignAssert <|> inAssert
+asserts :: Parser (Annot SourcePos Asserts)
+asserts = withSourcePos $ alignAssert <|> inAssert
 
 alignAssert :: ULocParser Asserts
 alignAssert =
   liftA2
     AlignAssert
     (keyword "aligned" *> (fst <$> int))
-    (maybeToMonoid <$> optional (keyword "in" *> (identifier `sepBy1` comma)))
+    (optionalL $ keyword "in" *> (identifier `sepBy1` comma))
 
 inAssert :: ULocParser Asserts
 inAssert =
@@ -462,29 +458,27 @@ labelStmt = LabelStmt <$> identifier <* colon
 contStmt :: ULocParser Stmt
 contStmt =
   keyword "continuation" *>
-  liftA2 ContStmt identifier (maybeToMonoid <$> parens (optional kindedNames)) <*
+  liftA2 ContStmt identifier (parens $ optionalL kindedNames) <*
   colon
 
 gotoStmt :: ULocParser Stmt
 gotoStmt =
-  keyword "goto" *> liftA2 GotoStmt expression (optional targets) <* semicolon
+  keyword "goto" *> liftA2 GotoStmt expr (optional targets) <* semicolon
 
 cutToStmt :: ULocParser Stmt
 cutToStmt =
-  keywords ["cut", "to"] *> liftA3 CutToStmt expression actuals (many flow) <*
+  keywords ["cut", "to"] *> liftA3 CutToStmt expr actuals (many flow) <*
   semicolon
 
 kindedNames :: Parser [Annot SourcePos KindName]
-kindedNames =
-  commaList . withSourcePos $ liftA2 KindName (optional kind) identifier
+kindedNames = commaList . withSourcePos $ liftA2 KindName mKind identifier
 
 arm :: SourceParser Arm
 arm =
   withSourcePos $ keyword "case" *> liftA2 Arm (commaList range <* colon) body
 
 range :: SourceParser Range
-range =
-  withSourcePos $ liftA2 Range expression (optional (symbol ".." *> expression))
+range = withSourcePos $ liftA2 Range expr (optional (symbol ".." *> expr))
 
 flow :: SourceParser Flow
 flow = withSourcePos $ alsoFlow <|> neverReturns
@@ -521,8 +515,8 @@ writesAlias = keyword "writes" *> (Writes <$> identifiers)
 targets :: SourceParser Targets
 targets = withSourcePos $ keyword "targets" *> (Targets <$> identifiers)
 
-expression :: SourceParser Expr
-expression = infixExpr
+expr :: SourceParser Expr
+expr = infixExpr
 
 simpleExpr :: SourceParser Expr
 simpleExpr = choice [litExpr, parExpr, prefixExpr, try refExpr, nameExpr]
@@ -554,7 +548,7 @@ refExpr :: SourceParser Expr
 refExpr = withSourcePos $ LVExpr <$> withSourcePos lvRef
 
 parExpr :: SourceParser Expr
-parExpr = withSourcePos $ ParExpr <$> parens expression
+parExpr = withSourcePos $ ParExpr <$> parens expr
 
 class OpImpl a where
   opImplL :: a -> SourceParser Expr -> SourceParser Expr
@@ -629,6 +623,4 @@ negExpr =
 
 prefixExpr :: SourceParser Expr
 prefixExpr =
-  withSourcePos $
-  symbol "%" *>
-  liftA2 PrefixExpr identifier (maybeToMonoid <$> optional actuals)
+  withSourcePos $ symbol "%" *> liftA2 PrefixExpr identifier (optionalL actuals)
