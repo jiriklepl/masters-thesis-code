@@ -17,6 +17,8 @@ type Annot annot node = Annotation annot (node annot)
 takeAnnot :: Annot annot node -> annot
 takeAnnot (Annot annot _) = annot
 
+type AST a = Annot a Unit
+
 newtype Unit a =
   Unit [Annot a TopLevel]
   deriving (Show, Data)
@@ -51,17 +53,17 @@ data TargetDirective a
   | WordSize Int
   deriving (Show, Data)
 
-data Endian
-  = Little
-  | Big
-  deriving (Show, Data)
-
 data Import a =
   Import (Maybe Text) Name
   deriving (Show, Data)
 
 data Export a =
   Export Name (Maybe Text)
+  deriving (Show, Data)
+
+data Endian
+  = Little
+  | Big
   deriving (Show, Data)
 
 data Datum a
@@ -110,12 +112,8 @@ newtype Kind =
   Kind Text
   deriving (Show, Data)
 
-data KindName a =
-  KindName (Maybe Kind) Name
-  deriving (Show, Data)
-
 newtype StackDecl a =
-  StackDecl [Annot a Datum] -- at least one
+  StackDecl [Annot a Datum]
   deriving (Show, Data)
 
 data Stmt a
@@ -123,7 +121,7 @@ data Stmt a
   | IfStmt (Annot a Expr) (Annot a Body) (Maybe (Annot a Body))
   | SwitchStmt (Annot a Expr) [Annot a Arm]
   | SpanStmt (Annot a Expr) (Annot a Expr) (Annot a Body)
-  | AssignStmt [(Annot a LValue, Annot a Expr)]
+  | AssignStmt [Annot a LValue] [Annot a Expr]
   | PrimOpStmt Name Name [Annot a Actual] [Annot a Flow]
   | CallStmt
       [Annot a KindName]
@@ -145,6 +143,10 @@ data Stmt a
   | ContStmt Name [Annot a KindName]
   | GotoStmt (Annot a Expr) (Maybe (Annot a Targets))
   | CutToStmt (Annot a Expr) [Annot a Actual] [Annot a Flow]
+  deriving (Show, Data)
+
+data KindName a =
+  KindName (Maybe Kind) Name
   deriving (Show, Data)
 
 data Arm a =
@@ -206,7 +208,7 @@ newtype Conv =
 
 data Asserts a
   = AlignAssert Int [Name]
-  | InAssert [Name] (Maybe Int)
+  | InAssert [Name] (Maybe Int) -- at least one Name
   deriving (Show, Data)
 
 data Op

@@ -286,7 +286,7 @@ body :: SourceParser Body
 body = withSourcePos . braces $ Body <$> many bodyItem
 
 bodyItem :: SourceParser BodyItem
-bodyItem = withSourcePos $ BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
+bodyItem = withSourcePos $ BodyDecl <$> try decl <|> BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
 
 secSpan :: ULocParser Section
 secSpan = liftA3 SecSpan expr expr (many section)
@@ -380,7 +380,7 @@ spanStmt = keyword "span" *> liftA3 SpanStmt expr expr body
 
 assignStmt :: ULocParser Stmt
 assignStmt =
-  AssignStmt <$> liftA2 zip (commaList lvalue <* eqSign) (commaList expr) <*
+  liftA2 AssignStmt (commaList lvalue <* eqSign) (commaList expr) <*
   semicolon
 
 primOpStmt :: ULocParser Stmt
