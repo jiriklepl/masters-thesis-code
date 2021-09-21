@@ -22,7 +22,7 @@ import Language.AST
 
 type Parser = Parsec Void Text
 
-type SourceParser a = Parser (Annot SourcePos a)
+type SourceParser a = Parser (Annot a SourcePos)
 
 type ULocParser a = Parser (a SourcePos)
 
@@ -99,7 +99,7 @@ name =
     otherChars = oneOf ['_', '.', '$', '@']
 
 withSourcePos :: ULocParser a -> SourceParser a
-withSourcePos = liftA2 Annot getSourcePos
+withSourcePos = liftA2 (flip Annot) getSourcePos
 
 identifier :: Parser Name
 identifier = Name <$> lexeme name
@@ -257,7 +257,7 @@ procedure =
 formal :: SourceParser Formal
 formal = withSourcePos $ liftA4 Formal mKind invariant typeToken identifier
 
-formals :: Parser [Annot SourcePos Formal]
+formals :: Parser [Annot Formal SourcePos]
 formals = parens $ formal `sepEndBy` comma
 
 invariant :: Parser Bool
@@ -266,7 +266,7 @@ invariant = try (keyword "invariant") $> True <|> pure False
 actual :: SourceParser Actual
 actual = withSourcePos $ liftA2 Actual mKind expr
 
-actuals :: Parser [Annot SourcePos Actual]
+actuals :: Parser [Annot Actual SourcePos]
 actuals = parens $ actual `sepEndBy` comma
 
 convention :: Parser Conv
@@ -402,7 +402,7 @@ callStmt =
     expr
     actuals
     (optional targets)
-    (many (Left <$> flow <|> Right <$> alias)) <*
+    (many . withSourcePos $ FlowAnnot <$> flow <|> AliasAnnot <$> alias) <*
   semicolon
 
 jumpStmt :: ULocParser Stmt
@@ -435,7 +435,7 @@ lvRef =
 lvName :: ULocParser LValue
 lvName = LVName <$> identifier
 
-asserts :: Parser (Annot SourcePos Asserts)
+asserts :: Parser (Annot Asserts SourcePos)
 asserts = withSourcePos $ alignAssert <|> inAssert
 
 alignAssert :: ULocParser Asserts
@@ -470,7 +470,7 @@ cutToStmt =
   keywords ["cut", "to"] *> liftA3 CutToStmt expr actuals (many flow) <*
   semicolon
 
-kindedNames :: Parser [Annot SourcePos KindName]
+kindedNames :: Parser [Annot KindName SourcePos]
 kindedNames = commaList . withSourcePos $ liftA2 KindName mKind identifier
 
 arm :: SourceParser Arm
@@ -558,17 +558,17 @@ class OpImpl a where
   opRestImplL ::
        a
     -> SourceParser Expr
-    -> Parser (Annot SourcePos Expr -> Annot SourcePos Expr)
+    -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
   opRestImplL x next =
-    Annot <$> getSourcePos <*< opRestInner x next >*> opRestImplL x next <|>
+    flip Annot <$> getSourcePos <*< opRestInner x next >*> opRestImplL x next <|>
     pure id
   opRestImplN ::
        a
     -> SourceParser Expr
-    -> Parser (Annot SourcePos Expr -> Annot SourcePos Expr)
-  opRestImplN x next = Annot <$> getSourcePos <*< opRestInner x next <|> pure id
+    -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
+  opRestImplN x next = flip Annot <$> getSourcePos <*< opRestInner x next <|> pure id
   opRestInner ::
-       a -> SourceParser Expr -> Parser (Annot SourcePos Expr -> Expr SourcePos)
+       a -> SourceParser Expr -> Parser (Annot Expr SourcePos -> Expr SourcePos)
 
 instance OpImpl (Op, Text) where
   opRestInner (op, str) next = flip (BinOpExpr op) <$> (symbol str *> next)

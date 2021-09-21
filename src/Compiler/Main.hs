@@ -5,10 +5,9 @@ module Main where
 
 import Control.Monad.State as State
 import Data.Text as T
+import Data.Void
 import Data.Text.IO as T
-import Text.Megaparsec
-
-import Language.Parser
+import Text.Megaparsec hiding (parse)
 
 import LLVM.AST hiding (function)
 import qualified LLVM.AST.Constant as C
@@ -21,13 +20,22 @@ import LLVM.IRBuilder.Instruction
 import LLVM.IRBuilder.Module
 import LLVM.IRBuilder.Monad
 
+import Language.Parser
+import Language.AST
+import Language.Pretty()
+import Prettyprinter(pretty)
+
 -- main :: IO ()
 -- main = T.putStrLn $ ppllvm $ buildModule "exampleModule" $ mdo
 --   function "add" [(i32, "foo"), (i32, "bar")] i32 $ \[a, b] -> mdo
 --     entry <- block `named` "entry"; do
 --       c <- add a b
 --       ret c
+
 main :: IO ()
-main = do
-  contents <- T.getContents
-  print $ runParser program "stdin" contents
+main = T.getContents >>= either print (print . pretty) . parse
+
+parse :: Text
+  -> Either
+     (ParseErrorBundle Text Void) (Annot Unit SourcePos)
+parse = runParser program "stdin"

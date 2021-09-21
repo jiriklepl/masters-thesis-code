@@ -25,8 +25,8 @@ maybeSpacedR = maybe mempty ((<> space) . pretty)
 ifTrue :: Monoid a => Bool -> a -> a
 ifTrue bool x = if bool then x else mempty
 
-instance (Pretty (n a)) => Pretty (Annot a n) where
-    pretty (Annot _ x) = pretty x
+instance (Pretty (n a)) => Pretty (Annot n a) where
+    pretty (Annot n _) = pretty n
 
 instance Pretty (Unit a) where
     pretty (Unit topLevels) = vsep $ pretty <$> topLevels
@@ -149,6 +149,10 @@ instance Pretty (Alias a) where
     pretty (Reads names) = "reads" <+> commaSep (pretty <$> names)
     pretty (Writes names) = "writes" <+> commaSep (pretty <$> names)
 
+instance Pretty (CallAnnot a) where
+    pretty (AliasAnnot alias) = pretty alias
+    pretty (FlowAnnot flow) = pretty flow
+
 instance Pretty (Targets a) where
     pretty (Targets names) = "targets" <+> commaSep (pretty <$> names)
 
@@ -205,6 +209,3 @@ instance Pretty Name where
 prettyCallStmtRest :: Stmt a -> Doc ann
 prettyCallStmtRest (CallStmt _ _ expr actuals mTargets flowOrAliases) = pretty expr <> parens (commaSep $ pretty <$> actuals) <+> maybeSpacedR mTargets <> hsep (pretty <$> flowOrAliases) <> semi
 prettyCallStmtRest _ = error "`prettyCallStmtRest` is implemented only for call statements"
-
-instance Pretty (Either (Annot a Flow) (Annot a Alias)) where
-    pretty = either pretty pretty

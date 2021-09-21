@@ -12,6 +12,9 @@ cradle:
     - path: "src/Inference/Inference.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/Inference/Pretty.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "vendor/llvm-hs-pretty/src"
       component: "lib:llvm-hs-pretty"
 
