@@ -84,9 +84,9 @@ keyword k = void . lexeme $ try (string k <* notFollowedBy alphaNumChar)
 keywords :: [Text] -> Parser ()
 keywords = traverse_ keyword
 
-stringLiteral :: Parser Text
+stringLiteral :: Parser StrLit
 stringLiteral =
-  lexeme $ char '"' *> (T.pack <$> manyTill L.charLiteral (char '"'))
+  lexeme $ char '"' *> (StrLit . T.pack <$> manyTill L.charLiteral (char '"'))
 
 charLiteral :: Parser Char
 charLiteral = lexeme $ char '\'' *> L.charLiteral <* char '\''
@@ -99,13 +99,13 @@ name =
     otherChars = oneOf ['_', '.', '$', '@']
 
 withSourcePos :: ULocParser a -> SourceParser a
-withSourcePos = liftA2 (flip Annot) getSourcePos
+withSourcePos = liftA2 withAnnot getSourcePos
 
-identifier :: Parser Name
+identifier :: ULocParser Name
 identifier = Name <$> lexeme name
 
-identifiers :: Parser [Name]
-identifiers = commaList identifier
+identifiers :: Parser [Annot Name SourcePos]
+identifiers = commaList $ withSourcePos identifier
 
 braces :: Parser a -> Parser a
 braces = between (symbol_ "{") (symbol_ "}")
@@ -155,8 +155,11 @@ decimal = liftA2 (,) L.decimal unsignedSpec
 unsignedSpec :: Parser Bool
 unsignedSpec = isNothing <$> optional (oneOf ['u', 'U'])
 
+float :: Parser Float
+float = lexeme L.float
+
 program :: SourceParser Unit
-program = sc *> unit
+program = sc *> unit <* eof
 
 -- | Parses the whole 'Unit'
 unit :: SourceParser Unit
@@ -165,11 +168,11 @@ unit = withSourcePos $ Unit <$> many topLevel
 topLevel :: SourceParser TopLevel
 topLevel =
   withSourcePos $
-  choice [sectionTopLevel, try $ TopProcedure <$> procedure, TopDecl <$> decl]
+  choice [sectionTopLevel, TopDecl <$> decl, TopProcedure <$> try procedure]
 
 sectionTopLevel :: ULocParser TopLevel
 sectionTopLevel =
-  keyword "section" *> liftA2 TopSection stringLiteral (braces (many section))
+  keyword "section" *> liftA2 TopSection stringLiteral (braces $ many section)
 
 section :: SourceParser Section
 section =
@@ -177,7 +180,7 @@ section =
   choice
     [ SecDecl <$> decl
     , secSpan
-    , try $ SecProcedure <$> procedure
+    , SecProcedure <$> try procedure
     , SecDatum <$> datum
     ]
 
@@ -191,7 +194,7 @@ decl =
     , typedefDecl
     , pragmaDecl
     , targetDecl
-    , registerDecl
+    , try registerDecl
     ]
 
 importDecl :: ULocParser Decl
@@ -289,10 +292,10 @@ bodyItem :: SourceParser BodyItem
 bodyItem = withSourcePos $ BodyDecl <$> try decl <|> BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
 
 secSpan :: ULocParser Section
-secSpan = liftA3 SecSpan expr expr (many section)
+secSpan = keyword "span" *> liftA3 SecSpan expr expr (braces $ many section)
 
 datum :: SourceParser Datum
-datum = withSourcePos $ choice [try alignDatum, try labelDatum, justDatum]
+datum = withSourcePos $ choice [alignDatum, try labelDatum, justDatum]
 
 alignDatum :: ULocParser Datum
 alignDatum = keyword "align" *> (DatumAlign . fst <$> unsignedInt) <* semicolon
@@ -325,7 +328,7 @@ registers =
     Registers
     mKind
     typeToken
-    (commaList (liftA2 (,) identifier (optional $ eqSign *> stringLiteral)))
+    (commaList (liftA2 (,) (withSourcePos identifier) (optional $ eqSign *> stringLiteral)))
 
 typeToken :: SourceParser Type
 typeToken = withSourcePos $ bitsType <|> nameType
@@ -354,8 +357,8 @@ stmt =
     , ifStmt
     , switchStmt
     , spanStmt
-    , jumpStmt
-    , returnStmt
+    , try jumpStmt
+    , try returnStmt
     , gotoStmt
     , contStmt
     , cutToStmt
@@ -443,13 +446,13 @@ alignAssert =
   liftA2
     AlignAssert
     (keyword "aligned" *> (fst <$> int))
-    (optionalL $ keyword "in" *> (identifier `sepBy1` comma))
+    (optionalL $ keyword "in" *> (withSourcePos identifier `sepBy1` comma))
 
 inAssert :: ULocParser Asserts
 inAssert =
   liftA2
     InAssert
-    (keyword "in" *> (identifier `sepBy1` comma))
+    (keyword "in" *> (withSourcePos identifier `sepBy1` comma))
     (optional (keyword "aligned" *> (fst <$> int)))
 
 labelStmt :: ULocParser Stmt
@@ -529,17 +532,17 @@ litExpr =
   withSourcePos $
   liftA2
     LitExpr
-    (choice [intExpr, floatExpr, charExpr])
+    (withSourcePos $ choice [charExpr, try floatExpr, intExpr])
     (optional $ symbol "::" *> typeToken)
 
-intExpr :: SourceParser Lit
-intExpr = withSourcePos $ LitInt . fst <$> int
+intExpr :: ULocParser Lit
+intExpr = LitInt . fst <$> int
 
-floatExpr :: SourceParser Lit
-floatExpr = intExpr -- TODO: implement for floats
+floatExpr :: ULocParser Lit
+floatExpr = LitFloat <$> float
 
-charExpr :: SourceParser Lit
-charExpr = withSourcePos $ LitChar <$> charLiteral
+charExpr :: ULocParser Lit
+charExpr = LitChar <$> charLiteral
 
 nameExpr :: SourceParser Expr
 nameExpr = withSourcePos $ LVExpr <$> withSourcePos lvName
@@ -560,13 +563,13 @@ class OpImpl a where
     -> SourceParser Expr
     -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
   opRestImplL x next =
-    flip Annot <$> getSourcePos <*< opRestInner x next >*> opRestImplL x next <|>
+    withAnnot <$> getSourcePos <*< opRestInner x next >*> opRestImplL x next <|>
     pure id
   opRestImplN ::
        a
     -> SourceParser Expr
     -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
-  opRestImplN x next = flip Annot <$> getSourcePos <*< opRestInner x next <|> pure id
+  opRestImplN x next = withAnnot <$> getSourcePos <*< opRestInner x next <|> pure id
   opRestInner ::
        a -> SourceParser Expr -> Parser (Annot Expr SourcePos -> Expr SourcePos)
 

@@ -4,7 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Pretty where
+module Language.Pretty(pretty) where
 
 import Prettyprinter
 
@@ -32,7 +32,7 @@ instance Pretty (Unit a) where
     pretty (Unit topLevels) = vsep $ pretty <$> topLevels
 
 instance Pretty (TopLevel a) where
-    pretty (TopSection name items) = dquotes (pretty name) <+> bracesBlock items
+    pretty (TopSection name items) = "section" <+> pretty name <+> bracesBlock items
     pretty (TopDecl decl) = pretty decl
     pretty (TopProcedure procedure) = pretty procedure
 
@@ -58,11 +58,11 @@ instance Pretty (TargetDirective a) where
     pretty (WordSize int) = "wordsize" <+> pretty int
 
 instance Pretty (Import a) where
-    pretty (Import (Just string) name) = dquotes (pretty string) <+> "as" <+> pretty name
+    pretty (Import (Just string) name) = pretty string <+> "as" <+> pretty name
     pretty (Import Nothing name) = pretty name
 
 instance Pretty (Export a) where
-    pretty (Export name (Just string)) = pretty name <+> "as" <+> dquotes (pretty string)
+    pretty (Export name (Just string)) = pretty name <+> "as" <+> pretty string
     pretty (Export name Nothing) = pretty name
 
 instance Pretty Endian where
@@ -76,11 +76,11 @@ instance Pretty (Datum a) where
 
 instance Pretty (Init a) where
     pretty (ExprInit exprs) = braces $ commaSep (pretty <$> exprs)
-    pretty (StrInit string) = dquotes (pretty string)
+    pretty (StrInit string) = pretty string
     pretty (Str16Init string) = "unicode" <> parens (dquotes $ pretty string)
 
 instance Pretty (Registers a) where
-    pretty (Registers mKind type_ nameStringPairs) = maybeSpacedR mKind <> pretty type_ <+> commaSep [pretty name <> maybe mempty ((space <>) . (equals <+>) . dquotes . pretty) mString | (name, mString) <- nameStringPairs]
+    pretty (Registers mKind type_ nameStringPairs) = maybeSpacedR mKind <> pretty type_ <+> commaSep [pretty name <> maybe mempty ((space <>) . (equals <+>) . pretty) mString | (name, mString) <- nameStringPairs]
 
 instance Pretty (Size a) where
     pretty (Size mExpr) = brackets $ maybe mempty pretty mExpr
@@ -103,7 +103,7 @@ instance Pretty (Actual a) where
     pretty (Actual mKind expr) = maybeSpacedR mKind <> pretty expr
 
 instance Pretty Kind where
-    pretty (Kind string) = dquotes $ pretty string
+    pretty (Kind string) = pretty string
 
 instance Pretty (StackDecl a) where
     pretty (StackDecl datums) = "stackdata" <+> bracesBlock datums
@@ -118,7 +118,7 @@ instance Pretty (Stmt a) where
     pretty callStmt@(CallStmt [] mConv _ _ _ _) = maybeSpacedR mConv <> prettyCallStmtRest callStmt
     pretty callStmt@(CallStmt kindedNames mConv _ _ _ _) = commaSep (pretty <$> kindedNames) <+> equals <> maybeSpacedL mConv <+> prettyCallStmtRest callStmt
     pretty (JumpStmt mConv expr actuals mTargets) = "jump" <+> maybeSpacedR mConv <> pretty expr <> parens (commaSep $ pretty <$> actuals) <> maybeSpacedL mTargets <> semi
-    pretty (ReturnStmt mConv mChoices actuals) = "return" <+> maybeSpacedR mConv <> maybe mempty (\(left, right) -> angles $ pretty left <> slash <> pretty right) mChoices <> parens (commaSep $ pretty <$> actuals) <> semi
+    pretty (ReturnStmt mConv mChoices actuals) = maybeSpacedR mConv <> "return" <+> maybe mempty (\(left, right) -> angles $ pretty left <> slash <> pretty right) mChoices <> parens (commaSep $ pretty <$> actuals) <> semi
     pretty (LabelStmt name) = pretty name <> colon
     pretty (ContStmt name kindedNames) = "continuation" <+> pretty name <> parens (commaSep $ pretty <$> kindedNames)
     pretty (GotoStmt expr mTargets) = "goto" <+> pretty expr <> maybeSpacedL mTargets <> semi
@@ -193,7 +193,7 @@ instance Pretty (Type a) where
     pretty (TName name) = pretty name
 
 instance Pretty Conv where
-    pretty (Foreign string) = "foreign" <+> dquotes (pretty string)
+    pretty (Foreign string) = "foreign" <+> pretty string
 
 instance Pretty (Asserts a) where
     pretty (AlignAssert int []) = "aligned" <+> pretty int
@@ -203,8 +203,10 @@ instance Pretty (Asserts a) where
 instance Pretty (Pragma a) where
     pretty _ = error "`Pragma`s are not specified" -- TODO: pragmas are not specified
 
-instance Pretty Name where
+instance Pretty (Name a) where
     pretty (Name name) = pretty name
+instance Pretty StrLit where
+    pretty (StrLit string) = pretty $ show string
 
 prettyCallStmtRest :: Stmt a -> Doc ann
 prettyCallStmtRest (CallStmt _ _ expr actuals mTargets flowOrAliases) = pretty expr <> parens (commaSep $ pretty <$> actuals) <+> maybeSpacedR mTargets <> hsep (pretty <$> flowOrAliases) <> semi
