@@ -2,38 +2,38 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Language.AST where
 
-import Data.Data
-import Data.Functor
-import Data.Text (Text)
-import Prelude
+import safe Data.Data (Data)
+import safe qualified Data.Kind as Kind
+import safe Data.Text (Text)
+import safe Prelude
 
-data Annotation node annot = Annot (node annot) annot deriving (Show, Functor, Data)
+data Annotation node annot =
+  Annot (node annot) annot
+  deriving (Show, Functor, Data)
+
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
 
 type Annot = Annotation
-
 type Annotated = Functor
 
-withAnnot :: a -> n a -> Annot n a
-withAnnot = flip Annot
+class ASTNode (n :: Kind.Type -> Kind.Type)
+class AST (n :: Kind.Type -> Kind.Type)
 
-takeAnnot :: Annot n a -> a
-takeAnnot (Annot _ annot) = annot
-
-updateAnnots :: Annotated n => (a -> b) -> n a -> n b
-updateAnnots = fmap
-
-stripAnnots :: Annotated n => n a -> n ()
-stripAnnots = void
+instance (ASTNode n) => AST n
+instance (ASTNode n) => AST (Annot n)
 
 newtype Unit a =
   Unit [Annot TopLevel a]
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Unit ())
 
@@ -41,7 +41,7 @@ data TopLevel a
   = TopSection StrLit [Annot Section a]
   | TopDecl (Annot Decl a)
   | TopProcedure (Annot Procedure a)
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (TopLevel ())
 
@@ -50,7 +50,7 @@ data Section a
   | SecProcedure (Annot Procedure a)
   | SecDatum (Annot Datum a)
   | SecSpan (Annot Expr a) (Annot Expr a) [Annot Section a]
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Section ())
 
@@ -62,7 +62,7 @@ data Decl a
   | RegDecl Bool (Annot Registers a)
   | PragmaDecl (Name a) (Annot Pragma a)
   | TargetDecl [Annot TargetDirective a]
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Decl ())
 
@@ -71,15 +71,15 @@ data TargetDirective a
   | ByteOrder Endian
   | PointerSize Int
   | WordSize Int
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data Import a =
   Import (Maybe StrLit) (Name a)
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data Export a =
   Export (Name a) (Maybe StrLit)
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data Endian
   = Little
@@ -90,7 +90,7 @@ data Datum a
   = DatumLabel (Name a)
   | DatumAlign Int
   | Datum (Annot Type a) (Maybe (Annot Size a)) (Maybe (Annot Init a))
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Datum ())
 
@@ -98,25 +98,25 @@ data Init a
   = ExprInit [Annot Expr a]
   | StrInit StrLit
   | Str16Init StrLit
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Init ())
 
 data Registers a =
   Registers (Maybe Kind) (Annot Type a) [(Annot Name a, Maybe StrLit)] -- at least one
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Registers ())
 
 newtype Size a =
   Size (Maybe (Annot Expr a))
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Size ())
 
 newtype Body a =
   Body [Annot BodyItem a]
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Body ())
 
@@ -124,25 +124,25 @@ data BodyItem a
   = BodyDecl (Annot Decl a)
   | BodyStackDecl (Annot StackDecl a)
   | BodyStmt (Annot Stmt a)
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (BodyItem ())
 
 data Procedure a =
   Procedure (Maybe Conv) (Name a) [Annot Formal a] (Annot Body a)
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Procedure ())
 
 data Formal a =
   Formal (Maybe Kind) Bool (Annot Type a) (Name a)
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Formal ())
 
 data Actual a =
   Actual (Maybe Kind) (Annot Expr a)
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Actual ())
 
@@ -152,7 +152,7 @@ newtype Kind =
 
 newtype StackDecl a =
   StackDecl [Annot Datum a]
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (StackDecl ())
 
@@ -183,30 +183,30 @@ data Stmt a
   | ContStmt (Name a) [Annot KindName a]
   | GotoStmt (Annot Expr a) (Maybe (Annot Targets a))
   | CutToStmt (Annot Expr a) [Annot Actual a] [Annot Flow a]
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Stmt ())
 
 data KindName a =
   KindName (Maybe Kind) (Name a)
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data Arm a =
   Arm [Annot Range a] (Annot Body a)
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Arm ())
 
 data Range a =
   Range (Annot Expr a) (Maybe (Annot Expr a))
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Range ())
 
 data LValue a
   = LVName (Name a)
   | LVRef (Annot Type a) (Annot Expr a) (Maybe (Annot Asserts a))
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (LValue ())
 
@@ -216,24 +216,24 @@ data Flow a
   | AlsoReturnsTo [Annot Name a] -- at least one
   | AlsoAborts
   | NeverReturns
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 -- TODO: should be a part of inference?
 data Alias a
   = Reads [Annot Name a]
   | Writes [Annot Name a]
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data CallAnnot a
   = FlowAnnot (Annot Flow a)
   | AliasAnnot (Annot Alias a)
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (CallAnnot ())
 
 newtype Targets a =
   Targets [Annot Name a]
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data Expr a
   = LitExpr (Annot Lit a) (Maybe (Annot Type a))
@@ -244,7 +244,7 @@ data Expr a
   | NegExpr (Annot Expr a)
   | InfixExpr (Name a) (Annot Expr a) (Annot Expr a)
   | PrefixExpr (Name a) [Annot Actual a]
-  deriving (Show, Functor, Data)
+  deriving (Show, Functor, Data, ASTNode)
 
 deriving instance Eq (Expr ())
 
@@ -252,12 +252,12 @@ data Lit a
   = LitInt Int -- TODO?: think more
   | LitFloat Float
   | LitChar Char
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data Type a
   = TBits Int
   | TName (Name a)
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 newtype Conv =
   Foreign StrLit
@@ -266,7 +266,7 @@ newtype Conv =
 data Asserts a
   = AlignAssert Int [Annot Name a]
   | InAssert [Annot Name a] (Maybe Int) -- at least one (Name a)
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 data Op
   = AddOp
@@ -289,17 +289,17 @@ data Op
 
 newtype Name a =
   Name Text
-  deriving (Show, Functor, Data, Eq)
+  deriving (Show, Functor, Data, Eq, ASTNode)
 
 newtype StrLit =
   StrLit Text
   deriving (Show, Data, Eq)
 
 data Pragma a
-  deriving (Functor, Data) -- TODO: the manual does not specify at all
+  deriving (Functor, Data, ASTNode) -- TODO: the manual does not specify at all
 
 instance Show (Pragma a) where
-  show = undefined
+  show = error "pragmas are not implemented"
 
 instance Eq (Pragma a) where
-  (==) = undefined
+  (==) = error "pragmas are not implemented"

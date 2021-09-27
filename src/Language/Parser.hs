@@ -19,6 +19,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 import Data.Foldable
 import Language.AST
+import Language.AST.Utils
 
 type Parser = Parsec Void Text
 
@@ -289,7 +290,9 @@ body :: SourceParser Body
 body = withSourcePos . braces $ Body <$> many bodyItem
 
 bodyItem :: SourceParser BodyItem
-bodyItem = withSourcePos $ BodyDecl <$> try decl <|> BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
+bodyItem =
+  withSourcePos $
+  BodyDecl <$> try decl <|> BodyStackDecl <$> stackDecl <|> BodyStmt <$> stmt
 
 secSpan :: ULocParser Section
 secSpan = keyword "span" *> liftA3 SecSpan expr expr (braces $ many section)
@@ -328,7 +331,11 @@ registers =
     Registers
     mKind
     typeToken
-    (commaList (liftA2 (,) (withSourcePos identifier) (optional $ eqSign *> stringLiteral)))
+    (commaList
+       (liftA2
+          (,)
+          (withSourcePos identifier)
+          (optional $ eqSign *> stringLiteral)))
 
 typeToken :: SourceParser Type
 typeToken = withSourcePos $ bitsType <|> nameType
@@ -383,8 +390,7 @@ spanStmt = keyword "span" *> liftA3 SpanStmt expr expr body
 
 assignStmt :: ULocParser Stmt
 assignStmt =
-  liftA2 AssignStmt (commaList lvalue <* eqSign) (commaList expr) <*
-  semicolon
+  liftA2 AssignStmt (commaList lvalue <* eqSign) (commaList expr) <* semicolon
 
 primOpStmt :: ULocParser Stmt
 primOpStmt =
@@ -569,7 +575,8 @@ class OpImpl a where
        a
     -> SourceParser Expr
     -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
-  opRestImplN x next = withAnnot <$> getSourcePos <*< opRestInner x next <|> pure id
+  opRestImplN x next =
+    withAnnot <$> getSourcePos <*< opRestInner x next <|> pure id
   opRestInner ::
        a -> SourceParser Expr -> Parser (Annot Expr SourcePos -> Expr SourcePos)
 

@@ -4,25 +4,36 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-module Main(main) where
+module Main
+  ( main
+  ) where
 
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe qualified Data.Text.IO as T
-import safe System.Exit ( exitFailure, exitSuccess )
+import safe System.Exit (exitFailure, exitSuccess)
 import safe Test.HUnit
-import safe Text.Megaparsec hiding (parse)
+import safe Prettyprinter (Doc(), Pretty(), pretty)
+import safe Text.Megaparsec
+  ( MonadParsec(eof)
+  , ParseErrorBundle()
+  , Parsec()
+  , many
+  , runParser
+  )
 
 import safe Language.AST
+import Language.AST.Utils
 import safe Language.Parser
-import safe Language.Pretty
-import safe Prettyprinter ( Pretty(), Doc() )
-import safe QuasiQuotes
+import safe Language.Pretty ()
+import safe QuasiQuotes (text)
 
-data SimpleAnnotation node annot = SimpleAnnot node annot deriving (Show, Functor)
+data SimpleAnnotation node annot =
+  SimpleAnnot node annot
+  deriving (Show, Functor)
+
 deriving instance Eq n => Eq (SimpleAnnotation n ())
 
 type SimpleAnnot = SimpleAnnotation
@@ -43,29 +54,37 @@ instance {-# OVERLAPPING #-} PrettyEmptyUnit () where
   prettyEmptyUnit () = mempty
 
 instance (PrettyEmptyUnit n) => Pretty (SimpleAnnot n a) where
-    pretty (SimpleAnnot n _) = prettyEmptyUnit n
+  pretty (SimpleAnnot n _) = prettyEmptyUnit n
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a
 parse parser = runParser parser "stdin"
 
-checkReparse :: (Eq (n ()), Functor n, Pretty (n a)) => Parser (n b) -> n a -> Bool
-checkReparse parser ast = either (const False) ((== stripAnnots ast) . stripAnnots) . parse (sc *> parser <* eof) . T.pack . show $ pretty ast
+checkReparse ::
+     (Eq (n ()), Functor n, Pretty (n a)) => Parser (n b) -> n a -> Bool
+checkReparse parser ast =
+  either (const False) ((== stripAnnots ast) . stripAnnots) .
+  parse (sc *> parser <* eof) . T.pack . show $
+  pretty ast
 
-testTemplate :: (Show a, Pretty a) => String -> Text -> Parser a -> (a -> Bool) -> Test
+testTemplate ::
+     (Show a, Pretty a) => String -> Text -> Parser a -> (a -> Bool) -> Test
 testTemplate testName input parser validator =
   testName ~: assertion $ parse (sc *> parser <* eof) input
   where
-    assertion (Left result) = assertFailure $ "Failed to parse the input: " ++ T.unpack input ++ "------\n" ++ show result
+    assertion (Left result) =
+      assertFailure $
+      "Failed to parse the input: " ++
+      T.unpack input ++ "------\n" ++ show result
     assertion (Right result) =
-        assertBool
-          ("Failed to validate the output: " ++ show (pretty result))
-          (validator result)
+      assertBool
+        ("Failed to validate the output: " ++ show (pretty result))
+        (validator result)
 
 manTests :: [Test]
 manTests =
   [ testTemplate
-    "manual, Figure 1"
-    [text|
+      "manual, Figure 1"
+      [text|
 /* Ordinary recursion */
 export sp1;
 sp1( bits32 n ) {
@@ -104,68 +123,68 @@ n = n-1;
 goto loop;
 } }
     |]
-    (many topLevel)
-    (all $ checkReparse topLevel)
+      (many topLevel)
+      (all $ checkReparse topLevel)
   , testTemplate
-    "manual, 3.3.2"
-    [text|
-    x _foo.name_abit_12.long
+      "manual, 3.3.2"
+      [text|
+x _foo.name_abit_12.long
 foo Sys.Indicators
 _912 .9Aname
 aname12 $1
 @name
     |]
-    (many identifier)
-    (all $ checkReparse identifier)
+      (many identifier)
+      (all $ checkReparse identifier)
   , testTemplate
-    "manual, 3.3.3, integer literals"
-    [text|
-    5 01234 23::bits8 077::bits16 0x00 255U::bits8 -128::bits8
+      "manual, 3.3.3, integer literals"
+      [text|
+5 01234 23::bits8 077::bits16 0x00 255U::bits8 -128::bits8
     |]
-    (many litExpr)
-    (all $ checkReparse litExpr)
+      (many litExpr)
+      (all $ checkReparse litExpr)
   , testTemplate
-    "manual, 3.3.3, bit vectors"
-    [text|
-    0x81::bits8 0201::bits8 129U::bits8 -127::bits8
+      "manual, 3.3.3, bit vectors"
+      [text|
+0x81::bits8 0201::bits8 129U::bits8 -127::bits8
     |]
-    (many litExpr)
-    (all $ checkReparse litExpr)
+      (many litExpr)
+      (all $ checkReparse litExpr)
   , testTemplate
-    "manual, 3.3.4, float literals"
-    [text|
-    3.1415 3e-5 1e+2 23.3e-4 2.71828e0::bits64
+      "manual, 3.3.4, float literals"
+      [text|
+3.1415 3e-5 1e+2 23.3e-4 2.71828e0::bits64
     |]
-    (many litExpr)
-    (all $ checkReparse litExpr)
+      (many litExpr)
+      (all $ checkReparse litExpr)
   , testTemplate
-    "manual, 3.3.5, char literals"
-    [text|
-    'a' 'a'::bits16 '\0' '\x0' '\010' '\r'
+      "manual, 3.3.5, char literals"
+      [text|
+'a' 'a'::bits16 '\0' '\x0' '\010' '\r'
     |]
-    (many litExpr)
-    (all $ checkReparse litExpr)
+      (many litExpr)
+      (all $ checkReparse litExpr)
   , testTemplate
-    "manual, 3.3.6, string literals"
-    [text|
-    "hello" "world\0" "(%d) (%s) \n"
+      "manual, 3.3.6, string literals"
+      [text|
+"hello" "world\0" "(%d) (%s) \n"
     |]
-    (many (withDummyAnnot <$> stringLiteral))
-    (all . checkReparse $ withDummyAnnot <$> stringLiteral)
+      (many (withDummyAnnot <$> stringLiteral))
+      (all . checkReparse $ withDummyAnnot <$> stringLiteral)
   , testTemplate
-    "manual, 3.4, comments"
-    [text|
-    /* This is a multi-line
+      "manual, 3.4, comments"
+      [text|
+/* This is a multi-line
 comment */
 // */ this is a one-line comment
 /*// this comment
 ends at the end of this line, not at the end of the line above */
     |]
-    (withDummyAnnot <$> mempty)
-    (checkReparse . pure $ withDummyAnnot ())
+      (withDummyAnnot <$> mempty)
+      (checkReparse . pure $ withDummyAnnot ())
   , testTemplate
-    "manual, TopLevel example"
-    [text|
+      "manual, TopLevel example"
+      [text|
 import printf, sqrt; /* C procedures used in this C-- program */
 export f3; /* To be used outside this C-- program */
 import "jump" as ext_jump;
@@ -304,8 +323,8 @@ bits32 m /* 2 */, n /* 3 */;
 return (y,x);
 }
     |]
-    (many topLevel)
-    (all $ checkReparse topLevel)
+      (many topLevel)
+      (all $ checkReparse topLevel)
   ]
 
 main :: IO ()
@@ -313,15 +332,17 @@ main = do
   results <-
     runTestTT $
     test
-      (manTests ++ [ testTemplate
-          "test1"
-          "x + y * z"
-          expr
-          (\case
-             Annot (BinOpExpr AddOp _ (Annot (BinOpExpr MulOp _ _) _)) _ -> True
-             _ -> False)
-      , "tests2" ~: assertEqual "Failed" (3 :: Integer) (3 :: Integer)
-      ])
+      (manTests ++
+       [ testTemplate
+           "test1"
+           "x + y * z"
+           expr
+           (\case
+              Annot (BinOpExpr AddOp _ (Annot (BinOpExpr MulOp _ _) _)) _ ->
+                True
+              _ -> False)
+       , "tests2" ~: assertEqual "Failed" (3 :: Integer) (3 :: Integer)
+       ])
   if errors results + failures results == 0
     then exitSuccess
     else exitFailure
