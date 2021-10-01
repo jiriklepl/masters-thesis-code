@@ -362,7 +362,7 @@ stmt =
   choice
     [ emptyStmt
     , ifStmt
-    , switchStmt
+    , try switchStmt
     , spanStmt
     , try jumpStmt
     , try returnStmt
