@@ -48,6 +48,11 @@ instance HasName (Formal a) where
 instance HasName Kind where
     getName (Kind (StrLit n)) = n
 
+instance HasName (Stmt a) where
+    getName (LabelStmt n) = getName n
+    getName (ContStmt n _) = getName n
+    getName _ = error "This statement does not have a name"
+
 instance HasName (KindName a) where
     getName (KindName _ n) = getName n
 
@@ -85,3 +90,8 @@ instance ASTNode n => EnsureNode n n where
 
 instance EnsureNode (Annot n) n where
   ensureNode = unAnnot
+
+getExprLVName :: Annot Expr annot -> Maybe Text
+getExprLVName (Annot (LVExpr (Annot (LVName n) _)) _) = Just $ getName n
+getExprLVName (Annot (ParExpr expr) _) = getExprLVName expr
+getExprLVName Annot{} = Nothing
