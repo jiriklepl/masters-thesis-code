@@ -95,7 +95,7 @@ charLiteral = lexeme $ char '\'' *> L.charLiteral <* char '\''
 name :: Parser Text
 name =
   T.pack <$>
-  liftA2 (:) (letterChar <|> otherChars) (many (alphaNumChar <|> otherChars))
+  liftA2 (:) (letterChar <|> otherChars) (many $ alphaNumChar <|> otherChars)
   where
     otherChars = oneOf ['_', '.', '$', '@']
 
@@ -487,7 +487,7 @@ arm =
   withSourcePos $ keyword "case" *> liftA2 Arm (commaList range <* colon) body
 
 range :: SourceParser Range
-range = withSourcePos $ liftA2 Range expr (optional (symbol ".." *> expr))
+range = withSourcePos $ liftA2 Range expr (optional $ symbol ".." *> expr)
 
 flow :: SourceParser Flow
 flow = withSourcePos $ alsoFlow <|> neverReturns
