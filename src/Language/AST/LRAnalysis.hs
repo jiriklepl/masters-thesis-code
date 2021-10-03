@@ -446,9 +446,9 @@ instance HasPosAnnot Import a => Blockify (Annot Decl) a where
   blockify decl@(Annot _ _) = return $ noBlockAnnots decl
 
 instance Blockify (Annot Import) a where
-  blockify import_@(Annot Import {} _) = do
-    modify $ \s -> s {imports = getName import_ : imports s}
-    return $ noBlockAnnots import_
+  blockify import'@(Annot Import {} _) = do
+    modify $ \s -> s {imports = getName import' : imports s}
+    return $ noBlockAnnots import'
 
 instance HasPosAnnot6 BodyItem Body Decl StackDecl Import Datum a =>
          Blockify (Annot Stmt) a where

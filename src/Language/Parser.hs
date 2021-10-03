@@ -76,8 +76,8 @@ lexeme = L.lexeme sc
 symbol :: Text -> Parser Text
 symbol = L.symbol sc
 
-symbol_ :: Text -> Parser ()
-symbol_ = void . L.symbol sc
+symbol' :: Text -> Parser ()
+symbol' = void . L.symbol sc
 
 keyword :: Text -> Parser ()
 keyword k = void . lexeme $ try (string k <* notFollowedBy alphaNumChar)
@@ -109,28 +109,28 @@ identifiers :: Parser [Annot Name SourcePos]
 identifiers = commaList $ withSourcePos identifier
 
 braces :: Parser a -> Parser a
-braces = between (symbol_ "{") (symbol_ "}")
+braces = between (symbol' "{") (symbol' "}")
 
 parens :: Parser a -> Parser a
-parens = between (symbol_ "(") (symbol_ ")")
+parens = between (symbol' "(") (symbol' ")")
 
 brackets :: Parser a -> Parser a
-brackets = between (symbol_ "[") (symbol_ "]")
+brackets = between (symbol' "[") (symbol' "]")
 
 angles :: Parser a -> Parser a
-angles = between (symbol_ "<") (symbol_ ">")
+angles = between (symbol' "<") (symbol' ">")
 
 comma :: Parser ()
-comma = symbol_ ","
+comma = symbol' ","
 
 semicolon :: Parser ()
-semicolon = symbol_ ";"
+semicolon = symbol' ";"
 
 eqSign :: Parser ()
-eqSign = symbol_ "="
+eqSign = symbol' "="
 
 colon :: Parser ()
-colon = symbol_ ":"
+colon = symbol' ":"
 
 commaList :: Parser a -> Parser [a]
 commaList = (`sepEndBy1` comma)
@@ -199,7 +199,7 @@ decl =
     ]
 
 importDecl :: ULocParser Decl
-importDecl = keyword "import" *> (ImportDecl <$> commaList import_) <* semicolon
+importDecl = keyword "import" *> (ImportDecl <$> commaList import') <* semicolon
 
 exportDecl :: ULocParser Decl
 exportDecl = keyword "export" *> (ExportDecl <$> commaList export) <* semicolon
@@ -276,8 +276,8 @@ actuals = parens $ actual `sepEndBy` comma
 convention :: Parser Conv
 convention = keyword "foreign" *> (Foreign <$> stringLiteral)
 
-import_ :: SourceParser Import
-import_ =
+import' :: SourceParser Import
+import' =
   withSourcePos $
   liftA2 Import (optional (stringLiteral <* keyword "as")) identifier
 
@@ -307,10 +307,10 @@ labelDatum :: ULocParser Datum
 labelDatum = DatumLabel <$> identifier <* colon
 
 justDatum :: ULocParser Datum
-justDatum = liftA3 Datum typeToken (optional size) (optional init_) <* semicolon
+justDatum = liftA3 Datum typeToken (optional size) (optional init') <* semicolon
 
-init_ :: SourceParser Init
-init_ = withSourcePos $ choice [stringInit, string16Init, initList]
+init' :: SourceParser Init
+init' = withSourcePos $ choice [stringInit, string16Init, initList]
 
 initList :: ULocParser Init
 initList = braces $ ExprInit <$> commaList expr
