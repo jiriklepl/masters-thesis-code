@@ -1,5 +1,8 @@
 # TODO
 
-- categorize names? (different namespaces for variables, operators, etc)
-- add comments
+- add haddock comments
 - write unit tests
+  - for binOp
+- write QuickCheck tests
+- do control flow analysis
+- translate c-- to llvm
