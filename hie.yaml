@@ -9,10 +9,19 @@ cradle:
     - path: "src/Language/AST.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Inference/Inference.hs"
+    - path: "src/Language/AST/Utils.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Inference/Pretty.hs"
+    - path: "src/Language/AST/Flattener.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Language/AST/LRAnalysis.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Language/Pretty.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Inference/Inference.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src"
