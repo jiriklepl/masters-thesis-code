@@ -6,10 +6,16 @@ cradle:
     - path: "src/Language/Parser.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/Language/Lexer.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/Language/AST.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/Language/AST/Utils.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Language/Utils.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/Language/AST/Flattener.hs"
@@ -19,6 +25,12 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/Language/Pretty.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Language/Translator.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Language/Warnings.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/Inference/Inference.hs"

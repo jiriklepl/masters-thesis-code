@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
@@ -9,11 +10,12 @@ module Language.AST.Flattener where
 
 import safe Control.Applicative (Applicative(liftA2))
 import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
-
-import qualified Data.Text as T
+import safe Data.Text (Text)
+import safe qualified Data.Text as T
 
 import safe Language.AST
 import safe Language.AST.Utils
+import safe Language.Utils
 
 class Flatten n where
   flatten :: n a -> n a
@@ -21,6 +23,11 @@ class Flatten n where
 class Functor n =>
       FlattenTrivial n
 
+helperName :: String -> Name a
+helperName = Name . addPrefix flattenerPrefix . T.pack
+
+flattenerPrefix :: Text
+flattenerPrefix = "F"
 
 type FlattenAnnot n = Flatten (Annot n)
 
@@ -122,8 +129,8 @@ brCond cond tName eName a =
 instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
   flattenStmt (Annot (IfStmt cond tBody Nothing) a) = do
     num <- show <$> fresh
-    let tName = Name . T.pack $ "then_" ++ num
-        fName = Name . T.pack $ "fi_" ++ num
+    let tName = helperName $ "then_" ++ num
+        fName = helperName $ "fi_" ++ num
     tTransl <- flattenBodyItems [tBody]
     pure $
       toBodyStmt (brCond cond tName fName a) :
@@ -131,9 +138,9 @@ instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
       tTransl ++ [toBodyStmt . withAnnot a $ LabelStmt fName]
   flattenStmt (Annot (IfStmt cond tBody (Just eBody)) a) = do
     num <- show <$> fresh
-    let tName = Name . T.pack $ "then_" ++ num
-    let eName = Name . T.pack $ "else_" ++ num
-        fName = Name . T.pack $ "fi_" ++ num
+    let tName = helperName $ "then_" ++ num
+    let eName = helperName $ "else_" ++ num
+        fName = helperName $ "fi_" ++ num
     tTransl <- flattenBodyItems [tBody]
     eTransl <- flattenBodyItems [eBody]
     pure $
@@ -145,9 +152,9 @@ instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
       eTransl ++ [toBodyStmt . withAnnot a $ LabelStmt fName]
   flattenStmt (Annot (SwitchStmt expr arms) annot) = do
     num <- show <$> fresh
-    let endName = Name . T.pack $ "switch_" ++ num ++ "_end"
+    let endName = helperName $ "switch_" ++ num ++ "_end"
     let caseNames =
-          Name . T.pack . (("switch_" ++ num ++ "_") ++) . show <$>
+          helperName . (("switch_" ++ num ++ "_") ++) . show <$>
           take (length arms) [(1 :: Int) ..]
     armsTransl <-
       sequence

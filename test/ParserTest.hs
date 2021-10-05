@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
@@ -12,6 +12,7 @@ module Main
   ) where
 
 import safe Data.Text (Text)
+import Debug.Trace (trace)
 import safe qualified Data.Text as T
 import safe System.Exit (exitFailure, exitSuccess)
 import safe Test.HUnit
@@ -26,6 +27,7 @@ import safe Text.Megaparsec
 
 import safe Language.AST
 import Language.AST.Utils
+import safe Language.Lexer
 import safe Language.Parser
 import safe Language.Pretty ()
 import safe QuasiQuotes (text)
@@ -63,13 +65,13 @@ checkReparse ::
      (Eq (n ()), Functor n, Pretty (n a)) => Parser (n b) -> n a -> Bool
 checkReparse parser ast =
   either (const False) ((== stripAnnots ast) . stripAnnots) .
-  parse (sc *> parser <* eof) . T.pack . show $
+  either undefined (parse parser) . parse tokenize . T.pack . show $
   pretty ast
 
 testTemplate ::
      (Show a, Pretty a) => String -> Text -> Parser a -> (a -> Bool) -> Test
 testTemplate testName input parser validator =
-  testName ~: assertion $ parse (sc *> parser <* eof) input
+  testName ~: assertion $ either ((`trace` undefined) . show) (parse parser) $ parse tokenize input
   where
     assertion (Left result) =
       assertFailure $

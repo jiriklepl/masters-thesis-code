@@ -21,6 +21,7 @@ data Annotation node annot =
   deriving (Show, Functor, Data)
 
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
+deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
 
 type Annot = Annotation
 type Annotated = Functor
@@ -218,7 +219,6 @@ data Flow a
   | NeverReturns
   deriving (Show, Functor, Data, Eq, ASTNode)
 
--- TODO: should be a part of inference?
 data Alias a
   = Reads [Annot Name a]
   | Writes [Annot Name a]
@@ -249,7 +249,7 @@ data Expr a
 deriving instance Eq (Expr ())
 
 data Lit a
-  = LitInt Int -- TODO?: think more
+  = LitInt Int
   | LitFloat Float
   | LitChar Char
   deriving (Show, Functor, Data, Eq, ASTNode)

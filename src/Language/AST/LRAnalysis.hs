@@ -14,28 +14,35 @@ module Language.AST.LRAnalysis where
 
 import safe Control.Monad.State.Lazy
 import safe Data.Foldable
+import safe Data.Maybe
+import safe Data.Tuple
+import safe Data.Graph (Graph)
+import safe qualified Data.Graph as Graph
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Set (Set)
+import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe qualified Data.Text.IO as T
-import safe Prettyprinter (pretty)
+import safe Prelude hiding (reads)
+import safe Prettyprinter (Pretty, pretty)
 import safe Text.Megaparsec.Pos (SourcePos)
 
 import safe Language.AST
 import safe Language.AST.Utils
+import safe Language.Utils
 import safe Language.Pretty ()
 import safe Language.Warnings
-import safe Prelude hiding (reads)
 
 data BlockAnnot
-  = PartOf Text
+  = PartOf Int
   | Begins Text
   | Unreachable
   | NoBlock
   deriving (Show)
 
-type MonadBlockify n m = (HasPos n, MonadState BlockifierState m, MonadIO m)
+type MonadBlockify m = (MonadState BlockifierState m, MonadIO m)
 
 class HasPos n where
   getPos :: n -> SourcePos
@@ -62,21 +69,25 @@ type HasPosAnnot7 n1 n2 n3 n4 n5 n6 n7 a
 type HasPosAnnot8 n1 n2 n3 n4 n5 n6 n7 n8 a
    = (HasPosAnnot n1 a, HasPosAnnot7 n2 n3 n4 n5 n6 n7 n8 a)
 
+type HasPosAnnot9 n1 n2 n3 n4 n5 n6 n7 n8 n9 a
+   = (HasPosAnnot n1 a, HasPosAnnot8 n2 n3 n4 n5 n6 n7 n8 n9 a)
+
 instance HasPos (Annot n SourcePos) where
   getPos = takeAnnot
 
 data BlockifierState =
   Blockifier
-    { controlFlow :: [(Text, Text)]
-    , currentBlock :: Maybe Text
+    { controlFlow :: [(Int, Int)]
+    , blocksTable :: Map Text Int
+    , currentBlock :: Maybe Int
     , currentData :: Map Text (Bool, Bool, Bool)
-    , blockData :: Map Text (Map Text (Bool, Bool, Bool))
-    , registers :: [Text]
-    , imports :: [Text]
-    , constants :: [Text]
-    , stackLabels :: [Text]
-    , labels :: [Text]
-    , continuations :: [Text]
+    , blockData :: Map Int (Map Text (Bool, Bool, Bool))
+    , registers :: Set Text
+    , imports :: Set Text
+    , constants :: Set Text
+    , stackLabels :: Set Text
+    , labels :: Set Text
+    , continuations :: Set Text
     , errors :: Int
     , warnings :: Int
     }
@@ -86,7 +97,8 @@ initBlockifier :: BlockifierState
 initBlockifier =
   Blockifier
     { controlFlow = mempty
-    , currentBlock = mempty
+    , blocksTable = mempty
+    , currentBlock = Nothing
     , currentData = mempty
     , blockData = mempty
     , registers = mempty
@@ -99,32 +111,50 @@ initBlockifier =
     , warnings = 0
     }
 
-registerError :: MonadBlockify n m => n -> Text -> m ()
-registerError node message = do
-  let pos = getPos node
-  modify $ \s -> s {errors = errors s + 1}
-  liftIO . T.putStrLn $ mkError pos message
+helperName :: Text -> Text
+helperName = addPrefix lrAnalysisPrefix
 
-registerWarning :: MonadBlockify n m => n -> Text -> m ()
+lrAnalysisPrefix :: Text
+lrAnalysisPrefix = "LR"
+
+registerError :: (HasPos n, Pretty n, MonadBlockify m) => n -> Text -> m ()
+registerError node message = do
+  modify $ \s -> s {errors = errors s + 1}
+  makeMessage mkError node message
+
+registerWarning :: (HasPos n, Pretty n, MonadBlockify m) => n -> Text -> m ()
 registerWarning node message = do
-  let pos = getPos node
   modify $ \s -> s {warnings = warnings s + 1}
-  liftIO . T.putStrLn $ mkWarning pos message
+  makeMessage mkWarning node message
+
+makeMessage :: (HasPos n, Pretty n, MonadBlockify m) => (SourcePos -> Text -> Text) -> n -> Text -> m ()
+makeMessage constructor node message = do
+  let pos = getPos node
+  liftIO . T.putStrLn $ constructor pos $ (T.pack . show $ pretty node) <> "\n\t" <> message
 
 blockIsSet :: MonadState BlockifierState m => m Bool
 blockIsSet = not . null <$> gets currentBlock
 
+blocksCache :: MonadState BlockifierState m => Text -> m Int
+blocksCache name = do
+  table <- gets blocksTable
+  case name `Map.lookup` table of
+    Just index -> return index
+    Nothing -> let index = Map.size table
+               in index <$ modify (\s -> s {blocksTable = Map.insert name index table})
+
 updateBlock :: MonadState BlockifierState m => Maybe Text -> m ()
 updateBlock mName = do
+  mIndex <- traverse blocksCache mName
   modify $ \s ->
     case currentBlock s of
       Just oldName ->
         s
           { blockData = Map.insert oldName (currentData s) (blockData s)
-          , currentBlock = mName
+          , currentBlock = mIndex
           , currentData = mempty
           }
-      Nothing -> s {currentBlock = mName}
+      Nothing -> s {currentBlock = mIndex}
 
 setBlock :: MonadState BlockifierState m => Text -> m ()
 setBlock = updateBlock . Just
@@ -139,11 +169,12 @@ withNoBlockAnnot :: a -> n (a, BlockAnnot) -> Annot n (a, BlockAnnot)
 withNoBlockAnnot a = withAnnot (a, NoBlock)
 
 addControlFlow :: MonadState BlockifierState m => Text -> m ()
-addControlFlow destBlock =
+addControlFlow destBlock = do
+  index <- blocksCache destBlock
   gets currentBlock >>= \case
     Nothing -> pure ()
     Just block ->
-      modify $ \s -> s {controlFlow = (block, destBlock) : controlFlow s}
+      modify $ \s -> s {controlFlow = (block, index) : controlFlow s}
 
 class MetadataType t =>
       Register t n
@@ -254,7 +285,7 @@ instance GetTrivialGotoTarget (Stmt a) where
   getTrivialGotoTarget _ = Nothing
 
 withBlockAnnot ::
-     MonadBlockify (Annot Stmt a) m
+     (HasPosAnnot Stmt a, MonadBlockify m)
   => Annot Stmt a
   -> m (Annot Stmt (a, BlockAnnot))
 withBlockAnnot stmt@(Annot n annot) =
@@ -349,6 +380,7 @@ instance GetMetadata WritesVars (Stmt a) where
   getMetadata t (AssignStmt lvalues _) = getMetadata t lvalues
   getMetadata _ (PrimOpStmt name _ _ _) = [getName name]
   getMetadata t (CallStmt kindNames _ _ _ _ _) = getMetadata t kindNames
+  getMetadata t (ContStmt _ kindNames) = getMetadata t kindNames
   getMetadata _ _ = []
 
 instance GetMetadata DeclaresVars (Stmt a) where
@@ -394,37 +426,43 @@ instance GetMetadata DeclaresVars (Arm a) where
   getMetadata t (Arm _ body) = getMetadata t body
 
 blockifyProcedure ::
-     HasPosAnnot8 Procedure BodyItem Datum Import StackDecl Stmt Body Decl a
+     HasPosAnnot9 Name Procedure BodyItem Datum Import StackDecl Stmt Body Decl a
   => Annot Procedure a
   -> IO (Annot Procedure (a, BlockAnnot), BlockifierState)
 blockifyProcedure procedure =
   flip runStateT initBlockifier $ do
-    modify $ \s -> s {currentBlock = Just "@procedure"}
-    blockify procedure
+    index <- blocksCache $ helperName "procedure"
+    modify $ \s -> s {currentBlock = Just index}
+    blockify procedure <* analyzeFlow procedure
 
 class Blockify n a where
-  blockify :: MonadBlockify (n a) m => n a -> m (n (a, BlockAnnot))
+  blockify :: MonadBlockify m => n a -> m (n (a, BlockAnnot))
 
-instance Blockify (Annot Datum) a where
+instance HasPos (Annot Datum a) => Blockify (Annot Datum) a where
   blockify datum@(Annot DatumLabel {} _) = do
-    modify $ \s -> s {stackLabels = getName datum : stackLabels s}
+    let name = getName datum
+    sls <- gets stackLabels
+    if name `Set.member` sls then
+      registerError datum "Duplicate datum label"
+    else
+      modify $ \s -> s {stackLabels = name `Set.insert` sls}
     return $ noBlockAnnots datum
   blockify datum@(Annot _ _) = do
     return $ noBlockAnnots datum
 
-instance HasPosAnnot7 BodyItem Stmt Body Decl StackDecl Import Datum a =>
+instance HasPosAnnot8 Name BodyItem Stmt Body Decl StackDecl Import Datum a =>
          Blockify (Annot Procedure) a where
   blockify (Annot (Procedure mConv name formals body) a) =
     withNoBlockAnnot a .
     Procedure mConv (noBlockAnnots name) (noBlockAnnots <$> formals) <$>
     blockify body
 
-instance HasPosAnnot7 BodyItem Stmt Decl Body StackDecl Import Datum a =>
+instance HasPosAnnot8 Name BodyItem Stmt Decl Body StackDecl Import Datum a =>
          Blockify (Annot Body) a where
   blockify (Annot (Body bodyItems) a) =
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
-instance HasPosAnnot6 Stmt Body Decl StackDecl Import Datum a =>
+instance HasPosAnnot8 Name BodyItem Stmt Body Decl StackDecl Import Datum a =>
          Blockify (Annot BodyItem) a where
   blockify (Annot (BodyStmt bodyStmt) a) =
     withNoBlockAnnot a . BodyStmt <$> blockify bodyStmt
@@ -437,29 +475,65 @@ instance HasPosAnnot Datum a => Blockify (Annot StackDecl) a where
   blockify (Annot (StackDecl datums) a) =
     withNoBlockAnnot a . StackDecl <$> traverse blockify datums
 
-instance HasPosAnnot Import a => Blockify (Annot Decl) a where
+instance HasPosAnnot3 Import Decl Name a => Blockify (Annot Decl) a where
+  blockify (Annot (RegDecl invar regs) a) =
+    withNoBlockAnnot a . RegDecl invar <$> blockify regs
   blockify (Annot (ImportDecl imports') a) =
     withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
   blockify decl@(Annot ConstDecl {} _) = do
-    modify $ \s -> s {constants = getName decl : constants s}
+    let name = getName decl
+    cs <- gets imports
+    if name `Set.member` cs then
+      registerError decl "Duplicate constant declaration"
+    else
+      modify $ \s -> s {constants = name `Set.insert` cs}
     return $ noBlockAnnots decl
   blockify decl@(Annot _ _) = return $ noBlockAnnots decl
 
-instance Blockify (Annot Import) a where
+instance HasPosAnnot Import a => Blockify (Annot Import) a where
   blockify import'@(Annot Import {} _) = do
-    modify $ \s -> s {imports = getName import' : imports s}
+    let name = getName import'
+    is <- gets imports
+    if name `Set.member` is then
+      registerError import' "Duplicate import"
+    else
+      modify $ \s -> s {imports = name `Set.insert` is}
     return $ noBlockAnnots import'
 
-instance HasPosAnnot6 BodyItem Body Decl StackDecl Import Datum a =>
+instance HasPos (Annot Name a) => Blockify (Annot Registers) a where
+  blockify regs@(Annot (Registers _ _ nameStrLits) _) = do
+    let names = fst <$> nameStrLits
+    rs <- gets registers
+    sequence_
+      [ if getName name `Set.member` rs then
+          registerError name "Duplicate register"
+        else modify $ \s -> s {registers = getName name `Set.insert` rs}
+      | name <- names
+      ]
+    return $ noBlockAnnots regs
+
+
+instance HasPosAnnot8 Name Stmt BodyItem Body Decl StackDecl Import Datum a =>
          Blockify (Annot Stmt) a where
   blockify stmt@(Annot LabelStmt {} _) = do
-    modify $ \s -> s {labels = getName stmt : labels s}
+    let name = getName stmt
+    ls <- gets labels
+    addControlFlow name -- a possible fallthrough
+    if name `Set.member` ls then
+      registerError stmt "Duplicate label"
+    else
+      modify $ \s -> s {labels = name `Set.insert` ls}
     blockifyLabelStmt stmt
   blockify stmt@(Annot ContStmt {} _) = do
-    modify $ \s -> s {continuations = getName stmt : continuations s}
+    let name = getName stmt
+    cs <- gets continuations
+    if name `Set.member` cs then
+      registerError stmt "Duplicate continuation"
+    else
+      modify $ \s -> s {continuations = name `Set.insert` cs}
     blockIsSet >>=
       (`when` registerError stmt "Fallthrough to a continuation is forbidden")
-    blockifyLabelStmt stmt
+    blockifyLabelStmt stmt <* registerWrites stmt
   blockify stmt@(Annot (GotoStmt expr _) _) = do
     case (getExprLVName expr, getTargetNames stmt) of
       (Nothing, Just targets@(_:_)) -> traverse_ addControlFlow targets
@@ -502,14 +576,39 @@ instance HasPosAnnot6 BodyItem Body Decl StackDecl Import Datum a =>
   blockify (Annot (SpanStmt key value body) a) =
     withNoBlockAnnot a . SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
     blockify body
-  blockify stmt@(Annot (CallStmt _ _ _ _ _ callAnnots) _) =
+  blockify stmt@(Annot (CallStmt _ _ _ _ _ callAnnots) _) = -- TODO: implement `cut to` statements
     registerReads stmt *> withBlockAnnot stmt <*
     when (neverReturns callAnnots) unsetBlock
 
 -- This is here just for completeness
-flatteningError :: (MonadBlockify n m) => n -> m ()
+flatteningError :: (HasPos n, Pretty n, MonadBlockify m) => n -> m ()
 flatteningError stmt =
   registerError stmt "Compilation failure in the flattening phase"
+
+analyzeFlow :: (HasPosAnnot Procedure a, MonadBlockify m) => Annot Procedure a -> m ()
+analyzeFlow procedure@(Annot _ _) = do
+  regs <- gets registers -- TODO: add formals to registers
+  bData <- gets blockData
+  labels <- gets labels
+  continuations <- gets continuations -- TODO: implement `cut to` statements
+  blocks <- gets blocksTable
+  flow <- gets controlFlow
+  let graph = Graph.buildG (0, Map.size blocks - 1) flow -- one block is guaranteed (procedure)
+      reachable = Set.fromList $ Graph.reachable graph 0
+      blockNames = Map.fromList $ swap <$> Map.toList blocks
+  let unreachableLabels = labels Set.\\ Set.map (blockNames Map.!) reachable
+      unreachableContinuations = continuations Set.\\ Set.map (blockNames Map.!) reachable
+  let labelsWarning = foldl (\a b -> a <> T.cons ' ' b) "Unreachable labels:" $ Set.filter hasPrefix unreachableLabels
+      continuationsWarning = foldl (\a b -> a <> T.cons ' ' b) "Unreachable continuations:" $ Set.filter hasPrefix unreachableContinuations
+  registerWarning procedure $ labelsWarning <> "\n\t" <> continuationsWarning
+  let cleanData = (`Map.restrictKeys` regs) <$> Map.restrictKeys bData reachable
+  let cleanFlow = filter ((`Set.member` reachable) . fst) flow
+  liftIO $ print regs
+  liftIO $ print cleanData
+  liftIO $ print cleanFlow
+  return () -- here goes the algorithm
+
+
 
 blockifyLabelStmt ::
      (MonadState BlockifierState m, Functor n, HasName (n a))

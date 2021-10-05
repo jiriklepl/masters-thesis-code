@@ -9,7 +9,7 @@ module Language.Pretty
   (
   ) where
 
-import Prelude
+import safe Prelude
   ( Bool
   , Maybe(..)
   , Monoid(..)
@@ -20,9 +20,9 @@ import Prelude
   , maybe
   , show
   )
-import Prettyprinter
+import safe Prettyprinter
 
-import Language.AST
+import safe Language.AST
 
 commaSep :: [Doc ann] -> Doc ann
 commaSep xs = hsep $ punctuate comma xs
@@ -188,7 +188,7 @@ instance Pretty (Stmt a) where
     parens (commaSep $ pretty <$> actuals) <> semi
   pretty (LabelStmt name) = pretty name <> colon
   pretty (ContStmt name kindedNames) =
-    "continuation" <+> pretty name <> parens (commaSep $ pretty <$> kindedNames)
+    "continuation" <+> pretty name <> parens (commaSep $ pretty <$> kindedNames) <> colon
   pretty (GotoStmt expr mTargets) =
     "goto" <+> pretty expr <> maybeSpacedL mTargets <> semi
   pretty (CutToStmt expr actuals flows) =
