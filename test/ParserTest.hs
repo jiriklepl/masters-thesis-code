@@ -18,8 +18,7 @@ import safe System.Exit (exitFailure, exitSuccess)
 import safe Test.HUnit
 import safe Prettyprinter (Doc(), Pretty(), pretty)
 import safe Text.Megaparsec
-  ( MonadParsec(eof)
-  , ParseErrorBundle()
+  ( ParseErrorBundle()
   , Parsec()
   , many
   , runParser
@@ -65,13 +64,13 @@ checkReparse ::
      (Eq (n ()), Functor n, Pretty (n a)) => Parser (n b) -> n a -> Bool
 checkReparse parser ast =
   either (const False) ((== stripAnnots ast) . stripAnnots) .
-  either undefined (parse parser) . parse tokenize . T.pack . show $
+  either undefined (parse parser) . parse tokenize . T.pack . show $ -- TODO: clean this up
   pretty ast
 
 testTemplate ::
      (Show a, Pretty a) => String -> Text -> Parser a -> (a -> Bool) -> Test
 testTemplate testName input parser validator =
-  testName ~: assertion $ either ((`trace` undefined) . show) (parse parser) $ parse tokenize input
+  testName ~: assertion $ either ((`trace` undefined) . show) (parse parser) $ parse tokenize input -- TODO: clean this up
   where
     assertion (Left result) =
       assertFailure $

@@ -11,15 +11,11 @@ import safe Control.Applicative hiding (many)
 import safe Data.Foldable
 import safe Data.Functor
 import safe Data.Maybe
-import safe qualified Data.Text as T
-import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Void
 import safe Prelude
 import safe Text.Megaparsec hiding (State)
-import safe Text.Megaparsec.Char
-import safe qualified Text.Megaparsec.Char.Lexer as L
 
 import safe Language.AST
 import safe Language.AST.Utils
@@ -86,32 +82,32 @@ symbol tok = flip token Set.empty $ \case
 
 identifier :: Parser (Name SourcePos)
 identifier  = flip token Set.empty $ \case
-  Annot (L.Ident name) _  -> Just $ Name name
+  Annot (L.Ident n) _  -> Just $ Name n
   _ -> Nothing
 
 stringLiteral :: Parser StrLit
 stringLiteral  = flip token Set.empty $ \case
-  Annot (L.StrLit text) _  -> Just $ StrLit text
+  Annot (L.StrLit t) _  -> Just $ StrLit t
   _ -> Nothing
 
 bitsType :: Parser Int
 bitsType  = flip token Set.empty $ \case
-  Annot (L.BitsType int) _  -> Just int
+  Annot (L.BitsType i) _  -> Just i
   _ -> Nothing
 
 charLit :: Parser Char
 charLit  = flip token Set.empty $ \case
-  Annot (L.CharLit char) _  -> Just char
+  Annot (L.CharLit c) _  -> Just c
   _ -> Nothing
 
 floatLit :: Parser Float
 floatLit  = flip token Set.empty $ \case
-  Annot (L.FloatLit float) _  -> Just float
+  Annot (L.FloatLit f) _  -> Just f
   _ -> Nothing
 
 intLit :: Parser (Int, Bool)
 intLit  = flip token Set.empty $ \case
-  Annot (L.IntLit int) _  -> Just int
+  Annot (L.IntLit i) _  -> Just i
   _ -> Nothing
 
 getPos :: Parser SourcePos
@@ -339,7 +335,7 @@ mKind :: Parser (Maybe Kind)
 mKind = optional $ Kind <$> stringLiteral
 
 pragma :: Parser a
-pragma = undefined -- TODO pragmas not yet specified and with no explanation of functionality
+pragma = undefined -- FIXME: pragmas not yet specified and with no explanation of functionality
 
 stackDecl :: SourceParser StackDecl
 stackDecl =
@@ -578,7 +574,7 @@ instance OpImpl x => OpImpl [x] where
 instance OpImpl Text where
   opRestInner "`" next =
     symbol L.Backtick *> (flip . InfixExpr <$> identifier) <* symbol L.Backtick <*> next
-  opRestInner _ _ = undefined
+  opRestInner _ _ = error "Parser not implemented for this operator"
 
 infixExpr :: SourceParser Expr
 infixExpr = opImplN ("`" :: Text) cmpExpr

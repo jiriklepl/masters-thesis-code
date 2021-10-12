@@ -12,7 +12,6 @@ module Language.Lexer
   ) where
 
 import safe Control.Applicative hiding (Const, many)
-import safe Data.Foldable
 import safe Data.Functor
 import safe Data.Maybe
 import safe qualified Data.Text as T

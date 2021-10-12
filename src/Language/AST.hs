@@ -296,7 +296,7 @@ newtype StrLit =
   deriving (Show, Data, Eq)
 
 data Pragma a
-  deriving (Functor, Data, ASTNode) -- TODO: the manual does not specify at all
+  deriving (Functor, Data, ASTNode) -- FIXME: the manual does not specify at all
 
 instance Show (Pragma a) where
   show = error "pragmas are not implemented"

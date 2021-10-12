@@ -288,7 +288,7 @@ instance Pretty (Asserts a) where
     "in" <+> commaSep (pretty <$> names) <> maybeSpacedL mInt
 
 instance Pretty (Pragma a) where
-  pretty _ = error "`Pragma`s are not specified" -- TODO: pragmas are not specified
+  pretty _ = error "`Pragma`s are not specified" -- FIXME: pragmas are not specified
 
 instance Pretty (Name a) where
   pretty (Name name) = pretty name

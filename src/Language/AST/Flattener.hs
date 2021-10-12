@@ -125,7 +125,6 @@ brCond cond tName eName a =
     (toBody . toBodyStmt $ trivialGoto a tName)
     (Just . toBody . toBodyStmt $ trivialGoto a eName)
 
--- TODO: rewrite to use i_don_t_care
 instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
   flattenStmt (Annot (IfStmt cond tBody Nothing) a) = do
     num <- show <$> fresh
