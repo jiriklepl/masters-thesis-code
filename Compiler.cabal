@@ -32,7 +32,8 @@ executable Compiler
                        Language.Pretty,
                        Language.Translator,
                        Language.Warnings,
-                       Inference.Inference
+                       Inference.Inference,
+                       Peano
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,
@@ -59,7 +60,8 @@ Test-Suite parser-testsuite
                        Language.Lexer,
                        Language.Pretty,
                        Language.Warnings,
-                       QuasiQuotes
+                       QuasiQuotes,
+                       Peano
   build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,
                        text ^>=1.2.4.0,
