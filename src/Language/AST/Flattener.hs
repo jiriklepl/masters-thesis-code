@@ -138,7 +138,7 @@ instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
   flattenStmt (Annot (IfStmt cond tBody (Just eBody)) a) = do
     num <- show <$> fresh
     let tName = helperName $ "then_" ++ num
-    let eName = helperName $ "else_" ++ num
+        eName = helperName $ "else_" ++ num
         fName = helperName $ "fi_" ++ num
     tTransl <- flattenBodyItems [tBody]
     eTransl <- flattenBodyItems [eBody]
@@ -152,7 +152,7 @@ instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
   flattenStmt (Annot (SwitchStmt expr arms) annot) = do
     num <- show <$> fresh
     let endName = helperName $ "switch_" ++ num ++ "_end"
-    let caseNames =
+        caseNames =
           helperName . (("switch_" ++ num ++ "_") ++) . show <$>
           take (length arms) [(1 :: Int) ..]
     armsTransl <-
