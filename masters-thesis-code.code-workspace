@@ -7,7 +7,14 @@
 	"settings": {
 		"files.insertFinalNewline": true,
 		"files.trimTrailingWhitespace": true,
-		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--)\\s*($TAGS)|^\\s*- \\[ \\])",
+		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--)\\s*($TAGS)|^\\s*- \\[( |~)\\])",
+		"todo-tree.general.tags": [
+			"BUG",
+			"HACK",
+			"FIXME",
+			"TODO",
+			"XXX"
+		],
 		"bracketPairColorizer.consecutivePairColors": [
 			"()",
 			"[]",
