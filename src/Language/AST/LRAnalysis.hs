@@ -39,7 +39,7 @@ import safe qualified Peano
 
 data BlockAnnot
   = PartOf Int
-  | Begins Text
+  | Begins Int
   | Unreachable
   | NoBlock
   deriving (Show)
@@ -80,6 +80,9 @@ type HasPosAnnot10 n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 a
 instance HasPos (Annot n SourcePos) where
   getPos = takeAnnot
 
+instance HasPos (Annot n (SourcePos, a)) where
+  getPos = fst . takeAnnot
+
 data BlockifierState =
   Blockifier
     { controlFlow :: [(Int, Int)]
@@ -93,8 +96,8 @@ data BlockifierState =
     , stackLabels :: Set Text
     , labels :: Set Text
     , continuations :: Set Text
-    , errors :: Int
-    , warnings :: Int
+    , errors :: Int -- TODO: move to a separate state
+    , warnings :: Int -- TODO: move to a separate state
     }
   deriving (Show)
 
@@ -439,8 +442,6 @@ blockifyProcedure ::
   -> IO (Annot Procedure (a, BlockAnnot), BlockifierState)
 blockifyProcedure procedure =
   flip runStateT initBlockifier $ do
-    index <- blocksCache $ helperName "procedure"
-    modify $ \s -> s {currentBlock = Just index}
     blockify procedure <* unsetBlock <* analyzeFlow procedure
 
 class Blockify n a where
@@ -463,7 +464,9 @@ instance HasPosAnnot9 Formal Name BodyItem Stmt Body Decl StackDecl Import Datum
          Blockify (Annot Procedure) a where
   blockify (Annot (Procedure mConv name formals body) a) = do
     formals' <- traverse blockify formals
-    withNoBlockAnnot a .
+    index <- blocksCache $ helperName "procedure"
+    modify $ \s -> s {currentBlock = Just index}
+    withAnnot (a, Begins index) .
       Procedure mConv (noBlockAnnots name) formals' <$>
       blockify body
 
@@ -594,6 +597,7 @@ instance HasPosAnnot8 Name Stmt BodyItem Body Decl StackDecl Import Datum a =>
     registerReads stmt *> withBlockAnnot stmt <*
     when (neverReturns callAnnots) unsetBlock
 
+-- TODO: make it clearer that this is a logic-error inside of the compiler
 -- This is here just for completeness
 flatteningError :: (HasPos n, Pretty n, MonadBlockify m) => n -> m ()
 flatteningError stmt =
@@ -649,4 +653,5 @@ blockifyLabelStmt ::
 blockifyLabelStmt (Annot stmt a) = do
   let name = getName stmt
   setBlock name
-  return . withAnnot (a, Begins name) $ noBlockAnnots stmt
+  index <- blocksCache name -- TODO: this is not optimal
+  return . withAnnot (a, Begins index) $ noBlockAnnots stmt

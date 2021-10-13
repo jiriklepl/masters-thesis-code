@@ -1,6 +1,7 @@
 # TO-DO list
 
 - [ ] translate c-- to llvm <-
+- [ ] split LRAnalysis into blockifying and flow analysis
 - [ ] change "Language" to "CMM"
 - [ ] add haddock comments
 
@@ -34,3 +35,10 @@
 - [ ] make the errors/warnings found during flow analysis cleaner
 - [ ] change `undefined` to `error s`
 - [ ] refactor LRAnalysis
+- [ ] draw a diagram for the architecture
+  - [~] draw a diagram for the overall pipeline
+  - [ ] draw a diagram for:
+    - [ ] Lexer + Parser
+    - [x] Flattener
+    - [ ] LRAnalysis
+    - [ ] Translator
