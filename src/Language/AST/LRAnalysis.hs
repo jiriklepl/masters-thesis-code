@@ -25,13 +25,12 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe qualified Data.Text.IO as T
 import safe Prelude hiding (reads)
-import safe Prettyprinter (Pretty, pretty)
-import safe Text.Megaparsec.Pos (SourcePos)
+import safe Prettyprinter (Pretty)
 
 import safe Language.AST
 import safe Language.AST.Utils
+import safe Language.Parser.Utils
 import safe Language.Utils
 import safe Language.Pretty ()
 import safe Language.Warnings
@@ -46,8 +45,6 @@ data BlockAnnot
 
 type MonadBlockify m = (MonadState BlockifierState m, MonadIO m)
 
-class HasPos n where
-  getPos :: n -> SourcePos
 
 type HasPosAnnot n a = HasPos (Annot n a)
 
@@ -77,15 +74,10 @@ type HasPosAnnot9 n1 n2 n3 n4 n5 n6 n7 n8 n9 a
 type HasPosAnnot10 n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 a
    = (HasPosAnnot n1 a, HasPosAnnot9 n2 n3 n4 n5 n6 n7 n8 n9 n10 a)
 
-instance HasPos (Annot n SourcePos) where
-  getPos = takeAnnot
-
-instance HasPos (Annot n (SourcePos, a)) where
-  getPos = fst . takeAnnot
 
 data BlockifierState =
   Blockifier
-    { controlFlow :: [(Int, Int)]
+    { controlFlow :: [(Int, Int)] -- [(from, to)]
     , blocksTable :: Map Text Int
     , currentBlock :: Maybe Int
     , currentData :: BlockVars
@@ -96,8 +88,8 @@ data BlockifierState =
     , stackLabels :: Set Text
     , labels :: Set Text
     , continuations :: Set Text
-    , errors :: Int -- TODO: move to a separate state
-    , warnings :: Int -- TODO: move to a separate state
+    , errors :: Int -- TODO: move to a separate state ?
+    , warnings :: Int -- TODO: move to a separate state ?
     }
   deriving (Show)
 
@@ -137,11 +129,6 @@ registerWarning :: (HasPos n, Pretty n, MonadBlockify m) => n -> Text -> m ()
 registerWarning node message = do
   modify $ \s -> s {warnings = warnings s + 1}
   makeMessage mkWarning node message
-
-makeMessage :: (HasPos n, Pretty n, MonadBlockify m) => (SourcePos -> Text -> Text) -> n -> Text -> m ()
-makeMessage constructor node message = do
-  let pos = getPos node
-  liftIO . T.putStrLn $ constructor pos $ (T.pack . show $ pretty node) <> "\n\t" <> message
 
 blockIsSet :: MonadState BlockifierState m => m Bool
 blockIsSet = not . null <$> gets currentBlock
@@ -272,28 +259,6 @@ instance GetTargetNames (Stmt a) (Maybe [Text]) where
 
 instance GetTargetNames (Targets a) [Text] where
   getTargetNames (Targets names) = getName <$> names
-
--- | Returns Nothing on failure
-class GetTrivialGotoTarget n where
-  getTrivialGotoTarget :: n -> Maybe Text
-
-instance GetTrivialGotoTarget (n a) => GetTrivialGotoTarget (Annot n a) where
-  getTrivialGotoTarget (Annot n _) = getTrivialGotoTarget n
-
-instance GetTrivialGotoTarget (Arm a) where
-  getTrivialGotoTarget (Arm _ body) = getTrivialGotoTarget body
-
-instance GetTrivialGotoTarget (BodyItem a) where
-  getTrivialGotoTarget (BodyStmt stmt) = getTrivialGotoTarget stmt
-  getTrivialGotoTarget _ = Nothing
-
-instance GetTrivialGotoTarget (Body a) where
-  getTrivialGotoTarget (Body [bodyItem]) = getTrivialGotoTarget bodyItem
-  getTrivialGotoTarget _ = Nothing
-
-instance GetTrivialGotoTarget (Stmt a) where
-  getTrivialGotoTarget (GotoStmt expr _) = getExprLVName expr
-  getTrivialGotoTarget _ = Nothing
 
 withBlockAnnot ::
      (HasPosAnnot Stmt a, MonadBlockify m)
@@ -475,14 +440,21 @@ instance HasPosAnnot8 Name BodyItem Stmt Decl Body StackDecl Import Datum a =>
   blockify (Annot (Body bodyItems) a) =
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
+constructBlockified :: (Blockify (Annot n1) a1, MonadBlockify m) =>
+  (Annot n1 (a1, BlockAnnot) -> n2 (a2, BlockAnnot))
+  -> a2 -> Annot n1 a1 -> m (Annot n2 (a2, BlockAnnot))
+constructBlockified constr a n =  do
+    n' <- blockify n
+    return . withAnnot (a, snd $ takeAnnot n') $ constr n'
+
 instance HasPosAnnot8 Name BodyItem Stmt Body Decl StackDecl Import Datum a =>
          Blockify (Annot BodyItem) a where
-  blockify (Annot (BodyStmt bodyStmt) a) =
-    withNoBlockAnnot a . BodyStmt <$> blockify bodyStmt
+  blockify (Annot (BodyStmt stmt) a) =
+    constructBlockified BodyStmt a stmt
   blockify (Annot (BodyDecl decl) a) =
-    withNoBlockAnnot a . BodyDecl <$> blockify decl
+    constructBlockified BodyDecl a decl
   blockify (Annot (BodyStackDecl stackDecl) a) =
-    withNoBlockAnnot a . BodyStackDecl <$> blockify stackDecl
+    constructBlockified BodyStackDecl a stackDecl
 
 instance HasPosAnnot Datum a => Blockify (Annot StackDecl) a where
   blockify (Annot (StackDecl datums) a) =
@@ -491,7 +463,7 @@ instance HasPosAnnot Datum a => Blockify (Annot StackDecl) a where
 -- TODO: refactor this
 instance HasPosAnnot3 Import Decl Name a => Blockify (Annot Decl) a where
   blockify (Annot (RegDecl invar regs) a) =
-    withNoBlockAnnot a . RegDecl invar <$> blockify regs
+    constructBlockified (RegDecl invar) a regs
   blockify (Annot (ImportDecl imports') a) =
     withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
   blockify decl@(Annot ConstDecl {} _) = do
@@ -631,7 +603,7 @@ analyzeFlow procedure@(Annot _ _) = do
       cleanFlow = filter ((`Set.member` reachable) . fst) flow -- we filter out unreachable flow
   modify $ \s -> s { blockData = cleanData }
   doWhile $ or <$> traverse updateFlowPair cleanFlow
-  uninitialized <- Map.keys . Map.filter (not . get_nth Peano.p2) . (Map.! 0) <$> gets blockData
+  uninitialized <- Map.keys . Map.filter (get_nth Peano.p2) . (Map.! 0) <$> gets blockData
   unless (null uninitialized) $ registerError procedure ("Uninitialized registers: " <> T.unwords uninitialized)
 
 -- TODO: "unused after write" warning

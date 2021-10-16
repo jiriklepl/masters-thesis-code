@@ -32,6 +32,7 @@ executable Compiler
                        Language.Pretty,
                        Language.Translator,
                        Language.Warnings,
+                       Language.Parser.Utils,
                        Inference.Inference,
                        Peano
   -- other-extensions:
@@ -60,6 +61,7 @@ Test-Suite parser-testsuite
                        Language.Lexer,
                        Language.Pretty,
                        Language.Warnings,
+                       Language.Parser.Utils,
                        QuasiQuotes,
                        Peano
   build-depends:       base >= 4.13 && < 4.16,
