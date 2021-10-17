@@ -3,6 +3,8 @@
 - [ ] translate c-- to llvm <-
 - [ ] split LRAnalysis into blockifying and flow analysis
 - [ ] change "Language" to "CMM"
+- [ ] rename Language.Parser.Utils to something more reasonable
+- [ ] procedure arguments shouldn't be reported as uninitialized
 - [ ] add haddock comments
 
   - [ ] Language

@@ -1,6 +1,10 @@
 # Master's Thesis Code
 
+<!-- TODO: How to clone -->
+<!-- TODO: How to run -->
+
 ## Dependencies
+<!-- TODO: Update dependencies -->
 
 - llvm-9
 - ghc
@@ -14,7 +18,7 @@
 
 - TODO: how to align
 
-```
+```txt
 1) type Name = data { x: Int; y: Int }
 2) newtype Name = data { x: Int; y: Int }
 ```
