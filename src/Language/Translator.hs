@@ -6,7 +6,9 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 
 {-|
 Module      : Language.Translator
@@ -20,6 +22,10 @@ module Language.Translator where
 
 import safe Data.Text (Text)
 import safe Control.Monad.State.Lazy
+import safe Control.Lens.Getter
+import safe Control.Lens.Setter
+import safe Control.Lens.Tuple
+import safe Control.Lens.TH
 import safe Data.Map.Lazy (Map)
 import safe qualified Data.Map.Lazy as Map
 import safe Data.Foldable
@@ -40,28 +46,31 @@ import safe Prettyprinter
 import safe Language.AST
 import safe Language.AST.Utils
 import safe Language.Parser.Utils
-import safe Language.AST.LRAnalysis
+import safe Language.AST.BlockAnnot
 import safe Language.Pretty()
+import Control.Lens
 
 data TranslState = TranslState
-    { variables :: [Map Text L.Operand]
-    , translControlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
-    , translBlockData :: BlockData -- We need the block data to create the phi nodes
-    , translCurrentBlock :: Maybe Int
-    , translBlocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
-    , translErrors :: Int
-    , translWarnings :: Int
+    { _variables :: [Map Text L.Operand]
+    , _translControlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
+    , _translBlockData :: BlockData -- We need the block data to create the phi nodes
+    , _translCurrentBlock :: Maybe Int
+    , _translBlocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
+    , _translErrors :: Int
+    , _translWarnings :: Int
     }
+
+makeLenses ''TranslState
 
 initTranslState :: TranslState
 initTranslState = TranslState -- FIXME: this is just DUMMY
-    { variables = mempty
-    , translControlFlow = mempty
-    , translBlockData = mempty
-    , translCurrentBlock = Nothing -- TODO: change to (Just 0) in procedure translation
-    , translBlocksTable = mempty
-    , translErrors = 0
-    , translWarnings = 0
+    { _variables = mempty
+    , _translControlFlow = mempty
+    , _translBlockData = mempty
+    , _translCurrentBlock = Nothing -- TODO: change to (Just 0) in procedure translation
+    , _translBlocksTable = mempty
+    , _translErrors = 0
+    , _translWarnings = 0
     }
 
 type MonadTranslator m = (MonadIRBuilder m, MonadModuleBuilder m, MonadFix m, MonadState TranslState m {-, MonadIO m -}) -- TODO: solve what with IO
@@ -74,22 +83,25 @@ translateName = L.mkName . T.unpack . getName
 translateParName :: HasName n => n -> ParameterName
 translateParName = (\(L.Name n) -> ParameterName n) . translateName
 
+infix 4 `exchange`
+exchange :: MonadState s m => (forall f. Functor f => (a -> f a) -> s -> f s) -> a -> m a
+l `exchange` b = use l <* (l .= b)
+
 -- TODO: maybe change the name to `endBlock` or something...
 pushVariables :: (MonadTranslator m, Pretty n, HasPos n) => n -> m Exports
 pushVariables _ = do
-    s@TranslState{variables, translCurrentBlock} <- get
-    case translCurrentBlock of
+    translCurrentBlock `exchange` Nothing >>= \case
         Just idx -> do
-            put s {variables = tail variables, translCurrentBlock = Nothing}
-            return $ (\(v, o) -> (v, idx, o)) <$> Map.toList (head variables)
+            ~(h : t) <- use variables
+            variables .= t
+            return $ (\(v, o) -> (v, idx, o)) <$> Map.toList h
         Nothing -> do
             -- makeMessage mkWarning n "The variables from this block are lost" -- TODO: make clearer
-            put s {variables = tail variables, translCurrentBlock = Nothing}
+            variables %= tail
             return mempty
 
 setCurrentBlock :: MonadState TranslState m => Int -> m ()
-setCurrentBlock n = do
-    modify $ \s -> s {translCurrentBlock = Just n}
+setCurrentBlock n = translCurrentBlock ?= n
 
 class MonadTranslator m => Translate m n b | m n -> b, b -> m where
     translate :: Annot n (SourcePos, BlockAnnot) -> b
@@ -103,13 +115,13 @@ instance MonadTranslator m => Translate m Procedure (m L.Operand) where
     translate (Annot _ (_, PartOf _)) = undefined -- TODO: add a nice compile-bug error
     translate (Annot (Procedure _ name formals body) (_, Begins blockIdx)) = do
         translFormals <- traverse translate formals
-        modify $ \s -> s {translCurrentBlock = Just blockIdx}
+        translCurrentBlock ?= blockIdx
         function (translateName name) translFormals L.i32 $
             \pars -> mdo
                 let newVars = Map.fromList (zip (getName <$> formals) pars)
-                modify (\s -> s{variables = newVars : variables s})
+                variables %= (newVars :)
                 exports <- (\exports' -> liftA2 (<>) (translate body exports') (pushVariables body)) exports
-                modify (\s -> s{variables = tail $ variables s})
+                variables %= tail
 
 instance MonadTranslator m => Translate m Body (Exports -> m Exports) where
     translate (Annot (Body []) _) _ = return mempty
@@ -119,21 +131,20 @@ instance MonadTranslator m => Translate m BodyItem (Exports -> m Exports) where
     translate (Annot (BodyDecl decl) _) _ = translate decl $> mempty -- TODO ?
     translate (Annot (BodyStackDecl stackDecl) _) _ = translate stackDecl $> mempty -- TODO ?
     translate (Annot (BodyStmt stmt) (_, Begins idx)) exports = do
-        bData <- gets translBlockData
-        let vars = case idx `Map.lookup` bData of
-                    Just xs -> Map.keys $ Map.filter (\(_, _, l) -> l) xs
-                    Nothing -> []
-        from <- (fst <$>) . filter (\(_, to) -> to == idx) <$> gets translControlFlow
-        names <- gets translBlocksTable
+        vars <- uses translBlockData (idx `Map.lookup`) <&>
+            maybe [] (Map.keys . Map.filter (^._3))
+        from <- uses translControlFlow $ (fst <$>) . filter (\(_, t) -> t == idx)
+        names <- use translBlocksTable
         exports' <- pushVariables stmt
         setCurrentBlock idx
-        modify (\s -> s{variables = mempty : variables s})
+        variables %= (mempty :)
         sequence_
             [do o <- phi $ [
-                    let Just (_, _, source) = (\(v', f', _) -> v' == v && f' == f) `find` exports
-                    in (source, L.mkName . T.unpack $ names Map.! f)
+                    let Just source = (\(v', f', _) -> v' == v && f' == f) `find` exports
+                    in (source^._3, L.mkName . T.unpack $ names Map.! f)
                     | f <- from]
-                modify $ \s -> let (h : t) = variables s in s {variables = Map.insert v o h : t}
+                ~(h : t) <- use variables
+                variables .= Map.insert v o h : t
             | v <- vars]
         (exports' <>) <$> translate stmt
     translate (Annot (BodyStmt stmt) _) _ = translate stmt
@@ -157,9 +168,8 @@ instance MonadTranslator m => Translate m Stmt (m Exports) where
     translate (Annot (SwitchStmt _ _) _) = return mempty -- TODO: this is taxing
     translate (Annot (AssignStmt lvalues exprs) _) = do
         names <- zipWithM translPair lvalues exprs -- TODO: check for duplicates -> error (also, check if modifiable)
-        modify $ \s ->
-            let (vars : rest) = variables s
-            in s {variables = Map.fromList names `Map.union` vars : rest}
+        ~(vars : rest) <- use variables
+        variables .= Map.fromList names <> vars : rest
         return mempty
         where
             translPair (Annot (LVName n) _) e =

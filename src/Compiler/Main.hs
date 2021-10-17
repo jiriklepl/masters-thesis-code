@@ -30,6 +30,7 @@ import Language.Lexer
 import Language.Translator
 import Language.Parser
 import Language.AST.LRAnalysis
+import Language.AST.Blockifier
 import Language.Pretty ()
 import Prettyprinter (pretty)
 
@@ -49,9 +50,9 @@ main = do
     contents <- TS.getContents
     (blockified, blockifier) <- blockifyProcedure . flatten . either undefined id . parse procedure . either undefined id . parse tokenize $ contents
     let translated =  flip evalState initTranslState
-            { translControlFlow = controlFlow blockifier
-            , translBlockData = blockData blockifier
-            , translBlocksTable = Map.fromList . (swap <$>) . Map.toList $ blocksTable blockifier
+            { _translControlFlow = _controlFlow blockifier
+            , _translBlockData = _blockData blockifier
+            , _translBlocksTable = Map.fromList . (swap <$>) . Map.toList $ _blocksTable blockifier
             } $ execModuleBuilderT emptyModuleBuilder $ runIRBuilderT emptyIRBuilder $ translate blockified
     print $ show translated
     return ()
