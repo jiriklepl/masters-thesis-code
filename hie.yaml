@@ -12,6 +12,12 @@ cradle:
     - path: "src/Language/AST.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/Language/AST/Blockifier.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Language/AST/BlockAnnot.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/Language/AST/Utils.hs"
       component: "Compiler:exe:Compiler"
 
@@ -31,6 +37,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/Language/Warnings.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/Language/Parser/Utils.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/Inference/Inference.hs"

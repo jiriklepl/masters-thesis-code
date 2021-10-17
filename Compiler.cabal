@@ -25,6 +25,8 @@ executable Compiler
   other-modules:       Language.Parser,
                        Language.Lexer,
                        Language.AST,
+                       Language.AST.Blockifier,
+                       Language.AST.BlockAnnot,
                        Language.AST.Utils,
                        Language.Utils,
                        Language.AST.Flattener,
@@ -33,8 +35,7 @@ executable Compiler
                        Language.Translator,
                        Language.Warnings,
                        Language.Parser.Utils,
-                       Inference.Inference,
-                       Peano
+                       Inference.Inference
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,
@@ -44,6 +45,7 @@ executable Compiler
                        containers ^>=0.6.4.1,
                        llvm-hs-pure ^>=9.0.0,
                        llvm-hs-pretty ^>=0.9.0.0,
+                       lens ^>=5.0.1,
                        prettyprinter ^>=1.7.1,
                        syb ^>=0.7.2.1,
                        mtl ^>=2.2.2,
@@ -62,8 +64,7 @@ Test-Suite parser-testsuite
                        Language.Pretty,
                        Language.Warnings,
                        Language.Parser.Utils,
-                       QuasiQuotes,
-                       Peano
+                       QuasiQuotes
   build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,
                        text ^>=1.2.4.0,
