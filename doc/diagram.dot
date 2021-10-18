@@ -1,14 +1,19 @@
 digraph {
+    subgraph ends {
+        node [shape="ellipse"]
+
+        Source
+        LLVM
+    }
+
     subgraph data {
         node [shape="parallelogram"]
 
-        subgraph {
-            AST
-            Source
-            FlatAST [label="Flat AST"]
-            FlatASTAnnots [label="Flat AST\nwith block annotations"]
-            LLVM
-        }
+        AST
+        Judgements [label="Type Judgements"]
+        FlatAST [label="Flat AST"]
+        FlatASTAnnots [label="Flat AST\nwith block annotations"]
+        MonoAST [label="Monomophized AST"]
     }
 
     subgraph components {
@@ -16,7 +21,9 @@ digraph {
 
         Parser
         Flattener
+        Infer [label="Type\ninference"]
         LRAnalysis
+        Monomorphization
         Translator
     }
 
@@ -26,6 +33,8 @@ digraph {
 
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
+    AST -> Infer -> Judgements -> Monomorphization
     FlatAST -> LRAnalysis -> FlatASTAnnots
-    FlatASTAnnots -> Translator -> LLVM
+    FlatASTAnnots -> Monomorphization -> MonoAST
+    MonoAST -> Translator -> LLVM
 }
