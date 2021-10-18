@@ -544,38 +544,8 @@ refExpr = withSourcePos $ LVExpr <$> withSourcePos lvRef
 parExpr :: SourceParser Expr
 parExpr = withSourcePos $ ParExpr <$> parens expr
 
-class OpImpl a where
-  opImplL :: a -> SourceParser Expr -> SourceParser Expr
-  opImplL x next = next <**> opRestImplL x next
-  opImplN :: a -> SourceParser Expr -> SourceParser Expr
-  opImplN x next = next <**> opRestImplN x next
-  opRestImplL ::
-       a
-    -> SourceParser Expr
-    -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
-  opRestImplL x next =
-    withAnnot <$> getPos <*< opRestInner x next >*> opRestImplL x next <|>
-    pure id
-  opRestImplN ::
-       a
-    -> SourceParser Expr
-    -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
-  opRestImplN x next =
-    withAnnot <$> getPos <*< opRestInner x next <|> pure id
-  opRestInner ::
-       a -> SourceParser Expr -> Parser (Annot Expr SourcePos -> Expr SourcePos)
-
-instance OpImpl (Op, L.Token SourcePos) where
-  opRestInner (op, str) next = flip (BinOpExpr op) <$> (symbol str *> next)
-
-instance OpImpl x => OpImpl [x] where
-  opRestInner xs next = foldl1 (<|>) (flip opRestInner next <$> xs)
-
-instance OpImpl Text where
-  opRestInner "`" next =
-    symbol L.Backtick *> (flip . InfixExpr <$> identifier) <* symbol L.Backtick <*> next
-  opRestInner _ _ = error "Parser not implemented for this operator"
-
+-- SYMBOLIC OPERATORS --
+-- Source: https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf (7.4.1)
 infixExpr :: SourceParser Expr
 infixExpr = opImplN ("`" :: Text) cmpExpr
 
@@ -609,6 +579,8 @@ addExpr = opImplL [(AddOp, L.Plus :: L.Token SourcePos), (SubOp, L.Minus)] mulEx
 mulExpr :: SourceParser Expr
 mulExpr = opImplL [(DivOp, L.Slash :: L.Token SourcePos), (MulOp, L.Star), (ModOp, L.Percent)] negExpr
 
+-- SYMBOLIC OPERATORS -- END
+
 negExpr :: SourceParser Expr
 negExpr =
   withSourcePos (symbol L.Minus *> (NegExpr <$> negExpr)) <|>
@@ -618,3 +590,35 @@ negExpr =
 prefixExpr :: SourceParser Expr
 prefixExpr =
   withSourcePos $ symbol L.Percent *> liftA2 PrefixExpr identifier (optionalL actuals)
+
+class OpImpl a where
+  opImplL :: a -> SourceParser Expr -> SourceParser Expr
+  opImplL x next = next <**> opRestImplL x next
+  opImplN :: a -> SourceParser Expr -> SourceParser Expr
+  opImplN x next = next <**> opRestImplN x next
+  opRestImplL ::
+       a
+    -> SourceParser Expr
+    -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
+  opRestImplL x next =
+    withAnnot <$> getPos <*< opRestInner x next >*> opRestImplL x next <|>
+    pure id
+  opRestImplN ::
+       a
+    -> SourceParser Expr
+    -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
+  opRestImplN x next =
+    withAnnot <$> getPos <*< opRestInner x next <|> pure id
+  opRestInner ::
+       a -> SourceParser Expr -> Parser (Annot Expr SourcePos -> Expr SourcePos)
+
+instance OpImpl (Op, L.Token SourcePos) where
+  opRestInner (op, str) next = flip (BinOpExpr op) <$> (symbol str *> next)
+
+instance OpImpl x => OpImpl [x] where
+  opRestInner xs next = foldl1 (<|>) (flip opRestInner next <$> xs)
+
+instance OpImpl Text where
+  opRestInner "`" next =
+    symbol L.Backtick *> (flip . InfixExpr <$> identifier) <* symbol L.Backtick <*> next
+  opRestInner _ _ = error "Parser not implemented for this operator"

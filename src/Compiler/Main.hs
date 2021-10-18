@@ -27,10 +27,10 @@ import LLVM.IRBuilder.Monad
 import Language.AST
 import Language.AST.Flattener
 import Language.Lexer
-import Language.Translator
+import Language.Translator as Tr
 import Language.Parser
 import Language.AST.LRAnalysis
-import Language.AST.Blockifier
+import Language.AST.Blockifier as B
 import Language.Pretty ()
 import Prettyprinter (pretty)
 
@@ -50,9 +50,9 @@ main = do
     contents <- TS.getContents
     (blockified, blockifier) <- blockifyProcedure . flatten . either undefined id . parse procedure . either undefined id . parse tokenize $ contents
     let translated =  flip evalState initTranslState
-            { _translControlFlow = _controlFlow blockifier
-            , _translBlockData = _blockData blockifier
-            , _translBlocksTable = Map.fromList . (swap <$>) . Map.toList $ _blocksTable blockifier
+            { Tr._controlFlow = B._controlFlow blockifier
+            , Tr._blockData = B._blockData blockifier
+            , Tr._blocksTable = Map.fromList . (swap <$>) . Map.toList $ B._blocksTable blockifier
             } $ execModuleBuilderT emptyModuleBuilder $ runIRBuilderT emptyIRBuilder $ translate blockified
     print $ show translated
     return ()

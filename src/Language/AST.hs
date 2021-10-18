@@ -249,7 +249,7 @@ data Expr a
 deriving instance Eq (Expr ())
 
 data Lit a
-  = LitInt Int
+  = LitInt Int -- TODO: discuss this later
   | LitFloat Float
   | LitChar Char
   deriving (Show, Functor, Data, Eq, ASTNode)

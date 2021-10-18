@@ -1,7 +1,9 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Language.AST.BlockAnnot where
 
+import safe Data.Data (Data)
 import safe Data.Text (Text)
 import safe Data.Map (Map)
 
@@ -10,7 +12,7 @@ data BlockAnnot
   | Begins Int
   | Unreachable
   | NoBlock
-  deriving (Show)
+  deriving (Eq, Show, Data)
 
 type BlockData = Map Int BlockVars
 type BlockVars = Map Text (Bool, Bool, Bool)

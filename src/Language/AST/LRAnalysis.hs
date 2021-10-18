@@ -20,6 +20,7 @@ import safe Data.Functor
 import safe Data.Foldable
 import safe Data.Maybe
 import safe Data.Tuple
+import safe Data.List
 import safe qualified Data.Graph as Graph
 import safe qualified Data.Map as Map
 import safe qualified Data.Set as Set
@@ -538,8 +539,10 @@ analyzeFlow procedure@(Annot _ _) = do
   preCleanData <- uses registers (fmap . flip Map.restrictKeys) <*> uses blockData (`Map.restrictKeys` reachable)  -- we filter out variables that are not local variables and whole blocks that are not reachable
   let allVars = (False, False, False) <$ Map.foldlWithKey (\vars _ block -> block <> vars) mempty preCleanData
       cleanData = (<> allVars) <$> preCleanData -- we make sure that each block has a record for each variable
-      cleanFlow = filter ((`Set.member` reachable) . fst) flow -- we filter out unreachable flow
+      order = flip elemIndex . filter (`Set.member` reachable) $ Graph.topSort graph
+      cleanFlow = sortOn (order . fst) $ filter ((`Set.member` reachable) . fst) flow -- we filter out unreachable flow
   blockData .= cleanData
+  controlFlow .= cleanFlow
   doWhile $ or <$> traverse updateFlowPair cleanFlow
   uninitialized <- uses blockData $ Map.keys . Map.filter (^._3) . (Map.! 0)
   unless (null uninitialized) $ registerError procedure ("Uninitialized registers: " <> T.unwords uninitialized)
