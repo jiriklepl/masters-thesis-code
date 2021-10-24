@@ -12,7 +12,8 @@ digraph {
         AST
         Judgements [label="Type Judgements"]
         FlatAST [label="Flat AST"]
-        FlatASTAnnots [label="Flat AST\nwith block annotations"]
+        BlockifiedAST [label="Blockified AST"]
+        BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow"]
         MonoAST [label="Monomophized AST"]
     }
 
@@ -21,8 +22,9 @@ digraph {
 
         Parser
         Flattener
-        Infer [label="Type\ninference"]
-        LRAnalysis
+        Infer [label="Type inference"]
+        Blockifier
+        FlowAnalysis [label="Flow analysis"]
         Monomorphization
         Translator
     }
@@ -34,7 +36,8 @@ digraph {
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
     AST -> Infer -> Judgements -> Monomorphization
-    FlatAST -> LRAnalysis -> FlatASTAnnots
-    FlatASTAnnots -> Monomorphization -> MonoAST
+    FlatAST -> Blockifier -> BlockifiedAST
+    BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
+    BlockifiedASTAnnots -> Monomorphization -> MonoAST
     MonoAST -> Translator -> LLVM
 }

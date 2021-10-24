@@ -14,7 +14,8 @@ digraph {
         AST [fillcolor="lightgreen"]
         Judgements [label="Type Judgements", fillcolor="pink"]
         FlatAST [label="Flat AST", fillcolor="lightgreen"]
-        FlatASTAnnots [label="Flat AST\nwith block annotations", fillcolor="lightgreen"]
+        BlockifiedAST [label="Blockified AST", fillcolor="lightgreen"]
+        BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow", fillcolor="lightgreen"]
         MonoAST [label="Monomophized AST", fillcolor="pink"]
     }
 
@@ -23,8 +24,9 @@ digraph {
 
         Parser [fillcolor="lightgreen"]
         Flattener [fillcolor="lightgreen"]
-        Infer [label="Type\ninference", fillcolor="pink"]
-        LRAnalysis [fillcolor="lightgreen"]
+        Infer [label="Type inference", fillcolor="pink"]
+        Blockifier [fillcolor="lightgreen"]
+        FlowAnalysis [label="Flow analysis", fillcolor="lightgreen"]
         Monomorphization [fillcolor="pink"]
         Translator [fillcolor="yellow"]
     }
@@ -36,7 +38,8 @@ digraph {
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
     AST -> Infer -> Judgements -> Monomorphization
-    FlatAST -> LRAnalysis -> FlatASTAnnots
-    FlatASTAnnots -> Monomorphization -> MonoAST
+    FlatAST -> Blockifier -> BlockifiedAST
+    BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
+    BlockifiedASTAnnots -> Monomorphization -> MonoAST
     MonoAST -> Translator -> LLVM
 }
