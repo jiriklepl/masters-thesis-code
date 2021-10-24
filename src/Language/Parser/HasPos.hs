@@ -1,7 +1,7 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Parser.Utils (HasPos(..)) where
+module Language.Parser.HasPos (HasPos(..)) where
 
 import safe Language.AST ( Annot )
 import safe Language.AST.Utils ( takeAnnot )

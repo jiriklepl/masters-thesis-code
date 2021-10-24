@@ -50,7 +50,7 @@ import safe Prettyprinter
 
 import safe Language.AST
 import safe Language.AST.Utils
-import safe Language.Parser.Utils
+import safe Language.Parser.HasPos
 import safe Language.AST.BlockAnnot
 import safe Language.Pretty()
 import safe Language.TranslState

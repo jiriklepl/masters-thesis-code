@@ -11,7 +11,7 @@ import safe Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
 import safe Prettyprinter
 
 import safe Language.AST.Utils()
-import safe Language.Parser.Utils
+import safe Language.Parser.HasPos
 
 -- | Creates a warning text from a `SourcePos` object, which gets printed out as the header for the warning, and from the message itself
 mkWarning :: SourcePos -> Text -> Text

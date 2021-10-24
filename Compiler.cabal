@@ -35,7 +35,7 @@ executable Compiler
                        Language.Translator,
                        Language.TranslState,
                        Language.Warnings,
-                       Language.Parser.Utils,
+                       Language.Parser.HasPos,
                        Inference.Inference
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.16,
@@ -65,7 +65,7 @@ Test-Suite parser-testsuite
                        Language.Lexer,
                        Language.Pretty,
                        Language.Warnings,
-                       Language.Parser.Utils,
+                       Language.Parser.HasPos,
                        QuasiQuotes
   build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,

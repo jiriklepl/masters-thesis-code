@@ -2,7 +2,7 @@
 
 - [ ] translate c-- to llvm <-
 - [ ] change "Language" to "CMM"
-- [ ] rename Language.Parser.Utils to something more reasonable
+- [x] rename Language.Parser.Utils to something more reasonable (renamed to Language.Parser.HasPos)
 - LRAnalysis
   - [ ] make the errors/warnings found during flow analysis cleaner
   - [ ] refactor LRAnalysis

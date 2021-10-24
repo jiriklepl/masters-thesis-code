@@ -42,7 +42,7 @@ cradle:
     - path: "src/Language/Warnings.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/Parser/Utils.hs"
+    - path: "src/Language.Parser.HasPos.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/Inference/Inference.hs"
