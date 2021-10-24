@@ -4,12 +4,14 @@
 - [x] change "Language" to "CMM"
 - [x] rename Language.Parser.Utils to something more reasonable (renamed to Language.Parser.HasPos)
 - LRAnalysis
-  - [ ] make the errors/warnings found during flow analysis cleaner
-  - [~] refactor LRAnalysis
-    - [x] abstract out details about registering stuff
-  - [ ] add "useless-write" warnings
+  - [x] abstract out details about registering stuff
   - [x] procedure arguments shouldn't be reported as uninitialized
   - [x] split LRAnalysis into blockifying and flow analysis
+- Blockifier
+  - [~] refactor Blockifier
+- FlowAnalysis
+  - [ ] make the errors/warnings cleaner
+  - [ ] add "useless-write" warnings
 - Flattener
   - [x] fallthrough should be made explicit
 - [ ] add haddock comments
@@ -20,13 +22,17 @@
 
       - [ ] Utils
       - [ ] Flattener
-      - [ ] LRAnalysis
+      - [ ] Blockifier
+      - [ ] BlockifierState
 
+    - [ ] FlowAnalysis
     - [ ] Utils
     - [ ] Lexer
     - [ ] Parser
+      - [ ] HasPos
     - [ ] Pretty
     - [ ] Translator
+    - [ ] TranslState
     - [x] Warnings
 
   - [ ] ParserTest
@@ -44,5 +50,6 @@
   - [ ] draw a diagram for:
     - [ ] Lexer + Parser
     - [x] Flattener
-    - [ ] LRAnalysis
+    - [ ] FlowAnalysis
+    - [ ] Blockifier
     - [ ] Translator
