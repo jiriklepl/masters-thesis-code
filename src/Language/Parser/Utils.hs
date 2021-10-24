@@ -1,22 +1,26 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 module Language.Parser.Utils (HasPos(..)) where
-
-import safe Control.Lens.Tuple
-import safe Control.Lens.Getter
 
 import safe Language.AST ( Annot )
 import safe Language.AST.Utils ( takeAnnot )
 import safe Text.Megaparsec.Pos ( SourcePos )
 
-
 class HasPos n where
   getPos :: n -> SourcePos
 
-instance {-# OVERLAPPING #-} HasPos (Annot n SourcePos) where
-  getPos = takeAnnot
+instance HasPos SourcePos where
+  getPos = id
 
-instance Field1 s s SourcePos SourcePos =>  HasPos (Annot n s) where
-  getPos = (^._1) . takeAnnot
+instance HasPos a => HasPos (Annot n a) where
+  getPos = getPos . takeAnnot
+
+instance HasPos (SourcePos, b) where
+  getPos (pos, _) = pos
+
+instance HasPos (SourcePos, b, c) where
+  getPos (pos, _, _) = pos
+
+instance HasPos (SourcePos, b, c, d) where
+  getPos (pos, _, _, _) = pos

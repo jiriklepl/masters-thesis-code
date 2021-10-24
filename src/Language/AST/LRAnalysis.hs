@@ -40,35 +40,6 @@ import safe Language.Warnings
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 
-
-type HasPosAnnot n a = HasPos (Annot n a)
-
-type HasPosAnnot1 n a = HasPosAnnot n a
-
-type HasPosAnnot2 n1 n2 a = (HasPosAnnot1 n1 a, HasPosAnnot1 n2 a)
-
-type HasPosAnnot3 n1 n2 n3 a = (HasPosAnnot n1 a, HasPosAnnot2 n2 n3 a)
-
-type HasPosAnnot4 n1 n2 n3 n4 a = (HasPosAnnot n1 a, HasPosAnnot3 n2 n3 n4 a)
-
-type HasPosAnnot5 n1 n2 n3 n4 n5 a
-   = (HasPosAnnot n1 a, HasPosAnnot4 n2 n3 n4 n5 a)
-
-type HasPosAnnot6 n1 n2 n3 n4 n5 n6 a
-   = (HasPosAnnot n1 a, HasPosAnnot5 n2 n3 n4 n5 n6 a)
-
-type HasPosAnnot7 n1 n2 n3 n4 n5 n6 n7 a
-   = (HasPosAnnot n1 a, HasPosAnnot6 n2 n3 n4 n5 n6 n7 a)
-
-type HasPosAnnot8 n1 n2 n3 n4 n5 n6 n7 n8 a
-   = (HasPosAnnot n1 a, HasPosAnnot7 n2 n3 n4 n5 n6 n7 n8 a)
-
-type HasPosAnnot9 n1 n2 n3 n4 n5 n6 n7 n8 n9 a
-   = (HasPosAnnot n1 a, HasPosAnnot8 n2 n3 n4 n5 n6 n7 n8 n9 a)
-
-type HasPosAnnot10 n1 n2 n3 n4 n5 n6 n7 n8 n9 n10 a
-   = (HasPosAnnot n1 a, HasPosAnnot9 n2 n3 n4 n5 n6 n7 n8 n9 n10 a)
-
 helperName :: Text -> Text
 helperName = addPrefix lrAnalysisPrefix
 
@@ -206,7 +177,7 @@ instance GetTargetNames (Targets a) [Text] where
   getTargetNames (Targets names) = getName <$> names
 
 withBlockAnnot ::
-     (HasPosAnnot Stmt a, MonadBlockify m)
+     (HasPos a, MonadBlockify m)
   => Annot Stmt a
   -> m (Annot Stmt (a, BlockAnnot))
 withBlockAnnot stmt@(Annot n annot) =
@@ -263,6 +234,9 @@ instance GetMetadata ReadsVars (BodyItem a) where
 instance GetMetadata WritesVars (BodyItem a) where
   getMetadata t (BodyStmt stmt) = getMetadata t stmt
   getMetadata _ _ = []
+
+instance GetMetadata WritesVars (Formal a) where
+  getMetadata _ formal = [getName formal]
 
 instance GetMetadata DeclaresVars (BodyItem a) where
   getMetadata t (BodyDecl stackDecl) = getMetadata t stackDecl
@@ -347,7 +321,7 @@ instance GetMetadata DeclaresVars (Arm a) where
   getMetadata t (Arm _ body) = getMetadata t body
 
 blockifyProcedure ::
-     HasPosAnnot10 Formal Name Procedure BodyItem Datum Import StackDecl Stmt Body Decl a
+     HasPos a
   => Annot Procedure a
   -> IO (Annot Procedure (a, BlockAnnot), Blockifier)
 blockifyProcedure procedure =
@@ -358,7 +332,7 @@ class Blockify n a where
   blockify :: MonadBlockify m => n a -> m (n (a, BlockAnnot))
 
 -- TODO: refactor this
-instance HasPos (Annot Datum a) => Blockify (Annot Datum) a where
+instance HasPos a => Blockify (Annot Datum) a where
   blockify datum@(Annot DatumLabel {} _) = do
     let name = getName datum
     sls <- use stackLabels
@@ -370,17 +344,17 @@ instance HasPos (Annot Datum a) => Blockify (Annot Datum) a where
   blockify datum@(Annot _ _) = do
     return $ noBlockAnnots datum
 
-instance HasPosAnnot9 Formal Name BodyItem Stmt Body Decl StackDecl Import Datum a =>
-         Blockify (Annot Procedure) a where
+instance HasPos a => Blockify (Annot Procedure) a where
   blockify (Annot (Procedure mConv name formals body) a) = do
     formals' <- traverse blockify formals
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
+    traverse_ registerWrites formals
     withAnnot (a, Begins index) .
       Procedure mConv (noBlockAnnots name) formals' <$>
       blockify body
 
-instance HasPosAnnot8 Name BodyItem Stmt Decl Body StackDecl Import Datum a =>
+instance HasPos a =>
          Blockify (Annot Body) a where
   blockify (Annot (Body bodyItems) a) =
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
@@ -392,7 +366,7 @@ constructBlockified constr a n =  do
     n' <- blockify n
     return . withAnnot (a, snd $ takeAnnot n') $ constr n'
 
-instance HasPosAnnot8 Name BodyItem Stmt Body Decl StackDecl Import Datum a =>
+instance HasPos a =>
          Blockify (Annot BodyItem) a where
   blockify (Annot (BodyStmt stmt) a) =
     constructBlockified BodyStmt a stmt
@@ -401,12 +375,12 @@ instance HasPosAnnot8 Name BodyItem Stmt Body Decl StackDecl Import Datum a =>
   blockify (Annot (BodyStackDecl stackDecl) a) =
     constructBlockified BodyStackDecl a stackDecl
 
-instance HasPosAnnot Datum a => Blockify (Annot StackDecl) a where
+instance HasPos a => Blockify (Annot StackDecl) a where
   blockify (Annot (StackDecl datums) a) =
     withNoBlockAnnot a . StackDecl <$> traverse blockify datums
 
 -- TODO: refactor this
-instance HasPosAnnot3 Import Decl Name a => Blockify (Annot Decl) a where
+instance HasPos a => Blockify (Annot Decl) a where
   blockify (Annot (RegDecl invar regs) a) =
     constructBlockified (RegDecl invar) a regs
   blockify (Annot (ImportDecl imports') a) =
@@ -421,7 +395,7 @@ instance HasPosAnnot3 Import Decl Name a => Blockify (Annot Decl) a where
     return $ noBlockAnnots decl
   blockify decl@(Annot _ _) = return $ noBlockAnnots decl
 
-instance HasPosAnnot Import a => Blockify (Annot Import) a where
+instance HasPos a => Blockify (Annot Import) a where
   blockify import'@(Annot Import {} _) = do
     let name = getName import'
     is <- use imports
@@ -431,11 +405,11 @@ instance HasPosAnnot Import a => Blockify (Annot Import) a where
       imports .= name `Set.insert` is
     return $ noBlockAnnots import'
 
-instance HasPosAnnot Name a => Blockify (Annot Registers) a where
+instance HasPos a => Blockify (Annot Registers) a where
   blockify regs@(Annot (Registers _ _ nameStrLits) _) =
     traverse_ (registerRegister . fst) nameStrLits $> noBlockAnnots regs
 
-instance HasPosAnnot Formal a => Blockify (Annot Formal) a where
+instance HasPos a => Blockify (Annot Formal) a where
   blockify formal =
     registerRegister formal $> noBlockAnnots formal
 
@@ -447,7 +421,7 @@ registerRegister name = do
       registerError name "Duplicate register"
   else registers .= getName name `Set.insert` rs
 
-instance HasPosAnnot8 Name Stmt BodyItem Body Decl StackDecl Import Datum a =>
+instance HasPos a =>
          Blockify (Annot Stmt) a where
   blockify stmt@(Annot LabelStmt {} _) = do
     let name = getName stmt
@@ -520,7 +494,7 @@ flatteningError :: (HasPos n, Pretty n, MonadBlockify m) => n -> m ()
 flatteningError stmt =
   registerError stmt "Compilation failure in the flattening phase"
 
-analyzeFlow :: (HasPosAnnot Procedure a, MonadBlockify m) => Annot Procedure a -> m ()
+analyzeFlow :: (HasPos a, MonadBlockify m) => Annot Procedure a -> m ()
 analyzeFlow procedure@(Annot _ _) = do
   -- TODO: implement `cut to` statements
   flow <- use controlFlow
