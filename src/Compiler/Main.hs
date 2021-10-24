@@ -19,15 +19,17 @@ import CMM.AST.Flattener
 import CMM.Lexer
 import CMM.Translator
 import CMM.Parser
-import CMM.AST.LRAnalysis
+import CMM.AST.Blockifier
+import CMM.FlowAnalysis
 import CMM.Pretty ()
 import qualified CMM.TranslState as Tr
-import qualified CMM.AST.Blockifier as B
+import qualified CMM.AST.BlockifierState as B
 
 main :: IO ()
 main = do
     contents <- TS.getContents
-    (blockified, blockifier) <- blockifyProcedure . flatten . either undefined id . parse procedure . either undefined id . parse tokenize $ contents
+    let p = flatten . either undefined id . parse procedure . either undefined id . parse tokenize $ contents
+    (blockified, blockifier) <- runStateT (blockifyProcedure p <* analyzeFlow p) B.initBlockifier
     let translated =  ppllvm $ flip evalState Tr.initTranslState
             { Tr._controlFlow = B._controlFlow blockifier
             , Tr._blockData = B._blockData blockifier

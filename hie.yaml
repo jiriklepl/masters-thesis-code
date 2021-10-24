@@ -15,6 +15,9 @@ cradle:
     - path: "src/CMM/AST/Blockifier.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/AST/BlockifierState.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/AST/BlockAnnot.hs"
       component: "Compiler:exe:Compiler"
 
@@ -27,7 +30,7 @@ cradle:
     - path: "src/CMM/AST/Flattener.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/AST/LRAnalysis.hs"
+    - path: "src/CMM/FlowAnalysis.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Pretty.hs"

@@ -9,7 +9,7 @@
     - [x] abstract out details about registering stuff
   - [ ] add "useless-write" warnings
   - [x] procedure arguments shouldn't be reported as uninitialized
-  - [ ] split LRAnalysis into blockifying and flow analysis
+  - [x] split LRAnalysis into blockifying and flow analysis
 - Flattener
   - [x] fallthrough should be made explicit
 - [ ] add haddock comments
