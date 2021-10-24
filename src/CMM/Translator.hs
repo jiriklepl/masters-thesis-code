@@ -10,14 +10,14 @@
 {-# LANGUAGE RankNTypes #-}
 
 {-|
-Module      : Language.Translator
+Module      : CMM.Translator
 Description : Cmm to llvm translation layer
 Maintainer  : jiriklepl@seznam.cz
 
-This module follows the `Language.AST.LRAnalysis` module and translates the AST using its annotations into llvm.
+This module follows the `CMM.AST.LRAnalysis` module and translates the AST using its annotations into llvm.
 There is no AST-aware module that would follow this module.
 -}
-module Language.Translator where
+module CMM.Translator where
 
 import safe Data.Function
 import safe Data.Foldable
@@ -48,12 +48,12 @@ import safe qualified LLVM.AST.Constant as L
 
 import safe Prettyprinter
 
-import safe Language.AST
-import safe Language.AST.Utils
-import safe Language.Parser.HasPos
-import safe Language.AST.BlockAnnot
-import safe Language.Pretty()
-import safe Language.TranslState
+import safe CMM.AST
+import safe CMM.AST.Utils
+import safe CMM.Parser.HasPos
+import safe CMM.AST.BlockAnnot
+import safe CMM.Pretty()
+import safe CMM.TranslState
 
 type MonadTranslator m = (L.MonadIRBuilder m, L.MonadModuleBuilder m, MonadFix m, MonadState TranslState m {-, MonadIO m -}) -- TODO: solve what with IO
 

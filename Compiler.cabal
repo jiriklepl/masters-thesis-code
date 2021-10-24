@@ -22,20 +22,20 @@ common common-options
 executable Compiler
   import:              common-options
   main-is:             Compiler/Main.hs
-  other-modules:       Language.Parser,
-                       Language.Lexer,
-                       Language.AST,
-                       Language.AST.Blockifier,
-                       Language.AST.BlockAnnot,
-                       Language.AST.Utils,
-                       Language.Utils,
-                       Language.AST.Flattener,
-                       Language.AST.LRAnalysis,
-                       Language.Pretty,
-                       Language.Translator,
-                       Language.TranslState,
-                       Language.Warnings,
-                       Language.Parser.HasPos,
+  other-modules:       CMM.Parser,
+                       CMM.Lexer,
+                       CMM.AST,
+                       CMM.AST.Blockifier,
+                       CMM.AST.BlockAnnot,
+                       CMM.AST.Utils,
+                       CMM.Utils,
+                       CMM.AST.Flattener,
+                       CMM.AST.LRAnalysis,
+                       CMM.Pretty,
+                       CMM.Translator,
+                       CMM.TranslState,
+                       CMM.Warnings,
+                       CMM.Parser.HasPos,
                        Inference.Inference
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.16,
@@ -58,14 +58,14 @@ Test-Suite parser-testsuite
   import:              common-options
   type:                exitcode-stdio-1.0
   main-is:             ParserTest.hs
-  other-modules:       Language.AST,
-                       Language.AST.Utils,
-                       Language.Utils,
-                       Language.Parser,
-                       Language.Lexer,
-                       Language.Pretty,
-                       Language.Warnings,
-                       Language.Parser.HasPos,
+  other-modules:       CMM.AST,
+                       CMM.AST.Utils,
+                       CMM.Utils,
+                       CMM.Parser,
+                       CMM.Lexer,
+                       CMM.Pretty,
+                       CMM.Warnings,
+                       CMM.Parser.HasPos,
                        QuasiQuotes
   build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,

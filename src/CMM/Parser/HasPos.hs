@@ -1,10 +1,10 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Parser.HasPos (HasPos(..)) where
+module CMM.Parser.HasPos (HasPos(..)) where
 
-import safe Language.AST ( Annot )
-import safe Language.AST.Utils ( takeAnnot )
+import safe CMM.AST ( Annot )
+import safe CMM.AST.Utils ( takeAnnot )
 import safe Text.Megaparsec.Pos ( SourcePos )
 
 class HasPos n where

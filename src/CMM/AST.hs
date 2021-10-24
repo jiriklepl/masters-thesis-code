@@ -9,7 +9,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module Language.AST where
+module CMM.AST where
 
 import safe Data.Data (Data)
 import safe qualified Data.Kind as Kind

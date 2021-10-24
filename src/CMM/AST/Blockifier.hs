@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module Language.AST.Blockifier where
+module CMM.AST.Blockifier where
 
 import Control.Lens.TH
 import safe Control.Monad.State.Lazy
@@ -10,7 +10,7 @@ import safe Data.Text (Text)
 import safe Data.Map (Map)
 import safe Data.Set (Set)
 
-import safe Language.AST.BlockAnnot
+import safe CMM.AST.BlockAnnot
 
 type BlockifierMonad = MonadState Blockifier
 

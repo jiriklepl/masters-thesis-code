@@ -4,7 +4,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Lexer
+module CMM.Lexer
   ( Lexer
   , Reserved(..)
   , Token(..)
@@ -22,8 +22,8 @@ import safe Text.Megaparsec hiding (State, Token, token)
 import safe Text.Megaparsec.Char
 import safe qualified Text.Megaparsec.Char.Lexer as L
 
-import safe Language.AST (Annot)
-import safe Language.AST.Utils (withAnnot)
+import safe CMM.AST (Annot)
+import safe CMM.AST.Utils (withAnnot)
 
 type Lexer = Parsec Void Text
 

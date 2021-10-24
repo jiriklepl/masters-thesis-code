@@ -5,7 +5,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Language.Pretty
+module CMM.Pretty
   (
   ) where
 
@@ -22,7 +22,7 @@ import safe Prelude
   )
 import safe Prettyprinter
 
-import safe Language.AST
+import safe CMM.AST
 
 commaSep :: [Doc ann] -> Doc ann
 commaSep xs = hsep $ punctuate comma xs

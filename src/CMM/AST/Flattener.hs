@@ -6,16 +6,16 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Language.AST.Flattener where
+module CMM.AST.Flattener where
 
 import safe Control.Applicative (Applicative(liftA2))
 import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
-import safe Language.AST
-import safe Language.AST.Utils
-import safe Language.Utils
+import safe CMM.AST
+import safe CMM.AST.Utils
+import safe CMM.Utils
 
 class Flatten n where
   flatten :: n a -> n a

@@ -2,13 +2,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.AST.Utils where
+module CMM.AST.Utils where
 
 import safe Data.Functor
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
-import safe Language.AST
+import safe CMM.AST
 
 class HasName n where
     getName :: n -> Text

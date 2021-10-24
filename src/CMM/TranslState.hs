@@ -1,14 +1,14 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Language.TranslState where
+module CMM.TranslState where
 
 import safe Data.Text (Text)
 import safe Data.Map (Map)
 import safe Control.Lens.TH
 import safe qualified LLVM.AST.Operand as L
 
-import safe Language.AST.BlockAnnot
+import safe CMM.AST.BlockAnnot
 
 data TranslState = TranslState
     { _variables :: [Map Text L.Operand]

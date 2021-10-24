@@ -10,7 +10,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Language.AST.LRAnalysis where
+module CMM.AST.LRAnalysis where
 
 import safe Control.Monad.State.Lazy
 import safe Control.Lens.Getter
@@ -29,14 +29,14 @@ import safe qualified Data.Text as T
 import safe Prelude hiding (reads)
 import safe Prettyprinter (Pretty)
 
-import safe Language.AST
-import safe Language.AST.Utils
-import safe Language.AST.Blockifier
-import safe Language.AST.BlockAnnot
-import safe Language.Parser.HasPos
-import safe Language.Utils
-import safe Language.Pretty ()
-import safe Language.Warnings
+import safe CMM.AST
+import safe CMM.AST.Utils
+import safe CMM.AST.Blockifier
+import safe CMM.AST.BlockAnnot
+import safe CMM.Parser.HasPos
+import safe CMM.Utils
+import safe CMM.Pretty ()
+import safe CMM.Warnings
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 

@@ -1,7 +1,7 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module Language.AST.BlockAnnot where
+module CMM.AST.BlockAnnot where
 
 import safe Data.Data (Data)
 import safe Data.Text (Text)

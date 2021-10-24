@@ -15,14 +15,14 @@ import LLVM.Pretty -- from the llvm-hs-pretty package
 import LLVM.IRBuilder.Module
 import LLVM.IRBuilder.Monad
 
-import Language.AST.Flattener
-import Language.Lexer
-import Language.Translator
-import Language.Parser
-import Language.AST.LRAnalysis
-import Language.Pretty ()
-import qualified Language.TranslState as Tr
-import qualified Language.AST.Blockifier as B
+import CMM.AST.Flattener
+import CMM.Lexer
+import CMM.Translator
+import CMM.Parser
+import CMM.AST.LRAnalysis
+import CMM.Pretty ()
+import qualified CMM.TranslState as Tr
+import qualified CMM.AST.Blockifier as B
 
 main :: IO ()
 main = do

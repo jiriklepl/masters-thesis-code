@@ -3,46 +3,46 @@ cradle:
     - path: "src/Compiler/Main.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/Parser.hs"
+    - path: "src/CMM/Parser.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/Lexer.hs"
+    - path: "src/CMM/Lexer.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/AST.hs"
+    - path: "src/CMM/AST.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/AST/Blockifier.hs"
+    - path: "src/CMM/AST/Blockifier.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/AST/BlockAnnot.hs"
+    - path: "src/CMM/AST/BlockAnnot.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/AST/Utils.hs"
+    - path: "src/CMM/AST/Utils.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/Utils.hs"
+    - path: "src/CMM/Utils.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/AST/Flattener.hs"
+    - path: "src/CMM/AST/Flattener.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/AST/LRAnalysis.hs"
+    - path: "src/CMM/AST/LRAnalysis.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/Pretty.hs"
+    - path: "src/CMM/Pretty.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/Translator.hs"
+    - path: "src/CMM/Translator.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/TranslState.hs"
+    - path: "src/CMM/TranslState.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language/Warnings.hs"
+    - path: "src/CMM/Warnings.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/Language.Parser.HasPos.hs"
+    - path: "src/CMM/Parser/HasPos.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/Inference/Inference.hs"

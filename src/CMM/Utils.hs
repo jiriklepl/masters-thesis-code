@@ -1,7 +1,7 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Utils where
+module CMM.Utils where
 
 import safe qualified Data.Text as T
 import safe Data.Text (Text)

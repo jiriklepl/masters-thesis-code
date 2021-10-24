@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Language.Parser where
+module CMM.Parser where
 
 import safe Control.Applicative hiding (many)
 import safe Data.Foldable
@@ -17,10 +17,10 @@ import safe Data.Void
 import safe Prelude
 import safe Text.Megaparsec hiding (State)
 
-import safe Language.AST
-import safe Language.AST.Utils
+import safe CMM.AST
+import safe CMM.AST.Utils
 
-import safe qualified Language.Lexer as L
+import safe qualified CMM.Lexer as L
 
 type Parser = Parsec Void [Annot L.Token SourcePos]
 

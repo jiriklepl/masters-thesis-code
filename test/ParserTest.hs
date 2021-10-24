@@ -24,11 +24,11 @@ import safe Text.Megaparsec
   , runParser
   )
 
-import safe Language.AST
-import Language.AST.Utils
-import safe Language.Lexer
-import safe Language.Parser
-import safe Language.Pretty ()
+import safe CMM.AST
+import CMM.AST.Utils
+import safe CMM.Lexer
+import safe CMM.Parser
+import safe CMM.Pretty ()
 import safe QuasiQuotes (text)
 
 data SimpleAnnotation node annot =
