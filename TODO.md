@@ -16,7 +16,7 @@
   - [x] fallthrough should be made explicit
 - [ ] add haddock comments
 
-  - [ ] Language
+  - [ ] CMM
 
     - [ ] AST
 
@@ -45,7 +45,7 @@
 - [ ] write QuickCheck tests
   - [ ] tests for re-parsing
 - [ ] change `undefined` to `error s`
-- [ ] draw a diagram for the architecture
+- [~] draw a diagram for the architecture
   - [~] draw a diagram for the overall pipeline
   - [ ] draw a diagram for:
     - [ ] Lexer + Parser
