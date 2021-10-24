@@ -1,10 +1,16 @@
 # TO-DO list
 
 - [ ] translate c-- to llvm <-
-- [ ] split LRAnalysis into blockifying and flow analysis
 - [ ] change "Language" to "CMM"
 - [ ] rename Language.Parser.Utils to something more reasonable
-- [ ] procedure arguments shouldn't be reported as uninitialized
+- LRAnalysis
+  - [ ] make the errors/warnings found during flow analysis cleaner
+  - [ ] refactor LRAnalysis
+  - [ ] add "useless-write" warnings
+  - [x] procedure arguments shouldn't be reported as uninitialized
+  - [ ] split LRAnalysis into blockifying and flow analysis
+- Flattener
+  - [ ] fallthrough should be made explicit
 - [ ] add haddock comments
 
   - [ ] Language
@@ -30,13 +36,8 @@
   - [ ] for binOp
 
 - [ ] write QuickCheck tests
-
   - [ ] tests for re-parsing
-
-- [ ] add "useless-write" warnings
-- [ ] make the errors/warnings found during flow analysis cleaner
 - [ ] change `undefined` to `error s`
-- [ ] refactor LRAnalysis
 - [ ] draw a diagram for the architecture
   - [~] draw a diagram for the overall pipeline
   - [ ] draw a diagram for:
