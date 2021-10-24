@@ -69,50 +69,66 @@ infixl 4 >*>
 (>*>) = liftA2 (flip (.))
 
 keyword :: L.Reserved -> Parser L.Reserved
-keyword name = flip token Set.empty $ \case
-  Annot (L.Keyword name') _  -> if name == name' then Just name else Nothing
-  _ -> Nothing
+keyword name =
+  flip token Set.empty $ \case
+    Annot (L.Keyword name') _ ->
+      if name == name'
+        then Just name
+        else Nothing
+    _ -> Nothing
 
 keywords :: [L.Reserved] -> Parser L.Reserved
 keywords = foldl1 (*>) . (keyword <$>)
 
 symbol :: L.Token SourcePos -> Parser ()
-symbol tok = flip token Set.empty $ \case
-  Annot tok' _ -> if tok == tok' then Just () else Nothing
+symbol tok =
+  flip token Set.empty $ \case
+    Annot tok' _ ->
+      if tok == tok'
+        then Just ()
+        else Nothing
 
 identifier :: Parser (Name SourcePos)
-identifier  = flip token Set.empty $ \case
-  Annot (L.Ident n) _  -> Just $ Name n
-  _ -> Nothing
+identifier =
+  flip token Set.empty $ \case
+    Annot (L.Ident n) _ -> Just $ Name n
+    _ -> Nothing
 
 stringLiteral :: Parser StrLit
-stringLiteral  = flip token Set.empty $ \case
-  Annot (L.StrLit t) _  -> Just $ StrLit t
-  _ -> Nothing
+stringLiteral =
+  flip token Set.empty $ \case
+    Annot (L.StrLit t) _ -> Just $ StrLit t
+    _ -> Nothing
 
 bitsType :: Parser Int
-bitsType  = flip token Set.empty $ \case
-  Annot (L.BitsType i) _  -> Just i
-  _ -> Nothing
+bitsType =
+  flip token Set.empty $ \case
+    Annot (L.BitsType i) _ -> Just i
+    _ -> Nothing
 
 charLit :: Parser Char
-charLit  = flip token Set.empty $ \case
-  Annot (L.CharLit c) _  -> Just c
-  _ -> Nothing
+charLit =
+  flip token Set.empty $ \case
+    Annot (L.CharLit c) _ -> Just c
+    _ -> Nothing
 
 floatLit :: Parser Float
-floatLit  = flip token Set.empty $ \case
-  Annot (L.FloatLit f) _  -> Just f
-  _ -> Nothing
+floatLit =
+  flip token Set.empty $ \case
+    Annot (L.FloatLit f) _ -> Just f
+    _ -> Nothing
 
 intLit :: Parser (Int, Bool)
-intLit  = flip token Set.empty $ \case
-  Annot (L.IntLit i) _  -> Just i
-  _ -> Nothing
+intLit =
+  flip token Set.empty $ \case
+    Annot (L.IntLit i) _ -> Just i
+    _ -> Nothing
 
 getPos :: Parser SourcePos
-getPos = lookAhead $ flip token Set.empty $ \case
-  Annot _ pos -> Just pos
+getPos =
+  lookAhead $
+  flip token Set.empty $ \case
+    Annot _ pos -> Just pos
 
 withSourcePos :: ULocParser a -> SourceParser a
 withSourcePos = liftA2 withAnnot getPos
@@ -130,7 +146,7 @@ brackets :: Parser a -> Parser a
 brackets = between (symbol L.LBracket) (symbol L.RBracket)
 
 angles :: Parser a -> Parser a
-angles =  between (symbol L.Lt) (symbol L.Gt)
+angles = between (symbol L.Lt) (symbol L.Gt)
 
 commaList :: Parser a -> Parser [a]
 commaList = (`sepEndBy1` comma)
@@ -233,8 +249,7 @@ endian :: Parser Endian
 endian = choice [keyword L.Little $> Little, keyword L.Big $> Big]
 
 pointerSizeDirective :: ULocParser TargetDirective
-pointerSizeDirective =
-  keyword L.Pointersize *> (PointerSize . fst <$> intLit)
+pointerSizeDirective = keyword L.Pointersize *> (PointerSize . fst <$> intLit)
 
 wordSizeDirective :: ULocParser TargetDirective
 wordSizeDirective = keyword L.Wordsize *> (WordSize . fst <$> intLit)
@@ -375,7 +390,8 @@ spanStmt = keyword L.Span *> liftA3 SpanStmt expr expr body
 
 assignStmt :: ULocParser Stmt
 assignStmt =
-  liftA2 AssignStmt (commaList lvalue <* symbol L.EqSign) (commaList expr) <* semicolon
+  liftA2 AssignStmt (commaList lvalue <* symbol L.EqSign) (commaList expr) <*
+  semicolon
 
 primOpStmt :: ULocParser Stmt
 primOpStmt =
@@ -424,7 +440,8 @@ lvalue = withSourcePos $ try lvRef <|> lvName
 
 lvRef :: ULocParser LValue
 lvRef =
-  liftA3 LVRef typeToken (symbol L.LBracket *> expr) (optional asserts) <* symbol L.RBracket
+  liftA3 LVRef typeToken (symbol L.LBracket *> expr) (optional asserts) <*
+  symbol L.RBracket
 
 lvName :: ULocParser LValue
 lvName = LVName <$> identifier
@@ -574,13 +591,16 @@ shExpr :: SourceParser Expr
 shExpr = opImplL [(ShLOp, L.ShL :: L.Token SourcePos), (ShROp, L.ShR)] addExpr
 
 addExpr :: SourceParser Expr
-addExpr = opImplL [(AddOp, L.Plus :: L.Token SourcePos), (SubOp, L.Minus)] mulExpr
+addExpr =
+  opImplL [(AddOp, L.Plus :: L.Token SourcePos), (SubOp, L.Minus)] mulExpr
 
 mulExpr :: SourceParser Expr
-mulExpr = opImplL [(DivOp, L.Slash :: L.Token SourcePos), (MulOp, L.Star), (ModOp, L.Percent)] negExpr
+mulExpr =
+  opImplL
+    [(DivOp, L.Slash :: L.Token SourcePos), (MulOp, L.Star), (ModOp, L.Percent)]
+    negExpr
 
 -- SYMBOLIC OPERATORS -- END
-
 negExpr :: SourceParser Expr
 negExpr =
   withSourcePos (symbol L.Minus *> (NegExpr <$> negExpr)) <|>
@@ -589,7 +609,8 @@ negExpr =
 
 prefixExpr :: SourceParser Expr
 prefixExpr =
-  withSourcePos $ symbol L.Percent *> liftA2 PrefixExpr identifier (optionalL actuals)
+  withSourcePos $
+  symbol L.Percent *> liftA2 PrefixExpr identifier (optionalL actuals)
 
 class OpImpl a where
   opImplL :: a -> SourceParser Expr -> SourceParser Expr
@@ -607,8 +628,7 @@ class OpImpl a where
        a
     -> SourceParser Expr
     -> Parser (Annot Expr SourcePos -> Annot Expr SourcePos)
-  opRestImplN x next =
-    withAnnot <$> getPos <*< opRestInner x next <|> pure id
+  opRestImplN x next = withAnnot <$> getPos <*< opRestInner x next <|> pure id
   opRestInner ::
        a -> SourceParser Expr -> Parser (Annot Expr SourcePos -> Expr SourcePos)
 
@@ -620,5 +640,6 @@ instance OpImpl x => OpImpl [x] where
 
 instance OpImpl Text where
   opRestInner "`" next =
-    symbol L.Backtick *> (flip . InfixExpr <$> identifier) <* symbol L.Backtick <*> next
+    symbol L.Backtick *> (flip . InfixExpr <$> identifier) <* symbol L.Backtick <*>
+    next
   opRestInner _ _ = error "Parser not implemented for this operator"

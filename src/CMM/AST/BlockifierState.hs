@@ -5,12 +5,12 @@
 
 module CMM.AST.BlockifierState where
 
-import Control.Lens.TH
 import safe Control.Lens.Setter
+import Control.Lens.TH
 import safe Control.Monad.State.Lazy
-import safe Data.Text (Text)
 import safe Data.Map (Map)
 import safe Data.Set (Set)
+import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
 
 import safe CMM.AST.BlockAnnot
@@ -37,9 +37,7 @@ data Blockifier =
     }
   deriving (Show)
 
-
 makeLenses ''Blockifier
-
 
 initBlockifier :: Blockifier
 initBlockifier =
@@ -68,4 +66,3 @@ registerWarning :: (HasPos n, Pretty n, MonadBlockifier m) => n -> Text -> m ()
 registerWarning node message = do
   warnings += 1
   makeMessage mkWarning node message
-

@@ -23,6 +23,7 @@ class Flatten n where
 class Functor n =>
       FlattenTrivial n
 
+
 helperName :: String -> Name a
 helperName = Name . addPrefix flattenerPrefix . T.pack
 

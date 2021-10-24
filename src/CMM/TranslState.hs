@@ -3,14 +3,15 @@
 
 module CMM.TranslState where
 
-import safe Data.Text (Text)
-import safe Data.Map (Map)
 import safe Control.Lens.TH
+import safe Data.Map (Map)
+import safe Data.Text (Text)
 import safe qualified LLVM.AST.Operand as L
 
 import safe CMM.AST.BlockAnnot
 
-data TranslState = TranslState
+data TranslState =
+  TranslState
     { _variables :: [Map Text L.Operand]
     , _controlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
     , _blockData :: BlockData -- We need the block data to create the phi nodes
@@ -23,7 +24,8 @@ data TranslState = TranslState
 makeLenses ''TranslState
 
 initTranslState :: TranslState
-initTranslState = TranslState -- FIXME: this is just DUMMY
+initTranslState =
+  TranslState -- FIXME: this is just DUMMY
     { _variables = mempty
     , _controlFlow = mempty
     , _blockData = mempty

@@ -3,10 +3,10 @@
 
 module CMM.Utils where
 
+import safe Control.Monad
+import safe Data.Maybe
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
-import safe Data.Maybe
-import safe Control.Monad
 
 addPrefix :: Text -> Text -> Text
 addPrefix prefix text = prefix <> T.cons ':' text

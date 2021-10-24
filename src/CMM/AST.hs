@@ -21,15 +21,19 @@ data Annotation node annot =
   deriving (Show, Functor, Data)
 
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
+
 deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
 
 type Annot = Annotation
+
 type Annotated = Functor
 
 class ASTNode (n :: Kind.Type -> Kind.Type)
+
 class AST (n :: Kind.Type -> Kind.Type)
 
 instance (ASTNode n) => AST n
+
 instance (ASTNode n) => AST (Annot n)
 
 newtype Unit a =

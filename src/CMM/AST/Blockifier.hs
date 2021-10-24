@@ -13,28 +13,28 @@
 
 module CMM.AST.Blockifier where
 
-import safe Control.Monad.State.Lazy
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
-import safe Data.Functor
-import safe Data.Foldable
-import safe Data.Maybe
-import safe Data.Tuple
 import safe Control.Lens.Type
+import safe Control.Monad.State.Lazy
+import safe Data.Foldable
+import safe Data.Functor
 import safe qualified Data.Map as Map
+import safe Data.Maybe
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
+import safe Data.Tuple
 import safe Prelude hiding (reads)
 import safe Prettyprinter (Pretty)
 
 import safe CMM.AST
-import safe CMM.AST.Utils
-import safe CMM.AST.BlockifierState
 import safe CMM.AST.BlockAnnot
+import safe CMM.AST.BlockifierState
+import safe CMM.AST.Utils
 import safe CMM.Parser.HasPos
-import safe CMM.Utils
 import safe CMM.Pretty ()
+import safe CMM.Utils
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 
@@ -52,19 +52,20 @@ blocksCache name = do
   table <- use blocksTable
   case name `Map.lookup` table of
     Just index -> return index
-    Nothing -> let index = Map.size table
-               in index <$ (blocksTable .= Map.insert name index table)
+    Nothing ->
+      let index = Map.size table
+       in index <$ (blocksTable .= Map.insert name index table)
 
 updateBlock :: MonadState Blockifier m => Maybe Text -> m ()
 updateBlock mName = do
   mIndex <- traverse blocksCache mName
   use currentBlock >>= \case
-      Just oldName -> do
-        cData <- use currentData
-        blockData %= Map.insert oldName cData
-        currentBlock .= mIndex
-        currentData .= mempty
-      Nothing -> currentBlock .= mIndex
+    Just oldName -> do
+      cData <- use currentData
+      blockData %= Map.insert oldName cData
+      currentBlock .= mIndex
+      currentData .= mempty
+    Nothing -> currentBlock .= mIndex
 
 setBlock :: MonadState Blockifier m => Text -> m ()
 setBlock = updateBlock . Just
@@ -94,28 +95,26 @@ class MetadataType t =>
 instance Register ReadsVars Text where
   register _ var =
     currentData %=
-      Map.insertWith
-        (\_ (reads, writes, lives) -> (not writes || reads, writes, lives))
-        var
-        (True, False, True)
+    Map.insertWith
+      (\_ (reads, writes, lives) -> (not writes || reads, writes, lives))
+      var
+      (True, False, True)
 
 instance Register WritesVars Text where
   register _ var =
     currentData %=
-      Map.insertWith
-        (\_ (reads, _, lives) -> (reads, True, lives))
-        var
-        (False, True, False)
+    Map.insertWith
+      (\_ (reads, _, lives) -> (reads, True, lives))
+      var
+      (False, True, False)
 
 instance (GetMetadata t (n a), Register t Text) => Register t (n a) where
   register t = traverse_ (register t) . getMetadata t
 
-registerReads ::
-     (Register ReadsVars n, MonadState Blockifier m) => n -> m ()
+registerReads :: (Register ReadsVars n, MonadState Blockifier m) => n -> m ()
 registerReads = register ReadsVars
 
-registerWrites ::
-     (Register WritesVars n, MonadState Blockifier m) => n -> m ()
+registerWrites :: (Register WritesVars n, MonadState Blockifier m) => n -> m ()
 registerWrites = register WritesVars
 
 registerReadsWrites ::
@@ -173,8 +172,7 @@ withBlockAnnot stmt@(Annot n annot) =
     Nothing ->
       registerWarning stmt "The statement is unreachable" $>
       withAnnot (annot, Unreachable) (noBlockAnnots n)
-    Just block ->
-      return . withAnnot (annot, PartOf block) $ noBlockAnnots n
+    Just block -> return . withAnnot (annot, PartOf block) $ noBlockAnnots n
 
 class MetadataType a
 
@@ -308,8 +306,8 @@ instance GetMetadata WritesVars (Arm a) where
 instance GetMetadata DeclaresVars (Arm a) where
   getMetadata t (Arm _ body) = getMetadata t body
 
-blockifyProcedure :: (Blockify n a, MonadBlockifier m) =>
-  n a -> m (n (a, BlockAnnot))
+blockifyProcedure ::
+     (Blockify n a, MonadBlockifier m) => n a -> m (n (a, BlockAnnot))
 blockifyProcedure procedure = blockify procedure <* unsetBlock
 
 class Blockify n a where
@@ -319,8 +317,7 @@ class Blockify n a where
 instance HasPos a => Blockify (Annot Datum) a where
   blockify datum@(Annot DatumLabel {} _) =
     storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
-  blockify datum@(Annot _ _) =
-    return $ noBlockAnnots datum
+  blockify datum@(Annot _ _) = return $ noBlockAnnots datum
 
 instance HasPos a => Blockify (Annot Procedure) a where
   blockify (Annot (Procedure mConv name formals body) a) = do
@@ -328,28 +325,26 @@ instance HasPos a => Blockify (Annot Procedure) a where
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
     traverse_ registerWrites formals
-    withAnnot (a, Begins index) .
-      Procedure mConv (noBlockAnnots name) formals' <$>
+    withAnnot (a, Begins index) . Procedure mConv (noBlockAnnots name) formals' <$>
       blockify body
 
-instance HasPos a =>
-         Blockify (Annot Body) a where
+instance HasPos a => Blockify (Annot Body) a where
   blockify (Annot (Body bodyItems) a) =
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
-constructBlockified :: (Blockify (Annot n1) a1, MonadBlockify m) =>
-  (Annot n1 (a1, BlockAnnot) -> n2 (a2, BlockAnnot))
-  -> a2 -> Annot n1 a1 -> m (Annot n2 (a2, BlockAnnot))
-constructBlockified constr a n =  do
-    n' <- blockify n
-    return . withAnnot (a, snd $ takeAnnot n') $ constr n'
+constructBlockified ::
+     (Blockify (Annot n1) a1, MonadBlockify m)
+  => (Annot n1 (a1, BlockAnnot) -> n2 (a2, BlockAnnot))
+  -> a2
+  -> Annot n1 a1
+  -> m (Annot n2 (a2, BlockAnnot))
+constructBlockified constr a n = do
+  n' <- blockify n
+  return . withAnnot (a, snd $ takeAnnot n') $ constr n'
 
-instance HasPos a =>
-         Blockify (Annot BodyItem) a where
-  blockify (Annot (BodyStmt stmt) a) =
-    constructBlockified BodyStmt a stmt
-  blockify (Annot (BodyDecl decl) a) =
-    constructBlockified BodyDecl a decl
+instance HasPos a => Blockify (Annot BodyItem) a where
+  blockify (Annot (BodyStmt stmt) a) = constructBlockified BodyStmt a stmt
+  blockify (Annot (BodyDecl decl) a) = constructBlockified BodyDecl a decl
   blockify (Annot (BodyStackDecl stackDecl) a) =
     constructBlockified BodyStackDecl a stackDecl
 
@@ -377,15 +372,23 @@ instance HasPos a => Blockify (Annot Registers) a where
 instance HasPos a => Blockify (Annot Formal) a where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
-storeRegister :: (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m) => n -> m ()
+storeRegister ::
+     (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m)
+  => n
+  -> m ()
 storeRegister = storeSymbol registers "register"
 
-storeSymbol :: (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m) => Lens Blockifier Blockifier (Set Text) (Set Text) -> Text -> n -> m ()
+storeSymbol ::
+     (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m)
+  => Lens Blockifier Blockifier (Set Text) (Set Text)
+  -> Text
+  -> n
+  -> m ()
 storeSymbol symbolSet symbolName node = do
   symbols' <- use symbolSet
-  if getName node `Set.member` symbols' then
-      registerError node ("Duplicate " <> symbolName)
-  else symbolSet .= getName node `Set.insert` symbols'
+  if getName node `Set.member` symbols'
+    then registerError node ("Duplicate " <> symbolName)
+    else symbolSet .= getName node `Set.insert` symbols'
 
 instance HasPos a => Blockify (Annot Stmt) a where
   blockify stmt@(Annot LabelStmt {} _) = do
@@ -439,7 +442,8 @@ instance HasPos a => Blockify (Annot Stmt) a where
   blockify (Annot (SpanStmt key value body) a) =
     withNoBlockAnnot a . SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
     blockify body
-  blockify stmt@(Annot (CallStmt _ _ _ _ _ callAnnots) _) = -- TODO: implement `cut to` statements
+  blockify stmt@(Annot (CallStmt _ _ _ _ _ callAnnots) _) -- TODO: implement `cut to` statements
+   =
     registerReads stmt *> withBlockAnnot stmt <*
     when (neverReturns callAnnots) unsetBlock
 

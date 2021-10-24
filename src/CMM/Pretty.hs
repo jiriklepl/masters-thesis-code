@@ -188,7 +188,8 @@ instance Pretty (Stmt a) where
     parens (commaSep $ pretty <$> actuals) <> semi
   pretty (LabelStmt name) = pretty name <> colon
   pretty (ContStmt name kindedNames) =
-    "continuation" <+> pretty name <> parens (commaSep $ pretty <$> kindedNames) <> colon
+    "continuation" <+>
+    pretty name <> parens (commaSep $ pretty <$> kindedNames) <> colon
   pretty (GotoStmt expr mTargets) =
     "goto" <+> pretty expr <> maybeSpacedL mTargets <> semi
   pretty (CutToStmt expr actuals flows) =

@@ -12,17 +12,12 @@ module Main
   ) where
 
 import safe Data.Text (Text)
-import Debug.Trace (trace)
 import safe qualified Data.Text as T
+import Debug.Trace (trace)
+import safe Prettyprinter (Doc(), Pretty(), pretty)
 import safe System.Exit (exitFailure, exitSuccess)
 import safe Test.HUnit
-import safe Prettyprinter (Doc(), Pretty(), pretty)
-import safe Text.Megaparsec
-  ( ParseErrorBundle()
-  , Parsec()
-  , many
-  , runParser
-  )
+import safe Text.Megaparsec (ParseErrorBundle(), Parsec(), many, runParser)
 
 import safe CMM.AST
 import CMM.AST.Utils
@@ -70,7 +65,8 @@ checkReparse parser ast =
 testTemplate ::
      (Show a, Pretty a) => String -> Text -> Parser a -> (a -> Bool) -> Test
 testTemplate testName input parser validator =
-  testName ~: assertion $ either ((`trace` undefined) . show) (parse parser) $ parse tokenize input -- TODO: clean this up
+  testName ~: assertion $
+  either ((`trace` undefined) . show) (parse parser) $ parse tokenize input
   where
     assertion (Left result) =
       assertFailure $
