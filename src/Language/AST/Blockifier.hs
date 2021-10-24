@@ -7,11 +7,8 @@ module Language.AST.Blockifier where
 import Control.Lens.TH
 import safe Control.Monad.State.Lazy
 import safe Data.Text (Text)
-import safe qualified Data.Text as T
 import safe Data.Map (Map)
-import safe qualified Data.Map as Map
 import safe Data.Set (Set)
-import safe qualified Data.Set as Set
 
 import safe Language.AST.BlockAnnot
 

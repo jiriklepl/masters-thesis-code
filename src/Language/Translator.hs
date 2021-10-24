@@ -6,7 +6,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -20,30 +19,33 @@ There is no AST-aware module that would follow this module.
 -}
 module Language.Translator where
 
-import safe Data.Text (Text)
 import safe Data.Function
+import safe Data.Foldable
+import safe Data.Functor
+import safe Data.Char
+import safe Data.String
+import safe Data.Text (Text)
+import safe qualified Data.Text as T
+import safe qualified Data.Map as Map
+import safe Text.Megaparsec (SourcePos)
+import safe Control.Applicative
 import safe Control.Monad.State.Lazy
+
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
 import safe Control.Lens.Tuple
-import safe Control.Lens.TH
-import safe Data.Map.Lazy (Map)
-import safe qualified Data.Map.Lazy as Map
-import safe Data.Foldable
-import safe Data.Functor
-import safe qualified Data.Text as T
-import safe Data.Char
 
-import safe qualified LLVM.IRBuilder.Instruction as L
-import safe LLVM.IRBuilder.Constant
-import safe LLVM.IRBuilder.Module
-import safe qualified LLVM.IRBuilder.Monad as L
+import qualified LLVM.IRBuilder.Instruction as L
+import qualified LLVM.IRBuilder.Module as L
+import qualified LLVM.IRBuilder.Monad as L
+import safe qualified LLVM.IRBuilder.Constant as L
 import safe qualified LLVM.AST.Name as L
 import safe qualified LLVM.AST.Type as L
 import safe qualified LLVM.AST.Operand as L
+import safe qualified LLVM.AST.Typed as L
 import safe qualified LLVM.AST.IntegerPredicate as L
-import safe Text.Megaparsec (SourcePos)
-import safe Control.Applicative
+import safe qualified LLVM.AST.Constant as L
+
 import safe Prettyprinter
 
 import safe Language.AST
@@ -51,31 +53,9 @@ import safe Language.AST.Utils
 import safe Language.Parser.Utils
 import safe Language.AST.BlockAnnot
 import safe Language.Pretty()
+import safe Language.TranslState
 
-data TranslState = TranslState
-    { _variables :: [Map Text L.Operand]
-    , _controlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
-    , _blockData :: BlockData -- We need the block data to create the phi nodes
-    , _currentBlock :: Maybe Int
-    , _blocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
-    , _errors :: Int
-    , _warnings :: Int
-    }
-
-makeLenses ''TranslState
-
-initTranslState :: TranslState
-initTranslState = TranslState -- FIXME: this is just DUMMY
-    { _variables = mempty
-    , _controlFlow = mempty
-    , _blockData = mempty
-    , _currentBlock = Nothing -- TODO: change to (Just 0) in procedure translation
-    , _blocksTable = mempty
-    , _errors = 0
-    , _warnings = 0
-    }
-
-type MonadTranslator m = (L.MonadIRBuilder m, MonadModuleBuilder m, MonadFix m, MonadState TranslState m {-, MonadIO m -}) -- TODO: solve what with IO
+type MonadTranslator m = (L.MonadIRBuilder m, L.MonadModuleBuilder m, MonadFix m, MonadState TranslState m {-, MonadIO m -}) -- TODO: solve what with IO
 
 type OutVar = (Text, Int, L.Operand)
 type OutVars = [OutVar]
@@ -83,16 +63,16 @@ type OutVars = [OutVar]
 translateName :: HasName n => n -> L.Name
 translateName = L.mkName . T.unpack . getName
 
-translateParName :: HasName n => n -> ParameterName
-translateParName = (\(L.Name n) -> ParameterName n) . translateName
+translateParName :: HasName n => n -> L.ParameterName
+translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
 
 infix 4 `exchange`
 exchange :: MonadState s m => (forall f. Functor f => (a -> f a) -> s -> f s) -> a -> m a
 l `exchange` b = use l <* (l .= b)
 
 -- TODO: maybe change the name to `endBlock` or something...
-pushVariables :: (MonadTranslator m, Pretty n, HasPos n) => n -> m OutVars
-pushVariables _ = do
+pushVariables :: (MonadTranslator m, Pretty (n a), HasPos a) => Annot n a -> m OutVars
+pushVariables (Annot _ _) = do
     currentBlock `exchange` Nothing >>= \case
         Just idx -> do
             ~(h : t) <- use variables
@@ -116,33 +96,35 @@ instance HasBlockAnnot BlockAnnot where
 instance HasBlockAnnot (SourcePos, BlockAnnot) where
     getBlockAnnot = snd
 
-class MonadTranslator m => Translate m n b | m n -> b, b -> m where
-    translate :: Annot n (SourcePos, BlockAnnot) -> b
+class (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m n a b | m n -> b, b -> m where
+    translate :: Annot n a -> b
 
-instance MonadTranslator m => Translate m Formal (m (L.Type, ParameterName)) where
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m Formal a (m (L.Type, L.ParameterName)) where
     translate (Annot formal _) = return . (L.i32,) . translateParName $ formal
 
-instance MonadTranslator m => Translate m Procedure (m L.Operand) where
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m Procedure a (m L.Operand) where
     translate (Annot (Procedure _ name formals body) annot) =
         go $ getBlockAnnot annot
         where
             go = \case
-                Begins blockIdx -> do
+                Begins idx -> do
                     formals' <- traverse translate formals
-                    currentBlock ?= blockIdx
-                    function (translateName name) formals' L.i32 $
+                    currentBlock ?= idx
+                    L.function (translateName name) formals' L.i32 $
                         \pars -> mdo
+                            blockName <- uses blocksTable (Map.! idx)
+                            L.emitBlockStart . fromString $ T.unpack blockName
                             let newVars = Map.fromList (zip (getName <$> formals) pars)
                             variables %= (newVars :)
                             exports <- (\exports' -> liftA2 (<>) (translate body exports') (pushVariables body)) exports
                             variables %= tail
                 _ -> undefined -- TODO: add nice error message
 
-instance MonadTranslator m => Translate m Body (OutVars -> m OutVars) where
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m Body a (OutVars -> m OutVars) where
     translate (Annot (Body []) _) _ = return mempty
     translate (Annot (Body items) _) exports = fold <$> traverse (`translate` exports) items
 
-instance MonadTranslator m => Translate m BodyItem (OutVars -> m OutVars) where
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m BodyItem a (OutVars -> m OutVars) where
     translate (Annot (BodyDecl decl) _) _ = translate decl $> mempty -- TODO ?
     translate (Annot (BodyStackDecl stackDecl) _) _ = translate stackDecl $> mempty -- TODO ?
     translate (Annot (BodyStmt stmt) annot) exports =
@@ -157,6 +139,7 @@ instance MonadTranslator m => Translate m BodyItem (OutVars -> m OutVars) where
                     exports' <- pushVariables stmt
                     setCurrentBlock idx
                     variables %= (mempty :)
+                    stmt' <- translate stmt
                     sequence_
                         [do o <- L.phi $ [
                                 let Just source = (\(v', f', _) -> v' == v && f' == f) `find` exports
@@ -165,10 +148,11 @@ instance MonadTranslator m => Translate m BodyItem (OutVars -> m OutVars) where
                             ~(h : t) <- use variables
                             variables .= Map.insert v o h : t
                         | v <- vars]
-                    (exports' <>) <$> translate stmt
+                    return $ exports' <> stmt'
+                Unreachable -> return mempty
                 _ -> translate stmt
 
-instance MonadTranslator m => Translate m Decl (m ()) where -- TODO: continue from here
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m Decl a (m ()) where -- TODO: continue from here
     translate _ = return () -- TODO: continue from here
 
 {- |
@@ -176,8 +160,10 @@ Guarantees:
 - Every IfStmt has two bodies consisting of trivial goto statements
 - Every SwitchStmt's arm consists of a trivial goto statement
 -}
-instance MonadTranslator m => Translate m Stmt (m OutVars) where
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m Stmt a (m OutVars) where
     translate (Annot EmptyStmt _) = return mempty
+    translate (Annot (LabelStmt name) _) =
+        (L.emitBlockStart . fromString . T.unpack . getName) name $> mempty
     translate (Annot (IfStmt c t (Just e)) _) = do -- TODO: Nothing is compilation pipeline error
         let Just tLab = getTrivialGotoTarget t
             Just eLab = getTrivialGotoTarget e
@@ -194,10 +180,14 @@ instance MonadTranslator m => Translate m Stmt (m OutVars) where
             translPair (Annot (LVName n) _) e =
                 (getName n, ) <$> translate e
             translPair (Annot LVRef{} _ ) _ = error "not implemented yet" -- TODO: make case for lvref
+    translate (Annot stmt@(GotoStmt _ Nothing) _) = do -- TODO: do other cases
+        let Just lab = getTrivialGotoTarget stmt -- TODO: is this safe?
+        L.br (L.mkName $ T.unpack lab)
+        return mempty
     translate _ = return mempty -- TODO: remove this
 
 -- Source: https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf (7.4)
-instance MonadTranslator m => Translate m Expr (m L.Operand) where
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m Expr a (m L.Operand) where
     translate (Annot (LitExpr lit Nothing) _) = translate lit
     translate (Annot (ParExpr expr) _) = translate expr
     translate (Annot (LVExpr lvalue) _) = translate lvalue
@@ -222,18 +212,25 @@ instance MonadTranslator m => Translate m Expr (m L.Operand) where
             LtOp -> L.icmp L.ULT
             GeOp -> L.icmp L.UGE
             LeOp -> L.icmp L.ULE
+    translate (Annot (ComExpr expr) _) = do
+        expr' <- translate expr
+        case L.typeOf expr' of
+            L.IntegerType bits -> L.xor expr' . L.ConstantOperand $ L.Int bits (-1)
+            _ -> error "Cannot create a binary complement to a non-int"
+    translate (Annot (NegExpr expr) _) =
+        translate expr >>= L.icmp L.EQ (L.bit 0)
 
 
-instance MonadTranslator m => Translate m Lit (m L.Operand) where
-    translate (Annot (LitInt int) _) = return . int32 $ toInteger int -- TODO: discuss this later
-    translate (Annot (LitFloat float) _) = return $ single float
-    translate (Annot (LitChar char) _) = return . int8 . toInteger $ ord char
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m Lit a (m L.Operand) where
+    translate (Annot (LitInt int) _) = return . L.int32 $ toInteger int -- TODO: discuss this later
+    translate (Annot (LitFloat float) _) = return $ L.single float
+    translate (Annot (LitChar char) _) = return . L.int8 . toInteger $ ord char
 
-instance MonadTranslator m => Translate m LValue (m L.Operand) where -- TODO: continue from here
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m LValue a (m L.Operand) where -- TODO: continue from here
     translate (Annot (LVName n) _) = do
         ~(h : _) <- use variables
         maybe (error "Variable not found") return (getName n `Map.lookup` h) -- TODO: traverse all frames (accessing global registers; also, accessing non-variables); remove the error
     translate (Annot LVRef{} _ ) = do
         error "references not yet implemented" -- TODO: implement lvref
 
-instance MonadTranslator m => Translate m StackDecl (m ()) where -- TODO: continue from here
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) => Translate m StackDecl a (m ()) where -- TODO: continue from here

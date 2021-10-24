@@ -126,6 +126,8 @@ brCond cond tName eName a =
     (Just . toBody . toBodyStmt $ trivialGoto a eName)
 
 instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
+  flattenStmt stmt@(Annot (LabelStmt n) a) =
+    return $ toBodyStmt (trivialGoto a n) : [toBodyStmt stmt]
   flattenStmt (Annot (IfStmt cond tBody Nothing) a) = do
     num <- show <$> fresh
     let tName = helperName $ "then_" ++ num
