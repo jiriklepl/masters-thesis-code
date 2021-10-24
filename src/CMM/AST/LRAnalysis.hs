@@ -9,6 +9,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE Rank2Types #-}
 
 module CMM.AST.LRAnalysis where
 
@@ -20,9 +21,11 @@ import safe Data.Functor
 import safe Data.Foldable
 import safe Data.Maybe
 import safe Data.Tuple
+import safe Control.Lens.Type
 import safe Data.List
 import safe qualified Data.Graph as Graph
 import safe qualified Data.Map as Map
+import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
@@ -333,15 +336,9 @@ class Blockify n a where
 
 -- TODO: refactor this
 instance HasPos a => Blockify (Annot Datum) a where
-  blockify datum@(Annot DatumLabel {} _) = do
-    let name = getName datum
-    sls <- use stackLabels
-    if name `Set.member` sls then
-      registerError datum "Duplicate datum label"
-    else
-      stackLabels .= name `Set.insert` sls
-    return $ noBlockAnnots datum
-  blockify datum@(Annot _ _) = do
+  blockify datum@(Annot DatumLabel {} _) =
+    storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
+  blockify datum@(Annot _ _) =
     return $ noBlockAnnots datum
 
 instance HasPos a => Blockify (Annot Procedure) a where
@@ -379,66 +376,43 @@ instance HasPos a => Blockify (Annot StackDecl) a where
   blockify (Annot (StackDecl datums) a) =
     withNoBlockAnnot a . StackDecl <$> traverse blockify datums
 
--- TODO: refactor this
 instance HasPos a => Blockify (Annot Decl) a where
   blockify (Annot (RegDecl invar regs) a) =
     constructBlockified (RegDecl invar) a regs
   blockify (Annot (ImportDecl imports') a) =
     withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
-  blockify decl@(Annot ConstDecl {} _) = do
-    let name = getName decl
-    cs <- use imports
-    if name `Set.member` cs then
-      registerError decl "Duplicate constant declaration"
-    else
-      constants .= name `Set.insert` cs
-    return $ noBlockAnnots decl
+  blockify decl@(Annot ConstDecl {} _) =
+    storeSymbol constants "constant declaration" decl $> noBlockAnnots decl
   blockify decl@(Annot _ _) = return $ noBlockAnnots decl
 
 instance HasPos a => Blockify (Annot Import) a where
-  blockify import'@(Annot Import {} _) = do
-    let name = getName import'
-    is <- use imports
-    if name `Set.member` is then
-      registerError import' "Duplicate import"
-    else
-      imports .= name `Set.insert` is
-    return $ noBlockAnnots import'
+  blockify import'@(Annot Import {} _) =
+    storeSymbol imports "import" import' $> noBlockAnnots import'
 
 instance HasPos a => Blockify (Annot Registers) a where
   blockify regs@(Annot (Registers _ _ nameStrLits) _) =
-    traverse_ (registerRegister . fst) nameStrLits $> noBlockAnnots regs
+    traverse_ (storeRegister . fst) nameStrLits $> noBlockAnnots regs
 
 instance HasPos a => Blockify (Annot Formal) a where
-  blockify formal =
-    registerRegister formal $> noBlockAnnots formal
+  blockify formal = storeRegister formal $> noBlockAnnots formal
 
-registerRegister :: (MonadState Blockifier m, HasName n, HasPos n, Pretty n,
-  MonadIO m) => n -> m ()
-registerRegister name = do
-  rs <- use registers
-  if getName name `Set.member` rs then
-      registerError name "Duplicate register"
-  else registers .= getName name `Set.insert` rs
+storeRegister :: (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m) => n -> m ()
+storeRegister = storeSymbol registers "register"
 
-instance HasPos a =>
-         Blockify (Annot Stmt) a where
+storeSymbol :: (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m) => Lens Blockifier Blockifier (Set Text) (Set Text) -> Text -> n -> m ()
+storeSymbol symbolSet symbolName node = do
+  symbols' <- use symbolSet
+  if getName node `Set.member` symbols' then
+      registerError node ("Duplicate " <> symbolName)
+  else symbolSet .= getName node `Set.insert` symbols'
+
+instance HasPos a => Blockify (Annot Stmt) a where
   blockify stmt@(Annot LabelStmt {} _) = do
-    let name = getName stmt
-    ls <- use labels
-    addControlFlow name -- a possible fallthrough
-    if name `Set.member` ls then
-      registerError stmt "Duplicate label"
-    else
-      labels .= name `Set.insert` ls
+    addControlFlow $ getName stmt -- a possible fallthrough
+    storeSymbol labels "label" stmt
     blockifyLabelStmt stmt
   blockify stmt@(Annot ContStmt {} _) = do
-    let name = getName stmt
-    cs <- use continuations
-    if name `Set.member` cs then
-      registerError stmt "Duplicate continuation"
-    else
-      continuations .= name `Set.insert` cs
+    storeSymbol continuations "continuation" stmt
     blockIsSet >>=
       (`when` registerError stmt "Fallthrough to a continuation is forbidden")
     blockifyLabelStmt stmt <* registerWrites stmt

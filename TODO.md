@@ -5,8 +5,8 @@
 - [x] rename Language.Parser.Utils to something more reasonable (renamed to Language.Parser.HasPos)
 - LRAnalysis
   - [ ] make the errors/warnings found during flow analysis cleaner
-  - [ ] refactor LRAnalysis
-    - [ ] abstract out details about registering stuff
+  - [~] refactor LRAnalysis
+    - [x] abstract out details about registering stuff
   - [ ] add "useless-write" warnings
   - [x] procedure arguments shouldn't be reported as uninitialized
   - [ ] split LRAnalysis into blockifying and flow analysis

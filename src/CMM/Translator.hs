@@ -7,7 +7,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Rank2Types #-}
 
 {-|
 Module      : CMM.Translator
@@ -34,6 +34,7 @@ import safe Control.Monad.State.Lazy
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
 import safe Control.Lens.Tuple
+import safe Control.Lens.Type
 
 import qualified LLVM.IRBuilder.Instruction as L
 import qualified LLVM.IRBuilder.Module as L
@@ -67,7 +68,7 @@ translateParName :: HasName n => n -> L.ParameterName
 translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
 
 infix 4 `exchange`
-exchange :: MonadState s m => (forall f. Functor f => (a -> f a) -> s -> f s) -> a -> m a
+exchange :: MonadState s m => Lens s s a a -> a -> m a
 l `exchange` b = use l <* (l .= b)
 
 -- TODO: maybe change the name to `endBlock` or something...
