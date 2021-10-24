@@ -6,11 +6,12 @@
 - LRAnalysis
   - [ ] make the errors/warnings found during flow analysis cleaner
   - [ ] refactor LRAnalysis
+    - [ ] abstract out details about registering stuff
   - [ ] add "useless-write" warnings
   - [x] procedure arguments shouldn't be reported as uninitialized
   - [ ] split LRAnalysis into blockifying and flow analysis
 - Flattener
-  - [ ] fallthrough should be made explicit
+  - [x] fallthrough should be made explicit
 - [ ] add haddock comments
 
   - [ ] Language
