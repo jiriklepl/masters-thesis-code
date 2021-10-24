@@ -36,6 +36,9 @@ cradle:
     - path: "src/Language/Translator.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/Language/TranslState.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/Language/Warnings.hs"
       component: "Compiler:exe:Compiler"
 
