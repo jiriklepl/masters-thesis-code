@@ -12,8 +12,7 @@
 			"BUG",
 			"HACK",
 			"FIXME",
-			"TODO",
-			"XXX"
+			"TODO"
 		],
 		"bracketPairColorizer.consecutivePairColors": [
 			"()",
@@ -34,6 +33,7 @@
 			"Blockified",
 			"Blockifier",
 			"blockify",
+			"blockifying",
 			"byteorder",
 			"concat",
 			"cond",
@@ -46,9 +46,11 @@
 			"foldl",
 			"hsep",
 			"kinded",
+			"lshr",
 			"lvals",
 			"lvalue",
 			"lvalues",
+			"lvref",
 			"mempty",
 			"memsize",
 			"nums",
@@ -57,6 +59,7 @@
 			"Paren",
 			"parens",
 			"pointersize",
+			"ppllvm",
 			"Prettyprinter",
 			"regs",
 			"Reparse",
@@ -64,8 +67,10 @@
 			"stackdata",
 			"Succ",
 			"Targs",
+			"udiv",
 			"uncurry",
 			"unwords",
+			"urem",
 			"vsep",
 			"wordsize"
 		],
@@ -73,8 +78,7 @@
 	},
 	"extensions": {
 		"recommendations": [
-			"haskell.haskell",
-			"justusadam.language-haskell"
+			"mogeko.haskell-extension-pack"
 		]
 	},
 	"tasks": {
