@@ -454,9 +454,9 @@ flatteningError stmt =
   registerError stmt "Compilation failure in the flattening phase"
 
 blockifyLabelStmt ::
-     (MonadState Blockifier m, Functor n, HasName (n a))
-  => Annot n a
-  -> m (Annot n (a, BlockAnnot))
+     MonadState Blockifier m
+  => Annot Stmt a
+  -> m (Annot Stmt (a, BlockAnnot))
 blockifyLabelStmt (Annot stmt a) = do
   let name = getName stmt
   setBlock name

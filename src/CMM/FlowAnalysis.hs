@@ -77,14 +77,15 @@ updateFlowPair (f, t) = do
   blocks <- use blockData
   let toVars = blocks Map.! t
       fromVars = blocks Map.! f
-      (Just newBlock, newBlocks) =
-        Map.insertLookupWithKey
+      newBlocks =
+        Map.insertWithKey
           (\_ new old ->
              Map.fromAscList $
              updateFlowPairVar <$> zip (Map.toAscList old) (Map.toAscList new))
           f
           toVars
           blocks
+      newBlock = newBlocks Map.! f
   blockData .= newBlocks
   return . or $
     zipWith
