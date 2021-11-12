@@ -1,7 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -38,6 +37,12 @@ import safe CMM.Utils
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 
+instance HasBlockAnnot (a, BlockAnnot) where
+  getBlockAnnot = snd
+
+instance WithBlockAnnot a (a, BlockAnnot) where
+  withBlockAnnot = flip (,)
+
 helperName :: Text -> Text
 helperName = addPrefix lrAnalysisPrefix
 
@@ -73,11 +78,11 @@ setBlock = updateBlock . Just
 unsetBlock :: MonadState Blockifier m => m ()
 unsetBlock = updateBlock Nothing
 
-noBlockAnnots :: Functor n => n a -> n (a, BlockAnnot)
-noBlockAnnots = updateAnnots (, NoBlock)
+noBlockAnnots :: (Functor n, WithBlockAnnot a b) => n a -> n b
+noBlockAnnots = updateAnnots (withBlockAnnot NoBlock)
 
-withNoBlockAnnot :: a -> n (a, BlockAnnot) -> Annot n (a, BlockAnnot)
-withNoBlockAnnot a = withAnnot (a, NoBlock)
+withNoBlockAnnot :: WithBlockAnnot a b => a -> n b -> Annot n b
+withNoBlockAnnot = withAnnot . withBlockAnnot NoBlock
 
 addControlFlow :: MonadState Blockifier m => Text -> m ()
 addControlFlow destBlock =
@@ -163,16 +168,16 @@ instance GetTargetNames (Stmt a) (Maybe [Text]) where
 instance GetTargetNames (Targets a) [Text] where
   getTargetNames (Targets names) = getName <$> names
 
-withBlockAnnot ::
-     (HasPos a, MonadBlockify m)
+addBlockAnnot ::
+     (HasPos a, WithBlockAnnot a b, MonadBlockify m)
   => Annot Stmt a
-  -> m (Annot Stmt (a, BlockAnnot))
-withBlockAnnot stmt@(Annot n annot) =
+  -> m (Annot Stmt b)
+addBlockAnnot stmt@(Annot n annot) =
   use currentBlock >>= \case
     Nothing ->
       registerWarning stmt "The statement is unreachable" $>
-      withAnnot (annot, Unreachable) (noBlockAnnots n)
-    Just block -> return . withAnnot (annot, PartOf block) $ noBlockAnnots n
+      withAnnot (withBlockAnnot Unreachable annot) (noBlockAnnots n)
+    Just block -> return . withAnnot (withBlockAnnot (PartOf block) annot) $ noBlockAnnots n
 
 class MetadataType a
 
@@ -307,11 +312,12 @@ instance GetMetadata DeclaresVars (Arm a) where
   getMetadata t (Arm _ body) = getMetadata t body
 
 blockifyProcedure ::
-     (Blockify n a, MonadBlockifier m) => n a -> m (n (a, BlockAnnot))
+     (Blockify n a, MonadBlockifier m, WithBlockAnnot a b) => n a -> m (n b)
 blockifyProcedure procedure = blockify procedure <* unsetBlock
 
+-- TODO: put `HasPos` here
 class Blockify n a where
-  blockify :: MonadBlockify m => n a -> m (n (a, BlockAnnot))
+  blockify :: (MonadBlockify m, WithBlockAnnot a b) => n a -> m (n b)
 
 instance HasPos a => Blockify (Annot Datum) a where
   blockify datum@(Annot DatumLabel {} _) =
@@ -324,7 +330,7 @@ instance HasPos a => Blockify (Annot Procedure) a where
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
     traverse_ registerWrites formals
-    withAnnot (a, Begins index) . Procedure mConv (noBlockAnnots name) formals' <$>
+    withAnnot (withBlockAnnot (Begins index) a) . Procedure mConv (noBlockAnnots name) formals' <$>
       blockify body
 
 instance HasPos a => Blockify (Annot Body) a where
@@ -332,14 +338,14 @@ instance HasPos a => Blockify (Annot Body) a where
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
 constructBlockified ::
-     (Blockify (Annot n1) a1, MonadBlockify m)
-  => (Annot n1 (a1, BlockAnnot) -> n2 (a2, BlockAnnot))
+     (Blockify (Annot n1) a1, MonadBlockify m, WithBlockAnnot a1 b1, WithBlockAnnot a2 b2)
+  => (Annot n1 b1 -> n2 b2)
   -> a2
   -> Annot n1 a1
-  -> m (Annot n2 (a2, BlockAnnot))
+  -> m (Annot n2 b2)
 constructBlockified constr a n = do
   n' <- blockify n
-  return . withAnnot (a, snd $ takeAnnot n') $ constr n'
+  return . withAnnot (withBlockAnnot (getBlockAnnot n') a) $ constr n'
 
 instance HasPos a => Blockify (Annot BodyItem) a where
   blockify (Annot (BodyStmt stmt) a) = constructBlockified BodyStmt a stmt
@@ -411,19 +417,19 @@ instance HasPos a => Blockify (Annot Stmt) a where
         registerError
           stmt
           "Indirect goto statement without specified targets is illegal"
-    registerReads stmt *> withBlockAnnot stmt <* unsetBlock
+    registerReads stmt *> addBlockAnnot stmt <* unsetBlock
   blockify (Annot CutToStmt {} _) =
     error "Cut to statements are not currently implemented" -- TODO: implement `cut to` statements
   blockify stmt@(Annot ReturnStmt {} _) =
-    registerReads stmt *> withBlockAnnot stmt <* unsetBlock
+    registerReads stmt *> addBlockAnnot stmt <* unsetBlock
   blockify stmt@(Annot JumpStmt {} _) =
-    registerReads stmt *> withBlockAnnot stmt <* unsetBlock
+    registerReads stmt *> addBlockAnnot stmt <* unsetBlock
   blockify stmt@(Annot EmptyStmt {} _) =
-    withBlockAnnot stmt -- This should be completely redundant, included just for completeness
+    addBlockAnnot stmt -- This should be completely redundant, included just for completeness
   blockify stmt@(Annot AssignStmt {} _) =
-    registerReadsWrites stmt *> withBlockAnnot stmt
+    registerReadsWrites stmt *> addBlockAnnot stmt
   blockify stmt@(Annot PrimOpStmt {} _) -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
-   = registerReadsWrites stmt *> withBlockAnnot stmt
+   = registerReadsWrites stmt *> addBlockAnnot stmt
   blockify stmt@(Annot (IfStmt _ tBody mEBody) _) = do
     case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
       (Just left, Just (Just right)) -> do
@@ -432,18 +438,18 @@ instance HasPos a => Blockify (Annot Stmt) a where
       (Just left, Nothing) -> do
         addControlFlow left
       _ -> flatteningError stmt
-    withBlockAnnot stmt <* unsetBlock
+    addBlockAnnot stmt <* unsetBlock
   blockify stmt@(Annot (SwitchStmt _ arms) _) = do
     case traverse getTrivialGotoTarget arms of
       Just names -> traverse_ addControlFlow names
       Nothing -> flatteningError stmt
-    withBlockAnnot stmt <* unsetBlock
+    addBlockAnnot stmt <* unsetBlock
   blockify (Annot (SpanStmt key value body) a) =
     withNoBlockAnnot a . SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
     blockify body
   blockify stmt@(Annot (CallStmt _ _ _ _ _ callAnnots) _) -- TODO: implement `cut to` statements
    =
-    registerReads stmt *> withBlockAnnot stmt <*
+    registerReads stmt *> addBlockAnnot stmt <*
     when (neverReturns callAnnots) unsetBlock
 
 -- This is here just for completeness
@@ -452,11 +458,11 @@ flatteningError stmt =
   registerError stmt "Compilation internal failure in the flattening phase"
 
 blockifyLabelStmt ::
-     MonadState Blockifier m
+     (MonadState Blockifier m, WithBlockAnnot a b)
   => Annot Stmt a
-  -> m (Annot Stmt (a, BlockAnnot))
+  -> m (Annot Stmt b)
 blockifyLabelStmt (Annot stmt a) = do
   let name = getName stmt
   setBlock name
   index <- blocksCache name -- TODO: this is not optimal
-  return . withAnnot (a, Begins index) $ noBlockAnnots stmt
+  return . withAnnot (withBlockAnnot (Begins index) a) $ noBlockAnnots stmt

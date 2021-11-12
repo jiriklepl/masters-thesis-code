@@ -27,6 +27,15 @@ cradle:
     - path: "src/CMM/Utils.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Type.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/InferPreprocessor.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/AST/Flattener.hs"
       component: "Compiler:exe:Compiler"
 
@@ -39,16 +48,13 @@ cradle:
     - path: "src/CMM/Translator.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/TranslState.hs"
+    - path: "src/CMM/Translator/TranslState.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Warnings.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Parser/HasPos.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/Inference/Inference.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src"

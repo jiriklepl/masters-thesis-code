@@ -30,14 +30,16 @@ executable Compiler
                        CMM.AST.BlockAnnot,
                        CMM.AST.Utils,
                        CMM.Utils,
+                       CMM.Type,
+                       CMM.Inference,
+                       CMM.Inference.InferPreprocessor,
                        CMM.AST.Flattener,
                        CMM.FlowAnalysis,
                        CMM.Pretty,
                        CMM.Translator,
-                       CMM.TranslState,
+                       CMM.Translator.TranslState,
                        CMM.Warnings,
-                       CMM.Parser.HasPos,
-                       Inference.Inference
+                       CMM.Parser.HasPos
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.16,
                        megaparsec ^>=9.0.1,

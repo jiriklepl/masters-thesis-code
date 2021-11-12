@@ -29,7 +29,6 @@ import safe qualified Data.Map as Map
 import safe Data.String
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe Text.Megaparsec (SourcePos)
 
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
@@ -54,7 +53,7 @@ import safe CMM.AST.BlockAnnot
 import safe CMM.AST.Utils
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
-import safe CMM.TranslState
+import safe CMM.Translator.TranslState
 
 type MonadTranslator m
    = ( L.MonadIRBuilder m
@@ -96,16 +95,6 @@ pushVariables (Annot _ _) = do
 
 setCurrentBlock :: MonadState TranslState m => Int -> m ()
 setCurrentBlock n = currentBlock ?= n
-
--- TODO: maybe move somewhere else
-class HasBlockAnnot a where
-  getBlockAnnot :: a -> BlockAnnot
-
-instance HasBlockAnnot BlockAnnot where
-  getBlockAnnot = id
-
-instance HasBlockAnnot (SourcePos, BlockAnnot) where
-  getBlockAnnot = snd
 
 class (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
       Translate m n a b
@@ -274,4 +263,5 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
 
 -- TODO: continue from here
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m StackDecl a (m ())
+         Translate m StackDecl a (m ()) where
+  translate = undefined

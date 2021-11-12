@@ -60,6 +60,7 @@
 			"parens",
 			"pointersize",
 			"ppllvm",
+			"Preprocess",
 			"Prettyprinter",
 			"regs",
 			"Reparse",
