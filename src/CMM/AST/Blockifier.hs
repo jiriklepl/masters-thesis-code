@@ -313,7 +313,6 @@ blockifyProcedure procedure = blockify procedure <* unsetBlock
 class Blockify n a where
   blockify :: MonadBlockify m => n a -> m (n (a, BlockAnnot))
 
--- TODO: refactor this
 instance HasPos a => Blockify (Annot Datum) a where
   blockify datum@(Annot DatumLabel {} _) =
     storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
@@ -423,7 +422,7 @@ instance HasPos a => Blockify (Annot Stmt) a where
     withBlockAnnot stmt -- This should be completely redundant, included just for completeness
   blockify stmt@(Annot AssignStmt {} _) =
     registerReadsWrites stmt *> withBlockAnnot stmt
-  blockify stmt@(Annot PrimOpStmt {} _) -- TODO: In the future, this may end a basic block if given `NeverReturns` flow annotation
+  blockify stmt@(Annot PrimOpStmt {} _) -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
    = registerReadsWrites stmt *> withBlockAnnot stmt
   blockify stmt@(Annot (IfStmt _ tBody mEBody) _) = do
     case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
@@ -447,11 +446,10 @@ instance HasPos a => Blockify (Annot Stmt) a where
     registerReads stmt *> withBlockAnnot stmt <*
     when (neverReturns callAnnots) unsetBlock
 
--- TODO: make it clearer that this is a logic-error inside of the compiler
 -- This is here just for completeness
 flatteningError :: (HasPos n, Pretty n, MonadBlockify m) => n -> m ()
 flatteningError stmt =
-  registerError stmt "Compilation failure in the flattening phase"
+  registerError stmt "Compilation internal failure in the flattening phase"
 
 blockifyLabelStmt ::
      MonadState Blockifier m

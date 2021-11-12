@@ -141,7 +141,7 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
                          (pushVariables body))
                       exports
                   variables %= tail
-          _ -> undefined -- TODO: add nice error message
+          _ -> undefined -- TODO: add nice error message for completeness
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
          Translate m Body a (OutVars -> m OutVars) where

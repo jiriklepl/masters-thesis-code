@@ -350,7 +350,7 @@ mKind :: Parser (Maybe Kind)
 mKind = optional $ Kind <$> stringLiteral
 
 pragma :: Parser a
-pragma = undefined -- FIXME: pragmas not yet specified and with no explanation of functionality
+pragma = error "Pragmas not specified" -- FIXME: pragmas not yet specified and with no explanation of functionality
 
 stackDecl :: SourceParser StackDecl
 stackDecl =

@@ -59,7 +59,7 @@ checkReparse ::
      (Eq (n ()), Functor n, Pretty (n a)) => Parser (n b) -> n a -> Bool
 checkReparse parser ast =
   either (const False) ((== stripAnnots ast) . stripAnnots) .
-  either undefined (parse parser) . parse tokenize . T.pack . show $ -- TODO: clean this up
+  either undefined (parse parser) . parse tokenize . T.pack . show $ -- TODO: clean this up (along with the other undefined)
   pretty ast
 
 testTemplate ::

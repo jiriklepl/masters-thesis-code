@@ -105,7 +105,7 @@ instance (FlattenStmt (Annot BodyItem)) =>
 instance {-# OVERLAPPING #-} FlattenStmt (Annot Stmt) =>
                              FlattenStmt (Annot BodyItem) where
   flattenStmt (Annot (BodyStmt stmt) _) = flattenStmt stmt
-  flattenStmt _ = undefined
+  flattenStmt _ = error "Not a statement"
 
 toBodyStmt :: Annot Stmt annot -> Annot BodyItem annot
 toBodyStmt stmt@(Annot _ a) = Annot (BodyStmt stmt) a

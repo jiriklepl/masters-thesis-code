@@ -21,10 +21,10 @@ type MonadBlockifier m = (MonadState Blockifier m, MonadIO m)
 
 data Blockifier =
   Blockifier
-    { _controlFlow :: [(Int, Int)] -- [(from, to)]
-    , _blocksTable :: Map Text Int
-    , _currentBlock :: Maybe Int
-    , _currentData :: BlockVars
+    { _controlFlow :: [(Int, Int)] -- | [(from, to)] edges in the control-flow graph
+    , _blocksTable :: Map Text Int -- | Maps block names to their respective indices
+    , _currentBlock :: Maybe Int -- | Contains the index of the current block
+    , _currentData :: BlockVars -- | Contains information about variables inside the current block
     , _blockData :: BlockData
     , _registers :: Set Text
     , _imports :: Set Text

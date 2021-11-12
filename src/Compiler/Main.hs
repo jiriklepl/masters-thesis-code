@@ -5,6 +5,8 @@ module Main where
 import Control.Monad.State as State
 import qualified Data.Map as Map
 
+import Debug.Trace -- TODO: remove this
+
 -- import Data.Text as T
 import Data.Text.IO as TS
 import Data.Tuple
@@ -15,6 +17,7 @@ import LLVM.Pretty -- from the llvm-hs-pretty package
 
 import LLVM.IRBuilder.Module
 import LLVM.IRBuilder.Monad
+import Prettyprinter
 
 import CMM.AST.Blockifier
 import qualified CMM.AST.BlockifierState as B
@@ -22,7 +25,6 @@ import CMM.AST.Flattener
 import CMM.FlowAnalysis
 import CMM.Lexer
 import CMM.Parser
-import CMM.Pretty ()
 import qualified CMM.TranslState as Tr
 import CMM.Translator
 
@@ -36,6 +38,7 @@ main = do
         contents
   (blockified, blockifier) <-
     runStateT (blockifyProcedure p <* analyzeFlow p) B.initBlockifier
+  trace (show $ pretty blockified) $ return ()
   let translated =
         ppllvm $
         flip
