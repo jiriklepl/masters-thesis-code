@@ -26,7 +26,7 @@ executable Compiler
                        CMM.Lexer,
                        CMM.AST,
                        CMM.AST.Blockifier,
-                       CMM.AST.BlockifierState,
+                       CMM.AST.Blockifier.State,
                        CMM.AST.BlockAnnot,
                        CMM.AST.Utils,
                        CMM.Utils,
@@ -37,7 +37,7 @@ executable Compiler
                        CMM.FlowAnalysis,
                        CMM.Pretty,
                        CMM.Translator,
-                       CMM.Translator.TranslState,
+                       CMM.Translator.State,
                        CMM.Warnings,
                        CMM.Parser.HasPos
   -- other-extensions:

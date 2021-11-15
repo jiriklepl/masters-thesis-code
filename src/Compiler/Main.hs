@@ -20,12 +20,12 @@ import LLVM.IRBuilder.Monad
 import Prettyprinter
 
 import CMM.AST.Blockifier
-import qualified CMM.AST.BlockifierState as B
+import qualified CMM.AST.Blockifier.State as B
 import CMM.AST.Flattener
 import CMM.FlowAnalysis
 import CMM.Lexer
 import CMM.Parser
-import qualified CMM.Translator.TranslState as Tr
+import qualified CMM.Translator.State as Tr
 import CMM.Translator
 
 main :: IO ()

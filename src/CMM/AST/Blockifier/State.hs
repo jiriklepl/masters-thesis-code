@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ConstraintKinds #-}
 
-module CMM.AST.BlockifierState where
+module CMM.AST.Blockifier.State where
 
 import safe Control.Lens.Setter ( (+=) )
 import Control.Lens.TH ( makeLenses )

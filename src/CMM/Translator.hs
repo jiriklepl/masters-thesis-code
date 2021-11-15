@@ -53,7 +53,7 @@ import safe CMM.AST.BlockAnnot
 import safe CMM.AST.Utils
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
-import safe CMM.Translator.TranslState
+import safe CMM.Translator.State
 
 type MonadTranslator m
    = ( L.MonadIRBuilder m

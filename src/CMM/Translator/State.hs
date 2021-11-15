@@ -1,7 +1,7 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module CMM.Translator.TranslState where
+module CMM.Translator.State where
 
 import safe Control.Lens.TH ( makeLenses )
 import safe Data.Map (Map)

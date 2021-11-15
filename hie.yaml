@@ -15,7 +15,7 @@ cradle:
     - path: "src/CMM/AST/Blockifier.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/AST/BlockifierState.hs"
+    - path: "src/CMM/AST/Blockifier/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/BlockAnnot.hs"
@@ -48,7 +48,7 @@ cradle:
     - path: "src/CMM/Translator.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Translator/TranslState.hs"
+    - path: "src/CMM/Translator/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Warnings.hs"

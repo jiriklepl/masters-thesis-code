@@ -29,7 +29,7 @@ import safe Prettyprinter (Pretty)
 
 import safe CMM.AST
 import safe CMM.AST.BlockAnnot
-import safe CMM.AST.BlockifierState
+import safe CMM.AST.Blockifier.State
 import safe CMM.AST.Utils
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()

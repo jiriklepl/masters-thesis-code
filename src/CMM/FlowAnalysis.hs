@@ -27,7 +27,7 @@ import safe Data.Tuple
 import safe Prelude hiding (reads)
 
 import safe CMM.AST
-import safe CMM.AST.BlockifierState
+import safe CMM.AST.Blockifier.State
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
 import safe CMM.Utils
