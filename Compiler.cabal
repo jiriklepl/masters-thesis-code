@@ -32,7 +32,7 @@ executable Compiler
                        CMM.Utils,
                        CMM.Type,
                        CMM.Inference,
-                       CMM.Inference.InferPreprocessor,
+                       CMM.Inference.State,
                        CMM.AST.Flattener,
                        CMM.FlowAnalysis,
                        CMM.Pretty,

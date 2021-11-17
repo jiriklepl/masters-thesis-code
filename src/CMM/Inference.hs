@@ -15,7 +15,7 @@ import safe qualified CMM.AST as AST
 import safe qualified CMM.AST.Utils as AST
 import safe CMM.Type
 import safe CMM.Parser.HasPos
-import safe CMM.Inference.InferPreprocessor
+import safe CMM.Inference.State
 
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 -- TODO: maybe split this into multiple files according to phases
@@ -119,7 +119,7 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Decl a) (AST.Annot AST.
         type'' <- preprocess type'
         let handle = getTypeHandle type''
         traverse_ (`storeTVar` handle) (AST.getName <$> names)
-        return $ withTypeHandle handle <$> typedef 
+        return $ withTypeHandle handle <$> typedef
 
 instance WithTypeHandle a b => PreprocessTrivial AST.TargetDirective a b
 instance WithTypeHandle a b => PreprocessTrivial AST.Pragma a b
@@ -131,11 +131,13 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Import a) (AST.Annot AS
         handle <- freshTypeHandle
         storeVar (AST.getName import') handle
         return $ withTypeHandle handle <$> import'
+
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Export a) (AST.Annot AST.Export b) a b where
     preprocess export@(AST.Annot AST.Export{} _) = do
         handle <- freshTypeHandle
         storeVar (AST.getName export) handle
         return $ withTypeHandle handle <$> export
+
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Type a) (AST.Annot AST.Type b) a b where
     preprocess tBits@(AST.Annot (AST.TBits int) _) =
         return $ withTypeHandle (TypeTBits int) <$> tBits
@@ -165,6 +167,7 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Registers a) (AST.Annot
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Procedure a) (AST.Annot AST.Procedure b) a b where
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Datum a) (AST.Annot AST.Datum b) a b where
+
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.LValue a) (AST.Annot AST.LValue b) a b where
     preprocess lvName@(AST.Annot AST.LVName{} _) = do
         handle <- lookupVar (AST.getName lvName)

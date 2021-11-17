@@ -8,7 +8,7 @@
 
 -- TODO: rename to ...State
 
-module CMM.Inference.InferPreprocessor where
+module CMM.Inference.State where
 
 import safe Data.Map (Map)
 import safe Data.Text (Text)
