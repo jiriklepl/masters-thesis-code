@@ -23,8 +23,8 @@ jobs:
 
     - uses: haskell/actions/setup@v1
       with:
-        ghc-version: 'latest'
-        cabal-version: 'latest'
+        ghc-version: '8'
+        cabal-version: '3.4'
 
     - name: Cache
       uses: actions/cache@v1
@@ -40,7 +40,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        cabal update
         cabal build --only-dependencies --enable-tests --enable-benchmarks all
 
     - name: Build
