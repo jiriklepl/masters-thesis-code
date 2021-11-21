@@ -21,10 +21,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libclang-9-dev llvm-9-dev clang-9 llvm-9
 
-    - uses: actions/setup-haskell@v1
+    - uses: haskell/actions/setup@v1
       with:
-        ghc-version: '9.0.1'
-        cabal-version: '3.4'
+        ghc-version: 'latest'
+        cabal-version: 'latest'
 
     - name: Cache
       uses: actions/cache@v1
