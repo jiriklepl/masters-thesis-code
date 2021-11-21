@@ -15,9 +15,10 @@ import Data.Foldable
 
 import safe qualified CMM.AST as AST
 import safe qualified CMM.AST.Utils as AST
--- import safe CMM.Type
 import safe CMM.Parser.HasPos
 import safe CMM.Inference.State
+import safe CMM.Inference.Type
+import safe CMM.Inference.BuiltIn
 
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 -- TODO: maybe split this into multiple files according to phases
@@ -185,6 +186,7 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Registers a) (AST.Annot
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Procedure a) (AST.Annot AST.Procedure b) a b where
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Lit a) (AST.Annot AST.Lit b) a b where
+instance WithTypeHandle a b => Preprocess (AST.Annot AST.Actual a) (AST.Annot AST.Actual b) a b where
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Init a) (AST.Annot AST.Init b) a b where
     preprocess (AST.Annot (AST.ExprInit exprs) a) = do
@@ -268,3 +270,13 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Expr a) (AST.Annot AST.
                 storeFact $ constExprType typeType litType
                 return $ Just type''
         return . AST.withAnnot (withTypeHandle litType a) $ AST.LitExpr lit' mType'
+    preprocess (AST.Annot (AST.PrefixExpr name actuals) a) = do
+        handle <- freshTypeHandle
+        actuals' <- traverse preprocess actuals
+        let actualTypes = getTypeHandle <$> actuals'
+            (mClassHandle, opType) = getNamedOperator $ AST.getName name
+        storeFact $ unifyConstraint opType (makeFunction (makeTuple actualTypes) handle)
+        case mClassHandle of
+            Nothing -> return ()
+            Just classHandle -> storeFact $ classConstraint classHandle actualTypes
+        return . AST.withAnnot (withTypeHandle handle a) $ AST.PrefixExpr (preprocessTrivial name) actuals'

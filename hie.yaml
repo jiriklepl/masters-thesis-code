@@ -27,13 +27,16 @@ cradle:
     - path: "src/CMM/Utils.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Type.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Inference.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/State.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/Type.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/BuiltIn.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/Flattener.hs"

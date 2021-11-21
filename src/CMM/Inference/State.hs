@@ -21,25 +21,7 @@ import safe Control.Lens.Setter
 
 import safe qualified CMM.AST as AST
 import safe qualified CMM.AST.Utils as AST
-
-data ClassHandle
-    = Numeric
-    | Real
-    | Character
-    | Address
-    | Class Text
-
-data TypeHandle
-    = NoType
-    | VarType Int
-    | TBitsType Int
-    | BoolType
-    | AddrType TypeHandle
-    | StringType
-    | String16Type
-
-data Fact
-type Facts = [Fact]
+import safe CMM.Inference.Type
 
 class HasTypeHandle a where
     getTypeHandle :: a -> TypeHandle
