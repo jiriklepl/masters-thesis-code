@@ -22,10 +22,21 @@ import safe Control.Lens.Setter
 import safe qualified CMM.AST as AST
 import safe qualified CMM.AST.Utils as AST
 
+data ClassHandle
+    = Numeric
+    | Real
+    | Character
+    | Address
+    | Class Text
+
 data TypeHandle
     = NoType
-    | TypeVar Int
-    | TypeTBits Int
+    | VarType Int
+    | TBitsType Int
+    | BoolType
+    | AddrType TypeHandle
+    | StringType
+    | String16Type
 
 data Fact
 type Facts = [Fact]
@@ -57,7 +68,6 @@ initInferPreprocessor = InferPreprocessor
     , _facts = mempty
     , _handleCounter = 0
     }
-
 
 -- returns `NoType` on failure
 lookupVar :: MonadInferPreprocessor m => Text -> m TypeHandle
@@ -102,4 +112,4 @@ storeFact = (facts %=) . (:)
 freshTypeHandle :: MonadInferPreprocessor m => m TypeHandle
 freshTypeHandle = do
     handleCounter += 1
-    TypeVar <$> use handleCounter
+    VarType <$> use handleCounter
