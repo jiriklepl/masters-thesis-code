@@ -5,22 +5,23 @@ module CMM.Inference.Type where
 import safe Data.Text (Text)
 
 data ClassHandle
-    = Numeric
-    | Real
-    | Character
-    | Address
-    | Class Text
+  = Numeric
+  | Real
+  | Character
+  | Address
+  | Class Text
 
 data TypeHandle
-    = NoType
-    | VarType Int
-    | TBitsType Int
-    | BoolType
-    | AddrType TypeHandle
-    | StringType
-    | String16Type
+  = NoType
+  | VarType Int
+  | TBitsType Int
+  | BoolType
+  | AddrType TypeHandle
+  | StringType
+  | String16Type
 
 data Fact
+
 type Facts = [Fact]
 
 makeFunction :: TypeHandle -> TypeHandle -> TypeHandle

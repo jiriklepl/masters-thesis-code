@@ -7,34 +7,38 @@
 {-# LANGUAGE LambdaCase #-}
 
 -- TODO: rename to ...State
-
 module CMM.Inference.State where
 
-import safe Data.Map (Map)
-import safe Data.Text (Text)
-import safe Data.Function
-import safe qualified Data.Map as Map
-import Control.Lens.TH ( makeLenses )
-import safe Control.Monad.State.Lazy ( MonadState )
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
+import Control.Lens.TH (makeLenses)
+import safe Control.Monad.State.Lazy (MonadState)
+import safe Data.Function
+import safe Data.Map (Map)
+import safe qualified Data.Map as Map
+import safe Data.Text (Text)
 
 import safe qualified CMM.AST as AST
 import safe qualified CMM.AST.Utils as AST
 import safe CMM.Inference.Type
 
 class HasTypeHandle a where
-    getTypeHandle :: a -> TypeHandle
+  getTypeHandle :: a -> TypeHandle
 
 instance HasTypeHandle a => HasTypeHandle (AST.Annot n a) where
   getTypeHandle = getTypeHandle . AST.takeAnnot
 
-class HasTypeHandle b => WithTypeHandle a b | a -> b, b -> a where
-    withTypeHandle :: TypeHandle -> a -> b
+class HasTypeHandle b =>
+      WithTypeHandle a b
+  | a -> b
+  , b -> a
+  where
+  withTypeHandle :: TypeHandle -> a -> b
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
 
-data InferPreprocessor = InferPreprocessor
+data InferPreprocessor =
+  InferPreprocessor
     { _variables :: [Map Text TypeHandle]
     , _typeVariables :: [Map Text TypeHandle]
     , _facts :: Facts
@@ -44,7 +48,8 @@ data InferPreprocessor = InferPreprocessor
 makeLenses ''InferPreprocessor
 
 initInferPreprocessor :: InferPreprocessor
-initInferPreprocessor = InferPreprocessor
+initInferPreprocessor =
+  InferPreprocessor
     { _variables = pure mempty
     , _typeVariables = pure mempty
     , _facts = mempty
@@ -60,10 +65,12 @@ lookupTVar = uses typeVariables . lookupVarImpl
 
 lookupVarImpl :: Ord k => k -> [Map k TypeHandle] -> TypeHandle
 lookupVarImpl name = go
-    where go (vars:others) = name `Map.lookup` vars & \case
-            Just handle -> handle
-            Nothing -> go others
-          go [] = NoType
+  where
+    go (vars:others) =
+      name `Map.lookup` vars & \case
+        Just handle -> handle
+        Nothing -> go others
+    go [] = NoType
 
 storeVar :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()
 storeVar name handle = variables %= storeVarImpl name handle
@@ -72,14 +79,13 @@ storeTVar :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()
 storeTVar name handle = typeVariables %= storeVarImpl name handle
 
 storeVarImpl :: Ord k => k -> a -> [Map k a] -> [Map k a]
-storeVarImpl name handle ~(vars : others) =
-    Map.insert name handle vars : others
+storeVarImpl name handle ~(vars:others) = Map.insert name handle vars : others
 
 pushVars :: MonadInferPreprocessor m => m ()
-pushVars = variables %= (mempty:)
+pushVars = variables %= (mempty :)
 
 pushTVars :: MonadInferPreprocessor m => m ()
-pushTVars = typeVariables %= (mempty:)
+pushTVars = typeVariables %= (mempty :)
 
 -- TODO: Do not over-pop
 popVars :: MonadInferPreprocessor m => m ()
@@ -93,5 +99,5 @@ storeFact = (facts %=) . (:)
 
 freshTypeHandle :: MonadInferPreprocessor m => m TypeHandle
 freshTypeHandle = do
-    handleCounter += 1
-    VarType <$> use handleCounter
+  handleCounter += 1
+  VarType <$> use handleCounter

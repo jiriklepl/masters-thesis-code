@@ -5,17 +5,17 @@
 
 module CMM.AST.Blockifier.State where
 
-import safe Control.Lens.Setter ( (+=) )
-import Control.Lens.TH ( makeLenses )
-import safe Control.Monad.State.Lazy ( MonadIO, MonadState )
+import safe Control.Lens.Setter ((+=))
+import Control.Lens.TH (makeLenses)
+import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Map (Map)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
 
-import safe CMM.AST.BlockAnnot ( BlockData, BlockVars )
-import safe CMM.Parser.HasPos ( HasPos )
-import safe CMM.Warnings ( mkWarning, mkError, makeMessage )
+import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
+import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 
 type MonadBlockifier m = (MonadState Blockifier m, MonadIO m)
 

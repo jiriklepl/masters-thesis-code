@@ -177,7 +177,8 @@ addBlockAnnot stmt@(Annot n annot) =
     Nothing ->
       registerWarning stmt "The statement is unreachable" $>
       withAnnot (withBlockAnnot Unreachable annot) (noBlockAnnots n)
-    Just block -> return . withAnnot (withBlockAnnot (PartOf block) annot) $ noBlockAnnots n
+    Just block ->
+      return . withAnnot (withBlockAnnot (PartOf block) annot) $ noBlockAnnots n
 
 class MetadataType a
 
@@ -330,7 +331,8 @@ instance HasPos a => Blockify (Annot Procedure) a where
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
     traverse_ registerWrites formals
-    withAnnot (withBlockAnnot (Begins index) a) . Procedure mConv (noBlockAnnots name) formals' <$>
+    withAnnot (withBlockAnnot (Begins index) a) .
+      Procedure mConv (noBlockAnnots name) formals' <$>
       blockify body
 
 instance HasPos a => Blockify (Annot Body) a where
@@ -338,7 +340,11 @@ instance HasPos a => Blockify (Annot Body) a where
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
 constructBlockified ::
-     (Blockify (Annot n1) a1, MonadBlockify m, WithBlockAnnot a1 b1, WithBlockAnnot a2 b2)
+     ( Blockify (Annot n1) a1
+     , MonadBlockify m
+     , WithBlockAnnot a1 b1
+     , WithBlockAnnot a2 b2
+     )
   => (Annot n1 b1 -> n2 b2)
   -> a2
   -> Annot n1 a1

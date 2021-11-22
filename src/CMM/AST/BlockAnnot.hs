@@ -26,7 +26,11 @@ class HasBlockAnnot a where
 instance HasBlockAnnot a => HasBlockAnnot (Annot n a) where
   getBlockAnnot = getBlockAnnot . takeAnnot
 
-class HasBlockAnnot b => WithBlockAnnot a b | a -> b, b -> a where
+class HasBlockAnnot b =>
+      WithBlockAnnot a b
+  | a -> b
+  , b -> a
+  where
   withBlockAnnot :: BlockAnnot -> a -> b
 
 type BlockData = Map Int BlockVars

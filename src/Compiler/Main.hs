@@ -25,8 +25,8 @@ import CMM.AST.Flattener
 import CMM.FlowAnalysis
 import CMM.Lexer
 import CMM.Parser
-import qualified CMM.Translator.State as Tr
 import CMM.Translator
+import qualified CMM.Translator.State as Tr
 
 main :: IO ()
 main = do

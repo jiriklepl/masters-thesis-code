@@ -3,12 +3,12 @@
 
 module CMM.Translator.State where
 
-import safe Control.Lens.TH ( makeLenses )
+import safe Control.Lens.TH (makeLenses)
 import safe Data.Map (Map)
 import safe Data.Text (Text)
 import safe qualified LLVM.AST.Operand as L
 
-import safe CMM.AST.BlockAnnot ( BlockData )
+import safe CMM.AST.BlockAnnot (BlockData)
 
 data TranslState =
   TranslState
