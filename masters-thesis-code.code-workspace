@@ -5,6 +5,11 @@
 		}
 	],
 	"settings": {
+		"[haskell]": {
+			"editor.tabSize": 2,
+			"editor.insertSpaces": true,
+			"editor.detectIndentation": false
+		},
 		"files.insertFinalNewline": true,
 		"files.trimTrailingWhitespace": true,
 		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--)\\s*($TAGS)|^\\s*- \\[( |~)\\])",
