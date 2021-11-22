@@ -5,6 +5,8 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 
 module CMM.Inference where
 
@@ -64,8 +66,24 @@ instance PreprocessTrivial n a b => PreprocessTrivial (AST.Annot n) a b
 instance {-# OVERLAPPABLE #-} (PreprocessTrivial n a b, Functor n) => Preprocess (AST.Annot n a) (AST.Annot n b) a b where
     preprocess = return . preprocessTrivial
 
-withNoTypeHandle :: WithTypeHandle a b => a -> n b -> AST.Annot n b
-withNoTypeHandle = AST.withAnnot . withTypeHandle NoType
+withNoTypeHandleAnnot :: WithTypeHandle a b => a -> n b -> AST.Annot n b
+withNoTypeHandleAnnot = withTypeHandledAnnot NoType
+
+withTypeHandledAnnot :: WithTypeHandle a b => TypeHandle -> a -> n b -> AST.Annot n b
+withTypeHandledAnnot = (AST.withAnnot .) . withTypeHandle
+
+liftAnnot :: WithTypeHandle a b => (n a -> (TypeHandle, n b)) -> AST.Annot n a -> AST.Annot n b
+liftAnnot f (AST.Annot n a) =
+    let (handle, n') = f n
+    in withTypeHandledAnnot handle a n'
+
+liftAnnotM :: (Monad m, WithTypeHandle a b) => (n a -> m (TypeHandle, n b)) -> AST.Annot n a -> m (AST.Annot n b)
+liftAnnotM f (AST.Annot n a) = do
+    (handle, n') <- f n
+    return $ withTypeHandledAnnot handle a n'
+
+pureAnnotM :: (Monad m, WithTypeHandle a b, Functor n) => TypeHandle -> n a -> m (TypeHandle, n b)
+pureAnnotM handle = return . (handle,) . (withTypeHandle handle <$>)
 
 instance Preprocess n n' a b => Preprocess [n] [n'] a b where
     preprocess = traverse preprocess
@@ -73,7 +91,7 @@ instance Preprocess n n' a b => Preprocess [n] [n'] a b where
 preprocessConstr :: (Preprocess n1 n1' a1 b1, MonadInferPreprocessor m,
     HasPos a1, WithTypeHandle a2 b2, WithTypeHandle a1 b1) =>
     a2 -> (n1' -> n2 b2) -> n1 -> m (AST.Annot n2 b2)
-preprocessConstr a constr content = withNoTypeHandle a . constr <$> preprocess content
+preprocessConstr a constr content = withNoTypeHandleAnnot a . constr <$> preprocess content
 
 preprocessInherit :: (Preprocess (AST.Annot n1 a1) (AST.Annot n1 b1) a1 b1,
  MonadInferPreprocessor m,
@@ -81,7 +99,7 @@ preprocessInherit :: (Preprocess (AST.Annot n1 a1) (AST.Annot n1 b1) a1 b1,
  a2 -> (AST.Annot n1 b1 -> n2 b2) -> AST.Annot n1 a1 -> m (AST.Annot n2 b2)
 preprocessInherit a constr content = do
     content' <- preprocess content
-    return . AST.withAnnot (withTypeHandle (getTypeHandle content') a) $ constr content'
+    return . withTypeHandledAnnot (getTypeHandle content') a $ constr content'
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Unit a) (AST.Annot AST.Unit b) a b where
     preprocess (AST.Annot (AST.Unit topLevels) a) =
@@ -107,7 +125,7 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Section a) (AST.Annot A
         value' <- preprocess value
         sectionItems' <- preprocess sectionItems
         storeFact $ unifyConstraint (getTypeHandle key') (getTypeHandle value')
-        return . withNoTypeHandle a $ AST.SecSpan key' value' sectionItems'
+        return . withNoTypeHandleAnnot a $ AST.SecSpan key' value' sectionItems'
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Decl a) (AST.Annot AST.Decl b) a b where
     preprocess (AST.Annot (AST.ImportDecl imports) a) =
@@ -124,7 +142,7 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Decl a) (AST.Annot AST.
     preprocess (AST.Annot (AST.ConstDecl Nothing name expr) a) = do
         expr' <- preprocess expr
         storeVar (AST.getName name) (getTypeHandle expr')
-        return . withNoTypeHandle a $ AST.ConstDecl Nothing (preprocessTrivial name) expr'
+        return . withNoTypeHandleAnnot a $ AST.ConstDecl Nothing (preprocessTrivial name) expr'
     -- the constant is typed explicitly
     preprocess (AST.Annot (AST.ConstDecl (Just type') name expr) a) = do
         expr' <- preprocess expr
@@ -132,7 +150,7 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Decl a) (AST.Annot AST.
         let handle = getTypeHandle type''
         storeVar (AST.getName name) handle
         storeFact $ unifyConstraint handle (getTypeHandle expr')
-        return . withNoTypeHandle a $ AST.ConstDecl Nothing (preprocessTrivial name) expr'
+        return . withNoTypeHandleAnnot a $ AST.ConstDecl Nothing (preprocessTrivial name) expr'
     preprocess typedef@(AST.Annot (AST.TypedefDecl type' names) _) = do
         type'' <- preprocess type'
         let handle = getTypeHandle type''
@@ -145,26 +163,28 @@ instance WithTypeHandle a b => PreprocessTrivial AST.Asserts a b
 instance WithTypeHandle a b => PreprocessTrivial AST.Name a b
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Import a) (AST.Annot AST.Import b) a b where
-    preprocess import'@(AST.Annot AST.Import{} _) = do
-        handle <- freshTypeHandle
-        storeVar (AST.getName import') handle
-        return $ withTypeHandle handle <$> import'
+    preprocess = liftAnnotM $ \case
+        import'@AST.Import{} -> do
+            handle <- freshTypeHandle
+            storeVar (AST.getName import') handle
+            pureAnnotM handle import'
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Export a) (AST.Annot AST.Export b) a b where
-    preprocess export@(AST.Annot AST.Export{} _) = do
-        handle <- freshTypeHandle
-        storeVar (AST.getName export) handle
-        return $ withTypeHandle handle <$> export
+    preprocess = liftAnnotM $ \case
+        export@AST.Export{} -> do
+            handle <- freshTypeHandle
+            storeVar (AST.getName export) handle
+            pureAnnotM handle export
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Type a) (AST.Annot AST.Type b) a b where
-    preprocess tBits@(AST.Annot (AST.TBits int) _) =
-        return $ withTypeHandle (TBitsType int) <$> tBits
-    preprocess tName@(AST.Annot (AST.TName name) _) = do
-        handle <- lookupTVar (AST.getName name)
-        return $ withTypeHandle handle <$> tName
+    preprocess = liftAnnotM $ \case
+        tBits@(AST.TBits int) -> pureAnnotM (TBitsType int) tBits
+        tName@(AST.TName name) -> do
+            handle <- lookupTVar (AST.getName name)
+            pureAnnotM handle tName
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Registers a) (AST.Annot AST.Registers b) a b where
-    preprocess (AST.Annot (AST.Registers mKind type' nameStrLits) a) = do
+    preprocess = liftAnnotM $ \(AST.Registers mKind type' nameStrLits) -> do
         type'' <- preprocess type'
         let typeType = getTypeHandle type''
         handle <- case mKind of
@@ -182,63 +202,76 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Registers a) (AST.Annot
                 storeVar (AST.getName name) handle'
                 return (withTypeHandle handle' <$> name, Just (AST.StrLit strLit))
         nameStrLits' <- traverse go nameStrLits
-        return . withNoTypeHandle a $ AST.Registers mKind type'' nameStrLits'
+        return (NoType, AST.Registers mKind type'' nameStrLits')
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Procedure a) (AST.Annot AST.Procedure b) a b where
+
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Lit a) (AST.Annot AST.Lit b) a b where
+
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Actual a) (AST.Annot AST.Actual b) a b where
+    preprocess = liftAnnotM $
+        \(AST.Actual mKind expr) -> do
+            expr' <- preprocess expr
+            let exprType = getTypeHandle expr'
+            case mKind of
+                Just kind -> do
+                    handle <- freshTypeHandle
+                    storeFact $ kindedType (AST.getName kind) exprType handle
+                    return (handle, AST.Actual mKind expr')
+                Nothing -> return (exprType, AST.Actual mKind expr')
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Init a) (AST.Annot AST.Init b) a b where
-    preprocess (AST.Annot (AST.ExprInit exprs) a) = do
-        exprs' <- traverse preprocess exprs
-        handle <- freshTypeHandle
-        traverse_ (storeFact . unifyConstraint handle . getTypeHandle) exprs'
-        return . AST.withAnnot (withTypeHandle handle a) $ AST.ExprInit exprs'
-    preprocess init@(AST.Annot (AST.StrInit _) _) =
-        return $ withTypeHandle StringType <$> init
-    preprocess init@(AST.Annot (AST.Str16Init _) _) =
-        return $ withTypeHandle String16Type <$> init
+    preprocess = liftAnnotM $ \case
+        (AST.ExprInit exprs) -> do
+            exprs' <- traverse preprocess exprs
+            handle <- freshTypeHandle
+            traverse_ (storeFact . unifyConstraint handle . getTypeHandle) exprs'
+            return (handle, AST.ExprInit exprs')
+        strInit@AST.StrInit{} -> pureAnnotM StringType strInit
+        strInit@AST.Str16Init{} -> pureAnnotM String16Type strInit
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Datum a) (AST.Annot AST.Datum b) a b where
-    preprocess datum@(AST.Annot (AST.DatumLabel name) _) = do
-        let handle = AddrType NoType
-        storeVar (AST.getName name) handle
-        return $ withTypeHandle handle <$> datum
-    preprocess datum@(AST.Annot (AST.DatumAlign _) _) =
-        return $ withTypeHandle NoType <$> datum
-    preprocess (AST.Annot (AST.Datum type' mSize mInit) a) = do
-        type'' <- preprocess type'
-        let typeType = getTypeHandle type''
-        mSize' <- case mSize of
-            Just (AST.Annot (AST.Size (Just expr)) a') -> do
-                expr' <- preprocess expr
-                let exprType = getTypeHandle expr'
-                storeFact $ constExprConstraint exprType
-                return . Just . AST.withAnnot (withTypeHandle exprType a') . AST.Size $ Just expr'
-                -- TODO: maybe enforce sizeType being numeric
-            Just (AST.Annot (AST.Size Nothing) a') -> do
-                return . Just . withNoTypeHandle a' $ AST.Size Nothing
-            Nothing -> return Nothing
-        mInit' <- case mInit of
-            Just init -> do
-                init' <- preprocess init
-                let initType = getTypeHandle init'
-                storeFact $ linkExprType typeType initType
-                return $ Just init'
-            Nothing -> return Nothing
-        return . AST.withAnnot (withTypeHandle (AddrType typeType) a) $ AST.Datum type'' mSize' mInit'
+    preprocess = liftAnnotM $ \case
+        datum@(AST.DatumLabel name) -> do
+            let handle = AddrType NoType
+            storeVar (AST.getName name) handle
+            pureAnnotM handle datum
+        datum@(AST.DatumAlign _) -> do
+            pureAnnotM NoType datum
+        (AST.Datum type' mSize mInit) -> do
+            type'' <- preprocess type'
+            let typeType = getTypeHandle type''
+            mSize' <- case mSize of
+                Just (AST.Annot (AST.Size (Just expr)) a') -> do
+                    expr' <- preprocess expr
+                    let exprType = getTypeHandle expr'
+                    storeFact $ constExprConstraint exprType
+                    return . Just . withTypeHandledAnnot exprType a' . AST.Size $ Just expr'
+                    -- TODO: maybe enforce sizeType being numeric
+                Just (AST.Annot (AST.Size Nothing) a') -> do
+                    return . Just . withNoTypeHandleAnnot a' $ AST.Size Nothing
+                Nothing -> return Nothing
+            mInit' <- case mInit of
+                Just init -> do
+                    init' <- preprocess init
+                    let initType = getTypeHandle init'
+                    storeFact $ linkExprType typeType initType
+                    return $ Just init'
+                Nothing -> return Nothing
+            return (AddrType typeType, AST.Datum type'' mSize' mInit')
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.LValue a) (AST.Annot AST.LValue b) a b where
-    preprocess lvName@(AST.Annot AST.LVName{} _) = do
-        handle <- lookupVar (AST.getName lvName)
-        return $ withTypeHandle handle <$> lvName
+    preprocess = liftAnnotM $ \case
+        lvName@AST.LVName{} -> do
+            handle <- lookupVar (AST.getName lvName)
+            pureAnnotM handle lvName
     -- TODO: is there a constraint on expr? probably yes -> consult with the man
-    preprocess (AST.Annot (AST.LVRef type' expr mAsserts) a) = do
-        type'' <- preprocess type'
-        expr' <- preprocess expr
-        let mAsserts' = (withTypeHandle NoType <$>) <$> mAsserts
-        storeFact $ classConstraint Address [getTypeHandle expr']
-        return $ AST.withAnnot (withTypeHandle (getTypeHandle type'') a) $ AST.LVRef type'' expr' mAsserts'
+        (AST.LVRef type' expr mAsserts) -> do
+            type'' <- preprocess type'
+            expr' <- preprocess expr
+            let mAsserts' = (withTypeHandle NoType <$>) <$> mAsserts
+            storeFact $ classConstraint Address [getTypeHandle expr']
+            return (getTypeHandle type'', AST.LVRef type'' expr' mAsserts')
 
 instance WithTypeHandle a b => Preprocess (AST.Annot AST.Expr a) (AST.Annot AST.Expr b) a b where
     preprocess (AST.Annot (AST.ParExpr expr) a) =
@@ -246,13 +279,13 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Expr a) (AST.Annot AST.
     preprocess (AST.Annot (AST.LVExpr lvalue) a) =
         preprocessInherit a AST.LVExpr lvalue
     preprocess (AST.Annot (AST.BinOpExpr op left right) a) = do
+        handle <- freshTypeHandle
         left' <- preprocess left
         right' <- preprocess right
-        handle <- freshTypeHandle
         let leftType = getTypeHandle left'
         storeFact $ unifyConstraint leftType (getTypeHandle right')
         -- TODO: add constraint dependent on the operator
-        return $ AST.withAnnot (withTypeHandle handle a) $ AST.BinOpExpr op left' right'
+        return $ withTypeHandledAnnot handle a $ AST.BinOpExpr op left' right'
     preprocess (AST.Annot (AST.NegExpr expr) a) =
         preprocessInherit a AST.NegExpr expr
         -- TODO: add constraint dependent on the operator
@@ -269,7 +302,7 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Expr a) (AST.Annot AST.
                 let typeType = getTypeHandle type''
                 storeFact $ constExprType typeType litType
                 return $ Just type''
-        return . AST.withAnnot (withTypeHandle litType a) $ AST.LitExpr lit' mType'
+        return . withTypeHandledAnnot litType a $ AST.LitExpr lit' mType'
     preprocess (AST.Annot (AST.PrefixExpr name actuals) a) = do
         handle <- freshTypeHandle
         actuals' <- traverse preprocess actuals
@@ -279,4 +312,16 @@ instance WithTypeHandle a b => Preprocess (AST.Annot AST.Expr a) (AST.Annot AST.
         case mClassHandle of
             Nothing -> return ()
             Just classHandle -> storeFact $ classConstraint classHandle actualTypes
-        return . AST.withAnnot (withTypeHandle handle a) $ AST.PrefixExpr (preprocessTrivial name) actuals'
+        return . withTypeHandledAnnot handle a $ AST.PrefixExpr (preprocessTrivial name) actuals'
+    preprocess (AST.Annot (AST.InfixExpr name left right) a) = do
+        handle <- freshTypeHandle
+        left' <- preprocess left
+        right' <- preprocess right
+        let leftType = getTypeHandle left'
+            rightType = getTypeHandle left'
+            (mClassHandle, opType) = getNamedOperator $ AST.getName name
+        case mClassHandle of
+            Nothing -> return ()
+            Just classHandle -> storeFact $ classConstraint classHandle [leftType, rightType]
+        storeFact $ unifyConstraint opType (makeFunction (makeTuple [leftType, rightType]) handle)
+        return . withTypeHandledAnnot handle a $ AST.InfixExpr (preprocessTrivial name) left' right'
