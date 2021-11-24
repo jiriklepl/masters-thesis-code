@@ -8,7 +8,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 
-module CMM.Inference where
+module CMM.Inference.Preprocess where
 
 import Data.Foldable
 import Data.Function
