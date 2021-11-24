@@ -8,7 +8,7 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe qualified Data.Text.IO as T
 import safe Prettyprinter
-import safe Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
+import safe Text.Megaparsec.Pos (sourcePosPretty)
 
 import safe CMM.AST.Utils ()
 import safe CMM.Parser.HasPos

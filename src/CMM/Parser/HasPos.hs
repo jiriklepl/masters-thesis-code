@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 module CMM.Parser.HasPos
-  ( HasPos(..)
+  ( HasPos(..), SourcePos
   ) where
 
 import safe CMM.AST (Annot)

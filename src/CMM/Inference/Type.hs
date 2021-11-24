@@ -21,6 +21,7 @@ data TypeHandle
   | LabelType
   | StringType
   | String16Type
+  deriving (Show, Eq, Ord)
 
 data Fact
 

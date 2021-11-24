@@ -1,10 +1,10 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- TODO: rename to ...State
 module CMM.Inference.State where
@@ -20,11 +20,15 @@ import safe qualified Data.Map as Map
 import safe Data.Text (Text)
 
 import safe qualified CMM.AST as AST
+import safe qualified CMM.Parser.HasPos as AST
 import safe qualified CMM.AST.Utils as AST
 import safe CMM.Inference.Type
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle
+
+instance HasTypeHandle (AST.SourcePos, TypeHandle) where
+  getTypeHandle = snd
 
 instance HasTypeHandle a => HasTypeHandle (AST.Annot n a) where
   getTypeHandle = getTypeHandle . AST.takeAnnot
@@ -35,6 +39,9 @@ class HasTypeHandle b =>
   , b -> a
   where
   withTypeHandle :: TypeHandle -> a -> b
+
+instance WithTypeHandle AST.SourcePos (AST.SourcePos, TypeHandle) where
+  withTypeHandle = flip (,)
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
 

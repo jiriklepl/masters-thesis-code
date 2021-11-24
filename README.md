@@ -10,8 +10,8 @@
 - ghc
 - cabal-install
   - cabal packages:
-    - syb
     - llvm-hs
+    - llvm-hs-pretty
     - megaparsec
 
 ## CMM/r (CMM with records)
