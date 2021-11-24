@@ -32,9 +32,9 @@ class ASTNode (n :: Kind.Type -> Kind.Type)
 
 class AST (n :: Kind.Type -> Kind.Type)
 
-instance (ASTNode n) => AST n
+instance ASTNode n => AST n
 
-instance (ASTNode n) => AST (Annot n)
+instance ASTNode n => AST (Annot n)
 
 newtype Unit a =
   Unit [Annot TopLevel a]

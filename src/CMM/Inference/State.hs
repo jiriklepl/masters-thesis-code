@@ -10,6 +10,7 @@
 module CMM.Inference.State where
 
 import safe Control.Lens.Getter
+import safe Data.Maybe
 import safe Control.Lens.Setter
 import Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadState)
@@ -40,9 +41,11 @@ type MonadInferPreprocessor = MonadState InferPreprocessor
 data InferPreprocessor =
   InferPreprocessor
     { _variables :: [Map Text TypeHandle]
+    , _procedures :: Map Text TypeHandle
     , _typeVariables :: [Map Text TypeHandle]
     , _facts :: Facts
     , _handleCounter :: Int
+    , _currentReturn :: Maybe TypeHandle
     }
 
 makeLenses ''InferPreprocessor
@@ -51,14 +54,19 @@ initInferPreprocessor :: InferPreprocessor
 initInferPreprocessor =
   InferPreprocessor
     { _variables = pure mempty
+    , _procedures = mempty
     , _typeVariables = pure mempty
     , _facts = mempty
     , _handleCounter = 0
+    , _currentReturn = Nothing
     }
 
 -- returns `NoType` on failure
 lookupVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupVar = uses variables . lookupVarImpl
+
+lookupProc :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupProc = uses procedures . (fromMaybe NoType .) . Map.lookup
 
 lookupTVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupTVar = uses typeVariables . lookupVarImpl
@@ -74,6 +82,17 @@ lookupVarImpl name = go
 
 storeVar :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()
 storeVar name handle = variables %= storeVarImpl name handle
+
+beginProc :: MonadInferPreprocessor m => m ()
+beginProc = currentReturn <~ Just <$> freshTypeHandle
+
+storeProc :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()
+storeProc name handle = procedures %= Map.insert name handle
+
+storeReturn :: MonadInferPreprocessor m => TypeHandle -> m ()
+storeReturn typeHandle = do
+  ~(Just ret) <- use currentReturn -- TODO: maybe replace the Maybe bit
+  storeFact $ unifyConstraint ret typeHandle
 
 storeTVar :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()
 storeTVar name handle = typeVariables %= storeVarImpl name handle
