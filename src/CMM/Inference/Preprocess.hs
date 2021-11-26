@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
@@ -27,11 +27,15 @@ import Control.Monad
 
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 class WithTypeHandle a b =>
-      Preprocess n n' a b
-  | n -> n' a
-  , n' -> n b
+      Preprocess n a b
   where
-  preprocess :: (MonadInferPreprocessor m, HasPos a) => n -> m n'
+  preprocess :: (MonadInferPreprocessor m, HasPos a) => n a -> m (n b)
+
+preprocessT ::
+     (Preprocess n a b, Traversable t, MonadInferPreprocessor m, HasPos a)
+  => t (n a)
+  -> m (t (n b))
+preprocessT = traverse preprocess
 
 class (WithTypeHandle a b, Functor n) =>
       PreprocessTrivial (n :: Kind.Type -> Kind.Type) a b
@@ -42,7 +46,7 @@ class (WithTypeHandle a b, Functor n) =>
 instance PreprocessTrivial n a b => PreprocessTrivial (Annot n) a b
 
 instance {-# OVERLAPPABLE #-} (PreprocessTrivial n a b, Functor n) =>
-                              Preprocess (Annot n a) (Annot n b) a b where
+                              Preprocess (Annot n) a b where
   preprocess = return . preprocessTrivial
 
 withNoTypeHandleAnnot :: WithTypeHandle a b => a -> n b -> Annot n b
@@ -53,10 +57,7 @@ withTypeHandledAnnot ::
 withTypeHandledAnnot = (withAnnot .) . withTypeHandle
 
 liftAnnot ::
-     WithTypeHandle a b
-  => (n a -> (TypeHandle, n b))
-  -> Annot n a
-  -> Annot n b
+     WithTypeHandle a b => (n a -> (TypeHandle, n b)) -> Annot n a -> Annot n b
 liftAnnot f (Annot n a) =
   let (handle, n') = f n
    in withTypeHandledAnnot handle a n'
@@ -77,26 +78,16 @@ pureAnnotM ::
   -> m (TypeHandle, n b)
 pureAnnotM handle = return . (handle, ) . (withTypeHandle handle <$>)
 
-instance {-# OVERLAPPABLE #-} (Preprocess n n' a b, Traversable f) =>
-                              Preprocess (f n) (f n') a b where
-  preprocess = traverse preprocess
-
 preprocessConstr ::
-     ( Preprocess n1 n1' a1 b1
-     , MonadInferPreprocessor m
-     , HasPos a1
-     , WithTypeHandle a2 b2
-     , WithTypeHandle a1 b1
-     )
+     (MonadInferPreprocessor m, WithTypeHandle a2 b2)
   => a2
   -> (n1' -> n2 b2)
-  -> n1
+  -> m n1'
   -> m (Annot n2 b2)
-preprocessConstr a constr content =
-  withNoTypeHandleAnnot a . constr <$> preprocess content
+preprocessConstr a constr content = withNoTypeHandleAnnot a . constr <$> content
 
 preprocessInherit ::
-     ( Preprocess (Annot n1 a1) (Annot n1 b1) a1 b1
+     ( Preprocess (Annot n1) a1 b1
      , MonadInferPreprocessor m
      , HasPos a1
      , WithTypeHandle a2 b2
@@ -112,31 +103,28 @@ preprocessInherit a constr content = do
 instType :: MonadInferPreprocessor m => TypeHandle -> m TypeHandle
 instType = undefined -- TODO: continue from here
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Unit a) (Annot Unit b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Unit) a b where
   preprocess (Annot (Unit topLevels) a) =
-    preprocessConstr a Unit topLevels
+    preprocessConstr a Unit $ traverse preprocess topLevels
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot TopLevel a) (Annot TopLevel b) a b where
+instance WithTypeHandle a b => Preprocess (Annot TopLevel) a b where
   preprocess (Annot (TopSection name sectionItems) a) =
-    preprocessConstr a (TopSection name) sectionItems
+    preprocessConstr a (TopSection name) $ traverse preprocess sectionItems
   preprocess (Annot (TopDecl decl) a) =
-    preprocessConstr a TopDecl decl
+    preprocessConstr a TopDecl $ preprocess decl
   preprocess (Annot (TopProcedure procedure) a) =
-    preprocessConstr a TopProcedure procedure
+    preprocessConstr a TopProcedure $ preprocess procedure
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Section a) (Annot Section b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Section) a b where
   preprocess (Annot (SecDecl decl) a) =
-    preprocessConstr a SecDecl decl
+    preprocessConstr a SecDecl $ preprocess decl
   preprocess (Annot (SecProcedure procedure) a) =
-    preprocessConstr a SecProcedure procedure
+    preprocessConstr a SecProcedure $ preprocess procedure
   preprocess (Annot (SecDatum datum) a) = do
-    preprocessConstr a SecDatum datum
+    preprocessConstr a SecDatum $ preprocess datum
   preprocess (Annot (SecSpan key value sectionItems) a) = do
     (key', value') <- preprocessSpanCommon key value
-    sectionItems' <- preprocess sectionItems
+    sectionItems' <- traverse preprocess sectionItems
     return . withNoTypeHandleAnnot a $ SecSpan key' value' sectionItems'
 
 preprocessSpanCommon ::
@@ -152,18 +140,17 @@ preprocessSpanCommon key value = do
   storeFact $ getTypeHandle value' `subType` getTypeHandle key'
   return (key', value')
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Decl a) (Annot Decl b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Decl) a b where
   preprocess (Annot (ImportDecl imports) a) =
-    preprocessConstr a ImportDecl imports
+    preprocessConstr a ImportDecl $ traverse preprocess imports
   preprocess (Annot (ExportDecl exports) a) =
-    preprocessConstr a ExportDecl exports
+    preprocessConstr a ExportDecl $ traverse preprocess exports
   preprocess (Annot (RegDecl invar registers) a) =
-    preprocessConstr a (RegDecl invar) registers
+    preprocessConstr a (RegDecl invar) $ preprocess registers
   preprocess (Annot (PragmaDecl name pragma) a) =
-    preprocessConstr a (PragmaDecl $ preprocessTrivial name) pragma
+    preprocessConstr a (PragmaDecl $ preprocessTrivial name) $ preprocess pragma
   preprocess (Annot (TargetDecl targetDirectives) a) =
-    preprocessConstr a TargetDecl targetDirectives
+    preprocessConstr a TargetDecl $ traverse preprocess targetDirectives
     -- the constant is typed implicitly
   preprocess (Annot (ConstDecl Nothing name expr) a) = do
     expr' <- preprocess expr
@@ -194,8 +181,7 @@ instance WithTypeHandle a b => PreprocessTrivial Asserts a b
 
 instance WithTypeHandle a b => PreprocessTrivial Name a b
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Import a) (Annot Import b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Import) a b where
   preprocess =
     liftAnnotM $ \case
       import'@Import {} -> do
@@ -203,8 +189,7 @@ instance WithTypeHandle a b =>
         storeVar (getName import') handle
         pureAnnotM handle import'
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Export a) (Annot Export b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Export) a b where
   preprocess =
     liftAnnotM $ \case
       export@Export {} -> do
@@ -212,8 +197,7 @@ instance WithTypeHandle a b =>
         storeVar (getName export) handle
         pureAnnotM handle export
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Type a) (Annot Type b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Type) a b where
   preprocess =
     liftAnnotM $ \case
       tBits@(TBits int) -> pureAnnotM (SimpleType $ TBitsType int) tBits
@@ -221,8 +205,7 @@ instance WithTypeHandle a b =>
         handle <- lookupTVar (getName name)
         pureAnnotM handle tName
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Registers a) (Annot Registers b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Registers) a b where
   preprocess =
     liftAnnotM $ \(Registers mKind type' nameStrLits) -> do
       type'' <- preprocess type'
@@ -243,15 +226,14 @@ instance WithTypeHandle a b =>
       nameStrLits' <- traverse go nameStrLits
       return (NoType, Registers mKind type'' nameStrLits')
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Procedure a) (Annot Procedure b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Procedure) a b where
   preprocess =
     liftAnnotM $ \(Procedure mConv name formals body)
     -- TODO: consult conventions with man
      -> do
       pushVars
       pushTVars
-      formals' <- preprocess formals
+      formals' <- traverse preprocess formals
       let formalTypes = getTypeHandle <$> formals'
       beginProc
       body' <- preprocess body
@@ -267,45 +249,36 @@ instance WithTypeHandle a b =>
         ( procedureSchema
         , Procedure mConv (preprocessTrivial name) formals' body')
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Formal a) (Annot Formal b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Formal) a b where
   preprocess =
     liftAnnotM $ \(Formal mKind invar type' name) -> do
       handle <- freshTypeHandle
       type'' <- preprocess type'
       storeFact . (handle &) . (getTypeHandle type'' &) $
-        maybe
-          unifyConstraint
-          ((unifyConstraint .) . kindedType . getName)
-          mKind
+        maybe unifyConstraint ((unifyConstraint .) . kindedType . getName) mKind
       storeVar (getName name) handle
       return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Body a) (Annot Body b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Body) a b where
   preprocess =
     liftAnnotM $ \(Body bodyItems) ->
-      (NoType, ) . Body <$> preprocess bodyItems
+      (NoType, ) . Body <$> traverse preprocess bodyItems
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot BodyItem a) (Annot BodyItem b) a b where
+instance WithTypeHandle a b => Preprocess (Annot BodyItem) a b where
   preprocess =
     liftAnnotM $
     ((NoType, ) <$>) <$> \case
       (BodyDecl decl) -> BodyDecl <$> preprocess decl
-      (BodyStackDecl stackDecl) ->
-        BodyStackDecl <$> preprocess stackDecl
+      (BodyStackDecl stackDecl) -> BodyStackDecl <$> preprocess stackDecl
       (BodyStmt stmt) -> BodyStmt <$> preprocess stmt
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot StackDecl a) (Annot StackDecl b) a b where
+instance WithTypeHandle a b => Preprocess (Annot StackDecl) a b where
   preprocess =
     liftAnnotM $ \(StackDecl datums) -> do
-      datums' <- preprocess datums
+      datums' <- traverse preprocess datums
       return (NoType, StackDecl datums')
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Stmt a) (Annot Stmt b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Stmt) a b where
   preprocess =
     liftAnnotM $ \case
       EmptyStmt -> pureAnnotM NoType EmptyStmt
@@ -313,11 +286,14 @@ instance WithTypeHandle a b =>
         cond' <- preprocess cond
         storeFact $ unifyConstraint (SimpleType BoolType) (getTypeHandle cond')
         (NoType, ) <$>
-          liftA2 (IfStmt cond') (preprocess thenBody) (preprocess mElseBody)
+          liftA2
+            (IfStmt cond')
+            (preprocess thenBody)
+            (traverse preprocess mElseBody)
       SwitchStmt scrutinee arms -> do
         scrutinee' <- preprocess scrutinee
         let scrutineeType = getTypeHandle scrutinee'
-        arms' <- preprocess arms
+        arms' <- traverse preprocess arms
         let armTypes = getTypeHandle <$> arms'
         traverse_ (storeFact . subType scrutineeType) armTypes
         return (NoType, SwitchStmt scrutinee' arms')
@@ -326,8 +302,8 @@ instance WithTypeHandle a b =>
         body' <- preprocess body
         return (NoType, SpanStmt key' value' body')
       AssignStmt lvalues exprs -> do
-        lvalues' <- preprocess lvalues
-        exprs' <- preprocess exprs
+        lvalues' <- traverse preprocess lvalues
+        exprs' <- traverse preprocess exprs
         let exprTypes = getTypeHandle <$> exprs'
         zipWithM_
           (\lvalue exprType ->
@@ -341,7 +317,7 @@ instance WithTypeHandle a b =>
       ReturnStmt mConv Nothing actuals
       -- TODO: consult conventions with man
        -> do
-        actuals' <- preprocess actuals
+        actuals' <- traverse preprocess actuals
         let retType = makeTuple (getTypeHandle <$> actuals')
         storeReturn retType
         return (NoType, ReturnStmt mConv Nothing actuals')
@@ -354,11 +330,10 @@ instance WithTypeHandle a b =>
        -> do
         expr' <- preprocess expr
         storeFact $ classConstraint LabelClass [getTypeHandle expr']
-        (NoType, ) . GotoStmt expr' <$> preprocess mTargets
+        (NoType, ) . GotoStmt expr' <$> traverse preprocess mTargets
       CutToStmt {} -> undefined -- TODO: continue from here
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot KindName a) (Annot KindName b) a b where
+instance WithTypeHandle a b => Preprocess (Annot KindName) a b where
   preprocess =
     liftAnnotM $ \(KindName mKind name) -> do
       handle <- freshTypeHandle
@@ -368,16 +343,13 @@ instance WithTypeHandle a b =>
         mKind
       return (handle, KindName mKind (preprocessTrivial name))
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Arm a) (Annot Arm b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Arm) a b where
   preprocess = undefined -- TODO: continue from here
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Targets a) (Annot Targets b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Targets) a b where
   preprocess = undefined -- TODO: continue from here
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Lit a) (Annot Lit b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Lit) a b where
   preprocess =
     liftAnnotM $ \lit -> do
       handle <- freshTypeHandle
@@ -388,24 +360,21 @@ instance WithTypeHandle a b =>
       constraint LitFloat {} = realConstraint
       constraint LitChar {} = characterConstraint
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Actual a) (Annot Actual b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Actual) a b where
   preprocess =
     liftAnnotM $ \(Actual mKind expr) -> do
       expr' <- preprocess expr
       let exprType = getTypeHandle expr'
       case mKind of
         Just kind -> do
-          return
-            (kindedType (getName kind) exprType, Actual mKind expr')
+          return (kindedType (getName kind) exprType, Actual mKind expr')
         Nothing -> return (exprType, Actual mKind expr')
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Init a) (Annot Init b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Init) a b where
   preprocess =
     liftAnnotM $ \case
       (ExprInit exprs) -> do
-        exprs' <- preprocess exprs
+        exprs' <- traverse preprocess exprs
         handle <- freshTypeHandle
         let exprTypes = getTypeHandle <$> exprs'
         traverse_ (storeFact . constExprConstraint) exprTypes
@@ -414,8 +383,7 @@ instance WithTypeHandle a b =>
       strInit@StrInit {} -> pureAnnotM (SimpleType StringType) strInit
       strInit@Str16Init {} -> pureAnnotM (SimpleType String16Type) strInit
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Datum a) (Annot Datum b) a b where
+instance WithTypeHandle a b => Preprocess (Annot Datum) a b where
   preprocess =
     liftAnnotM $ \case
       datum@(DatumLabel name) -> do
@@ -449,8 +417,7 @@ instance WithTypeHandle a b =>
             Nothing -> return Nothing
         return (SimpleType $ AddrType typeType, Datum type'' mSize' mInit')
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot LValue a) (Annot LValue b) a b where
+instance WithTypeHandle a b => Preprocess (Annot LValue) a b where
   preprocess =
     liftAnnotM $ \case
       lvName@LVName {} -> do
@@ -464,12 +431,9 @@ instance WithTypeHandle a b =>
         storeFact $ classConstraint AddressClass [getTypeHandle expr']
         return (getTypeHandle type'', LVRef type'' expr' mAsserts')
 
-instance WithTypeHandle a b =>
-         Preprocess (Annot Expr a) (Annot Expr b) a b where
-  preprocess (Annot (ParExpr expr) a) =
-    preprocessInherit a ParExpr expr
-  preprocess (Annot (LVExpr lvalue) a) =
-    preprocessInherit a LVExpr lvalue
+instance WithTypeHandle a b => Preprocess (Annot Expr) a b where
+  preprocess (Annot (ParExpr expr) a) = preprocessInherit a ParExpr expr
+  preprocess (Annot (LVExpr lvalue) a) = preprocessInherit a LVExpr lvalue
   preprocess (Annot (BinOpExpr op left right) a) = do
     handle <- freshTypeHandle
     left' <- preprocess left
@@ -480,11 +444,9 @@ instance WithTypeHandle a b =>
     storeFact $ subType handle rightType
     -- TODO: add constraint dependent on the operator
     return $ withTypeHandledAnnot handle a $ BinOpExpr op left' right'
-  preprocess (Annot (NegExpr expr) a) =
-    preprocessInherit a NegExpr expr
+  preprocess (Annot (NegExpr expr) a) = preprocessInherit a NegExpr expr
         -- TODO: add constraint dependent on the operator
-  preprocess (Annot (ComExpr expr) a) =
-    preprocessInherit a ComExpr expr
+  preprocess (Annot (ComExpr expr) a) = preprocessInherit a ComExpr expr
         -- TODO: add constraint dependent on the operator
   preprocess (Annot (LitExpr lit mType) a) = do
     lit' <- preprocess lit
@@ -502,7 +464,7 @@ instance WithTypeHandle a b =>
     handle <- freshTypeHandle
     argType <- freshTypeHandle
     retType <- freshTypeHandle
-    actuals' <- preprocess actuals
+    actuals' <- traverse preprocess actuals
     let actualTypes = getTypeHandle <$> actuals'
         (mClassHandle, opSchema) = getNamedOperator $ getName name
         tupleType = makeTuple actualTypes

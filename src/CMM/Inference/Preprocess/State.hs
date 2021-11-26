@@ -18,9 +18,9 @@ import safe qualified Data.Map as Map
 import safe Data.Maybe
 import safe Data.Text (Text)
 
-import safe CMM.Lens
 import safe qualified CMM.AST.Annot as AST
 import safe CMM.Inference.Type
+import safe CMM.Lens
 import safe qualified CMM.Parser.HasPos as AST
 
 class HasTypeHandle a where
@@ -93,8 +93,7 @@ beginProc :: MonadInferPreprocessor m => m ()
 beginProc = currentReturn <~ Just <$> freshTypeHandle
 
 endProc :: MonadInferPreprocessor m => m TypeHandle
-endProc = fromMaybe  NoType <$>
-  (currentReturn `exchange` Nothing)
+endProc = fromMaybe NoType <$> (currentReturn `exchange` Nothing)
 
 storeProc :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()
 storeProc name handle = procedures %= Map.insert name handle

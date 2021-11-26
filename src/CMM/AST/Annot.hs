@@ -6,8 +6,8 @@
 
 module CMM.AST.Annot where
 
-import safe Data.Functor
 import safe Data.Data
+import safe Data.Functor
 
 data Annotation node annot =
   Annot (node annot) annot

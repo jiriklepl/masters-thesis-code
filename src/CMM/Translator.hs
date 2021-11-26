@@ -47,12 +47,12 @@ import qualified LLVM.IRBuilder.Monad as L
 
 import safe Prettyprinter
 
-import safe CMM.Lens
 import safe CMM.AST
 import safe CMM.AST.Annot
+import safe CMM.AST.BlockAnnot
 import safe CMM.AST.HasName
 import safe CMM.AST.Utils
-import safe CMM.AST.BlockAnnot
+import safe CMM.Lens
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
 import safe CMM.Translator.State
@@ -74,7 +74,6 @@ translateName = L.mkName . T.unpack . getName
 
 translateParName :: HasName n => n -> L.ParameterName
 translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
-
 
 -- TODO: maybe change the name to `endBlock` or something...
 pushVariables ::

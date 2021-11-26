@@ -27,9 +27,9 @@ import safe Prettyprinter (Pretty)
 
 import safe CMM.AST
 import safe CMM.AST.Annot
-import safe CMM.AST.HasName
 import safe CMM.AST.BlockAnnot
 import safe CMM.AST.Blockifier.State
+import safe CMM.AST.HasName
 import safe CMM.AST.Utils
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
@@ -313,20 +313,20 @@ instance GetMetadata DeclaresVars (Arm a) where
   getMetadata t (Arm _ body) = getMetadata t body
 
 blockifyProcedure ::
-     (Blockify n a, MonadBlockifier m, WithBlockAnnot a b) => n a -> m (n b)
+     (Blockify n a, HasPos a, MonadBlockifier m, WithBlockAnnot a b)
+  => n a
+  -> m (n b)
 blockifyProcedure procedure = blockify procedure <* unsetBlock
 
-class HasPos a =>
-      Blockify n a
-  where
-  blockify :: (MonadBlockify m, WithBlockAnnot a b) => n a -> m (n b)
+class Blockify n a where
+  blockify :: (MonadBlockify m, WithBlockAnnot a b, HasPos a) => n a -> m (n b)
 
-instance HasPos a => Blockify (Annot Datum) a where
+instance Blockify (Annot Datum) a where
   blockify datum@(Annot DatumLabel {} _) =
     storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
   blockify datum@(Annot _ _) = return $ noBlockAnnots datum
 
-instance HasPos a => Blockify (Annot Procedure) a where
+instance Blockify (Annot Procedure) a where
   blockify (Annot (Procedure mConv name formals body) a) = do
     formals' <- traverse blockify formals
     index <- blocksCache $ helperName "procedure"
@@ -336,7 +336,7 @@ instance HasPos a => Blockify (Annot Procedure) a where
       Procedure mConv (noBlockAnnots name) formals' <$>
       blockify body
 
-instance HasPos a => Blockify (Annot Body) a where
+instance Blockify (Annot Body) a where
   blockify (Annot (Body bodyItems) a) =
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
@@ -345,6 +345,7 @@ constructBlockified ::
      , MonadBlockify m
      , WithBlockAnnot a1 b1
      , WithBlockAnnot a2 b2
+     , HasPos a1
      )
   => (Annot n1 b1 -> n2 b2)
   -> a2
@@ -354,17 +355,17 @@ constructBlockified constr a n = do
   n' <- blockify n
   return . withAnnot (withBlockAnnot (getBlockAnnot n') a) $ constr n'
 
-instance HasPos a => Blockify (Annot BodyItem) a where
+instance Blockify (Annot BodyItem) a where
   blockify (Annot (BodyStmt stmt) a) = constructBlockified BodyStmt a stmt
   blockify (Annot (BodyDecl decl) a) = constructBlockified BodyDecl a decl
   blockify (Annot (BodyStackDecl stackDecl) a) =
     constructBlockified BodyStackDecl a stackDecl
 
-instance HasPos a => Blockify (Annot StackDecl) a where
+instance Blockify (Annot StackDecl) a where
   blockify (Annot (StackDecl datums) a) =
     withNoBlockAnnot a . StackDecl <$> traverse blockify datums
 
-instance HasPos a => Blockify (Annot Decl) a where
+instance Blockify (Annot Decl) a where
   blockify (Annot (RegDecl invar regs) a) =
     constructBlockified (RegDecl invar) a regs
   blockify (Annot (ImportDecl imports') a) =
@@ -373,15 +374,15 @@ instance HasPos a => Blockify (Annot Decl) a where
     storeSymbol constants "constant declaration" decl $> noBlockAnnots decl
   blockify decl@(Annot _ _) = return $ noBlockAnnots decl
 
-instance HasPos a => Blockify (Annot Import) a where
+instance Blockify (Annot Import) a where
   blockify import'@(Annot Import {} _) =
     storeSymbol imports "import" import' $> noBlockAnnots import'
 
-instance HasPos a => Blockify (Annot Registers) a where
+instance Blockify (Annot Registers) a where
   blockify regs@(Annot (Registers _ _ nameStrLits) _) =
     traverse_ (storeRegister . fst) nameStrLits $> noBlockAnnots regs
 
-instance HasPos a => Blockify (Annot Formal) a where
+instance Blockify (Annot Formal) a where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
 storeRegister ::
@@ -402,7 +403,7 @@ storeSymbol symbolSet symbolName node = do
     then registerError node ("Duplicate " <> symbolName)
     else symbolSet .= getName node `Set.insert` symbols'
 
-instance HasPos a => Blockify (Annot Stmt) a where
+instance Blockify (Annot Stmt) a where
   blockify stmt@(Annot LabelStmt {} _) = do
     addControlFlow $ getName stmt -- a possible fallthrough
     storeSymbol labels "label" stmt
