@@ -1,24 +1,21 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 
 module CMM.Parser where
 
 import safe Control.Applicative hiding (many)
-import safe Data.Foldable
 import safe Data.Functor
 import safe Data.Maybe
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Void
-import safe Prelude
 import safe Text.Megaparsec hiding (State)
 
 import safe CMM.AST
-import safe CMM.AST.Utils
+import safe CMM.AST.Annot
 
 import safe qualified CMM.Lexer as L
 

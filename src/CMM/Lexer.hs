@@ -1,7 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module CMM.Lexer
@@ -17,13 +16,11 @@ import safe Data.Maybe
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
 import safe Data.Void
-import safe Prelude
 import safe Text.Megaparsec hiding (State, Token, token)
 import safe Text.Megaparsec.Char
 import safe qualified Text.Megaparsec.Char.Lexer as L
 
-import safe CMM.AST (Annot)
-import safe CMM.AST.Utils (withAnnot)
+import safe CMM.AST.Annot
 
 type Lexer = Parsec Void Text
 

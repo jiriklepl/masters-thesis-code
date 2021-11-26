@@ -3,16 +3,22 @@ cradle:
     - path: "src/Compiler/Main.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Lexer.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Lens.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Parser.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Lexer.hs"
+    - path: "src/CMM/Parser/HasPos.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Lens.hs"
+    - path: "src/CMM/AST/Annot.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/Blockifier.hs"
@@ -22,6 +28,12 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/BlockAnnot.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/AST/Flattener.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/AST/HasName.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/Utils.hs"
@@ -48,9 +60,6 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/State.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/AST/Flattener.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/FlowAnalysis.hs"
       component: "Compiler:exe:Compiler"
 
@@ -64,9 +73,6 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Warnings.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Parser/HasPos.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src"

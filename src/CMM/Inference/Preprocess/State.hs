@@ -19,8 +19,7 @@ import safe Data.Maybe
 import safe Data.Text (Text)
 
 import safe CMM.Lens
-import safe qualified CMM.AST as AST
-import safe qualified CMM.AST.Utils as AST
+import safe qualified CMM.AST.Annot as AST
 import safe CMM.Inference.Type
 import safe qualified CMM.Parser.HasPos as AST
 

@@ -12,22 +12,22 @@
 
 module CMM.AST.Blockifier where
 
-import safe Control.Lens.Getter
-import safe Control.Lens.Setter
-import safe Control.Lens.Type
-import safe Control.Monad.State.Lazy
-import safe Data.Foldable
-import safe Data.Functor
+import safe Control.Lens.Getter (use, uses)
+import safe Control.Lens.Setter ((%=), (.=), (?=))
+import safe Control.Lens.Type (Lens)
+import safe Control.Monad.State.Lazy (MonadIO, MonadState, when)
+import safe Data.Foldable (traverse_)
+import safe Data.Functor (($>))
 import safe qualified Data.Map as Map
-import safe Data.Maybe
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Tuple
 import safe Prelude hiding (reads)
 import safe Prettyprinter (Pretty)
 
 import safe CMM.AST
+import safe CMM.AST.Annot
+import safe CMM.AST.HasName
 import safe CMM.AST.BlockAnnot
 import safe CMM.AST.Blockifier.State
 import safe CMM.AST.Utils
@@ -316,8 +316,9 @@ blockifyProcedure ::
      (Blockify n a, MonadBlockifier m, WithBlockAnnot a b) => n a -> m (n b)
 blockifyProcedure procedure = blockify procedure <* unsetBlock
 
--- TODO: put `HasPos` here
-class Blockify n a where
+class HasPos a =>
+      Blockify n a
+  where
   blockify :: (MonadBlockify m, WithBlockAnnot a b) => n a -> m (n b)
 
 instance HasPos a => Blockify (Annot Datum) a where

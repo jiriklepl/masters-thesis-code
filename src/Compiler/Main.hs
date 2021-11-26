@@ -21,6 +21,7 @@ import LLVM.IRBuilder.Monad
 import Prettyprinter
 
 import CMM.AST
+import CMM.AST.Annot
 import CMM.AST.Blockifier
 import qualified CMM.AST.Blockifier.State as B
 import CMM.AST.Flattener

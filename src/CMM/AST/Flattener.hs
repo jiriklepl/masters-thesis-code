@@ -14,7 +14,7 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
 import safe CMM.AST
-import safe CMM.AST.Utils
+import safe CMM.AST.Annot
 import safe CMM.Utils
 
 class Flatten n where

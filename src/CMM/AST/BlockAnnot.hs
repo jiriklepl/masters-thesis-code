@@ -9,8 +9,7 @@ import safe Data.Data (Data)
 import safe Data.Map (Map)
 import safe Data.Text (Text)
 
-import safe CMM.AST
-import safe CMM.AST.Utils
+import safe CMM.AST.Annot
 
 -- | Contains information about basic-block structure
 data BlockAnnot

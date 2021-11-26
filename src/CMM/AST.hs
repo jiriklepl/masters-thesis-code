@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE KindSignatures #-}
@@ -14,19 +13,8 @@ module CMM.AST where
 import safe Data.Data (Data)
 import safe qualified Data.Kind as Kind
 import safe Data.Text (Text)
-import safe Prelude
 
-data Annotation node annot =
-  Annot (node annot) annot
-  deriving (Show, Functor, Data)
-
-deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
-
-deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
-
-type Annot = Annotation
-
-type Annotated = Functor
+import safe CMM.AST.Annot
 
 class ASTNode (n :: Kind.Type -> Kind.Type)
 

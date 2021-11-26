@@ -22,13 +22,17 @@ common common-options
 executable Compiler
   import:              common-options
   main-is:             Compiler/Main.hs
-  other-modules:       CMM.Parser,
-                       CMM.Lexer,
-                       CMM.AST,
+  other-modules:       CMM.Lexer,
                        CMM.Lens,
+                       CMM.Parser,
+                       CMM.Parser.HasPos,
+                       CMM.AST,
+                       CMM.AST.Annot,
                        CMM.AST.Blockifier,
                        CMM.AST.Blockifier.State,
                        CMM.AST.BlockAnnot,
+                       CMM.AST.Flattener,
+                       CMM.AST.HasName,
                        CMM.AST.Utils,
                        CMM.Utils,
                        CMM.Inference,
@@ -37,13 +41,11 @@ executable Compiler
                        CMM.Inference.BuiltIn,
                        CMM.Inference.Preprocess,
                        CMM.Inference.Preprocess.State,
-                       CMM.AST.Flattener,
                        CMM.FlowAnalysis,
                        CMM.Pretty,
                        CMM.Translator,
                        CMM.Translator.State,
-                       CMM.Warnings,
-                       CMM.Parser.HasPos
+                       CMM.Warnings
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.17,
                        megaparsec ^>=9.0.1,

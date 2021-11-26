@@ -49,8 +49,10 @@ import safe Prettyprinter
 
 import safe CMM.Lens
 import safe CMM.AST
-import safe CMM.AST.BlockAnnot
+import safe CMM.AST.Annot
+import safe CMM.AST.HasName
 import safe CMM.AST.Utils
+import safe CMM.AST.BlockAnnot
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
 import safe CMM.Translator.State

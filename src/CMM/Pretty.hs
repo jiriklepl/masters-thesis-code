@@ -1,7 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -9,20 +8,10 @@ module CMM.Pretty
   (
   ) where
 
-import safe Prelude
-  ( Bool
-  , Maybe(..)
-  , Monoid(..)
-  , ($)
-  , (.)
-  , (<$>)
-  , error
-  , maybe
-  , show
-  )
 import safe Prettyprinter
 
 import safe CMM.AST
+import safe CMM.AST.Annot
 
 commaSep :: [Doc ann] -> Doc ann
 commaSep xs = hsep $ punctuate comma xs

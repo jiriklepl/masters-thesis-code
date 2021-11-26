@@ -20,7 +20,7 @@ import safe Test.HUnit
 import safe Text.Megaparsec (ParseErrorBundle(), Parsec(), many, runParser)
 
 import safe CMM.AST
-import CMM.AST.Utils
+import safe CMM.AST.Annot
 import safe CMM.Lexer
 import safe CMM.Parser
 import safe CMM.Pretty ()

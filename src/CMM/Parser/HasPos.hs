@@ -6,9 +6,9 @@ module CMM.Parser.HasPos
   , SourcePos
   ) where
 
-import safe CMM.AST (Annot)
-import safe CMM.AST.Utils (takeAnnot)
 import safe Text.Megaparsec.Pos (SourcePos)
+
+import safe CMM.AST.Annot
 
 class HasPos n where
   getPos :: n -> SourcePos
