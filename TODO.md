@@ -27,6 +27,8 @@
   - [ ] CMM
     - [ ] AST
       - [ ] Utils
+      - [ ] HasPos
+      - [ ] Annot
       - [ ] Flattener
       - [ ] Blockifier
         - [ ] State

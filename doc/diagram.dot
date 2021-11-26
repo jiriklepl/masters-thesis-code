@@ -1,32 +1,37 @@
 digraph {
+    node [style="filled"]
+
     subgraph ends {
         node [shape="ellipse"]
 
-        Source
-        LLVM
+        Source [fillcolor="lightblue"]
+        LLVM [fillcolor="lightblue"]
     }
 
     subgraph data {
         node [shape="parallelogram"]
 
-        AST
-        Judgements [label="Type Judgements"]
-        FlatAST [label="Flat AST"]
-        BlockifiedAST [label="Blockified AST"]
-        BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow"]
-        MonoAST [label="Monomophized AST"]
+        AST [fillcolor="lightgreen"]
+        Facts [label="Type facts", fillcolor="lightgreen"]
+        ASTTypeHandles [label="AST\nwith type handles", fillcolor="lightgreen"]
+        Judgements [label="Type Judgements", fillcolor="pink"]
+        FlatAST [label="Flat AST", fillcolor="lightgreen"]
+        BlockifiedAST [label="Blockified AST", fillcolor="lightgreen"]
+        BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow", fillcolor="lightgreen"]
+        MonoAST [label="Monomophized AST", fillcolor="pink"]
     }
 
     subgraph components {
         node [shape="component"]
 
-        Parser
-        Flattener
-        Infer [label="Type inference"]
-        Blockifier
-        FlowAnalysis [label="Flow analysis"]
-        Monomorphization
-        Translator
+        Parser [fillcolor="lightgreen"]
+        Flattener [fillcolor="lightgreen"]
+        InferPre [label="Type inference\npreprocessing", fillcolor="lightgreen"]
+        Infer [label="Type inference", fillcolor="pink"]
+        Blockifier [fillcolor="lightgreen"]
+        FlowAnalysis [label="Flow analysis", fillcolor="lightgreen"]
+        Monomorphization [fillcolor="pink"]
+        Translator [fillcolor="yellow"]
     }
 
     subgraph decisions {
@@ -35,7 +40,7 @@ digraph {
 
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
-    AST -> Infer -> Judgements -> Monomorphization
+    AST -> InferPre -> { Facts ASTTypeHandles } -> Infer -> Judgements -> Monomorphization
     FlatAST -> Blockifier -> BlockifiedAST
     BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
     BlockifiedASTAnnots -> Monomorphization -> MonoAST
