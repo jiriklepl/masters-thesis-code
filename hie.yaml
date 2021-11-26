@@ -33,7 +33,7 @@ cradle:
     - path: "src/CMM/Inference.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/Preprocess/State.hs"
+    - path: "src/CMM/Inference/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Type.hs"
@@ -43,6 +43,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Preprocess.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/Preprocess/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/Flattener.hs"
