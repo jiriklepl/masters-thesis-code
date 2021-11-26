@@ -6,13 +6,12 @@ module Main where
 import Control.Monad.State as State
 import qualified Data.Map as Map
 
-import Debug.Trace -- TODO: remove this
-
 -- import Data.Text as T
 import Data.Text.IO as TS
 import Data.Tuple
 import Text.Megaparsec hiding (parse)
 
+import Data.Text.Lazy as T
 import Data.Text.Lazy.IO as T
 import LLVM.Pretty -- from the llvm-hs-pretty package
 
@@ -51,7 +50,7 @@ main = do
     runStateT
       (blockifyProcedure flattened <* analyzeFlow flattened)
       B.initBlockifier
-  trace (show $ pretty blockified) $ return ()
+  T.putStr . T.pack . show $ pretty blockified
   let translated =
         ppllvm $
         flip
@@ -68,7 +67,6 @@ main = do
   T.putStr translated
   print mined
   print (_facts miner)
-  return ()
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a
 parse parser = runParser parser "stdin"
