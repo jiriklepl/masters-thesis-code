@@ -20,29 +20,36 @@ import LLVM.IRBuilder.Module
 import LLVM.IRBuilder.Monad
 import Prettyprinter
 
+import CMM.AST
 import CMM.AST.Blockifier
 import qualified CMM.AST.Blockifier.State as B
 import CMM.AST.Flattener
-import CMM.AST
 import CMM.FlowAnalysis
+import CMM.Inference.Preprocess
+import CMM.Inference.State
+import CMM.Inference.Type
 import CMM.Lexer
 import CMM.Parser
 import CMM.Translator
 import qualified CMM.Translator.State as Tr
-import CMM.Inference.Preprocess
-import CMM.Inference.State
-import CMM.Inference.Type
 
 main :: IO ()
 main = do
   contents <- TS.getContents
-  let ast = either undefined id .
+  let ast =
+        either undefined id .
         parse procedure . either undefined id . parse tokenize $
         contents
   let flattened = flatten ast
-  let mined = evalState (preprocess ast :: (MonadState InferPreprocessor m) => m (Annot Procedure (SourcePos, TypeHandle))) initInferPreprocessor
+  let mined =
+        evalState
+          (preprocess ast :: (MonadState InferPreprocessor m) =>
+                               m (Annot Procedure (SourcePos, TypeHandle)))
+          initInferPreprocessor
   (blockified, blockifier) <-
-    runStateT (blockifyProcedure flattened <* analyzeFlow flattened) B.initBlockifier
+    runStateT
+      (blockifyProcedure flattened <* analyzeFlow flattened)
+      B.initBlockifier
   trace (show $ pretty blockified) $ return ()
   let translated =
         ppllvm $

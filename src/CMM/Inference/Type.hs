@@ -21,8 +21,7 @@ data Constness
   | ConstExpr
   deriving (Show, Eq, Ord)
 
-type TypeAnnotations
-  = (Maybe Text, Constness, Maybe Text)
+type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
 
 data TypeHandle
   = NoType
@@ -74,28 +73,34 @@ subType = SubType
 
 kindedType :: Text -> TypeHandle -> TypeHandle
 kindedType _ NoType = NoType
-kindedType _ type'@ErrorType{} = type'
-kindedType kind (SimpleType type') = AnnotType (Just kind, Unknown, Nothing) type'
-kindedType kind (AnnotType (Nothing, constness, mReg) type') = AnnotType (Just kind, constness, mReg) type'
+kindedType _ type'@ErrorType {} = type'
+kindedType kind (SimpleType type') =
+  AnnotType (Just kind, Unknown, Nothing) type'
+kindedType kind (AnnotType (Nothing, constness, mReg) type') =
+  AnnotType (Just kind, constness, mReg) type'
 kindedType kind type'@(AnnotType (Just kind', _, _) _)
   | kind == kind' = type'
-  | otherwise = ErrorType . T.pack $ "kinds `" <> show kind <> "` and `" <> show kind' <> "` do not match"
+  | otherwise =
+    ErrorType . T.pack $
+    "kinds `" <> show kind <> "` and `" <> show kind' <> "` do not match"
 
 kindedConstraint :: Text -> TypeHandle -> Fact
 kindedConstraint = HasKind
 
 linkExprType :: TypeHandle -> TypeHandle
 linkExprType NoType = NoType -- `NoType` is trivially a link-time constant
-linkExprType type'@ErrorType{} = type'
+linkExprType type'@ErrorType {} = type'
 linkExprType (SimpleType type') = AnnotType (Nothing, LinkExpr, Nothing) type'
 linkExprType type'@(AnnotType (_, ConstExpr, _) _) = type'
-linkExprType (AnnotType (mKind, _, mReg) type') = AnnotType (mKind, LinkExpr, mReg) type'
+linkExprType (AnnotType (mKind, _, mReg) type') =
+  AnnotType (mKind, LinkExpr, mReg) type'
 
 constExprType :: TypeHandle -> TypeHandle
 constExprType NoType = NoType -- `NoType` is trivially a compile-time constant
-constExprType type'@ErrorType{} = type'
+constExprType type'@ErrorType {} = type'
 constExprType (SimpleType type') = AnnotType (Nothing, ConstExpr, Nothing) type'
-constExprType (AnnotType (mKind, _, mReg) type') = AnnotType (mKind, ConstExpr, mReg) type'
+constExprType (AnnotType (mKind, _, mReg) type') =
+  AnnotType (mKind, ConstExpr, mReg) type'
 
 constExprConstraint :: TypeHandle -> Fact
 constExprConstraint = ConstnessLimit ConstExpr
@@ -105,12 +110,16 @@ linkExprConstraint = ConstnessLimit LinkExpr
 
 registerType :: Text -> TypeHandle -> TypeHandle
 registerType _ NoType = NoType
-registerType _ type'@ErrorType{} = type'
-registerType reg (SimpleType type') = AnnotType (Nothing, Unknown, Just reg) type'
-registerType reg (AnnotType (mKind, constness, Nothing) type') = AnnotType (mKind, constness, Just reg) type'
+registerType _ type'@ErrorType {} = type'
+registerType reg (SimpleType type') =
+  AnnotType (Nothing, Unknown, Just reg) type'
+registerType reg (AnnotType (mKind, constness, Nothing) type') =
+  AnnotType (mKind, constness, Just reg) type'
 registerType reg type'@(AnnotType (_, _, Just reg') _)
   | reg == reg' = type'
-  | otherwise = ErrorType . T.pack $ "registers `" <> show reg <> "` and `" <> show reg' <> "` do not match"
+  | otherwise =
+    ErrorType . T.pack $
+    "registers `" <> show reg <> "` and `" <> show reg' <> "` do not match"
 
 registerConstraint :: Text -> TypeHandle -> Fact
 registerConstraint = OnRegister

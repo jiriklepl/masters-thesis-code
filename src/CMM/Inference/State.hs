@@ -10,19 +10,19 @@
 module CMM.Inference.State where
 
 import safe Control.Lens.Getter
-import safe Data.Maybe
 import safe Control.Lens.Setter
 import Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Function
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Maybe
 import safe Data.Text (Text)
 
 import safe qualified CMM.AST as AST
-import safe qualified CMM.Parser.HasPos as AST
 import safe qualified CMM.AST.Utils as AST
 import safe CMM.Inference.Type
+import safe qualified CMM.Parser.HasPos as AST
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle
