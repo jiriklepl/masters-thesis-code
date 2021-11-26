@@ -173,7 +173,7 @@ instance WithTypeHandle a b =>
     handle <- freshTypeHandle
     expr' <- preprocess expr
     type'' <- preprocess type'
-    storeFact $ constExprType (getTypeHandle type'') handle
+    storeFact $ unifyConstraint (constExprType (getTypeHandle type'')) handle
     storeFact $ unifyConstraint handle (getTypeHandle expr')
     storeVar (AST.getName name) handle
     return . withNoTypeHandleAnnot a $
@@ -214,7 +214,7 @@ instance WithTypeHandle a b =>
          Preprocess (AST.Annot AST.Type a) (AST.Annot AST.Type b) a b where
   preprocess =
     liftAnnotM $ \case
-      tBits@(AST.TBits int) -> pureAnnotM (TBitsType int) tBits
+      tBits@(AST.TBits int) -> pureAnnotM (SimpleType $ TBitsType int) tBits
       tName@(AST.TName name) -> do
         handle <- lookupTVar (AST.getName name)
         pureAnnotM handle tName
@@ -228,16 +228,14 @@ instance WithTypeHandle a b =>
       handle <-
         case mKind of
           Just kind -> do
-            handle <- freshTypeHandle
-            storeFact $ kindedType (AST.getName kind) typeType handle
-            return handle
+            return $ kindedType (AST.getName kind) typeType
           Nothing -> return typeType
       let go (name, Nothing) = do
             storeVar (AST.getName name) handle
             return (withTypeHandle handle <$> name, Nothing)
           go (name, Just (AST.StrLit strLit)) = do
             handle' <- freshTypeHandle
-            storeFact $ registerType strLit handle handle'
+            storeFact $ unifyConstraint (registerType strLit handle) handle'
             storeVar (AST.getName name) handle'
             return (withTypeHandle handle' <$> name, Just (AST.StrLit strLit))
       nameStrLits' <- traverse go nameStrLits
@@ -269,7 +267,7 @@ instance WithTypeHandle a b =>
     type'' <- preprocess type'
 
     storeFact . (handle &) . (getTypeHandle type'' &) $
-      maybe unifyConstraint (kindedType . AST.getName) mKind
+      maybe unifyConstraint ((unifyConstraint .) . kindedType . AST.getName) mKind
 
     return (handle, AST.Formal mKind invar type'' (preprocessTrivial name))
 
@@ -297,7 +295,7 @@ instance WithTypeHandle a b =>
     AST.EmptyStmt -> pureAnnotM NoType AST.EmptyStmt
     AST.IfStmt cond thenBody mElseBody -> do
       cond' <- preprocess cond
-      storeFact $ unifyConstraint BoolType (getTypeHandle cond')
+      storeFact $ unifyConstraint (SimpleType BoolType) (getTypeHandle cond')
       (NoType,) <$> liftA2
         (AST.IfStmt cond')
         (preprocess thenBody)
@@ -333,7 +331,7 @@ instance WithTypeHandle a b =>
       return (NoType, AST.ReturnStmt mConv Nothing actuals')
     AST.ReturnStmt{} -> undefined -- TODO: continue from here
     label@AST.LabelStmt{} -> do
-      storeVar (AST.getName label) LabelType
+      storeVar (AST.getName label) (SimpleType LabelType)
       pureAnnotM NoType label
     AST.ContStmt{} -> undefined -- TODO: continue from here
     AST.GotoStmt expr mTargets -> do -- TODO: check if cosher
@@ -346,7 +344,7 @@ instance WithTypeHandle a b =>
          Preprocess (AST.Annot AST.KindName a) (AST.Annot AST.KindName b) a b where
   preprocess = liftAnnotM $ \(AST.KindName mKind name) -> do
     handle <- freshTypeHandle
-    maybe (return ()) (storeFact . flip kindedConstraint handle . AST.getName) mKind
+    maybe (return ()) (storeFact . (`kindedConstraint` handle) . AST.getName) mKind
     return (handle, AST.KindName mKind (preprocessTrivial name))
 
 instance WithTypeHandle a b =>
@@ -376,9 +374,7 @@ instance WithTypeHandle a b =>
       let exprType = getTypeHandle expr'
       case mKind of
         Just kind -> do
-          handle <- freshTypeHandle
-          storeFact $ kindedType (AST.getName kind) exprType handle
-          return (handle, AST.Actual mKind expr')
+          return (kindedType (AST.getName kind) exprType, AST.Actual mKind expr')
         Nothing -> return (exprType, AST.Actual mKind expr')
 
 instance WithTypeHandle a b =>
@@ -392,15 +388,15 @@ instance WithTypeHandle a b =>
         traverse_ (storeFact . constExprConstraint) exprTypes
         traverse_ (storeFact . unifyConstraint handle) exprTypes
         return (handle, AST.ExprInit exprs')
-      strInit@AST.StrInit {} -> pureAnnotM StringType strInit
-      strInit@AST.Str16Init {} -> pureAnnotM String16Type strInit
+      strInit@AST.StrInit {} -> pureAnnotM (SimpleType StringType) strInit
+      strInit@AST.Str16Init {} -> pureAnnotM (SimpleType String16Type) strInit
 
 instance WithTypeHandle a b =>
          Preprocess (AST.Annot AST.Datum a) (AST.Annot AST.Datum b) a b where
   preprocess =
     liftAnnotM $ \case
       datum@(AST.DatumLabel name) -> do
-        let handle = AddrType NoType
+        let handle = SimpleType $ AddrType NoType
         storeVar (AST.getName name) handle
         pureAnnotM handle datum
       datum@(AST.DatumAlign _) -> do
@@ -425,10 +421,10 @@ instance WithTypeHandle a b =>
             Just init -> do
               init' <- preprocess init
               let initType = getTypeHandle init'
-              storeFact $ linkExprType typeType initType
+              storeFact $ unifyConstraint (linkExprType typeType) initType
               return $ Just init'
             Nothing -> return Nothing
-        return (AddrType typeType, AST.Datum type'' mSize' mInit')
+        return (SimpleType $ AddrType typeType, AST.Datum type'' mSize' mInit')
 
 instance WithTypeHandle a b =>
          Preprocess (AST.Annot AST.LValue a) (AST.Annot AST.LValue b) a b where
@@ -476,7 +472,7 @@ instance WithTypeHandle a b =>
         Just type' -> do
           type'' <- preprocess type'
           let typeType = getTypeHandle type''
-          storeFact $ constExprType typeType litType
+          storeFact $ unifyConstraint (constExprType typeType) litType
           return $ Just type''
     return . withTypeHandledAnnot litType a $ AST.LitExpr lit' mType'
   preprocess (AST.Annot (AST.PrefixExpr name actuals) a) = do

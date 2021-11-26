@@ -20,7 +20,6 @@ import safe Data.Functor
 import safe qualified Data.Graph as Graph
 import safe Data.List
 import safe qualified Data.Map as Map
-import safe Data.Maybe
 import safe qualified Data.Set as Set
 import safe qualified Data.Text as T
 import safe Data.Tuple

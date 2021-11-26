@@ -126,4 +126,4 @@ storeFact = (facts %=) . (:)
 freshTypeHandle :: MonadInferPreprocessor m => m TypeHandle
 freshTypeHandle = do
   handleCounter += 1
-  VarType <$> use handleCounter
+  SimpleType . VarType <$> use handleCounter
