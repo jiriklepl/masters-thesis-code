@@ -27,7 +27,7 @@ helperName = Name . addPrefix flattenerPrefix . T.pack
 flattenerPrefix :: Text
 flattenerPrefix = "F"
 
-instance {-# OVERLAPPING #-} (Flatten n) => Flatten (Annot n) where
+instance {-# OVERLAPPING #-} Flatten n => Flatten (Annot n) where
   flatten (Annot n a) = Annot (flatten n) a
 
 instance {-# OVERLAPPABLE #-} FlattenTrivial n => Flatten n where

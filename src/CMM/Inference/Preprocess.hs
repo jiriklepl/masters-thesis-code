@@ -1,7 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
@@ -49,14 +48,14 @@ preprocessT ::
 preprocessT = traverse preprocess
 
 class Functor n =>
-      PreprocessTrivial n a b
+      PreprocessTrivial n
   where
   preprocessTrivial :: (WithTypeHandle a b, HasPos a) => n a -> n b
   preprocessTrivial = (withTypeHandle NoType <$>)
 
-instance PreprocessTrivial n a b => PreprocessTrivial (Annot n) a b
+instance PreprocessTrivial n => PreprocessTrivial (Annot n)
 
-instance {-# OVERLAPPABLE #-} (PreprocessTrivial n a b, Functor n) =>
+instance {-# OVERLAPPABLE #-} (PreprocessTrivial n, Functor n) =>
                               Preprocess n a b where
   preprocess = return . preprocessTrivial
   preprocessImpl = return . (NoType, ) . preprocessTrivial
@@ -143,13 +142,13 @@ instance Preprocess Decl a b where
         traverse_ (`storeTVar` handle) (getName <$> names)
         return $ TypedefDecl type'' (preprocessTrivial <$> names)
 
-instance PreprocessTrivial TargetDirective a b
+instance PreprocessTrivial TargetDirective
 
-instance PreprocessTrivial Pragma a b
+instance PreprocessTrivial Pragma
 
-instance PreprocessTrivial Asserts a b
+instance PreprocessTrivial Asserts
 
-instance PreprocessTrivial Name a b
+instance PreprocessTrivial Name
 
 instance Preprocess Import a b where
   preprocessImpl import'@Import {} = do
