@@ -1,6 +1,5 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
@@ -19,8 +18,6 @@ deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
 
 type Annot = Annotation
 
-type Annotated = Functor
-
 withAnnot :: a -> n a -> Annot n a
 withAnnot = flip Annot
 
@@ -30,8 +27,8 @@ takeAnnot (Annot _ annot) = annot
 unAnnot :: Annot n a -> n a
 unAnnot (Annot node _) = node
 
-updateAnnots :: Annotated n => (a -> b) -> n a -> n b
+updateAnnots :: Functor n => (a -> b) -> n a -> n b
 updateAnnots = fmap
 
-stripAnnots :: Annotated n => n a -> n ()
+stripAnnots :: Functor n => n a -> n ()
 stripAnnots = void

@@ -3,8 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE MonoLocalBinds #-}
 
 module CMM.AST.Flattener where
 
@@ -20,8 +18,7 @@ import safe CMM.Utils
 class Flatten n where
   flatten :: n a -> n a
 
-class Functor n =>
-      FlattenTrivial n
+class Functor n => FlattenTrivial n
 
 
 helperName :: String -> Name a
@@ -30,29 +27,21 @@ helperName = Name . addPrefix flattenerPrefix . T.pack
 flattenerPrefix :: Text
 flattenerPrefix = "F"
 
-type FlattenAnnot n = Flatten (Annot n)
-
-type FlattenAnnot1 n = FlattenAnnot n
-
-type FlattenAnnot2 n1 n2 = (FlattenAnnot n1, FlattenAnnot n2)
-
-type FlattenAnnot3 n1 n2 n3 = (FlattenAnnot2 n1 n2, FlattenAnnot n3)
-
 instance {-# OVERLAPPING #-} (Flatten n) => Flatten (Annot n) where
   flatten (Annot n a) = Annot (flatten n) a
 
 instance {-# OVERLAPPABLE #-} FlattenTrivial n => Flatten n where
   flatten = id
 
-instance FlattenAnnot TopLevel => Flatten Unit where
+instance Flatten Unit where
   flatten (Unit topLevels) = Unit $ flatten <$> topLevels
 
-instance FlattenAnnot2 Procedure Section => Flatten TopLevel where
+instance Flatten TopLevel where
   flatten (TopSection strLit items) = TopSection strLit $ flatten <$> items
   flatten (TopProcedure procedure) = TopProcedure $ flatten procedure
   flatten (TopDecl decl) = TopDecl decl
 
-instance FlattenAnnot3 Section Procedure Expr => Flatten Section where
+instance Flatten Section where
   flatten (SecDecl decl) = SecDecl decl
   flatten (SecProcedure procedure) = SecProcedure $ flatten procedure
   flatten (SecDatum datum) = SecDatum datum
@@ -80,11 +69,10 @@ fresh = do
 class FlattenBodyItems n where
   flattenBodyItems :: MonadState Int m => [n a] -> m [Annot BodyItem a]
 
-instance FlattenBodyItems (Annot BodyItem) => Flatten Body where
+instance Flatten Body where
   flatten (Body bodyItems) = Body $ evalState (flattenBodyItems bodyItems) 0
 
-instance FlattenBodyItems (Annot BodyItem) =>
-         FlattenBodyItems (Annot Body) where
+instance FlattenBodyItems (Annot Body) where
   flattenBodyItems [] = pure []
   flattenBodyItems (Annot (Body bodyItems) _:bodies) =
     liftA2 (++) (flattenBodyItems bodyItems) (flattenBodyItems bodies)
@@ -92,8 +80,7 @@ instance FlattenBodyItems (Annot BodyItem) =>
 class FlattenStmt n where
   flattenStmt :: MonadState Int m => n a -> m [Annot BodyItem a]
 
-instance (FlattenStmt (Annot BodyItem)) =>
-         FlattenBodyItems (Annot BodyItem) where
+instance FlattenBodyItems (Annot BodyItem) where
   flattenBodyItems [] = pure []
   flattenBodyItems (decl@(Annot BodyDecl {} _):bodyItems) =
     (decl :) <$> flattenBodyItems bodyItems
@@ -102,8 +89,7 @@ instance (FlattenStmt (Annot BodyItem)) =>
   flattenBodyItems (stmt:bodyItems) =
     liftA2 (<>) (flattenStmt stmt) (flattenBodyItems bodyItems)
 
-instance {-# OVERLAPPING #-} FlattenStmt (Annot Stmt) =>
-                             FlattenStmt (Annot BodyItem) where
+instance {-# OVERLAPPING #-} FlattenStmt (Annot BodyItem) where
   flattenStmt (Annot (BodyStmt stmt) _) = flattenStmt stmt
   flattenStmt _ = error "Not a statement"
 
@@ -126,7 +112,7 @@ brCond cond tName eName a =
     (toBody . toBodyStmt $ trivialGoto a tName)
     (Just . toBody . toBodyStmt $ trivialGoto a eName)
 
-instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
+instance FlattenStmt (Annot Stmt) where
   flattenStmt stmt@(Annot (LabelStmt n) a) =
     return $ toBodyStmt (trivialGoto a n) : [toBodyStmt stmt]
   flattenStmt (Annot (IfStmt cond tBody Nothing) a) = do
@@ -182,7 +168,7 @@ instance (FlattenBodyItems (Annot Body)) => FlattenStmt (Annot Stmt) where
   flattenStmt (Annot EmptyStmt _) = pure []
   flattenStmt stmt = pure [toBodyStmt stmt]
 
-instance (FlattenAnnot2 Body Formal, Flatten Name) => Flatten Procedure where
+instance Flatten Procedure where
   flatten (Procedure mConv name formals body) =
     Procedure mConv (flatten name) (flatten <$> formals) (flatten body)
 
@@ -192,7 +178,7 @@ instance FlattenTrivial Actual
 
 instance FlattenTrivial KindName
 
-instance FlattenAnnot2 Range Body => Flatten Arm where
+instance Flatten Arm where
   flatten (Arm ranges body) = Arm (flatten <$> ranges) (flatten body)
 
 instance FlattenTrivial Range
