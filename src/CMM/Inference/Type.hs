@@ -13,6 +13,7 @@ data ClassHandle
   | AddressClass
   | LabelClass
   | Class Text
+  deriving (Show, Eq, Ord)
 
 data Constness
   = Regular
@@ -49,6 +50,7 @@ data Fact
   | ConstnessLimit Constness TypeHandle
   | HasKind Text TypeHandle
   | OnRegister Text TypeHandle
+  deriving (Show, Eq)
 
 type Facts = [Fact]
 

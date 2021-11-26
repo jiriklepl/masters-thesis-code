@@ -26,7 +26,7 @@ import qualified CMM.AST.Blockifier.State as B
 import CMM.AST.Flattener
 import CMM.FlowAnalysis
 import CMM.Inference.Preprocess
-import CMM.Inference.State
+import CMM.Inference.Preprocess.State
 import CMM.Inference.Type
 import CMM.Lexer
 import CMM.Parser
@@ -41,8 +41,8 @@ main = do
         parse procedure . either undefined id . parse tokenize $
         contents
   let flattened = flatten ast
-  let mined =
-        evalState
+  let (mined, miner) =
+        runState
           (preprocess ast :: (MonadState InferPreprocessor m) =>
                                m (Annot Procedure (SourcePos, TypeHandle)))
           initInferPreprocessor
@@ -66,6 +66,7 @@ main = do
         runIRBuilderT emptyIRBuilder $ translate blockified
   T.putStr translated
   print mined
+  print (_facts miner)
   return ()
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a

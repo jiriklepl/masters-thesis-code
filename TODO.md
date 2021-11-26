@@ -29,8 +29,8 @@
       - [ ] Utils
       - [ ] Flattener
       - [ ] Blockifier
+        - [ ] State
       - [x] BlockAnnot
-      - [ ] BlockifierState
     - [ ] FlowAnalysis
     - [ ] Utils
     - [ ] Lexer
@@ -38,13 +38,20 @@
       - [ ] HasPos
     - [ ] Pretty
     - [ ] Translator
-    - [ ] TranslState
+      - [ ] State
+    - [ ] Inference
+      - [ ] BuiltIn
+        - [ ] Operator
+      - [ ] Type
+      - [ ] Preprocess
+        - [ ] State
     - [x] Warnings
 
   - [ ] ParserTest
   - [ ] QuasiQuotes
 
-- [ ] Type inference
+- [ ] Inference preprocessing
+- [ ] Inference
   - [ ] Type classes
     - [ ] MPTC
 

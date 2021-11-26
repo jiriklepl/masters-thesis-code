@@ -12,6 +12,9 @@ cradle:
     - path: "src/CMM/AST.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Lens.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/AST/Blockifier.hs"
       component: "Compiler:exe:Compiler"
 
@@ -30,7 +33,7 @@ cradle:
     - path: "src/CMM/Inference.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/State.hs"
+    - path: "src/CMM/Inference/Preprocess/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Type.hs"

@@ -6,8 +6,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 
--- TODO: rename to ...State
-module CMM.Inference.State where
+module CMM.Inference.Preprocess.State where
 
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
@@ -19,6 +18,7 @@ import safe qualified Data.Map as Map
 import safe Data.Maybe
 import safe Data.Text (Text)
 
+import safe CMM.Lens
 import safe qualified CMM.AST as AST
 import safe qualified CMM.AST.Utils as AST
 import safe CMM.Inference.Type
@@ -93,12 +93,16 @@ storeVar name handle = variables %= storeVarImpl name handle
 beginProc :: MonadInferPreprocessor m => m ()
 beginProc = currentReturn <~ Just <$> freshTypeHandle
 
+endProc :: MonadInferPreprocessor m => m TypeHandle
+endProc = fromMaybe  NoType <$>
+  (currentReturn `exchange` Nothing)
+
 storeProc :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()
 storeProc name handle = procedures %= Map.insert name handle
 
 storeReturn :: MonadInferPreprocessor m => TypeHandle -> m ()
 storeReturn typeHandle = do
-  ~(Just ret) <- use currentReturn -- TODO: maybe replace the Maybe bit
+  ret <- fromMaybe NoType <$> use currentReturn
   storeFact $ unifyConstraint ret typeHandle
 
 storeTVar :: MonadInferPreprocessor m => Text -> TypeHandle -> m ()

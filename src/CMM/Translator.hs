@@ -33,7 +33,6 @@ import safe qualified Data.Text as T
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
 import safe Control.Lens.Tuple
-import safe Control.Lens.Type
 
 import safe qualified LLVM.AST.Constant as L
 import safe qualified LLVM.AST.IntegerPredicate as L
@@ -48,6 +47,7 @@ import qualified LLVM.IRBuilder.Monad as L
 
 import safe Prettyprinter
 
+import safe CMM.Lens
 import safe CMM.AST
 import safe CMM.AST.BlockAnnot
 import safe CMM.AST.Utils
@@ -73,10 +73,6 @@ translateName = L.mkName . T.unpack . getName
 translateParName :: HasName n => n -> L.ParameterName
 translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
 
-infix 4 `exchange`
-
-exchange :: MonadState s m => Lens s s a a -> a -> m a
-l `exchange` b = use l <* (l .= b)
 
 -- TODO: maybe change the name to `endBlock` or something...
 pushVariables ::

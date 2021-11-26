@@ -18,14 +18,13 @@ import safe Prelude hiding (init)
 import safe qualified CMM.AST as AST
 import safe qualified CMM.AST.Utils as AST
 import safe CMM.Inference.BuiltIn
-import safe CMM.Inference.State
+import safe CMM.Inference.Preprocess.State
 import safe CMM.Inference.Type
 import safe CMM.Parser.HasPos
 import Control.Applicative
 import Control.Monad
 
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
--- TODO: maybe split this into multiple files according to phases
 class WithTypeHandle a b =>
       Preprocess n n' a b
   | n -> n' a
@@ -255,9 +254,9 @@ instance WithTypeHandle a b =>
       let formalTypes = getTypeHandle <$> formals'
       beginProc
       body' <- preprocess body
-      let bodyType = getTypeHandle body'
+      retType <- endProc
       let argumentsType = makeTuple formalTypes
-      let procedureType = makeFunction argumentsType bodyType
+      let procedureType = makeFunction argumentsType retType
       let procedureSchema =
             forallType (freeTypeVars procedureType) procedureType
       popTVars
@@ -278,6 +277,7 @@ instance WithTypeHandle a b =>
           unifyConstraint
           ((unifyConstraint .) . kindedType . AST.getName)
           mKind
+      storeVar (AST.getName name) handle
       return (handle, AST.Formal mKind invar type'' (preprocessTrivial name))
 
 instance WithTypeHandle a b =>
