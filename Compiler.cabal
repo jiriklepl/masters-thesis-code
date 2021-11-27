@@ -29,6 +29,7 @@ executable Compiler
                        CMM.Control.Applicative,
                        CMM.AST,
                        CMM.AST.Annot,
+                       CMM.AST.Maps,
                        CMM.AST.Blockifier,
                        CMM.AST.Blockifier.State,
                        CMM.AST.BlockAnnot,
