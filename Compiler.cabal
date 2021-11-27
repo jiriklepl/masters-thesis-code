@@ -26,6 +26,7 @@ executable Compiler
                        CMM.Lens,
                        CMM.Parser,
                        CMM.Parser.HasPos,
+                       CMM.Control.Applicative,
                        CMM.AST,
                        CMM.AST.Annot,
                        CMM.AST.Blockifier,

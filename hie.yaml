@@ -15,6 +15,9 @@ cradle:
     - path: "src/CMM/Parser/HasPos.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Control/Applicative.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/AST.hs"
       component: "Compiler:exe:Compiler"
 
