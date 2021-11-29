@@ -4,6 +4,7 @@
 module Main where
 
 import Control.Monad.State as State
+import Control.Lens.Getter
 import qualified Data.Map as Map
 
 -- import Data.Text as T
@@ -24,10 +25,11 @@ import CMM.AST.Annot
 import CMM.AST.Blockifier
 import qualified CMM.AST.Blockifier.State as B
 import CMM.AST.Flattener
+import CMM.AST.Variables
 import CMM.FlowAnalysis
-import CMM.Inference.Preprocess
-import CMM.Inference.Preprocess.State
-import CMM.Inference.Type
+import CMM.Inference.Preprocess as Infer
+import CMM.Inference.Preprocess.State as Infer
+import CMM.Inference.Type as Infer
 import CMM.Lexer
 import CMM.Parser
 import CMM.Translator
@@ -41,10 +43,9 @@ main = do
         parse procedure . either undefined id . parse tokenize $
         contents
   let flattened = flatten ast
-  let (mined, miner) =
-        runState
-          (preprocess ast :: (MonadState InferPreprocessor m) =>
-                               m (Annot Procedure (SourcePos, TypeHandle)))
+  (mined, miner) <-
+        runStateT
+          (preprocess ast)
           initInferPreprocessor
   (blockified, blockifier) <-
     runStateT
@@ -66,6 +67,9 @@ main = do
         runIRBuilderT emptyIRBuilder $ translate blockified
   T.putStr translated
   print mined
+  vars <- localVariables (unAnnot ast)
+  print vars
+  print (freeTypeVars (SimpleType (TupleType[SimpleType BoolType, SimpleType (VarType (TypeVar 20)), SimpleType (VarType (TypeVar 30))])))
   print (_facts miner)
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a

@@ -18,7 +18,8 @@ import safe CMM.Utils
 class Flatten n where
   flatten :: n a -> n a
 
-class Functor n => FlattenTrivial n
+class Functor n =>
+      FlattenTrivial n
 
 
 helperName :: String -> Name a

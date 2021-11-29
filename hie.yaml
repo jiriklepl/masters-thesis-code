@@ -24,9 +24,6 @@ cradle:
     - path: "src/CMM/AST/Annot.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/AST/Maps.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/AST/Blockifier.hs"
       component: "Compiler:exe:Compiler"
 
@@ -40,6 +37,12 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/HasName.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/AST/Variables.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/AST/Maps.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/Utils.hs"

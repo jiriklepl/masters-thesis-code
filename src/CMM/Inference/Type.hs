@@ -1,7 +1,15 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module CMM.Inference.Type where
+
+import safe Data.Data
+import safe Data.Generics.Aliases
+
+import safe Data.Set (Set)
+import safe qualified Data.Set as Set
 
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
@@ -13,67 +21,82 @@ data ClassHandle
   | AddressClass
   | LabelClass
   | Class Text
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Data)
 
 data Constness
   = Regular
   | Unknown
   | LinkExpr
   | ConstExpr
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Data)
 
 type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
 
-data TypeHandle
+newtype TypeVar
+  = TypeVar Int
+  deriving (Show, Eq, Ord, Data, IsTyped)
+
+newtype TypeLam
+  = TypeLam Int
+  deriving (Show, Eq, Ord, Data, IsTyped)
+
+data Type
   = NoType
   | ErrorType Text
-  | SimpleType SimpleHandle
-  | AnnotType TypeAnnotations SimpleHandle
-  deriving (Show, Eq, Ord)
+  | SimpleType SimpleType
+  | AnnotType TypeAnnotations SimpleType
+  | Forall Int Facts Type
+  deriving (Show, Eq, Ord, Data, IsTyped)
 
-data SimpleHandle
-  = VarType Int
+data SimpleType
+  = VarType TypeVar
+  | LamType TypeLam
   | TBitsType Int
   | BoolType
-  | TupleType [TypeHandle]
-  | FunctionType TypeHandle TypeHandle
-  | AddrType TypeHandle
+  | TupleType [Type]
+  | FunctionType Type Type
+  | AddrType Type
   | LabelType
   | StringType
   | String16Type
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Data, IsTyped)
 
 data Fact
-  = Union TypeHandle TypeHandle
-  | SubType TypeHandle TypeHandle
-  | Constraint ClassHandle [TypeHandle]
-  | ConstnessLimit Constness TypeHandle
-  | HasKind Text TypeHandle
-  | OnRegister Text TypeHandle
-  deriving (Show, Eq)
+  = Union Type Type
+  | SubType Type Type
+  | Constraint ClassHandle [Type]
+  | ConstnessLimit Constness Type
+  | HasKind Text Type
+  | OnRegister Text Type
+  deriving (Show, Eq, Ord, Data)
 
 type Facts = [Fact]
 
-makeFunction :: TypeHandle -> TypeHandle -> TypeHandle
+class Data a => IsTyped a where
+  freeTypeVars :: a -> Set TypeVar
+  freeTypeVars = go
+    where go :: Data d => d -> Set TypeVar
+          go = (Set.unions . gmapQ go) `extQ` leaf
+          leaf tVar@TypeVar{} = Set.singleton tVar
+
+makeFunction :: Type -> Type -> Type
 makeFunction args ret = SimpleType $ FunctionType args ret
 
-makeTuple :: [TypeHandle] -> TypeHandle
+makeTuple :: [Type] -> Type
 makeTuple = SimpleType . TupleType
 
-freeTypeVars :: TypeHandle -> [TypeHandle]
-freeTypeVars _ = [] -- TODO: continue from here (this is just a placeholder)
+forall :: Set TypeVar -> Facts -> Type -> Type
+forall s [] t
+  | null s = Forall 0 [] t
+forall _ _ t = Forall 0 [] t -- TODO: continue from here by replacing this placeholder
 
-forallType :: [TypeHandle] -> TypeHandle -> TypeHandle
-forallType [] t = t
-forallType _ _ = undefined -- TODO: continue from here
-
-unifyConstraint :: TypeHandle -> TypeHandle -> Fact
+unifyConstraint :: Type -> Type -> Fact
 unifyConstraint = Union
 
-subType :: TypeHandle -> TypeHandle -> Fact
+subType :: Type -> Type -> Fact
 subType = SubType
 
-kindedType :: Text -> TypeHandle -> TypeHandle
+kindedType :: Text -> Type -> Type
 kindedType _ NoType = NoType
 kindedType _ type'@ErrorType {} = type'
 kindedType kind (SimpleType type') =
@@ -86,10 +109,10 @@ kindedType kind type'@(AnnotType (Just kind', _, _) _)
     ErrorType . T.pack $
     "kinds `" <> show kind <> "` and `" <> show kind' <> "` do not match"
 
-kindedConstraint :: Text -> TypeHandle -> Fact
+kindedConstraint :: Text -> Type -> Fact
 kindedConstraint = HasKind
 
-linkExprType :: TypeHandle -> TypeHandle
+linkExprType :: Type -> Type
 linkExprType NoType = NoType -- `NoType` is trivially a link-time constant
 linkExprType type'@ErrorType {} = type'
 linkExprType (SimpleType type') = AnnotType (Nothing, LinkExpr, Nothing) type'
@@ -97,20 +120,20 @@ linkExprType type'@(AnnotType (_, ConstExpr, _) _) = type'
 linkExprType (AnnotType (mKind, _, mReg) type') =
   AnnotType (mKind, LinkExpr, mReg) type'
 
-constExprType :: TypeHandle -> TypeHandle
+constExprType :: Type -> Type
 constExprType NoType = NoType -- `NoType` is trivially a compile-time constant
 constExprType type'@ErrorType {} = type'
 constExprType (SimpleType type') = AnnotType (Nothing, ConstExpr, Nothing) type'
 constExprType (AnnotType (mKind, _, mReg) type') =
   AnnotType (mKind, ConstExpr, mReg) type'
 
-constExprConstraint :: TypeHandle -> Fact
+constExprConstraint :: Type -> Fact
 constExprConstraint = ConstnessLimit ConstExpr
 
-linkExprConstraint :: TypeHandle -> Fact
+linkExprConstraint :: Type -> Fact
 linkExprConstraint = ConstnessLimit LinkExpr
 
-registerType :: Text -> TypeHandle -> TypeHandle
+registerType :: Text -> Type -> Type
 registerType _ NoType = NoType
 registerType _ type'@ErrorType {} = type'
 registerType reg (SimpleType type') =
@@ -123,8 +146,8 @@ registerType reg type'@(AnnotType (_, _, Just reg') _)
     ErrorType . T.pack $
     "registers `" <> show reg <> "` and `" <> show reg' <> "` do not match"
 
-registerConstraint :: Text -> TypeHandle -> Fact
+registerConstraint :: Text -> Type -> Fact
 registerConstraint = OnRegister
 
-classConstraint :: ClassHandle -> [TypeHandle] -> Fact
+classConstraint :: ClassHandle -> [Type] -> Fact
 classConstraint = Constraint

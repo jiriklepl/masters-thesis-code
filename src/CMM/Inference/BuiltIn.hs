@@ -4,20 +4,20 @@ module CMM.Inference.BuiltIn where
 
 import safe Data.Text (Text)
 
-import safe CMM.AST
-import safe CMM.Inference.Type
+import safe CMM.AST as AST
+import safe CMM.Inference.Type as Infer
 
-getNamedOperator :: Text -> (Maybe ClassHandle, TypeHandle)
+getNamedOperator :: Text -> Infer.Type
 getNamedOperator = undefined -- TODO: continue from here
 
-getSymbolicOperator :: Op -> (Maybe ClassHandle, TypeHandle)
+getSymbolicOperator :: Op -> Infer.Type
 getSymbolicOperator = undefined -- TODO: continue from here
 
-numericConstraint :: TypeHandle -> Fact
+numericConstraint :: Infer.Type -> Fact
 numericConstraint = classConstraint NumericClass . pure
 
-realConstraint :: TypeHandle -> Fact
+realConstraint :: Infer.Type -> Fact
 realConstraint = classConstraint RealClass . pure
 
-characterConstraint :: TypeHandle -> Fact
+characterConstraint :: Infer.Type -> Fact
 characterConstraint = classConstraint CharacterClass . pure
