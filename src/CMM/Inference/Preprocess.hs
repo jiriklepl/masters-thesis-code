@@ -91,9 +91,6 @@ purePreprocess ::
   -> m (Infer.Type, n b)
 purePreprocess handle = return . (handle, ) . (withTypeHandle handle <$>)
 
-instType :: MonadInferPreprocessor m => Infer.Type -> m Infer.Type
-instType = undefined -- TODO: continue from here, store facts
-
 instance Preprocess Unit a b where
   preprocessImpl (Unit topLevels) = (NoType, ) . Unit <$> preprocessT topLevels
 
@@ -384,10 +381,9 @@ instance Preprocess Expr a b where
         let actualTypes = getTypeHandle <$> actuals'
             opScheme = getNamedOperator $ getName name
             tupleType = makeTuple actualTypes
-        opType <- instType opScheme
-        storeFact $ opType `unifyConstraint` makeFunction argType retType
-        storeFact $ subType argType tupleType
-        storeFact $ subType handle retType
+        storeFact $ opScheme `instType` makeFunction argType retType
+        storeFact $ argType `subType` tupleType
+        storeFact $ handle `subType` retType
         return (handle, PrefixExpr (preprocessTrivial name) actuals')
       InfixExpr name left right -> do
         handle <- freshTypeHandle
@@ -399,10 +395,9 @@ instance Preprocess Expr a b where
             rightType = getTypeHandle left'
             opScheme = getNamedOperator $ getName name
             tupleType = makeTuple [leftType, rightType]
-        opType <- instType opScheme
-        storeFact $ opType `unifyConstraint` makeFunction argType retType
-        storeFact $ subType argType tupleType
-        storeFact $ subType handle retType
+        storeFact $ opScheme `instType` makeFunction argType retType
+        storeFact $ argType `subType` tupleType
+        storeFact $ handle `subType` retType
         return (handle, InfixExpr (preprocessTrivial name) left' right')
     where
       preprocessInherit c n = do

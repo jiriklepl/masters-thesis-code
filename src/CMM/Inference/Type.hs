@@ -54,7 +54,7 @@ data SimpleType
   | TBitsType Int
   | BoolType
   | TupleType [Type]
-  | FunctionType Type Type
+  | FunctionType Type Type --TODO: change to [Type]?
   | AddrType Type
   | LabelType
   | StringType
@@ -63,7 +63,8 @@ data SimpleType
 
 data Fact
   = Union Type Type
-  | SubType Type Type
+  | SubType Type Type -- supertype; subtype
+  | InstType Type Type -- polytype; monotype
   | Constraint ClassHandle [Type]
   | ConstnessLimit Constness Type
   | HasKind Text Type
@@ -95,6 +96,9 @@ unifyConstraint = Union
 
 subType :: Type -> Type -> Fact
 subType = SubType
+
+instType :: Type -> Type -> Fact
+instType = InstType
 
 kindedType :: Text -> Type -> Type
 kindedType _ NoType = NoType
