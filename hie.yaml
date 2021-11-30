@@ -42,6 +42,9 @@ cradle:
     - path: "src/CMM/AST/Variables.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/AST/Variables/State.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/AST/Maps.hs"
       component: "Compiler:exe:Compiler"
 

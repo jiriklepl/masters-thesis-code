@@ -35,6 +35,7 @@ executable Compiler
                        CMM.AST.Flattener,
                        CMM.AST.HasName,
                        CMM.AST.Variables,
+                       CMM.AST.Variables.State,
                        CMM.AST.Maps,
                        CMM.AST.Utils,
                        CMM.Utils,
