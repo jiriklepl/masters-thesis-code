@@ -20,48 +20,61 @@
   - [ ] errors/warnings should output to stderr
   - [ ] refactor FlowAnalysis
 
+- [ ] Move CMM.Pretty to CMM.AST.Pretty
+- [ ] Pretty types
+
 - [x] Flattener
   - [x] fallthrough should be made explicit
 
 - [ ] add haddock comments
   - [ ] CMM
     - [ ] AST
-      - [ ] Utils
-      - [ ] HasPos
       - [ ] Annot
-      - [ ] Flattener
-      - [ ] Blockifier
-        - [ ] State
       - [x] BlockAnnot
+        - [ ] State
+      - [ ] Blockifier
+      - [ ] Flattener
+      - [ ] HasName
+      - [ ] Maps
+      - [ ] Utils
+      - [ ] Variables
+    - [-] Control
+      - [ ] Applicative
     - [ ] FlowAnalysis
-    - [ ] Utils
+    - [ ] Inference
+      - [ ] BuiltIn
+        - [ ] Operator
+      - [ ] Preprocess
+        - [ ] State
+      - [ ] State
+      - [ ] Type
+    - [ ] Lens
     - [ ] Lexer
     - [ ] Parser
       - [ ] HasPos
     - [ ] Pretty
     - [ ] Translator
       - [ ] State
-    - [ ] Inference
-      - [ ] BuiltIn
-        - [ ] Operator
-      - [ ] Type
-      - [ ] Preprocess
-        - [ ] State
+    - [ ] Utils
     - [x] Warnings
 
   - [ ] ParserTest
   - [ ] QuasiQuotes
 
-- [ ] Inference preprocessing
+- [x] Inference preprocessing
+  - [ ] check whether all `subType`s and `instType`s follow the correct order
+  - [ ] check correctness
 - [ ] Inference
   - [ ] Type classes
     - [ ] MPTC
 
 - [ ] write unit tests
-  - [ ] for binOp
+  - [ ] for binOp: precedence, associativity etc
 
 - [ ] write QuickCheck tests
   - [ ] tests for re-parsing
+  - [ ] tests for variables (global, local)
+  - [ ] tests for unification?
 
 - [x] change `undefined` to `error s`
 
@@ -72,4 +85,7 @@
     - [x] Flattener
     - [ ] FlowAnalysis
     - [ ] Blockifier
+    - [ ] Variables
+    - [ ] Inference Preprocess
+    - [ ] Inference
     - [ ] Translator

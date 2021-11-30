@@ -13,6 +13,7 @@ digraph {
 
         AST [fillcolor="lightgreen"]
         Facts [label="Type facts", fillcolor="lightgreen"]
+        Variables [label="Variables", fillcolor="lightgreen"]
         ASTTypeHandles [label="AST\nwith type handles", fillcolor="lightgreen"]
         Judgements [label="Type Judgements", fillcolor="pink"]
         FlatAST [label="Flat AST", fillcolor="lightgreen"]
@@ -27,6 +28,7 @@ digraph {
         Parser [fillcolor="lightgreen"]
         Flattener [fillcolor="lightgreen"]
         InferPre [label="Type inference\npreprocessing", fillcolor="lightgreen"]
+        VariableMining [label="Variables collection", fillcolor="lightgreen"]
         Infer [label="Type inference", fillcolor="pink"]
         Blockifier [fillcolor="lightgreen"]
         FlowAnalysis [label="Flow analysis", fillcolor="lightgreen"]
@@ -40,6 +42,7 @@ digraph {
 
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
+    AST -> VariableMining -> Variables -> InferPre
     AST -> InferPre -> { Facts ASTTypeHandles } -> Infer -> Judgements -> Monomorphization
     FlatAST -> Blockifier -> BlockifiedAST
     BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
