@@ -12,10 +12,7 @@ import safe Data.Generics.Aliases
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe
-import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Data.Text (Text)
-import safe qualified Data.Text as T
 
 import safe CMM.Inference.Type
 

@@ -210,7 +210,7 @@ instance Preprocess Procedure a b where
     let procedureScheme = forall (freeTypeVars procedureType) [] procedureType -- TODO: add context to facts
     storeProc (getName name) procedureScheme
     return
-      (procedureType, Procedure mConv (preprocessTrivial name) formals' body')
+      (SimpleType procedureType, Procedure mConv (preprocessTrivial name) formals' body')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do
@@ -397,7 +397,7 @@ instance Preprocess Expr a b where
         let actualTypes = getTypeHandle <$> actuals'
             opScheme = getNamedOperator $ getName name
             tupleType = makeTuple actualTypes
-        storeFact $ opScheme `instType` makeFunction argType retType
+        storeFact $ opScheme `instType` SimpleType (makeFunction argType retType)
         storeFact $ argType `subType` tupleType
         storeFact $ handle `subType` retType
         return (handle, PrefixExpr (preprocessTrivial name) actuals')
@@ -411,7 +411,7 @@ instance Preprocess Expr a b where
             rightType = getTypeHandle left'
             opScheme = getNamedOperator $ getName name
             tupleType = makeTuple [leftType, rightType]
-        storeFact $ opScheme `instType` makeFunction argType retType
+        storeFact $ opScheme `instType` SimpleType (makeFunction argType retType)
         storeFact $ argType `subType` tupleType
         storeFact $ handle `subType` retType
         return (handle, InfixExpr (preprocessTrivial name) left' right')

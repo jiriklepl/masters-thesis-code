@@ -45,7 +45,7 @@ data Type
   | ErrorType Text
   | SimpleType SimpleType
   | AnnotType TypeAnnotations SimpleType
-  | Forall Int Facts Type
+  | Forall Int Facts SimpleType
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 data SimpleType
@@ -83,13 +83,13 @@ class Data a =>
       go = (Set.unions . gmapQ go) `extQ` leaf
       leaf tVar@TypeVar {} = Set.singleton tVar
 
-makeFunction :: Type -> Type -> Type
-makeFunction args ret = SimpleType $ FunctionType args ret
+makeFunction :: Type -> Type -> SimpleType
+makeFunction = FunctionType
 
 makeTuple :: [Type] -> Type
 makeTuple = SimpleType . TupleType
 
-forall :: Set TypeVar -> Facts -> Type -> Type
+forall :: Set TypeVar -> Facts -> SimpleType -> Type
 forall s [] t
   | null s = Forall 0 [] t
 forall _ _ t = Forall 0 [] t -- TODO: continue from here by replacing this placeholder
@@ -105,7 +105,8 @@ instType = InstType
 
 kindedType :: Text -> Type -> Type
 kindedType _ NoType = NoType
-kindedType _ type'@ErrorType {} = type'
+kindedType _ type'@Forall {} = ErrorType . T.pack $ "Attempted to give a kind to a polytype `" <> show type' <> "`" -- TODO: prettify
+kindedType _ type'@ErrorType {} = type' -- propagating the error
 kindedType kind (SimpleType type') =
   AnnotType (Just kind, Unknown, Nothing) type'
 kindedType kind (AnnotType (Nothing, constness, mReg) type') =
@@ -114,14 +115,15 @@ kindedType kind type'@(AnnotType (Just kind', _, _) _)
   | kind == kind' = type'
   | otherwise =
     ErrorType . T.pack $
-    "kinds `" <> show kind <> "` and `" <> show kind' <> "` do not match"
+    "Kinds `" <> show kind <> "` and `" <> show kind' <> "` do not match"
 
 kindedConstraint :: Text -> Type -> Fact
 kindedConstraint = HasKind
 
 linkExprType :: Type -> Type
 linkExprType NoType = NoType -- `NoType` is trivially a link-time constant
-linkExprType type'@ErrorType {} = type'
+linkExprType type'@Forall{} = type' -- all polytypes are trivially link-time constants
+linkExprType type'@ErrorType {} = type' -- propagating the error
 linkExprType (SimpleType type') = AnnotType (Nothing, LinkExpr, Nothing) type'
 linkExprType type'@(AnnotType (_, ConstExpr, _) _) = type'
 linkExprType (AnnotType (mKind, _, mReg) type') =
@@ -129,7 +131,8 @@ linkExprType (AnnotType (mKind, _, mReg) type') =
 
 constExprType :: Type -> Type
 constExprType NoType = NoType -- `NoType` is trivially a compile-time constant
-constExprType type'@ErrorType {} = type'
+constExprType type'@Forall{} = type' -- all polytypes are trivially compile-time constants
+constExprType type'@ErrorType {} = type' -- propagating the error
 constExprType (SimpleType type') = AnnotType (Nothing, ConstExpr, Nothing) type'
 constExprType (AnnotType (mKind, _, mReg) type') =
   AnnotType (mKind, ConstExpr, mReg) type'
@@ -142,6 +145,7 @@ linkExprConstraint = ConstnessLimit LinkExpr
 
 registerType :: Text -> Type -> Type
 registerType _ NoType = NoType
+registerType _ type'@Forall {} = ErrorType . T.pack $ "Attempted to give a hardware register to a polytype `" <> show type' <> "`" -- TODO: prettify
 registerType _ type'@ErrorType {} = type'
 registerType reg (SimpleType type') =
   AnnotType (Nothing, Unknown, Just reg) type'
@@ -151,7 +155,7 @@ registerType reg type'@(AnnotType (_, _, Just reg') _)
   | reg == reg' = type'
   | otherwise =
     ErrorType . T.pack $
-    "registers `" <> show reg <> "` and `" <> show reg' <> "` do not match"
+    "Registers `" <> show reg <> "` and `" <> show reg' <> "` do not match" -- TODO: prettify
 
 registerConstraint :: Text -> Type -> Fact
 registerConstraint = OnRegister
