@@ -8,18 +8,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
-
-#define CASE_HEAD0(constructor) constructor -> pure $ constructor
-#define CASE_HEAD(constructor) constructor a -> constructor <$>
-#define CASE_HEAD2(constructor) constructor a b -> liftA2 constructor
-#define CASE_HEAD3(constructor) constructor a b c -> liftA3 constructor
-#define CASE_HEAD4(constructor) constructor a b c d -> liftA4 constructor
-#define CASE0(constructor) CASE_HEAD0(constructor)
-#define CASE(constructor, f) CASE_HEAD(constructor) f a
-#define CASE2(constructor, f, g) CASE_HEAD2(constructor) (f a) (g b)
-#define CASE3(constructor, f, g, h) CASE_HEAD3(constructor) (f a) (g b) (h c)
-#define CASE4(constructor, f, g, h, i) CASE_HEAD4(constructor) (f a) (g b) (h c) (i d)
 
 module CMM.AST.Maps where
 
@@ -65,26 +53,26 @@ instance ASTmapCTX1 hint a b TopLevel => ASTmap hint Unit a b where
 
 instance ASTmapCTX3 hint a b Decl Procedure Section => ASTmap hint TopLevel a b where
   astMapM _ f = \case
-    CASE(TopSection strLit, traverse f)
-    CASE(TopDecl, f)
-    CASE(TopProcedure, f)
+    TopSection strLit a -> TopSection strLit <$> traverse f a
+    TopDecl a -> TopDecl <$> f a
+    TopProcedure a -> TopProcedure <$> f a
 
 instance ASTmapCTX5 hint a b Datum Decl Expr Procedure Section => ASTmap hint Section a b where
   astMapM _ f = \case
-    CASE(SecDecl, f)
-    CASE(SecProcedure, f)
-    CASE(SecDatum, f)
-    CASE3(SecSpan, f, f, traverse f)
+    SecDecl a -> SecDecl <$> f a
+    SecProcedure a -> SecProcedure <$> f a
+    SecDatum a -> SecDatum <$> f a
+    SecSpan a b c -> liftA3 SecSpan (f a) (f b) (traverse f c)
 
-instance (ASTmapCTX8 hint a b Export Expr Import Name Pragma Registers TargetDirective Type, Space hint a b Name)  => ASTmap hint Decl a b where
+instance (ASTmapCTX8 hint a b Export Expr Import Name Pragma Registers TargetDirective Type, Space hint a b Name) => ASTmap hint Decl a b where
   astMapM _ f = \case
-    CASE(ImportDecl, traverse f)
-    CASE(ExportDecl, traverse f)
-    CASE3(ConstDecl, traverse f, f, f)
-    CASE2(TypedefDecl, f, traverse f)
-    RegDecl a b -> (RegDecl a) <$> f b
-    CASE2(PragmaDecl, f, f)
-    CASE(TargetDecl, traverse f)
+    ImportDecl a -> ImportDecl <$> traverse f a
+    ExportDecl a -> ExportDecl <$> traverse f a
+    ConstDecl a b c -> liftA3 ConstDecl (traverse f a) (f b) (f c)
+    TypedefDecl a b -> liftA2 TypedefDecl (f a) (traverse f b)
+    RegDecl a b -> RegDecl a <$> f b
+    PragmaDecl a b -> liftA2 PragmaDecl (f a) (f b)
+    TargetDecl a -> TargetDecl <$> traverse f a
 
 instance ASTmap hint TargetDirective a b where
   astMapM _ _ = trivial
@@ -95,35 +83,35 @@ instance ASTmap hint Import a b where
 instance ASTmap hint Export a b where
   astMapM _ _ = trivial
 
-instance (ASTmapCTX3 hint a b Init Size Type, Space hint a b Name)  => ASTmap hint Datum a b where
+instance (ASTmapCTX3 hint a b Init Size Type, Space hint a b Name) => ASTmap hint Datum a b where
   astMapM _ f = \case
-    CASE(DatumLabel, f)
-    CASE0(DatumAlign a)
-    CASE3(Datum, f, traverse f, traverse f)
+    DatumLabel a -> DatumLabel <$> f a
+    DatumAlign a -> pure $ DatumAlign a
+    Datum a b c -> liftA3 Datum (f a) (traverse f b) (traverse f c)
 
-instance ASTmapCTX1 hint a b Expr  => ASTmap hint Init a b where
+instance ASTmapCTX1 hint a b Expr => ASTmap hint Init a b where
   astMapM _ f = \case
-    CASE(ExprInit, traverse f)
-    CASE0(StrInit a)
-    CASE0(Str16Init a)
+    ExprInit a -> ExprInit <$> traverse f a
+    StrInit a -> pure $ StrInit a
+    Str16Init a -> pure $ Str16Init a
 
-instance ASTmapCTX2 hint a b Name Type  => ASTmap hint Registers a b where
+instance ASTmapCTX2 hint a b Name Type => ASTmap hint Registers a b where
   astMapM _ f = \case
     Registers a b c -> liftA2 (Registers a) (f b) (traverse (\(x, y) -> (, y) <$> f x) c)
 
-instance ASTmapCTX1 hint a b Expr  => ASTmap hint Size a b where
+instance ASTmapCTX1 hint a b Expr => ASTmap hint Size a b where
   astMapM _ f = \case
-    CASE(Size, traverse f)
+    Size a -> Size <$> traverse f a
 
 instance (ASTmapCTX1 hint a b BodyItem) => ASTmap hint Body a b where
   astMapM _ f = \case
-    CASE(Body, traverse f)
+    Body a -> Body <$> traverse f a
 
 instance (ASTmapCTX3 hint a b Decl StackDecl Stmt) => ASTmap hint BodyItem a b where
   astMapM _ f = \case
-    CASE(BodyDecl, f)
-    CASE(BodyStackDecl, f)
-    CASE(BodyStmt, f)
+    BodyDecl a -> BodyDecl <$> f a
+    BodyStackDecl a -> BodyStackDecl <$> f a
+    BodyStmt a -> BodyStmt <$> f a
 
 instance (ASTmapCTX2 hint a b Body Formal, Space hint a b Name) => ASTmap hint Procedure a b where
   astMapM _ f = \case
@@ -143,20 +131,20 @@ instance ASTmapCTX1 hint a b Datum => ASTmap hint StackDecl a b where
 
 instance (ASTmapCTX9 hint a b Actual Arm Body CallAnnot Expr Flow KindName LValue Targets, Space hint a b Name) => ASTmap hint Stmt a b where
   astMapM _ f = \case
-    CASE0(EmptyStmt)
-    CASE3(IfStmt, f, f, traverse f)
-    CASE2(SwitchStmt, f, traverse f)
-    CASE3(SpanStmt, f, f, f)
-    CASE2(AssignStmt, traverse f, traverse f)
-    CASE4(PrimOpStmt, f, f, traverse f, traverse f)
+    EmptyStmt -> pure EmptyStmt
+    IfStmt a b c -> liftA3 IfStmt (f a) (f b) (traverse f c)
+    SwitchStmt a b -> liftA2 SwitchStmt (f a) (traverse f b)
+    SpanStmt a b c -> liftA3 SpanStmt (f a) (f b) (f c)
+    AssignStmt a b -> liftA2 AssignStmt (traverse f a) (traverse f b)
+    PrimOpStmt a b c d -> liftA4 PrimOpStmt (f a) (f b) (traverse f c) (traverse f d)
     CallStmt a b c d e g -> liftA6 CallStmt (traverse f a) (pure b) (f c) (traverse f d) (traverse f e) (traverse f g)
-    CASE4(JumpStmt, pure, f, traverse f, traverse f)
+    JumpStmt a b c d -> liftA4 JumpStmt (pure a) (f b) (traverse f c) (traverse f d)
     ReturnStmt a (Just (b, c)) d -> liftA2 (ReturnStmt a) (Just <$> liftA2 (,) (f b) (f c)) (traverse f d)
     ReturnStmt a Nothing b -> ReturnStmt a Nothing <$> traverse f b
-    CASE(LabelStmt, f)
-    CASE2(ContStmt, f, traverse f)
-    CASE2(GotoStmt, f, traverse f)
-    CASE3(CutToStmt, f, traverse f, traverse f)
+    LabelStmt a -> LabelStmt <$> f a
+    ContStmt a b -> liftA2 ContStmt (f a) (traverse f b)
+    GotoStmt a b -> liftA2 GotoStmt (f a) (traverse f b)
+    CutToStmt a b c -> liftA3 CutToStmt (f a) (traverse f b) (traverse f c)
 
 instance (ASTmapGen hint a b, Space hint a b Name) => ASTmap hint KindName a b where
   astMapM _ f = \case
@@ -164,49 +152,49 @@ instance (ASTmapGen hint a b, Space hint a b Name) => ASTmap hint KindName a b w
 
 instance ASTmapCTX2 hint a b Body Range => ASTmap hint Arm a b where
   astMapM _ f = \case
-    CASE2(Arm, traverse f, f)
+    Arm a b -> liftA2 Arm (traverse f a) (f b)
 
 instance ASTmapCTX1 hint a b Expr => ASTmap hint Range a b where
   astMapM _ f = \case
-    CASE2(Range, f, traverse f)
+    Range a b -> liftA2 Range (f a) (traverse f b)
 
 instance (ASTmapCTX3 hint a b Asserts Expr Type, Space hint a b Name) => ASTmap hint LValue a b where
   astMapM _ f = \case
-    CASE(LVName, f)
-    CASE3(LVRef, f, f, traverse f)
+    LVName a -> LVName <$> f a
+    LVRef a b c -> liftA3 LVRef (f a) (f b) (traverse f c)
 
 instance ASTmapCTX1 hint a b Name => ASTmap hint Flow a b where
   astMapM _ f = \case
-    CASE(AlsoCutsTo, traverse f)
-    CASE(AlsoUnwindsTo, traverse f)
-    CASE(AlsoReturnsTo, traverse f)
-    CASE0(AlsoAborts)
-    CASE0(NeverReturns)
+    AlsoCutsTo a -> AlsoCutsTo <$> traverse f a
+    AlsoUnwindsTo a -> AlsoUnwindsTo <$> traverse f a
+    AlsoReturnsTo a -> AlsoReturnsTo <$> traverse f a
+    AlsoAborts -> pure AlsoAborts
+    NeverReturns -> pure NeverReturns
 
 instance ASTmapCTX1 hint a b Name => ASTmap hint Alias a b where
   astMapM _ f = \case
-    CASE(Reads, traverse f)
-    CASE(Writes, traverse f)
+    Reads a -> Reads <$> traverse f a
+    Writes a -> Writes <$> traverse f a
 
 instance ASTmapCTX2 hint a b Flow Alias => ASTmap hint CallAnnot a b where
   astMapM _ f = \case
-    CASE(FlowAnnot, f)
-    CASE(AliasAnnot, f)
+    FlowAnnot a -> FlowAnnot <$> f a
+    AliasAnnot a -> AliasAnnot <$> f a
 
 instance ASTmapCTX1 hint a b Name => ASTmap hint Targets a b where
   astMapM _ f = \case
-    CASE(Targets, traverse f)
+    Targets a -> Targets <$> traverse f a
 
 instance (ASTmapCTX5 hint a b Actual Expr Lit LValue Type, Space hint a b Name) => ASTmap hint Expr a b where
   astMapM _ f = \case
-    CASE2(LitExpr, f, traverse f)
-    CASE(LVExpr, f)
-    CASE(ParExpr, f)
+    LitExpr a b -> liftA2 LitExpr (f a) (traverse f b)
+    LVExpr a -> LVExpr <$> f a
+    ParExpr a -> ParExpr <$> f a
     BinOpExpr a b c -> liftA2 (BinOpExpr a) (f b) (f c)
-    CASE(ComExpr, f)
-    CASE(NegExpr, f)
-    CASE3(InfixExpr, f, f, f)
-    CASE2(PrefixExpr, f, traverse f)
+    ComExpr a -> ComExpr <$> f a
+    NegExpr a -> NegExpr <$> f a
+    InfixExpr a b c -> liftA3 InfixExpr (f a) (f b) (f c)
+    PrefixExpr a b -> liftA2 PrefixExpr (f a) (traverse f b)
 
 instance ASTmap hint Lit a b where
   astMapM _ _ = trivial
