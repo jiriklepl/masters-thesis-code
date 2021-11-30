@@ -14,9 +14,9 @@ import safe Data.Text (Text)
 import safe Data.Void
 import safe Text.Megaparsec hiding (State)
 
-import safe CMM.Control.Applicative
 import safe CMM.AST
 import safe CMM.AST.Annot
+import safe CMM.Control.Applicative
 
 import safe qualified CMM.Lexer as L
 

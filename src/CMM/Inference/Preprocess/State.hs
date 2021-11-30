@@ -10,16 +10,15 @@
 
 module CMM.Inference.Preprocess.State where
 
+import safe Control.Applicative
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
 import Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadState)
-import safe Control.Applicative
-import safe Data.Maybe
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Maybe
 import safe Data.Set (Set)
-import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe qualified CMM.AST.Annot as AST
@@ -89,11 +88,13 @@ lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe Type)
 lookupProc = uses variables . Map.lookup
 
 lookupTVar :: MonadInferPreprocessor m => Text -> m Type
-lookupTVar name = liftA2 (lookupVarImpl name) (use procTypeVariables) (use typeVariables)
+lookupTVar name =
+  liftA2 (lookupVarImpl name) (use procTypeVariables) (use typeVariables)
 
 lookupVarImpl :: Ord k => k -> Maybe (Map k Type) -> Map k Type -> Type
 lookupVarImpl name procVars vars =
-  fromMaybe NoType $ (procVars >>= (name `Map.lookup`)) <|> name `Map.lookup` vars
+  fromMaybe NoType $
+  (procVars >>= (name `Map.lookup`)) <|> name `Map.lookup` vars
 
 storeVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeVar name handle = do
@@ -119,8 +120,7 @@ endProc = do
 storeProc :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeProc name handle =
   use variables >>=
-    (storeFact . unifyConstraint handle)
-      . lookupVarImpl name Nothing
+  (storeFact . unifyConstraint handle) . lookupVarImpl name Nothing
 
 storeReturn :: MonadInferPreprocessor m => Type -> m ()
 storeReturn typeHandle = do
@@ -132,7 +132,13 @@ storeTVar name handle = do
   tVars <- use procTypeVariables
   storeVarImpl name handle vars tVars
 
-storeVarImpl :: (Ord k, MonadInferPreprocessor m) => k -> Type -> Map k Type -> Maybe (Map k Type) -> m ()
+storeVarImpl ::
+     (Ord k, MonadInferPreprocessor m)
+  => k
+  -> Type
+  -> Map k Type
+  -> Maybe (Map k Type)
+  -> m ()
 storeVarImpl name handle vars procVars =
   storeFact $ handle `unifyConstraint` lookupVarImpl name procVars vars
 

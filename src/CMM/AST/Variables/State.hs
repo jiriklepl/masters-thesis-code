@@ -9,19 +9,18 @@
 module CMM.AST.Variables.State where
 
 import safe Control.Lens.TH (makeLenses)
-import safe Control.Monad.State ( MonadState, MonadIO )
+import safe Control.Monad.State (MonadIO, MonadState)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Prettyprinter ( Pretty )
+import safe Prettyprinter (Pretty)
 
-
-import safe Control.Lens.Getter ( uses )
-import safe Control.Lens.Setter ( (%=), (+=) )
-import safe CMM.AST.HasName ( HasName(..) )
-import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.AST.HasName (HasName(..))
+import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
-import safe CMM.Warnings ( makeMessage, mkError, mkWarning )
+import safe CMM.Warnings (makeMessage, mkError, mkWarning)
+import safe Control.Lens.Getter (uses)
+import safe Control.Lens.Setter ((%=), (+=))
 
 data CollectedVariables =
   CollectedVariables

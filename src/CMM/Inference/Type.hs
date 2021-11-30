@@ -32,12 +32,12 @@ data Constness
 
 type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
 
-newtype TypeVar
-  = TypeVar Int
+newtype TypeVar =
+  TypeVar Int
   deriving (Show, Eq, Ord, Data, IsTyped)
 
-newtype TypeLam
-  = TypeLam Int
+newtype TypeLam =
+  TypeLam Int
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 data Type
@@ -73,12 +73,15 @@ data Fact
 
 type Facts = [Fact]
 
-class Data a => IsTyped a where
+class Data a =>
+      IsTyped a
+  where
   freeTypeVars :: a -> Set TypeVar
   freeTypeVars = go
-    where go :: Data d => d -> Set TypeVar
-          go = (Set.unions . gmapQ go) `extQ` leaf
-          leaf tVar@TypeVar{} = Set.singleton tVar
+    where
+      go :: Data d => d -> Set TypeVar
+      go = (Set.unions . gmapQ go) `extQ` leaf
+      leaf tVar@TypeVar {} = Set.singleton tVar
 
 makeFunction :: Type -> Type -> Type
 makeFunction args ret = SimpleType $ FunctionType args ret

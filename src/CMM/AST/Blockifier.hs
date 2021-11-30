@@ -37,6 +37,7 @@ import safe CMM.Utils
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 
+-- TODO: maybe move this elsewhere
 instance HasBlockAnnot (a, BlockAnnot) where
   getBlockAnnot = snd
 

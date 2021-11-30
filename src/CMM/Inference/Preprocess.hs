@@ -10,23 +10,22 @@
 
 module CMM.Inference.Preprocess where
 
-import safe Data.Foldable
-import safe Data.Traversable
-import safe Data.Function
 import safe Control.Monad.State.Lazy
+import safe Data.Foldable
+import safe Data.Function
+import safe Data.Traversable
 import safe Prelude hiding (init)
 
 import safe CMM.AST as AST
-import safe CMM.AST.Maps as AST
 import safe CMM.AST.Annot as AST
 import safe CMM.AST.HasName as AST
+import safe CMM.AST.Maps as AST
 import safe CMM.AST.Variables as AST
 import safe CMM.Inference.BuiltIn as Infer
 import safe CMM.Inference.Preprocess.State as Infer
 import safe CMM.Inference.Type as Infer
 import safe CMM.Parser.HasPos
 import Control.Applicative
-import Control.Monad
 
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 class Preprocess n a b where
@@ -45,9 +44,12 @@ class Preprocess n a b where
 preprocessTrivial :: (Functor n, WithTypeHandle a b) => n a -> n b
 preprocessTrivial = (withTypeHandle NoType <$>)
 
-data PreprocessHint = PreprocessHint
+data PreprocessHint =
+  PreprocessHint
 
-type instance Constraint PreprocessHint a b = (WithTypeHandle a b, HasPos a)
+type instance Constraint PreprocessHint a b =
+     (WithTypeHandle a b, HasPos a)
+
 type instance Space PreprocessHint = Preprocess'
 
 class Preprocess' a b n where
@@ -55,18 +57,26 @@ class Preprocess' a b n where
        (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
     => n a
     -> m (n b)
+
 instance Preprocess n a b => Preprocess' a b (Annot n) where
   preprocess' = preprocess
 
 instance ASTmapGen PreprocessHint a b
 
-pass :: (ASTmap PreprocessHint n a b, WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
-    => n a
-    -> m (n b)
+pass ::
+     ( ASTmap PreprocessHint n a b
+     , WithTypeHandle a b
+     , MonadInferPreprocessor m
+     , HasPos a
+     , MonadIO m
+     )
+  => n a
+  -> m (n b)
 pass = astMapM PreprocessHint preprocess'
 
-instance {-# OVERLAPPABLE #-} ASTmap PreprocessHint n a b => Preprocess n a b where
-  preprocessImpl = fmap (NoType,) . pass
+instance {-# OVERLAPPABLE #-} ASTmap PreprocessHint n a b =>
+                              Preprocess n a b where
+  preprocessImpl = fmap (NoType, ) . pass
 
 preprocessT ::
      ( Preprocess n a b
@@ -172,7 +182,9 @@ instance Preprocess Registers a b where
   preprocessImpl (Registers mKind type' nameStrLits) = do
     type'' <- preprocess type'
     let typeType = getTypeHandle type''
-    let handle = flip (maybe typeType) mKind $ \kind -> kindedType (getName kind) typeType
+    let handle =
+          flip (maybe typeType) mKind $ \kind ->
+            kindedType (getName kind) typeType
     let go (name, Nothing) = do
           storeVar (getName name) handle
           return (withTypeHandle handle <$> name, Nothing)
@@ -185,8 +197,7 @@ instance Preprocess Registers a b where
     return (NoType, Registers mKind type'' nameStrLits')
 
 -- TODO: consult conventions with man
-instance Preprocess Procedure a b
-                                        where
+instance Preprocess Procedure a b where
   preprocessImpl procedure@(Procedure mConv name formals body) = do
     (vars, tVars) <- localVariables procedure
     beginProc vars tVars
@@ -288,8 +299,10 @@ instance Preprocess Actual a b where
   preprocessImpl (Actual mKind expr) = do
     expr' <- preprocess expr
     let exprType = getTypeHandle expr'
-    return (flip (maybe exprType) mKind $ \kind ->
-      kindedType (getName kind) exprType, Actual mKind expr')
+    return
+      ( flip (maybe exprType) mKind $ \kind ->
+          kindedType (getName kind) exprType
+      , Actual mKind expr')
 
 instance Preprocess Init a b where
   preprocessImpl =
@@ -317,21 +330,23 @@ instance Preprocess Datum a b where
         type'' <- preprocess type'
         let typeType = getTypeHandle type''
         mSize' <- traverse preprocess mSize
-        mInit' <- for mInit $ \init -> do
-          init' <- preprocess init
-          let initType = getTypeHandle init'
-          storeFact $ linkExprType typeType `unifyConstraint` initType
-          return init'
+        mInit' <-
+          for mInit $ \init -> do
+            init' <- preprocess init
+            let initType = getTypeHandle init'
+            storeFact $ linkExprType typeType `unifyConstraint` initType
+            return init'
         return (SimpleType $ AddrType typeType, Datum type'' mSize' mInit')
 
 instance Preprocess Size a b where
-  preprocessImpl = \case
-    Size (Just expr) -> do
-      expr' <- preprocess expr
-      let exprType = getTypeHandle expr'
-      storeFact $ constExprConstraint exprType
-      return (exprType, Size $ Just expr')
-    size -> purePreprocess NoType size
+  preprocessImpl =
+    \case
+      Size (Just expr) -> do
+        expr' <- preprocess expr
+        let exprType = getTypeHandle expr'
+        storeFact $ constExprConstraint exprType
+        return (exprType, Size $ Just expr')
+      size -> purePreprocess NoType size
 
 instance Preprocess LValue a b where
   preprocessImpl =
@@ -367,11 +382,12 @@ instance Preprocess Expr a b where
       LitExpr lit mType -> do
         lit' <- preprocess lit
         let litType = getTypeHandle lit'
-        mType' <- for mType $ \type' -> do
-          type'' <- preprocess type'
-          let typeType = getTypeHandle type''
-          storeFact $ constExprType typeType `unifyConstraint` litType
-          return type''
+        mType' <-
+          for mType $ \type' -> do
+            type'' <- preprocess type'
+            let typeType = getTypeHandle type''
+            storeFact $ constExprType typeType `unifyConstraint` litType
+            return type''
         return (litType, LitExpr lit' mType')
       PrefixExpr name actuals -> do
         handle <- freshTypeHandle
