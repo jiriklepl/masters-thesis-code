@@ -81,8 +81,8 @@ main = do
        (SimpleType
           (TupleType
              [ SimpleType BoolType
-             , SimpleType (VarType (TypeVar 20))
-             , SimpleType (VarType (TypeVar 30))
+             , SimpleType (VarType (TypeVar 20 Infer.Star))
+             , SimpleType (VarType (TypeVar 30 Infer.Star))
              ])))
   print (_facts miner)
   runStateT (Infer.infer (_facts miner) >>= Infer.infer) (Infer.initInferencer (CMM.Inference.Preprocess.State._handleCounter miner)) >>= print

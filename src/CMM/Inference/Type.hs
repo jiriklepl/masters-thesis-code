@@ -6,7 +6,7 @@
 module CMM.Inference.Type where
 
 import safe Data.Data
-import safe Data.Generics.Aliases
+import safe Data.Generics.Aliases (extQ)
 
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
@@ -31,44 +31,139 @@ type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
 
 data TypeKind
   = Star
-  | TApp TypeKind TypeKind
+  | TypeKind :-> TypeKind
+  | Generic
+  deriving (Show, Data)
 
-newtype TypeVar =
-  TypeVar Int
+instance Eq TypeKind where
+  Generic == _ = True
+  _ == Generic = True
+
+  Star == Star = True
+
+  (l :-> r) == (l' :-> r') = l == l' && r == r'
+  _ == _ = False
+
+instance Ord TypeKind where
+  Generic `compare` Generic = EQ
+  Generic `compare` _ = LT
+  _ `compare` Generic = GT
+
+  Star `compare` Star = EQ
+  Star `compare` _ = LT
+  _ `compare` Star = GT
+
+  (l :-> r) `compare` (l' :-> r') =
+    case l `compare` l' of
+      LT -> LT
+      GT -> GT
+      EQ -> r `compare` r'
+
+data TypeVar =
+  TypeVar Int TypeKind
+  deriving (Show, Data, IsTyped)
+
+instance Eq TypeVar where
+  TypeVar int _ == TypeVar int' _ = int == int'
+
+instance Ord TypeVar where
+  TypeVar int _ `compare` TypeVar int' _ = int `compare` int'
+
+instance HasKind TypeVar where
+  getKind (TypeVar _ kind) = kind
+
+data TypeLam =
+  TypeLam Int TypeKind
+  deriving (Show, Data, IsTyped)
+
+instance Eq TypeLam where
+  TypeLam int _ == TypeLam int' _ = int == int'
+
+instance Ord TypeLam where
+  TypeLam int _ `compare` TypeLam int' _ = int `compare` int'
+
+instance HasKind TypeLam where
+  getKind (TypeLam _ kind) = kind
+
+data TypeConst =
+  TypeConst Text TypeKind
+  deriving (Show, Data, IsTyped)
+
+instance Eq TypeConst where
+  TypeConst name _ == TypeConst name' _ = name == name'
+
+instance Ord TypeConst where
+  TypeConst name _ `compare` TypeConst name' _ = name `compare` name'
+
+instance HasKind TypeConst where
+  getKind (TypeConst _ kind) = kind
+
+infix 6 :=>
+
+data Qual a =
+  Facts :=> a
   deriving (Show, Eq, Ord, Data, IsTyped)
 
-newtype TypeLam =
-  TypeLam Int
+instance HasKind a => HasKind (Qual a) where
+  getKind (_ :=> t) = getKind t
+
+infix 5 :.
+
+data Scheme a =
+  [TypeKind] :. Qual a
   deriving (Show, Eq, Ord, Data, IsTyped)
+
+instance HasKind a => HasKind (Scheme a) where
+  getKind (_ :. t) = getKind t
 
 data Type
   = NoType
   | ErrorType Text
   | SimpleType SimpleType
   | AnnotType TypeAnnotations SimpleType
-  | Forall Int Facts SimpleType
+  | Forall (Scheme SimpleType)
   deriving (Show, Eq, Ord, Data, IsTyped)
 
+instance HasKind Type where
+  getKind NoType = Generic
+  getKind ErrorType{} = Generic
+  getKind (SimpleType t) = getKind t
+  getKind (AnnotType _ t) = getKind t
+  getKind (Forall scheme) = getKind scheme
+
 data SimpleType
-  = VarType TypeVar -- TODO: maybe squash
-  | ConstType Text
+  = VarType TypeVar
+  | ConstType TypeConst
   | LamType TypeLam
   | TBitsType Int
   | BoolType
-  | TupleType [Type] -- TODO: remove this in the reaction the the latter
-  | FunctionType Type Type --TODO: change to [Type] -> Type ?
+  | TupleType [Type]
+  | FunctionType Type Type
   | AddrType Type
   | LabelType
   | StringType
   | String16Type
   deriving (Show, Eq, Ord, Data, IsTyped)
 
-data Class =
-  Class Int Facts Inst
+instance HasKind SimpleType where
+  getKind (VarType t) = getKind t
+  getKind (ConstType t) = getKind t
+  getKind (LamType t) = getKind t
+  getKind TBitsType{} = Star
+  getKind BoolType{} = Star
+  getKind TupleType{} = Star -- TODO: check if all types are `Star`
+  getKind FunctionType{} = Star -- TODO: ditto
+  getKind AddrType{} = Star -- TODO: ditto
+  getKind LabelType{} = Star
+  getKind StringType{} = Star
+  getKind String16Type{} = Star
+
+newtype Class =
+  Class (Scheme [Inst])
   deriving (Show, Data)
 
-data Inst =
-  Inst Int Facts Type
+newtype Inst =
+  Inst (Scheme [Type])
   deriving (Show, Data)
 
 data Fact
@@ -79,9 +174,13 @@ data Fact
   | ConstnessLimit Constness Type
   | HasKind Text Type
   | OnRegister Text Type
+  | NestedFacts Facts Facts
   deriving (Show, Eq, Ord, Data)
 
 type Facts = [Fact]
+
+class HasKind a where
+  getKind :: a -> TypeKind
 
 class Data a =>
       IsTyped a
@@ -101,8 +200,8 @@ makeTuple = SimpleType . TupleType
 
 forall :: Set TypeVar -> Facts -> SimpleType -> Type
 forall s [] t
-  | null s = Forall 0 [] t
-forall _ _ t = Forall 0 [] t -- TODO: continue from here by replacing this placeholder
+  | null s = Forall $ [] :. [] :=> t
+forall _ _ t = Forall $ [] :. [] :=> t -- TODO: continue from here by replacing this placeholder
 
 unifyConstraint :: Type -> Type -> Fact
 unifyConstraint = Union

@@ -40,3 +40,6 @@ floatKind = "float"
 -- TODO: add to `Preprocess`
 integerKind :: Text
 integerKind = ""
+
+builtInContext :: Facts
+builtInContext = [] -- undefined

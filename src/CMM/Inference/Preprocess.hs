@@ -144,7 +144,7 @@ instance Preprocess Decl a b where
         return $ ConstDecl Nothing (preprocessTrivial name) expr'
     -- the constant is typed explicitly
       ConstDecl (Just type') name expr -> do
-        handle <- freshTypeHandle
+        handle <- freshTypeHandle Star
         expr' <- preprocess expr
         type'' <- preprocess type'
         storeFact $
@@ -160,13 +160,13 @@ instance Preprocess Decl a b where
 
 instance Preprocess Import a b where
   preprocessImpl import'@Import {} = do
-    handle <- freshTypeHandle
+    handle <- freshTypeHandle Star
     storeVar (getName import') handle
     purePreprocess handle import'
 
 instance Preprocess Export a b where
   preprocessImpl export@Export {} = do
-    handle <- freshTypeHandle
+    handle <- freshTypeHandle Star
     storeVar (getName export) handle
     purePreprocess handle export
 
@@ -189,7 +189,7 @@ instance Preprocess Registers a b where
           storeVar (getName name) handle
           return (withTypeHandle handle <$> name, Nothing)
         go (name, Just (StrLit strLit)) = do
-          handle' <- freshTypeHandle
+          handle' <- freshTypeHandle Star
           storeFact $ registerType strLit handle `unifyConstraint` handle'
           storeVar (getName name) handle'
           return (withTypeHandle handle' <$> name, Just (StrLit strLit))
@@ -214,7 +214,7 @@ instance Preprocess Procedure a b where
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do
-    handle <- freshTypeHandle
+    handle <- freshTypeHandle Star
     type'' <- preprocess type'
     storeFact . (handle &) . (getTypeHandle type'' &) $
       maybe unifyConstraint ((unifyConstraint .) . kindedType . getName) mKind
@@ -275,7 +275,7 @@ instance Preprocess Stmt a b where
 
 instance Preprocess KindName a b where
   preprocessImpl (KindName mKind name) = do
-    handle <- freshTypeHandle
+    handle <- freshTypeHandle Star
     traverse_ (storeFact . (`kindedConstraint` handle) . getName) mKind
     return (handle, KindName mKind (preprocessTrivial name))
 
@@ -287,7 +287,7 @@ instance Preprocess Targets a b where
 
 instance Preprocess Lit a b where
   preprocessImpl lit = do
-    handle <- freshTypeHandle
+    handle <- freshTypeHandle Star
     storeFact $ constraint lit handle
     purePreprocess handle lit
     where
@@ -309,7 +309,7 @@ instance Preprocess Init a b where
     \case
       ExprInit exprs -> do
         exprs' <- preprocessT exprs
-        handle <- freshTypeHandle
+        handle <- freshTypeHandle Star
         let exprTypes = getTypeHandle <$> exprs'
         traverse_ (storeFact . constExprConstraint) exprTypes
         traverse_ (storeFact . unifyConstraint handle) exprTypes
@@ -368,7 +368,7 @@ instance Preprocess Expr a b where
       ParExpr expr -> ParExpr `preprocessInherit` expr
       LVExpr lvalue -> LVExpr `preprocessInherit` lvalue
       BinOpExpr op left right -> do
-        handle <- freshTypeHandle
+        handle <- freshTypeHandle Star
         left' <- preprocess left
         let leftType = getTypeHandle left'
         right' <- preprocess right
@@ -390,9 +390,9 @@ instance Preprocess Expr a b where
             return type''
         return (litType, LitExpr lit' mType')
       PrefixExpr name actuals -> do
-        handle <- freshTypeHandle
-        argType <- freshTypeHandle
-        retType <- freshTypeHandle
+        handle <- freshTypeHandle Star
+        argType <- freshTypeHandle Star
+        retType <- freshTypeHandle Star
         actuals' <- preprocessT actuals
         let actualTypes = getTypeHandle <$> actuals'
             opScheme = getNamedOperator $ getName name
@@ -402,9 +402,9 @@ instance Preprocess Expr a b where
         storeFact $ handle `subType` retType
         return (handle, PrefixExpr (preprocessTrivial name) actuals')
       InfixExpr name left right -> do
-        handle <- freshTypeHandle
-        argType <- freshTypeHandle
-        retType <- freshTypeHandle
+        handle <- freshTypeHandle Star
+        argType <- freshTypeHandle Star
+        retType <- freshTypeHandle Star
         left' <- preprocess left
         right' <- preprocess right
         let leftType = getTypeHandle left'

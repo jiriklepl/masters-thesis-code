@@ -11,29 +11,30 @@ import safe Control.Monad.State
 import safe Data.Data
 import safe Data.Foldable
 import safe Data.Generics.Aliases
-import safe Data.Set (Set)
+import safe Data.Map (Map)
 import safe Data.Text (Text)
 
 import safe CMM.AST
+import safe CMM.Inference.Type
 import safe CMM.AST.Annot
 import safe CMM.AST.HasName
 import safe CMM.AST.Variables.State
 import safe CMM.Parser.HasPos
 
-localVariables :: (MonadIO m, HasPos a) => Procedure a -> m (Set Text, Set Text)
+localVariables :: (MonadIO m, HasPos a) => Procedure a -> m (Map Text TypeKind, Map Text TypeKind)
 localVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addCommonCases $ gmapM go
 
-globalVariables :: (MonadIO m, HasPos a) => Unit a -> m (Set Text, Set Text)
+globalVariables :: (MonadIO m, HasPos a) => Unit a -> m (Map Text TypeKind, Map Text TypeKind)
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
 variablesCommon ::
-     MonadIO m => StateT CollectedVariables m a -> m (Set Text, Set Text)
+     MonadIO m => StateT CollectedVariables m a -> m (Map Text TypeKind, Map Text TypeKind)
 variablesCommon go = do
   result <- execStateT go initCollectedVariables
   return (result ^. variables, result ^. typeVariables)
@@ -56,28 +57,28 @@ addCommonCases go =
   where
     goFormal =
       \case
-        (formal :: Annot Formal SourcePos) -> addVarTrivial formal
+        (formal :: Annot Formal SourcePos) -> addVarTrivial formal Star
     goDecl =
       \case
-        decl@(Annot ConstDecl {} (_ :: SourcePos)) -> addVarTrivial decl
+        decl@(Annot ConstDecl {} (_ :: SourcePos)) -> addVarTrivial decl Star
         decl@(Annot (TypedefDecl _ names) (_ :: SourcePos)) ->
-          decl <$ traverse_ (addTVar decl) (getName <$> names)
+          decl <$ traverse_ (flip (addTVar decl) Generic) (getName <$> names)
         decl -> gmapM go decl
     goImport =
       \case
-        (import' :: Annot Import SourcePos) -> addVarTrivial import'
+        (import' :: Annot Import SourcePos) -> addVarTrivial import' Star
     goRegisters =
       \case
         registers@(Annot (Registers _ _ nameStrLits) (_ :: SourcePos)) ->
           registers <$
-          traverse_ (addVar registers) (getName . fst <$> nameStrLits)
+          traverse_ (flip (addVar registers) Star) (getName . fst <$> nameStrLits)
     goDatum =
       \case
-        datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum
+        datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum Star
         datum -> gmapM go datum
     goStmt =
       \case
-        stmt@(Annot LabelStmt {} (_ :: SourcePos)) -> addVarTrivial stmt
+        stmt@(Annot LabelStmt {} (_ :: SourcePos)) -> addVarTrivial stmt Star
         stmt -> gmapM go stmt
 
 addGlobalCases ::
@@ -90,7 +91,7 @@ addGlobalCases go = goProcedure $| goSection $| go
   where
     goProcedure =
       \case
-        (procedure :: Annot Procedure SourcePos) -> addVarTrivial procedure
+        (procedure :: Annot Procedure SourcePos) -> addVarTrivial procedure Star
     goSection =
       \case
         (section :: Annot Section SourcePos) -> gmapM goSectionItems section
@@ -108,7 +109,7 @@ addSectionCases go = goProcedure $| go
     goProcedure =
       \case
         (procedure :: Annot Procedure SourcePos) ->
-          addVarTrivial procedure <* gmapM goLabels procedure
+          addVarTrivial procedure Star <* gmapM goLabels procedure
     goLabels :: (Data d, MonadCollectVariables m) => d -> m d
     goLabels = addLabelCases $ gmapM goLabels
 
@@ -122,9 +123,9 @@ addLabelCases go = goStmt $| goDatum $| go
   where
     goStmt =
       \case
-        stmt@(Annot LabelStmt {} (_ :: SourcePos)) -> addVarTrivial stmt
+        stmt@(Annot LabelStmt {} (_ :: SourcePos)) -> addVarTrivial stmt Star
         stmt -> gmapM go stmt
     goDatum =
       \case
-        datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum
+        datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum Star
         datum -> gmapM go datum

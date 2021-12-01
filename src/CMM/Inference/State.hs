@@ -10,12 +10,11 @@ import safe Control.Monad.State.Lazy
 import safe Control.Lens.Setter
 import safe Control.Lens.TH
 import safe Data.Text (Text)
-import safe qualified Data.Text as Text
 import safe Data.Map (Map)
-import safe qualified Data.Map as Map
 import safe Prettyprinter
 
 import safe CMM.Inference.Type
+import safe CMM.Inference.BuiltIn
 import safe CMM.Parser.HasPos
 import safe CMM.Warnings
 
@@ -27,6 +26,7 @@ data Inferencer =
     , _handleCounter :: Int
     , _errors :: Int
     , _warnings :: Int
+    , _context :: Facts
     }
     deriving (Show)
 
@@ -37,6 +37,7 @@ initInferencer handleCounter =
     , _handleCounter = handleCounter
     , _errors = 0
     , _warnings = 0
+    , _context = builtInContext
     }
 
 type MonadInferencer m = (MonadState Inferencer m, MonadIO m)

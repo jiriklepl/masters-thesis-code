@@ -18,7 +18,6 @@ import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe
-import safe Data.Set (Set)
 import safe Data.Text (Text)
 
 import safe qualified CMM.AST.Annot as AST
@@ -72,7 +71,7 @@ initInferPreprocessor =
     , _currentReturn = noCurrentReturn
     }
 
-beginTopLevel :: MonadInferPreprocessor m => Set Text -> Set Text -> m ()
+beginTopLevel :: MonadInferPreprocessor m => Map Text TypeKind -> Map Text TypeKind -> m ()
 beginTopLevel vars tVars = do
   variables <~ declVars vars
   typeVariables <~ declVars tVars
@@ -102,14 +101,14 @@ storeVar name handle = do
   tVars <- use procVariables
   storeVarImpl name handle vars tVars
 
-beginProc :: MonadInferPreprocessor m => Set Text -> Set Text -> m ()
+beginProc :: MonadInferPreprocessor m => Map Text TypeKind -> Map Text TypeKind -> m ()
 beginProc vars tVars = do
   procVariables <~ Just <$> declVars vars
   procTypeVariables <~ Just <$> declVars tVars
-  currentReturn <~ freshTypeHandle
+  currentReturn <~ freshTypeHandle Star
 
-declVars :: MonadInferPreprocessor m => Set Text -> m (Map Text Type)
-declVars = Map.traverseWithKey (const id) . Map.fromSet (const freshTypeHandle)
+declVars :: MonadInferPreprocessor m => Map Text TypeKind -> m (Map Text Type)
+declVars = Map.traverseWithKey (const id) . (freshTypeHandle <$>)
 
 endProc :: MonadInferPreprocessor m => m Type
 endProc = do
@@ -145,7 +144,7 @@ storeVarImpl name handle vars procVars =
 storeFact :: MonadInferPreprocessor m => Fact -> m ()
 storeFact = (facts %=) . (:)
 
-freshTypeHandle :: MonadInferPreprocessor m => m Type
-freshTypeHandle = do
+freshTypeHandle :: MonadInferPreprocessor m => TypeKind -> m Type
+freshTypeHandle tKind = do
   handleCounter += 1
-  SimpleType . VarType . TypeVar <$> use handleCounter
+  SimpleType . VarType . flip TypeVar tKind <$> use handleCounter
