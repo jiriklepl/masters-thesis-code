@@ -25,7 +25,7 @@ import safe CMM.Inference.BuiltIn as Infer
 import safe CMM.Inference.Preprocess.State as Infer
 import safe CMM.Inference.Type as Infer
 import safe CMM.Parser.HasPos
-import Control.Applicative
+import safe Control.Applicative
 
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 class Preprocess n a b where

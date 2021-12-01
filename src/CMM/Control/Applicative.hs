@@ -2,7 +2,7 @@
 
 module CMM.Control.Applicative where
 
-import Control.Applicative
+import safe Control.Applicative
 
 liftA4 ::
      Applicative f => (a -> b -> c -> d -> e) -> f a -> f b -> f c -> f d -> f e
