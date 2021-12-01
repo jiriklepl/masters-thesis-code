@@ -269,7 +269,7 @@ instance Preprocess Stmt a b where
       GotoStmt expr mTargets -- TODO: check if cosher
        -> do
         expr' <- preprocess expr
-        storeFact $ classConstraint LabelClass [getTypeHandle expr']
+        storeFact . labelConstraint $ getTypeHandle expr'
         (NoType, ) . GotoStmt expr' <$> preprocessT mTargets
       CutToStmt {} -> undefined -- TODO: continue from here
 
@@ -359,7 +359,7 @@ instance Preprocess LValue a b where
         type'' <- preprocess type'
         expr' <- preprocess expr
         let mAsserts' = (withTypeHandle NoType <$>) <$> mAsserts
-        storeFact $ classConstraint AddressClass [getTypeHandle expr']
+        storeFact . addressConstraint $ getTypeHandle expr'
         return (getTypeHandle type'', LVRef type'' expr' mAsserts')
 
 instance Preprocess Expr a b where

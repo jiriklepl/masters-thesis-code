@@ -4,7 +4,6 @@
 module Main where
 
 import Control.Monad.State as State
-import Control.Lens.Getter
 import qualified Data.Map as Map
 
 -- import Data.Text as T
@@ -29,7 +28,10 @@ import CMM.AST.Variables
 import CMM.FlowAnalysis
 import CMM.Inference.Preprocess as Infer
 import CMM.Inference.Preprocess.State as Infer
+import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.Type as Infer
+import CMM.Inference.State as Infer
+import CMM.Inference as Infer
 import CMM.Lexer
 import CMM.Parser
 import CMM.Translator
@@ -43,10 +45,7 @@ main = do
         parse procedure . either undefined id . parse tokenize $
         contents
   let flattened = flatten ast
-  (mined, miner) <-
-        runStateT
-          (preprocess ast)
-          initInferPreprocessor
+  (mined, miner) <- runStateT (preprocess ast) initInferPreprocessor
   (blockified, blockifier) <-
     runStateT
       (blockifyProcedure flattened <* analyzeFlow flattened)
@@ -67,10 +66,26 @@ main = do
         runIRBuilderT emptyIRBuilder $ translate blockified
   T.putStr translated
   print mined
-  vars <- localVariables (unAnnot ast)
+  let annot = takeAnnot ast
+  vars <-
+    globalVariables
+      (Unit
+         [ withAnnot annot $
+           TopSection
+             (CMM.AST.StrLit "data")
+             [withAnnot annot $ SecProcedure ast]
+         ])
   print vars
-  print (freeTypeVars (SimpleType (TupleType[SimpleType BoolType, SimpleType (VarType (TypeVar 20)), SimpleType (VarType (TypeVar 30))])))
+  print
+    (freeTypeVars
+       (SimpleType
+          (TupleType
+             [ SimpleType BoolType
+             , SimpleType (VarType (TypeVar 20))
+             , SimpleType (VarType (TypeVar 30))
+             ])))
   print (_facts miner)
+  runStateT (Infer.infer (_facts miner) >>= Infer.infer) (Infer.initInferencer (CMM.Inference.Preprocess.State._handleCounter miner)) >>= print
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a
 parse parser = runParser parser "stdin"

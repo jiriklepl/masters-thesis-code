@@ -14,14 +14,10 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
-data ClassHandle
-  = NumericClass
-  | RealClass
-  | CharacterClass
-  | AddressClass
-  | LabelClass
-  | Class Text
+newtype ClassHandle
+  = ClassHandle Text
   deriving (Show, Eq, Ord, Data)
+
 
 data Constness
   = Regular -- TODO: maybe connect with unknown?
@@ -32,6 +28,10 @@ data Constness
 
 -- (Kind, Constness, Register)
 type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
+
+data TypeKind
+  = Star
+  | TApp TypeKind TypeKind
 
 newtype TypeVar =
   TypeVar Int
@@ -50,7 +50,8 @@ data Type
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 data SimpleType
-  = VarType TypeVar
+  = VarType TypeVar -- TODO: maybe squash
+  | ConstType Text
   | LamType TypeLam
   | TBitsType Int
   | BoolType
@@ -61,6 +62,14 @@ data SimpleType
   | StringType
   | String16Type
   deriving (Show, Eq, Ord, Data, IsTyped)
+
+data Class =
+  Class Int Facts Inst
+  deriving (Show, Data)
+
+data Inst =
+  Inst Int Facts Type
+  deriving (Show, Data)
 
 data Fact
   = Union Type Type

@@ -121,6 +121,8 @@ instance Unify SimpleType where
 -- TODO: add cases with `ErrorType`
 -- supertype; subtype; returns Nothing if cannot be determined
 subUnify :: MonadWriter [UnificationError] m => Type -> Type -> m (Maybe (Subst, Type))
+subUnify simpT@(SimpleType (VarType t)) (SimpleType (VarType t'))
+  | t == t' = return $ Just (mempty, simpT)
 subUnify (SimpleType (VarType _)) _ =
   return Nothing
 subUnify _ (SimpleType (VarType _)) =
@@ -168,37 +170,38 @@ onRegister reg (AnnotType (_, _, Just reg') _)
 onRegister reg t = Just [NoRegister reg t]
 
 infer :: MonadInferencer m => Facts -> m Facts
-infer (Union t t':facts) = do
-  let ((subst, _), errs) = runWriter $ unify t t' -- TODO: do something about `errs`
-  unifyCommon subst facts
-infer (InstType scheme@Forall{} t:facts) = do
-  (t', facts') <- freshInst scheme
-  let ((subst, _), errs) = runWriter $ unify t t' -- TODO: do something about `errs`
-  infer $ apply subst <$> (facts' <> facts)
-infer (InstType _ _:facts) =
-  undefined <$> infer facts -- TODO: this should be illegal
-infer (fact@(SubType t t'):facts) = do
-  let (ret, errs) = runWriter $ subUnify t t' -- TODO: do something about `errs`
-  case ret of
-    Nothing -> (fact:) <$> infer facts
-    Just (subst, _) -> unifyCommon subst facts
-infer (fact@(ConstnessLimit const t):facts) =
-  case constLimit const t of
-    Nothing -> (fact:) <$> infer facts
-    Just errs -> infer facts -- TODO: do something about `errs`
-infer (fact@(HasKind kind t):facts) =
-  case hasKind kind t of
-    Nothing -> (fact:) <$> infer facts
-    Just errs -> infer facts -- TODO: do something about `errs`
-infer (fact@(OnRegister reg t):facts) =
-  case onRegister reg t of
-    Nothing -> (fact:) <$> infer facts
-    Just errs -> infer facts -- TODO: do something about `errs`
-infer (fact@(Constraint classHandle ts):facts) =
-  (fact:) <$> infer facts -- TODO: continue from here
 infer [] = return []
-
-unifyCommon :: MonadInferencer m => Subst -> Facts -> m Facts
-unifyCommon subst facts = do
-  currentSubst %= apply subst
-  infer $ apply subst <$> facts
+infer (first:others) = do
+  currSubst <- use currentSubst
+  let fact = currSubst `apply` first
+  ((<>) <$> infer others) <*> case fact of
+   Union t t' -> do
+     let ((subst, _), errs) = runWriter $ unify t t' -- TODO: do something about `errs`
+     currentSubst %= apply subst
+     return []
+   InstType scheme@Forall{} t -> do
+     (t', facts') <- freshInst scheme
+     let ((subst, _), errs) = runWriter $ unify t t' -- TODO: do something about `errs`
+     currentSubst %= apply subst
+     return facts'
+   InstType _ _ ->
+     undefined -- TODO: this should be illegal
+   SubType t t' -> do
+     let (ret, errs) = runWriter $ subUnify t t' -- TODO: do something about `errs`
+     case ret of
+       Nothing -> return [fact]
+       Just (subst, _) -> currentSubst %= apply subst >> return []
+   ConstnessLimit const t ->
+     case constLimit const t of
+       Nothing -> return [fact]
+       Just errs -> return [] -- TODO: do something about `errs`
+   HasKind kind t ->
+     case hasKind kind t of
+       Nothing -> return [fact]
+       Just errs -> return [] -- TODO: do something about `errs`
+   OnRegister reg t ->
+     case onRegister reg t of
+       Nothing -> return [fact]
+       Just errs -> return [] -- TODO: do something about `errs`
+   Constraint classHandle ts ->
+     return [fact] -- TODO: continue from here
