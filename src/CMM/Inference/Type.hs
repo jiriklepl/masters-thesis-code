@@ -24,12 +24,13 @@ data ClassHandle
   deriving (Show, Eq, Ord, Data)
 
 data Constness
-  = Regular
+  = Regular -- TODO: maybe connect with unknown?
   | Unknown
   | LinkExpr
   | ConstExpr
   deriving (Show, Eq, Ord, Data)
 
+-- (Kind, Constness, Register)
 type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
 
 newtype TypeVar =
@@ -53,8 +54,8 @@ data SimpleType
   | LamType TypeLam
   | TBitsType Int
   | BoolType
-  | TupleType [Type]
-  | FunctionType Type Type --TODO: change to [Type]?
+  | TupleType [Type] -- TODO: remove this in the reaction the the latter
+  | FunctionType Type Type --TODO: change to [Type] -> Type ?
   | AddrType Type
   | LabelType
   | StringType
