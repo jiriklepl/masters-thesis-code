@@ -8,6 +8,7 @@ module CMM.Inference.State where
 
 import safe Control.Monad.State.Lazy
 import safe Control.Lens.Setter
+import safe Control.Lens.Getter
 import safe Control.Lens.TH
 import safe Data.Text (Text)
 import safe Data.Map (Map)
@@ -43,6 +44,11 @@ initInferencer handleCounter =
 type MonadInferencer m = (MonadState Inferencer m, MonadIO m)
 
 makeLenses ''Inferencer
+
+freshTypeHandle :: MonadInferencer m => TypeKind -> m Type
+freshTypeHandle tKind = do
+  handleCounter += 1
+  SimpleType . VarType . flip TypeVar tKind <$> use handleCounter
 
 registerError ::
      (HasPos n, Pretty n, MonadInferencer m) => n -> Text -> m ()

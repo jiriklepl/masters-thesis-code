@@ -204,7 +204,16 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
     let Just lab = getTrivialGotoTarget stmt -- TODO: is this safe?
     L.br (L.mkName $ T.unpack lab)
     return mempty
+  translate (Annot (ReturnStmt Nothing Nothing [actual]) _) = do -- TODO: do others
+    ret <- translate actual
+    L.ret ret $> mempty
   translate _ = return mempty -- TODO: remove this
+
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
+         Translate m Actual a (m L.Operand) where
+  translate (Annot (Actual Nothing expr) _) =
+    translate expr
+  translate _ = undefined
 
 -- Source: https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf (7.4)
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>

@@ -251,9 +251,9 @@ instance Preprocess Stmt a b where
           lvalues'
           exprTypes
         return (NoType, AssignStmt lvalues' exprs')
-      PrimOpStmt {} -> undefined -- TODO: continue from here
-      CallStmt {} -> undefined -- TODO: continue from here
-      JumpStmt {} -> undefined -- TODO: continue from here
+      PrimOpStmt {} -> undefined
+      CallStmt {} -> undefined
+      JumpStmt {} -> undefined
       ReturnStmt mConv Nothing actuals
       -- TODO: consult conventions with man
        -> do
@@ -261,17 +261,17 @@ instance Preprocess Stmt a b where
         let retType = makeTuple (getTypeHandle <$> actuals')
         storeReturn retType
         return (NoType, ReturnStmt mConv Nothing actuals')
-      ReturnStmt {} -> undefined -- TODO: continue from here
+      ReturnStmt {} -> undefined
       label@LabelStmt {} -> do
         storeVar (getName label) (SimpleType LabelType)
         purePreprocess NoType label
-      ContStmt {} -> undefined -- TODO: continue from here
+      ContStmt {} -> undefined
       GotoStmt expr mTargets -- TODO: check if cosher
        -> do
         expr' <- preprocess expr
         storeFact . labelConstraint $ getTypeHandle expr'
         (NoType, ) . GotoStmt expr' <$> preprocessT mTargets
-      CutToStmt {} -> undefined -- TODO: continue from here
+      CutToStmt {} -> undefined
 
 instance Preprocess KindName a b where
   preprocessImpl (KindName mKind name) = do
@@ -280,10 +280,10 @@ instance Preprocess KindName a b where
     return (handle, KindName mKind (preprocessTrivial name))
 
 instance Preprocess Arm a b where
-  preprocessImpl = undefined -- TODO: continue from here
+  preprocessImpl = undefined
 
 instance Preprocess Targets a b where
-  preprocessImpl = undefined -- TODO: continue from here
+  preprocessImpl = undefined
 
 instance Preprocess Lit a b where
   preprocessImpl lit = do

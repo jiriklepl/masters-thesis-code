@@ -18,6 +18,7 @@ import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe
 import safe qualified Data.Set as Set
+import Prelude hiding (const)
 
 import safe CMM.Inference.Type
 import safe CMM.Inference.State
@@ -67,16 +68,30 @@ class Unify a where
 equivalent :: Facts -> Facts -> Bool
 equivalent = undefined
 
-freshInst :: MonadInferencer m => Type -> m (Type, Facts)
-freshInst = undefined
+freshInst :: (MonadInferencer m, MonadIO m, Data a) => Scheme a -> m (a, Facts)
+freshInst (given :. facts :=> t) = do
+  tVars <- traverse freshTypeHandle given
+  let varMap = Map.fromList $ zip [0..] tVars -- TODO: int map?
+      leaf (SimpleType (LamType (TypeLam i _))) = varMap Map.! i
+      leaf t' = gmapT transform t'
+      transform :: Data d => d -> d
+      transform = gmapT transform `extT` leaf
+  return (transform t, transform facts)
 
 -- superAnnots; subAnnots
 subAnnots :: TypeAnnotations -> TypeAnnotations -> Bool
-subAnnots = undefined
+(mKind, const, mReg) `subAnnots` (mKind', const', mReg')
+  = (null mKind || mKind == mKind')
+  && const `subConst` const'
+  && (null mReg || mReg == mReg')
 
 --superConst; subConst
 subConst :: Constness -> Constness -> Bool
-subConst = undefined
+Unknown `subConst` _ = True
+LinkExpr `subConst` ConstExpr = True
+const `subConst` const'
+  | const == const' = True
+_ `subConst` _ = False
 
 matchKind :: (HasKind a, HasKind b) => a -> b -> Bool
 matchKind a b = getKind a == getKind b
@@ -151,6 +166,8 @@ constLimit :: Constness -> Type -> Maybe [UnificationError]
 constLimit _ (SimpleType VarType{}) = Nothing
 constLimit _ (ErrorType text) = Just [GotErrorType text]
 constLimit Unknown _ = Just []
+constLimit const (AnnotType (_, Unknown, _) _)
+  | const /= Unknown = Nothing
 constLimit const t@(AnnotType (_, const', _) _)
   | const `subConst` const' = Just []
   | otherwise = Just [NoConstness const t]
@@ -186,9 +203,9 @@ infer (first:others) = do
      let ((subst, _), errs) = runWriter $ unify t t' -- TODO: do something about `errs`
      currentSubst %= apply subst
      return []
-   InstType scheme@Forall{} t -> do
+   InstType (Forall scheme) t -> do
      (t', facts') <- freshInst scheme
-     let ((subst, _), errs) = runWriter $ unify t t' -- TODO: do something about `errs`
+     let ((subst, _), errs) = runWriter $ unify t (SimpleType t') -- TODO: do something about `errs`
      currentSubst %= apply subst
      return facts'
    InstType _ _ ->

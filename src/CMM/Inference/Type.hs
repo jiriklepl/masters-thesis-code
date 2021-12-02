@@ -20,7 +20,7 @@ newtype ClassHandle
 
 
 data Constness
-  = Regular -- TODO: maybe connect with unknown?
+  = Regular
   | Unknown
   | LinkExpr
   | ConstExpr
@@ -158,6 +158,7 @@ instance HasKind SimpleType where
   getKind StringType{} = Star
   getKind String16Type{} = Star
 
+-- TODO: add methods and their instances
 newtype Class =
   Class (Scheme [Inst])
   deriving (Show, Data)
