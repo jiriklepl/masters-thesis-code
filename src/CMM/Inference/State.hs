@@ -12,21 +12,26 @@ import safe Control.Lens.Getter
 import safe Control.Lens.TH
 import safe Data.Text (Text)
 import safe Data.Map (Map)
-import safe Prettyprinter
+import safe Data.Set (Set)
+import safe Data.Function
 
 import safe CMM.Inference.Type
 import safe CMM.Inference.BuiltIn
-import safe CMM.Parser.HasPos
-import safe CMM.Warnings
 
 type Subst = Map TypeVar Type
 
+
 data Inferencer =
   Inferencer
-    { _currentSubst :: Subst
+    { _typing :: Subst -- contains types of type variables
+    , _kinding :: Map TypeVar Text -- contains least kinds of type variables
+    , _subKinding :: Map TypeVar (Set TypeVar) -- maps variables to their superKinds
+    , _consting :: Map TypeVar (Constness, Constness) -- contains constness limits of type variables
+    , _subConsting :: Map TypeVar (Set TypeVar) -- maps variables to their subConsts
     , _handleCounter :: Int
-    , _errors :: Int
-    , _warnings :: Int
+    , _errors :: [UnificationError]
+    , _facts :: Facts
+    , _assumps :: Facts
     , _context :: Facts
     }
     deriving (Show)
@@ -34,30 +39,36 @@ data Inferencer =
 initInferencer :: Int -> Inferencer
 initInferencer handleCounter =
   Inferencer
-    { _currentSubst = mempty
+    { _typing = mempty
+    , _kinding = mempty
+    , _subKinding = mempty
+    , _consting = mempty
+    , _subConsting = mempty
     , _handleCounter = handleCounter
-    , _errors = 0
-    , _warnings = 0
+    , _facts = mempty
+    , _assumps = mempty
+    , _errors = mempty
     , _context = builtInContext
     }
+
+data UnificationError
+  = Occurs TypeVar Type
+  | Mismatch Type Type
+  | NoSubType Type Type -- supertype; subtype
+  | NoConstness Constness Type
+  | NoKind Text Type
+  | NoRegister Text Type
+  | TupleMismatch [Type] [Type]
+  | GotErrorType Text
+  | IllegalPolytype Type
+  | BadKind Type Type
+  deriving (Show)
 
 type MonadInferencer m = (MonadState Inferencer m, MonadIO m)
 
 makeLenses ''Inferencer
 
-freshTypeHandle :: MonadInferencer m => TypeKind -> m Type
+freshTypeHandle :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHandle tKind = do
   handleCounter += 1
-  SimpleType . VarType . flip TypeVar tKind <$> use handleCounter
-
-registerError ::
-     (HasPos n, Pretty n, MonadInferencer m) => n -> Text -> m ()
-registerError node message = do
-  errors += 1
-  makeMessage mkError node message
-
-registerWarning ::
-     (HasPos n, Pretty n, MonadInferencer m) => n -> Text -> m ()
-registerWarning node message = do
-  warnings += 1
-  makeMessage mkWarning node message
+  (Nothing &) . (tKind &) . TypeVar  <$> use handleCounter

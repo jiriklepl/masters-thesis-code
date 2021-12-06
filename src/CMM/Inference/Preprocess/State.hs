@@ -18,6 +18,7 @@ import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe
+import safe Data.Function
 import safe Data.Text (Text)
 
 import safe qualified CMM.AST.Annot as AST
@@ -26,9 +27,9 @@ import safe CMM.Lens
 import safe qualified CMM.Parser.HasPos as AST
 
 class HasTypeHandle a where
-  getTypeHandle :: a -> Type
+  getTypeHandle :: a -> TypeVar
 
-instance HasTypeHandle (AST.SourcePos, Type) where
+instance HasTypeHandle (AST.SourcePos, TypeVar) where
   getTypeHandle = snd
 
 instance HasTypeHandle a => HasTypeHandle (AST.Annot n a) where
@@ -39,22 +40,23 @@ class HasTypeHandle b =>
   | a -> b
   , b -> a
   where
-  withTypeHandle :: Type -> a -> b
+  withTypeHandle :: TypeVar -> a -> b
 
-instance WithTypeHandle AST.SourcePos (AST.SourcePos, Type) where
+instance WithTypeHandle AST.SourcePos (AST.SourcePos, TypeVar) where
   withTypeHandle = flip (,)
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
 
 data InferPreprocessor =
   InferPreprocessor
-    { _variables :: Map Text Type
-    , _procVariables :: Maybe (Map Text Type)
-    , _typeVariables :: Map Text Type
-    , _procTypeVariables :: Maybe (Map Text Type)
+    { _variables :: Map Text TypeVar
+    , _procVariables :: Maybe (Map Text TypeVar)
+    , _typeVariables :: Map Text TypeVar
+    , _procTypeVariables :: Maybe (Map Text TypeVar)
     , _facts :: Facts
+    , _assumptions :: Facts
     , _handleCounter :: Int
-    , _currentReturn :: Type
+    , _currentReturn :: TypeVar
     }
 
 makeLenses ''InferPreprocessor
@@ -67,6 +69,7 @@ initInferPreprocessor =
     , _typeVariables = mempty
     , _procTypeVariables = mempty
     , _facts = mempty
+    , _assumptions = mempty
     , _handleCounter = 0
     , _currentReturn = noCurrentReturn
     }
@@ -76,26 +79,26 @@ beginTopLevel vars tVars = do
   variables <~ declVars vars
   typeVariables <~ declVars tVars
 
-noCurrentReturn :: Type
-noCurrentReturn = ErrorType "No function return registered"
+noCurrentReturn :: TypeVar
+noCurrentReturn = NoType
 
 -- returns `NoType` on failure
-lookupVar :: MonadInferPreprocessor m => Text -> m Type
+lookupVar :: MonadInferPreprocessor m => Text -> m TypeVar
 lookupVar name = liftA2 (lookupVarImpl name) (use procVariables) (use variables)
 
-lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe Type)
+lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeVar)
 lookupProc = uses variables . Map.lookup
 
-lookupTVar :: MonadInferPreprocessor m => Text -> m Type
+lookupTVar :: MonadInferPreprocessor m => Text -> m TypeVar
 lookupTVar name =
   liftA2 (lookupVarImpl name) (use procTypeVariables) (use typeVariables)
 
-lookupVarImpl :: Ord k => k -> Maybe (Map k Type) -> Map k Type -> Type
+lookupVarImpl :: Ord k => k -> Maybe (Map k TypeVar) -> Map k TypeVar -> TypeVar
 lookupVarImpl name procVars vars =
   fromMaybe NoType $
   (procVars >>= (name `Map.lookup`)) <|> name `Map.lookup` vars
 
-storeVar :: MonadInferPreprocessor m => Text -> Type -> m ()
+storeVar :: MonadInferPreprocessor m => Text -> TypeVar -> m ()
 storeVar name handle = do
   vars <- use variables
   tVars <- use procVariables
@@ -107,25 +110,25 @@ beginProc vars tVars = do
   procTypeVariables <~ Just <$> declVars tVars
   currentReturn <~ freshTypeHandle Star
 
-declVars :: MonadInferPreprocessor m => Map Text TypeKind -> m (Map Text Type)
-declVars = Map.traverseWithKey (const id) . (freshTypeHandle <$>)
+declVars :: MonadInferPreprocessor m => Map Text TypeKind -> m (Map Text TypeVar)
+declVars = Map.traverseWithKey (&) . (freshNamedHandle <$>)
 
-endProc :: MonadInferPreprocessor m => m Type
+endProc :: MonadInferPreprocessor m => m TypeVar
 endProc = do
   procVariables .= Nothing
   procTypeVariables .= Nothing
-  currentReturn `exchange` noCurrentReturn
+  exchange currentReturn noCurrentReturn
 
 storeProc :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeProc name handle =
   use variables >>=
-  (storeFact . unifyConstraint handle) . lookupVarImpl name Nothing
+  (storeFact . flip typeUnion handle) . lookupVarImpl name Nothing
 
-storeReturn :: MonadInferPreprocessor m => Type -> m ()
+storeReturn :: MonadInferPreprocessor m => TypeVar -> m ()
 storeReturn typeHandle = do
-  use currentReturn >>= \ret -> storeFact $ unifyConstraint ret typeHandle
+  use currentReturn >>= \ret -> storeFact $ subType ret typeHandle -- TODO: add safety measures
 
-storeTVar :: MonadInferPreprocessor m => Text -> Type -> m ()
+storeTVar :: MonadInferPreprocessor m => Text -> TypeVar -> m ()
 storeTVar name handle = do
   vars <- use typeVariables
   tVars <- use procTypeVariables
@@ -134,17 +137,25 @@ storeTVar name handle = do
 storeVarImpl ::
      (Ord k, MonadInferPreprocessor m)
   => k
-  -> Type
-  -> Map k Type
-  -> Maybe (Map k Type)
+  -> TypeVar
+  -> Map k TypeVar
+  -> Maybe (Map k TypeVar)
   -> m ()
 storeVarImpl name handle vars procVars =
-  storeFact $ handle `unifyConstraint` lookupVarImpl name procVars vars
+  storeFact $ lookupVarImpl name procVars vars `typeUnion` VarType handle
 
 storeFact :: MonadInferPreprocessor m => Fact -> m ()
 storeFact = (facts %=) . (:)
 
-freshTypeHandle :: MonadInferPreprocessor m => TypeKind -> m Type
+storeAssump :: MonadInferPreprocessor m => Fact -> m ()
+storeAssump = (assumptions %=) . (:)
+
+freshTypeHandle :: MonadInferPreprocessor m => TypeKind -> m TypeVar
 freshTypeHandle tKind = do
   handleCounter += 1
-  SimpleType . VarType . flip TypeVar tKind <$> use handleCounter
+  (Nothing &) . (tKind &) . TypeVar  <$> use handleCounter
+
+freshNamedHandle :: MonadInferPreprocessor m => TypeKind -> Text -> m TypeVar
+freshNamedHandle tKind name = do
+  handleCounter += 1
+  (Just name &) . (tKind &) . TypeVar  <$> use handleCounter

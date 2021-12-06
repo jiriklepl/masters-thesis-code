@@ -1,7 +1,9 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveAnyClass #-}
+
+
+-- TODO: create a special type for Kinds
 
 module CMM.Inference.Type where
 
@@ -12,7 +14,6 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 
 import safe Data.Text (Text)
-import safe qualified Data.Text as T
 
 newtype ClassHandle
   = ClassHandle Text
@@ -24,7 +25,7 @@ data Constness
   | Unknown
   | LinkExpr
   | ConstExpr
-  deriving (Show, Eq, Ord, Data)
+  deriving (Show, Eq, Ord, Data) -- TODO: make sure that they follow the correctus order
 
 -- (Kind, Constness, Register)
 type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
@@ -59,43 +60,38 @@ instance Ord TypeKind where
       GT -> GT
       EQ -> r `compare` r'
 
-data TypeVar =
-  TypeVar Int TypeKind
+data TypeVar
+  = NoType
+  | TypeVar Int TypeKind (Maybe Text) -- TODO: change text to something even more useful
+  | TypeLam Int TypeKind
+  | TypeConst Text TypeKind
   deriving (Show, Data, IsTyped)
 
 instance Eq TypeVar where
-  TypeVar int _ == TypeVar int' _ = int == int'
+  TypeVar int _ _ == TypeVar int' _ _ = int == int'
+  TypeLam int _ == TypeLam int' _ = int == int'
+  TypeConst name _ == TypeConst name' _ = name == name'
+  _ == _ = False
 
 instance Ord TypeVar where
-  TypeVar int _ `compare` TypeVar int' _ = int `compare` int'
-
-instance HasKind TypeVar where
-  getKind (TypeVar _ kind) = kind
-
-data TypeLam =
-  TypeLam Int TypeKind
-  deriving (Show, Data, IsTyped)
-
-instance Eq TypeLam where
-  TypeLam int _ == TypeLam int' _ = int == int'
-
-instance Ord TypeLam where
+  NoType `compare` NoType = EQ
+  TypeVar int _ _ `compare` TypeVar int' _ _ = int `compare` int'
   TypeLam int _ `compare` TypeLam int' _ = int `compare` int'
-
-instance HasKind TypeLam where
-  getKind (TypeLam _ kind) = kind
-
-data TypeConst =
-  TypeConst Text TypeKind
-  deriving (Show, Data, IsTyped)
-
-instance Eq TypeConst where
-  TypeConst name _ == TypeConst name' _ = name == name'
-
-instance Ord TypeConst where
   TypeConst name _ `compare` TypeConst name' _ = name `compare` name'
 
-instance HasKind TypeConst where
+  NoType `compare` _ = LT
+  _ `compare` TypeConst {} = LT
+
+  _ `compare` NoType = GT
+  TypeConst {} `compare` _ = GT
+
+  TypeVar {} `compare` TypeLam {} = LT
+  TypeLam {} `compare` TypeVar {} = GT
+
+instance HasKind TypeVar where
+  getKind NoType{} = Generic
+  getKind (TypeVar _ kind _) = kind
+  getKind (TypeLam _ kind) = kind
   getKind (TypeConst _ kind) = kind
 
 infix 6 :=>
@@ -117,24 +113,9 @@ instance HasKind a => HasKind (Scheme a) where
   getKind (_ :. t) = getKind t
 
 data Type
-  = NoType
-  | ErrorType Text
-  | SimpleType SimpleType
-  | AnnotType TypeAnnotations SimpleType
-  | Forall (Scheme SimpleType)
-  deriving (Show, Eq, Ord, Data, IsTyped)
-
-instance HasKind Type where
-  getKind NoType = Generic
-  getKind ErrorType{} = Generic
-  getKind (SimpleType t) = getKind t
-  getKind (AnnotType _ t) = getKind t
-  getKind (Forall scheme) = getKind scheme
-
-data SimpleType
-  = VarType TypeVar
-  | ConstType TypeConst
-  | LamType TypeLam
+  = ErrorType Text
+  | Forall (Scheme Type)
+  | VarType TypeVar
   | TBitsType Int
   | BoolType
   | TupleType [Type]
@@ -145,10 +126,10 @@ data SimpleType
   | String16Type
   deriving (Show, Eq, Ord, Data, IsTyped)
 
-instance HasKind SimpleType where
+instance HasKind Type where
+  getKind ErrorType{} = Generic
+  getKind (Forall scheme) = getKind scheme
   getKind (VarType t) = getKind t
-  getKind (ConstType t) = getKind t
-  getKind (LamType t) = getKind t
   getKind TBitsType{} = Star
   getKind BoolType{} = Star
   getKind TupleType{} = Star -- TODO: check if all types are `Star`
@@ -168,13 +149,16 @@ newtype Inst =
   deriving (Show, Data)
 
 data Fact
-  = Union Type Type
-  | SubType Type Type -- supertype; subtype
-  | InstType Type Type -- polytype; monotype
-  | Constraint ClassHandle [Type]
-  | ConstnessLimit Constness Type
-  | HasKind Text Type
-  | OnRegister Text Type
+  = SubType TypeVar TypeVar -- supertype; subtype
+  | TypeUnion TypeVar Type -- binds the type variable to a type
+  | Typing TypeVar Type -- states that the type variable follows a certain typing
+  | KindLimit Text TypeVar -- lower bound on the kind of the type variable
+  | ConstnessLimit Constness TypeVar -- lower bound on the constness of the type variable
+  | OnRegister Text TypeVar -- states that the type variable stores its data to a certain register
+  | SubKind TypeVar TypeVar -- superKind; subKind
+  | SubConst TypeVar TypeVar -- superConst; subConst
+  | InstType TypeVar TypeVar -- polytype; monotype
+  | Constraint ClassHandle [TypeVar]
   | NestedFacts Facts Facts
   deriving (Show, Eq, Ord, Data)
 
@@ -192,83 +176,42 @@ class Data a =>
       go :: Data d => d -> Set TypeVar
       go = (Set.unions . gmapQ go) `extQ` leaf
       leaf tVar@TypeVar {} = Set.singleton tVar
+      leaf _ = mempty
 
-makeFunction :: Type -> Type -> SimpleType
+makeFunction :: Type -> Type -> Type
 makeFunction = FunctionType
 
 makeTuple :: [Type] -> Type
-makeTuple = SimpleType . TupleType
+makeTuple = TupleType
 
-forall :: Set TypeVar -> Facts -> SimpleType -> Type
+forall :: Set TypeVar -> Facts -> Type -> Type
 forall s [] t
   | null s = Forall $ [] :. [] :=> t
 forall _ _ t = Forall $ [] :. [] :=> t -- TODO: continue from here by replacing this placeholder
 
-unifyConstraint :: Type -> Type -> Fact
-unifyConstraint = Union
+typeUnion :: TypeVar -> Type -> Fact
+typeUnion = TypeUnion
 
-subType :: Type -> Type -> Fact
+typeConstraint :: TypeVar -> Type -> Fact
+typeConstraint = Typing
+
+subType :: TypeVar -> TypeVar -> Fact
 subType = SubType
 
-instType :: Type -> Type -> Fact
+instType :: TypeVar -> TypeVar -> Fact
 instType = InstType
 
-kindedType :: Text -> Type -> Type
-kindedType _ NoType = NoType
-kindedType _ type'@Forall {} = ErrorType . T.pack $ "Attempted to give a kind to a polytype `" <> show type' <> "`" -- TODO: prettify
-kindedType _ type'@ErrorType {} = type' -- propagating the error
-kindedType kind (SimpleType type') =
-  AnnotType (Just kind, Unknown, Nothing) type'
-kindedType kind (AnnotType (Nothing, constness, mReg) type') =
-  AnnotType (Just kind, constness, mReg) type'
-kindedType kind type'@(AnnotType (Just kind', _, _) _)
-  | kind == kind' = type'
-  | otherwise =
-    ErrorType . T.pack $
-    "Kinds `" <> show kind <> "` and `" <> show kind' <> "` do not match"
+kindedConstraint :: Text -> TypeVar -> Fact
+kindedConstraint = KindLimit
 
-kindedConstraint :: Text -> Type -> Fact
-kindedConstraint = HasKind
-
-linkExprType :: Type -> Type
-linkExprType NoType = NoType -- `NoType` is trivially a link-time constant
-linkExprType type'@Forall{} = type' -- all polytypes are trivially link-time constants
-linkExprType type'@ErrorType {} = type' -- propagating the error
-linkExprType (SimpleType type') = AnnotType (Nothing, LinkExpr, Nothing) type'
-linkExprType type'@(AnnotType (_, ConstExpr, _) _) = type'
-linkExprType (AnnotType (mKind, _, mReg) type') =
-  AnnotType (mKind, LinkExpr, mReg) type'
-
-constExprType :: Type -> Type
-constExprType NoType = NoType -- `NoType` is trivially a compile-time constant
-constExprType type'@Forall{} = type' -- all polytypes are trivially compile-time constants
-constExprType type'@ErrorType {} = type' -- propagating the error
-constExprType (SimpleType type') = AnnotType (Nothing, ConstExpr, Nothing) type'
-constExprType (AnnotType (mKind, _, mReg) type') =
-  AnnotType (mKind, ConstExpr, mReg) type'
-
-constExprConstraint :: Type -> Fact
+constExprConstraint :: TypeVar -> Fact
 constExprConstraint = ConstnessLimit ConstExpr
 
-linkExprConstraint :: Type -> Fact
+linkExprConstraint :: TypeVar -> Fact
 linkExprConstraint = ConstnessLimit LinkExpr
 
-registerType :: Text -> Type -> Type
-registerType _ NoType = NoType
-registerType _ type'@Forall {} = ErrorType . T.pack $ "Attempted to give a hardware register to a polytype `" <> show type' <> "`" -- TODO: prettify
-registerType _ type'@ErrorType {} = type'
-registerType reg (SimpleType type') =
-  AnnotType (Nothing, Unknown, Just reg) type'
-registerType reg (AnnotType (mKind, constness, Nothing) type') =
-  AnnotType (mKind, constness, Just reg) type'
-registerType reg type'@(AnnotType (_, _, Just reg') _)
-  | reg == reg' = type'
-  | otherwise =
-    ErrorType . T.pack $
-    "Registers `" <> show reg <> "` and `" <> show reg' <> "` do not match" -- TODO: prettify
-
-registerConstraint :: Text -> Type -> Fact
+registerConstraint :: Text -> TypeVar -> Fact
 registerConstraint = OnRegister
 
-classConstraint :: ClassHandle -> [Type] -> Fact
+classConstraint :: ClassHandle -> [TypeVar] -> Fact
 classConstraint = Constraint

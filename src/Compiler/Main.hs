@@ -9,6 +9,7 @@ import qualified Data.Map as Map
 -- import Data.Text as T
 import Data.Text.IO as TS
 import Data.Tuple
+import Control.Lens
 import Text.Megaparsec hiding (parse)
 
 import Data.Text.Lazy as T
@@ -30,12 +31,13 @@ import CMM.Inference.Preprocess as Infer
 import CMM.Inference.Preprocess.State as Infer
 import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.Type as Infer
-import CMM.Inference.State as Infer
+import CMM.Inference.State as InferState
 import CMM.Inference as Infer
 import CMM.Lexer
 import CMM.Parser
 import CMM.Translator
 import qualified CMM.Translator.State as Tr
+import Data.Foldable (traverse_)
 
 main :: IO ()
 main = do
@@ -78,14 +80,26 @@ main = do
   print vars
   print
     (freeTypeVars
-       (SimpleType
-          (TupleType
-             [ SimpleType BoolType
-             , SimpleType (VarType (TypeVar 20 Infer.Star))
-             , SimpleType (VarType (TypeVar 30 Infer.Star))
-             ])))
-  print (_facts miner)
-  runStateT (Infer.infer (_facts miner) >>= Infer.infer) (Infer.initInferencer (CMM.Inference.Preprocess.State._handleCounter miner)) >>= print
+       (TupleType
+             [ VarType (TypeVar 20 Infer.Star Nothing)
+             , VarType (TypeVar 30 Infer.Star Nothing)
+             ]))
+  print (CMM.Inference.Preprocess.State._facts miner)
+  execStateT (do
+    let fs = CMM.Inference.Preprocess.State._facts miner
+    traverse_ Infer.infer fs
+    fs <- use InferState.facts
+    InferState.facts .= mempty
+    traverse_ Infer.infer fs
+    fs <- use InferState.facts
+    InferState.facts .= mempty
+    traverse_ Infer.infer fs
+    fs <- use InferState.facts
+    InferState.facts .= mempty
+    traverse_ Infer.infer fs
+    use InferState.facts)
+    (InferState.initInferencer (CMM.Inference.Preprocess.State._handleCounter miner))
+    >>= print
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a
 parse parser = runParser parser "stdin"

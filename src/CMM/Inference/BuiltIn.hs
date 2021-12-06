@@ -31,19 +31,19 @@ getNamedOperator = undefined -- TODO: continue from here
 getSymbolicOperator :: Op -> Infer.Type
 getSymbolicOperator = undefined -- TODO: continue from here
 
-labelConstraint :: Infer.Type -> Fact
+labelConstraint :: TypeVar -> Fact
 labelConstraint = classConstraint (ClassHandle labelClassName) . pure
 
-numericConstraint :: Infer.Type -> Fact
+numericConstraint :: TypeVar -> Fact
 numericConstraint = classConstraint (ClassHandle numClassName) . pure
 
-realConstraint :: Infer.Type -> Fact
+realConstraint :: TypeVar -> Fact
 realConstraint = classConstraint (ClassHandle realClassName) . pure
 
-characterConstraint :: Infer.Type -> Fact
+characterConstraint :: TypeVar -> Fact
 characterConstraint = classConstraint (ClassHandle charClassName) . pure
 
-addressConstraint :: Infer.Type -> Fact
+addressConstraint :: TypeVar -> Fact
 addressConstraint = classConstraint (ClassHandle addressClassName) . pure
 
 -- TODO: add to `Preprocess`
@@ -65,7 +65,7 @@ builtInContext = [] -- undefined
 builtInClasses :: Map Text Class
 builtInClasses = Map.fromList
   [ (numClassName, Class $ [Star] :. [] :=> [int 32, int 16, int 8, int 64])
-  , (labelClassName, Class $ [Star] :. [] :=> [Inst $ [] :. [] :=> [SimpleType LabelType]])
-  , (addressClassName, Class $ [Star] :. [] :=> [Inst $ [Star] :. [] :=> [SimpleType (AddrType (SimpleType (LamType (TypeLam 0 Star))))]])
+  , (labelClassName, Class $ [Star] :. [] :=> [Inst $ [] :. [] :=> [LabelType]])
+  , (addressClassName, Class $ [Star] :. [] :=> [Inst $ [Star] :. [] :=> [AddrType . VarType $ TypeLam 0 Star]])
   ]
-  where int n = Inst $ [] :. [] :=> [AnnotType (Just integerKind, Unknown, Nothing) $ TBitsType n]
+  where int n = Inst $ [Star] :. [integerKind `KindLimit` TypeLam 0 Star, TypeLam 0 Star `typeConstraint` TBitsType n] :=> [VarType $ TypeLam 0 Star]
