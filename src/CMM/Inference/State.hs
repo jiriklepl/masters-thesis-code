@@ -62,6 +62,8 @@ data UnificationError
   | GotErrorType Text
   | IllegalPolytype Type
   | BadKind Type Type
+  | FalseKind
+  | FalseConst
   deriving (Show)
 
 type MonadInferencer m = (MonadState Inferencer m, MonadIO m)

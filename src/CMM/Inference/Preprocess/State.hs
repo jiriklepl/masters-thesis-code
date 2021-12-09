@@ -98,7 +98,7 @@ lookupVarImpl name procVars vars =
   fromMaybe NoType $
   (procVars >>= (name `Map.lookup`)) <|> name `Map.lookup` vars
 
-storeVar :: MonadInferPreprocessor m => Text -> TypeVar -> m ()
+storeVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeVar name handle = do
   vars <- use variables
   tVars <- use procVariables
@@ -124,11 +124,10 @@ storeProc name handle =
   use variables >>=
   (storeFact . flip typeUnion handle) . lookupVarImpl name Nothing
 
-storeReturn :: MonadInferPreprocessor m => TypeVar -> m ()
-storeReturn typeHandle = do
-  use currentReturn >>= \ret -> storeFact $ subType ret typeHandle -- TODO: add safety measures
+getCurrentReturn :: MonadInferPreprocessor m => m TypeVar
+getCurrentReturn = use currentReturn
 
-storeTVar :: MonadInferPreprocessor m => Text -> TypeVar -> m ()
+storeTVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeTVar name handle = do
   vars <- use typeVariables
   tVars <- use procTypeVariables
@@ -137,12 +136,12 @@ storeTVar name handle = do
 storeVarImpl ::
      (Ord k, MonadInferPreprocessor m)
   => k
-  -> TypeVar
+  -> Type
   -> Map k TypeVar
   -> Maybe (Map k TypeVar)
   -> m ()
 storeVarImpl name handle vars procVars =
-  storeFact $ lookupVarImpl name procVars vars `typeUnion` VarType handle
+  storeFact $ lookupVarImpl name procVars vars `typeUnion` handle
 
 storeFact :: MonadInferPreprocessor m => Fact -> m ()
 storeFact = (facts %=) . (:)

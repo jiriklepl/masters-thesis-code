@@ -1,5 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
 
@@ -22,10 +23,20 @@ newtype ClassHandle
 
 data Constness
   = Regular
-  | Unknown
   | LinkExpr
   | ConstExpr
-  deriving (Show, Eq, Ord, Data) -- TODO: make sure that they follow the correctus order
+  deriving (Show, Eq, Data) -- TODO: make sure that they follow the correctus order
+
+instance Ord Constness where
+  Regular `compare` Regular = EQ
+  LinkExpr `compare` LinkExpr = EQ
+  ConstExpr `compare` ConstExpr = EQ
+
+  Regular `compare` _ = LT
+  _ `compare` Regular = GT
+
+  ConstExpr `compare` _ = GT
+  _ `compare` ConstExpr = LT
 
 -- (Kind, Constness, Register)
 type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
@@ -124,6 +135,7 @@ data Type
   | LabelType
   | StringType
   | String16Type
+  | VoidType
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 instance HasKind Type where
@@ -138,6 +150,7 @@ instance HasKind Type where
   getKind LabelType{} = Star
   getKind StringType{} = Star
   getKind String16Type{} = Star
+  getKind VoidType{} = Star
 
 -- TODO: add methods and their instances
 newtype Class =
@@ -182,7 +195,9 @@ makeFunction :: Type -> Type -> Type
 makeFunction = FunctionType
 
 makeTuple :: [Type] -> Type
-makeTuple = TupleType
+makeTuple [] = VoidType
+makeTuple [t] = t
+makeTuple ts = TupleType ts
 
 forall :: Set TypeVar -> Facts -> Type -> Type
 forall s [] t
@@ -215,3 +230,9 @@ registerConstraint = OnRegister
 
 classConstraint :: ClassHandle -> [TypeVar] -> Fact
 classConstraint = Constraint
+
+genericKind :: Text
+genericKind = "generic"
+
+falseKind :: Text
+falseKind = "false"

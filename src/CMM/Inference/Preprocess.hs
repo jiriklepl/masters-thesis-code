@@ -8,6 +8,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
+-- TODO: add kinds and constnesses where they make sense
+
 module CMM.Inference.Preprocess where
 
 import safe Control.Monad.State.Lazy
@@ -143,34 +145,31 @@ instance Preprocess Decl a b where
     -- the constant is typed implicitly
       ConstDecl Nothing name expr -> do
         expr' <- preprocess expr
-        storeVar (getName name) (getTypeHandle expr')
+        storeVar (getName name) (VarType $ getTypeHandle expr')
         return $ ConstDecl Nothing (preprocessTrivial name) expr'
     -- the constant is typed explicitly
       ConstDecl (Just type') name expr -> do
-        handle <- freshTypeHandle Star
+        handle <- lookupVar (getName name)
         expr' <- preprocess expr
         type'' <- preprocess type'
         storeFact $ getTypeHandle type'' `subType` handle
         storeFact $ constExprConstraint handle
         storeFact $ handle `subType` getTypeHandle expr'
-        storeVar (getName name) handle
         return $ ConstDecl (Just type'') (preprocessTrivial name) expr'
       TypedefDecl type' names -> do
         type'' <- preprocess type'
-        let handle = getTypeHandle type''
+        let handle = VarType $ getTypeHandle type''
         traverse_ (`storeTVar` handle) (getName <$> names)
         return $ TypedefDecl type'' (preprocessTrivial <$> names)
 
 instance Preprocess Import a b where
   preprocessImpl import'@Import {} = do
-    handle <- freshTypeHandle Star
-    storeVar (getName import') handle
+    handle <- lookupVar (getName import')
     purePreprocess handle import'
 
 instance Preprocess Export a b where
   preprocessImpl export@Export {} = do
-    handle <- freshTypeHandle Star
-    storeVar (getName export) handle
+    handle <- lookupVar (getName export)
     purePreprocess handle export
 
 instance Preprocess AST.Type a b where
@@ -188,21 +187,22 @@ instance Preprocess Registers a b where
   preprocessImpl (Registers mKind type' nameStrLits) = do
     type'' <- preprocess type'
     let typeType = getTypeHandle type''
-    handle <- case mKind of
-      Nothing -> return typeType
-      Just kind -> do
-        handle <- freshTypeHandle Star
-        storeFact $ typeType `subType` handle
-        storeFact $ kindedConstraint (getName kind) handle
-        return handle
-    let go (name, Nothing) = do
-          storeVar (getName name) handle
-          return (withTypeHandle handle <$> name, Nothing)
-        go (name, Just (StrLit strLit)) = do
-          storeAssump $ registerConstraint strLit handle
-          storeVar (getName name) handle
-          return (withTypeHandle handle <$> name, Just (StrLit strLit))
-    nameStrLits' <- traverse go nameStrLits
+
+        setType handle = do
+          storeFact $ typeType `subType` handle
+          for_ mKind $
+            storeFact .  (`kindedConstraint` handle) . getName
+
+        go name mStrLit = do
+          handle <- lookupVar (getName name)
+          setType handle
+          case mStrLit of
+            Nothing -> return (withTypeHandle handle <$> name, Nothing)
+            Just (StrLit strLit) -> do
+              storeFact $ registerConstraint strLit handle
+              return (withTypeHandle handle <$> name, Just (StrLit strLit))
+
+    nameStrLits' <- traverse (uncurry go) nameStrLits
     return (NoType, Registers mKind type'' nameStrLits')
 
 -- TODO: consult conventions with man
@@ -224,14 +224,11 @@ instance Preprocess Procedure a b where
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do
-    handle <- freshTypeHandle Star
+    handle <- lookupVar (getName name)
     type'' <- preprocess type'
-    case mKind of
-      Nothing -> storeFact $ getTypeHandle type'' `subType` handle
-      Just kind -> do
-        storeFact $ getName kind `kindedConstraint` handle
-        storeFact $ getTypeHandle type'' `subType` handle
-    storeVar (getName name) handle
+    storeFact $ getTypeHandle type'' `subType` handle
+    for_ mKind $
+        storeFact . (`kindedConstraint` handle) . getName
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
 instance Preprocess Stmt a b where
@@ -274,13 +271,12 @@ instance Preprocess Stmt a b where
         let retType = makeTuple (VarType . getTypeHandle <$> actuals')
         handle <- freshTypeHandle Star
         storeFact $ handle `typeUnion` retType
-        storeReturn handle
+        getCurrentReturn >>= storeFact . (`subType` handle)
         return (NoType, ReturnStmt mConv Nothing actuals')
       ReturnStmt {} -> undefined
       label@LabelStmt {} -> do
-        handle <- freshTypeHandle Star
+        handle <- lookupVar (getName label)
         storeFact $ handle `typeConstraint` LabelType
-        storeVar (getName label) handle
         purePreprocess NoType label
       ContStmt {} -> undefined
       GotoStmt expr mTargets -- TODO: check if cosher
@@ -305,13 +301,12 @@ instance Preprocess Targets a b where
 instance Preprocess Lit a b where
   preprocessImpl lit = do
     handle <- freshTypeHandle Star
-    storeFact $ constraint lit handle
-    storeAssump $ constExprConstraint handle
+    case lit of
+      LitInt {} -> storeFact $ integerKind `kindedConstraint` handle
+      LitFloat {} -> storeFact $ floatKind `kindedConstraint` handle
+      LitChar {} -> storeFact $ integerKind `kindedConstraint` handle
+    storeFact $ constExprConstraint handle
     purePreprocess handle lit
-    where
-      constraint LitInt {} = numericConstraint
-      constraint LitFloat {} = realConstraint
-      constraint LitChar {} = characterConstraint
 
 instance Preprocess Actual a b where
   preprocessImpl (Actual mKind expr) = do
@@ -342,9 +337,8 @@ instance Preprocess Datum a b where
   preprocessImpl =
     \case
       datum@(DatumLabel name) -> do
-        handle <- freshTypeHandle Star
+        handle <- lookupVar (getName name)
         storeFact $ handle `typeConstraint` AddrType (VarType NoType)
-        storeVar (getName name) handle
         purePreprocess handle datum
       datum@(DatumAlign _) -> do
         purePreprocess NoType datum
@@ -398,8 +392,11 @@ instance Preprocess Expr a b where
         let leftType = getTypeHandle left'
         right' <- preprocess right
         let rightType = getTypeHandle right'
+        storeFact $ SubKind leftType rightType
+        storeFact $ SubKind rightType leftType
         if op `elem` [EqOp, NeqOp, GtOp, LtOp, GeOp, LeOp]
           then do
+            storeFact $ Typing leftType (VarType rightType)
             storeFact $ SubConst handle leftType
             storeFact $ SubConst handle rightType
             storeFact $ Typing handle BoolType

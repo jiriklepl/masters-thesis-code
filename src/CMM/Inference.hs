@@ -1,10 +1,13 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
 
 module CMM.Inference where
+
+import Debug.Trace
 
 import safe Control.Monad.Writer.Lazy
 import safe Control.Lens.Getter
@@ -12,6 +15,7 @@ import safe Control.Lens.Setter
 import safe Control.Lens.Tuple
 import safe Data.Data
 import safe Data.Functor
+import qualified Data.Graph as Graph
 
 import safe Data.Generics.Aliases
 import safe Data.Text (Text)
@@ -22,6 +26,8 @@ import Prelude hiding (const)
 
 import safe CMM.Inference.Type
 import safe CMM.Inference.State
+import Control.Lens.Traversal
+import Data.Foldable
 
 
 class Unify a where
@@ -54,14 +60,14 @@ class UnionPropagate a where
 -- equivalent = undefined
 
 freshInst :: (MonadInferencer m, MonadIO m, Data a) => Scheme a -> m (a, Facts)
-freshInst (given :. facts :=> t) = do
+freshInst (given :. facts' :=> t) = do
   tVars <- traverse ((VarType <$>) . freshTypeHandle) given
   let varMap = Map.fromList $ zip [0..] tVars -- TODO: int map?
       leaf (VarType (TypeLam i _)) = varMap Map.! i
       leaf t' = gmapT transform t'
       transform :: Data d => d -> d
       transform = gmapT transform `extT` leaf
-  return (transform t, transform facts)
+  return (transform t, transform facts')
 
 instance UnionPropagate Type where
   unionPropagate NoType  _ = return () -- error "Implementation error"
@@ -157,8 +163,8 @@ instance Unify Type where
 --   | reg == reg' = Just []
 -- onRegister reg t = Just [NoRegister reg t]
 
-infer :: MonadInferencer m => Fact -> m ()
-infer fact = case fact of
+reduce :: MonadInferencer m => Fact -> m ()
+reduce fact = case fact of
   SubType t t' -> subUnify t t'
   SubKind t t' -> subKinding %= Map.insertWith Set.union t' (Set.singleton t)
   SubConst t t' -> subConsting %= Map.insertWith Set.union t (Set.singleton t')
@@ -180,13 +186,57 @@ infer fact = case fact of
     kinding <~ (use kinding >>= Map.alterF go t)
     where
       go Nothing = return (Just kind)
-      go (Just kind') = kind `intersect` kind'
+      go (Just kind') = Just <$> kind `intersect` kind'
   -- OnRegister reg t ->
   --   case onRegister reg t of
   --     Nothing -> return [fact]
   --     Just errs -> return [] -- TODO: do something about `errs`
   Constraint classHandle ts -> return () -- undefined
 
--- returns Nothing on failure (if the intersection is empty) and also writes errors
-intersect :: MonadInferencer m => Text -> Text -> m (Maybe Text)
-intersect = undefined
+collect :: Graph.Tree Graph.Vertex -> [Graph.Vertex]
+collect (Graph.Node n nodes) = n : concat (collect <$> nodes)
+
+-- TODO: replace with a correct implementation
+deduceKinds :: MonadInferencer m => m ()
+deduceKinds = do
+  subKinding <- Map.toList <$> use subKinding
+  kindings <- use kinding
+  handles <- use handleCounter
+  let edges = concat ((\(from, to) -> (from,) <$> Set.toList to) <$> subKinding)
+      varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
+      graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
+      components = filter ((>1) .length) $ collect <$> Graph.scc graph
+      kinds = catMaybes . ((`Map.lookup` kindings) . (\i -> TypeVar i Star Nothing) <$>) <$> components
+  let
+    propagateKind kind vertices =
+      if kind == falseKind
+        then errors <>= [FalseKind]
+        else kinding %= (`Map.union` Map.fromList ((,kind) . (varMap Map.!) <$> vertices))
+  deduced <- traverse (foldrM intersect genericKind) kinds
+  zipWithM_ propagateKind deduced components
+
+-- TODO: replace with a correct implementation
+deduceConsts :: MonadInferencer m => m ()
+deduceConsts = do
+  subConsts <- Map.toList <$> use subConsting
+  constings <- use consting
+  handles <- use handleCounter
+  let edges = concat ((\(from, to) -> (from,) <$> Set.toList to) <$> subConsts)
+      varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
+      graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
+      components = filter ((>1) .length) $ collect <$> Graph.scc graph
+      consts = catMaybes . ((`Map.lookup` constings) . (\i -> TypeVar i Star Nothing) <$>) <$> components
+  let
+    propagateConst const@(minConst, maxConst) vertices =
+      if minConst > maxConst
+        then errors <>= [FalseConst]
+        else consting %= (`Map.union` Map.fromList ((,const) . (varMap Map.!) <$> vertices))
+    deduced = foldr combineConsts (Regular, ConstExpr) <$> consts
+  zipWithM_ propagateConst deduced components
+
+-- returns `falseKind` on failure (if the intersection is empty) and also writes errors
+intersect :: MonadInferencer m => Text -> Text -> m Text
+intersect a _ = return a -- TODO: this is just a placeholder
+
+combineConsts :: (Constness, Constness) -> (Constness, Constness) -> (Constness, Constness)
+combineConsts (minConst, maxConst) (minConst', maxConst') = (max minConst minConst', min maxConst maxConst')
