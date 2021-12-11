@@ -49,12 +49,9 @@ type MonadInferPreprocessor = MonadState InferPreprocessor
 
 data InferPreprocessor =
   InferPreprocessor
-    { _variables :: Map Text TypeVar
-    , _procVariables :: Maybe (Map Text TypeVar)
-    , _typeVariables :: Map Text TypeVar
-    , _procTypeVariables :: Maybe (Map Text TypeVar)
-    , _facts :: Facts
-    , _assumptions :: Facts
+    { _variables :: [Map Text TypeVar]
+    , _typeVariables :: [Map Text TypeVar]
+    , _facts :: [Facts]
     , _handleCounter :: Int
     , _currentReturn :: TypeVar
     }
@@ -64,65 +61,66 @@ makeLenses ''InferPreprocessor
 initInferPreprocessor :: InferPreprocessor
 initInferPreprocessor =
   InferPreprocessor
-    { _variables = mempty
-    , _procVariables = mempty
-    , _typeVariables = mempty
-    , _procTypeVariables = mempty
-    , _facts = mempty
-    , _assumptions = mempty
+    { _variables = [mempty]
+    , _typeVariables = [mempty]
+    , _facts = [mempty]
     , _handleCounter = 0
     , _currentReturn = noCurrentReturn
     }
 
 beginTopLevel :: MonadInferPreprocessor m => Map Text TypeKind -> Map Text TypeKind -> m ()
 beginTopLevel vars tVars = do
-  variables <~ declVars vars
-  typeVariables <~ declVars tVars
+  variables <~ pure <$> declVars vars
+  typeVariables <~ pure <$> declVars tVars
 
 noCurrentReturn :: TypeVar
 noCurrentReturn = NoType
 
 -- returns `NoType` on failure
 lookupVar :: MonadInferPreprocessor m => Text -> m TypeVar
-lookupVar name = liftA2 (lookupVarImpl name) (use procVariables) (use variables)
+lookupVar name = lookupVarImpl name <$> use variables
 
 lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeVar)
-lookupProc = uses variables . Map.lookup
+lookupProc = uses variables . (. last) . Map.lookup
 
 lookupTVar :: MonadInferPreprocessor m => Text -> m TypeVar
 lookupTVar name =
-  liftA2 (lookupVarImpl name) (use procTypeVariables) (use typeVariables)
+  lookupVarImpl name <$> use typeVariables
 
-lookupVarImpl :: Ord k => k -> Maybe (Map k TypeVar) -> Map k TypeVar -> TypeVar
-lookupVarImpl name procVars vars =
-  fromMaybe NoType $
-  (procVars >>= (name `Map.lookup`)) <|> name `Map.lookup` vars
+lookupVarImpl :: Ord k => k -> [Map k TypeVar] -> TypeVar
+lookupVarImpl name vars =
+  fromMaybe NoType . foldr (<|>) Nothing $
+  (name `Map.lookup`) <$> vars
 
 storeVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeVar name handle = do
   vars <- use variables
-  tVars <- use procVariables
-  storeVarImpl name handle vars tVars
+  storeVarImpl name handle vars
 
 beginProc :: MonadInferPreprocessor m => Map Text TypeKind -> Map Text TypeKind -> m ()
 beginProc vars tVars = do
-  procVariables <~ Just <$> declVars vars
-  procTypeVariables <~ Just <$> declVars tVars
+  vars' <- declVars vars
+  variables %= (vars' :)
+  tVars' <- declVars tVars
+  typeVariables %= (tVars' :)
+  facts %= ([]:)
   currentReturn <~ freshTypeHandle Star
 
 declVars :: MonadInferPreprocessor m => Map Text TypeKind -> m (Map Text TypeVar)
 declVars = Map.traverseWithKey (&) . (freshNamedHandle <$>)
 
-endProc :: MonadInferPreprocessor m => m TypeVar
+endProc :: MonadInferPreprocessor m => m (Facts, TypeVar)
 endProc = do
-  procVariables .= Nothing
-  procTypeVariables .= Nothing
-  exchange currentReturn noCurrentReturn
+  variables %= tail
+  typeVariables %= tail
+  ~(h : t) <- use facts
+  facts .= t
+  (h,) <$> exchange currentReturn noCurrentReturn
 
-storeProc :: MonadInferPreprocessor m => Text -> Type -> m ()
-storeProc name handle =
-  use variables >>=
-  (storeFact . flip typeUnion handle) . lookupVarImpl name Nothing
+storeProc :: MonadInferPreprocessor m => Text -> Facts -> Type -> m ()
+storeProc name fs t = do
+  handle <- uses variables $ lookupVarImpl name
+  storeFact $ forall (freeTypeVars fs <> freeTypeVars t) fs handle t
 
 getCurrentReturn :: MonadInferPreprocessor m => m TypeVar
 getCurrentReturn = use currentReturn
@@ -130,24 +128,21 @@ getCurrentReturn = use currentReturn
 storeTVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeTVar name handle = do
   vars <- use typeVariables
-  tVars <- use procTypeVariables
-  storeVarImpl name handle vars tVars
+  storeVarImpl name handle vars
 
 storeVarImpl ::
      (Ord k, MonadInferPreprocessor m)
   => k
   -> Type
-  -> Map k TypeVar
-  -> Maybe (Map k TypeVar)
+  -> [Map k TypeVar]
   -> m ()
-storeVarImpl name handle vars procVars =
-  storeFact $ lookupVarImpl name procVars vars `typeUnion` handle
+storeVarImpl name handle vars =
+  storeFact $ lookupVarImpl name vars `typeUnion` handle
 
 storeFact :: MonadInferPreprocessor m => Fact -> m ()
-storeFact = (facts %=) . (:)
-
-storeAssump :: MonadInferPreprocessor m => Fact -> m ()
-storeAssump = (assumptions %=) . (:)
+storeFact f = do
+  ~(h: t) <- use facts
+  facts .= (f:h):t
 
 freshTypeHandle :: MonadInferPreprocessor m => TypeKind -> m TypeVar
 freshTypeHandle tKind = do

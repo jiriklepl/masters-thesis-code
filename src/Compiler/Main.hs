@@ -86,7 +86,13 @@ main = do
              ]))
   print (CMM.Inference.Preprocess.State._facts miner)
   execStateT (do
-    let fs = CMM.Inference.Preprocess.State._facts miner
+    let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
+    traverse_ Infer.reduce fs
+    fs <- use InferState.facts
+    InferState.facts .= mempty
+    traverse_ Infer.reduce fs
+    fs <- use InferState.facts
+    InferState.facts .= mempty
     traverse_ Infer.reduce fs
     fs <- use InferState.facts
     InferState.facts .= mempty

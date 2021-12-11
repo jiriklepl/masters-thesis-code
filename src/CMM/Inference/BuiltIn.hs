@@ -5,6 +5,8 @@ module CMM.Inference.BuiltIn where
 
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Set (Set)
+import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.AST as AST
@@ -64,8 +66,8 @@ builtInContext = [] -- undefined
 -- the constrained type has to be a subtype of an instance type
 builtInClasses :: Map Text Class
 builtInClasses = Map.fromList
-  [ (numClassName, Class $ [Star] :. [] :=> [int 32, int 16, int 8, int 64])
-  , (labelClassName, Class $ [Star] :. [] :=> [Inst $ [] :. [] :=> [LabelType]])
-  , (addressClassName, Class $ [Star] :. [] :=> [Inst $ [Star] :. [] :=> [AddrType . VarType $ TypeLam 0 Star]])
+  [ (numClassName, Class $ Set.singleton (TypeLam 0 Star Nothing) :. [] :=> [int 32, int 16, int 8, int 64])
+  , (labelClassName, Class $ Set.singleton (TypeLam 0 Star Nothing) :. [] :=> [Inst $ mempty :. [] :=> [LabelType]])
+  , (addressClassName, Class $ Set.singleton (TypeLam 0 Star Nothing) :. [] :=> [Inst $ Set.singleton (TypeLam 0 Star Nothing) :. [] :=> [AddrType . VarType $ TypeLam 0 Star Nothing]])
   ]
-  where int n = Inst $ [Star] :. [integerKind `KindLimit` TypeLam 0 Star, TypeLam 0 Star `typeConstraint` TBitsType n] :=> [VarType $ TypeLam 0 Star]
+  where int n = Inst $ Set.singleton (TypeLam 0 Star Nothing) :. [integerKind `KindLimit` TypeLam 0 Star Nothing, TypeLam 0 Star Nothing `typeConstraint` TBitsType n] :=> [VarType $ TypeLam 0 Star Nothing]

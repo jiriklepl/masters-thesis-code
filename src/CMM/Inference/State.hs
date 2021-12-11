@@ -33,6 +33,7 @@ data Inferencer =
     , _facts :: Facts
     , _assumps :: Facts
     , _context :: Facts
+    , _schemes :: Map TypeVar (Scheme Type)
     }
     deriving (Show)
 
@@ -49,6 +50,7 @@ initInferencer handleCounter =
     , _assumps = mempty
     , _errors = mempty
     , _context = builtInContext
+    , _schemes = mempty
     }
 
 data UnificationError

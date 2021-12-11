@@ -1,4 +1,4 @@
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -6,8 +6,6 @@
 {-# LANGUAGE TupleSections #-}
 
 module CMM.Inference where
-
-import Debug.Trace
 
 import safe Control.Monad.Writer.Lazy
 import safe Control.Lens.Getter
@@ -59,15 +57,24 @@ class UnionPropagate a where
 -- equivalent :: Facts -> Facts -> Bool
 -- equivalent = undefined
 
-freshInst :: (MonadInferencer m, MonadIO m, Data a) => Scheme a -> m (a, Facts)
+fresherVarType :: MonadInferencer m => TypeVar -> m TypeVar
+fresherVarType tVar = do
+  let
+    (kind, label) = case tVar of
+      TypeVar _ kind' label' -> (kind', label')
+      TypeLam _ kind' label' -> (kind', label')
+      TypeConst _ kind' label' -> (kind', label')
+      NoType -> (Generic, Nothing)
+  handleCounter += 1
+  uses handleCounter $ \i -> TypeVar i kind label
+
+freshInst :: (MonadInferencer m, MonadIO m, Data a) => Scheme a -> m (Facts, a)
 freshInst (given :. facts' :=> t) = do
-  tVars <- traverse ((VarType <$>) . freshTypeHandle) given
-  let varMap = Map.fromList $ zip [0..] tVars -- TODO: int map?
-      leaf (VarType (TypeLam i _)) = varMap Map.! i
-      leaf t' = gmapT transform t'
-      transform :: Data d => d -> d
+  varMap <- sequence $ Map.fromSet fresherVarType given
+  let transform :: Data d => d -> d
       transform = gmapT transform `extT` leaf
-  return (transform t, transform facts')
+      leaf tVar = fromMaybe tVar (tVar `Map.lookup` varMap)
+  return (transform facts', transform t)
 
 instance UnionPropagate Type where
   unionPropagate NoType  _ = return () -- error "Implementation error"
@@ -127,7 +134,6 @@ instance Unify Type where
   unify (ErrorType text) (ErrorType text') = Left [GotErrorType text, GotErrorType text']
   unify (ErrorType text) _ = Left [GotErrorType text]
   unify _ (ErrorType text) = Left [GotErrorType text]
-  unify scheme@Forall{} scheme'@Forall{} = Left [IllegalPolytype scheme, IllegalPolytype scheme']
   unify t t'
     | t == t' = Right (mempty, t)
   unify (VarType tVar) t' = bind tVar t'
@@ -170,16 +176,6 @@ reduce fact = case fact of
   SubConst t t' -> subConsting %= Map.insertWith Set.union t (Set.singleton t')
   Typing t t' -> addTyping $ bind t t'
   TypeUnion t t' -> unionPropagate t t' $> bind t t' >>= addTyping
-  InstType tVar inst -> go tVar
-    where
-      go var = uses typing (var `Map.lookup`) >>= \case
-        Just (Forall scheme) -> do
-          (inst', facts') <- freshInst scheme
-          facts <>= facts'
-          unionPropagate inst inst' $> bind inst inst' >>= addTyping
-        Just (VarType var') -> go var'
-        Just t -> errors <>= [IllegalPolytype t]
-        Nothing -> facts <>= [fact]
   ConstnessLimit const t ->
     consting %= Map.insertWith max t (const, ConstExpr)
   KindLimit kind t -> do
@@ -192,6 +188,12 @@ reduce fact = case fact of
   --     Nothing -> return [fact]
   --     Just errs -> return [] -- TODO: do something about `errs`
   Constraint classHandle ts -> return () -- undefined
+  NestedFacts (kinds :. fs :=> [tVar `TypeUnion` t]) -> do
+    let scheme = kinds :. fs :=> t
+    (fs', t') <- freshInst scheme
+    tVar' <- fresherVarType tVar
+    facts <>= tVar' `TypeUnion` t' : fs'
+    schemes %= Map.insert tVar scheme -- TODO: add a polytype check
 
 collect :: Graph.Tree Graph.Vertex -> [Graph.Vertex]
 collect (Graph.Node n nodes) = n : concat (collect <$> nodes)

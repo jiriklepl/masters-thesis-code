@@ -13,6 +13,9 @@
 module CMM.Inference.Preprocess where
 
 import safe Control.Monad.State.Lazy
+import safe Control.Applicative
+import safe Control.Lens.Setter
+import safe Control.Lens.Tuple
 import safe Data.Foldable
 import safe Data.Function
 import safe Data.Traversable
@@ -27,7 +30,6 @@ import safe CMM.Inference.BuiltIn as Infer
 import safe CMM.Inference.Preprocess.State as Infer
 import safe CMM.Inference.Type as Infer
 import safe CMM.Parser.HasPos
-import safe Control.Applicative
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- TODO: kind annotations are constraints, not casts! check for any occurrence of violation of this
@@ -213,14 +215,12 @@ instance Preprocess Procedure a b where
     formals' <- preprocessT formals
     let formalTypes = VarType . getTypeHandle <$> formals'
     body' <- preprocess body
-    retType <- VarType <$> endProc
+    (fs , retType) <- (_2 %~ VarType) <$> endProc
     let argumentsType = makeTuple formalTypes
     let procedureType = makeFunction argumentsType retType
-    let procedureScheme = forall (freeTypeVars procedureType) [] procedureType -- TODO: add context to facts
-    storeProc (getName name) procedureScheme
-    handle <- lookupVar (getName name)
+    storeProc (getName name) fs procedureType
     return
-      (handle, Procedure mConv (preprocessTrivial name) formals' body')
+      (NoType, Procedure mConv (preprocessTrivial name) formals' body')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do

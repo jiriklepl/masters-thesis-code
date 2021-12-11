@@ -2,6 +2,9 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 
 -- TODO: create a special type for Kinds
@@ -73,22 +76,22 @@ instance Ord TypeKind where
 
 data TypeVar
   = NoType
-  | TypeVar Int TypeKind (Maybe Text) -- TODO: change text to something even more useful
-  | TypeLam Int TypeKind
-  | TypeConst Text TypeKind
+  | TypeVar Int TypeKind (Maybe Text) -- TODO: change text to something even more useful; also: reduce repetition
+  | TypeLam Int TypeKind (Maybe Text)
+  | TypeConst Text TypeKind (Maybe Text)
   deriving (Show, Data, IsTyped)
 
 instance Eq TypeVar where
   TypeVar int _ _ == TypeVar int' _ _ = int == int'
-  TypeLam int _ == TypeLam int' _ = int == int'
-  TypeConst name _ == TypeConst name' _ = name == name'
+  TypeLam int _ _ == TypeLam int' _ _ = int == int'
+  TypeConst name _ _ == TypeConst name' _ _ = name == name'
   _ == _ = False
 
 instance Ord TypeVar where
   NoType `compare` NoType = EQ
   TypeVar int _ _ `compare` TypeVar int' _ _ = int `compare` int'
-  TypeLam int _ `compare` TypeLam int' _ = int `compare` int'
-  TypeConst name _ `compare` TypeConst name' _ = name `compare` name'
+  TypeLam int _ _ `compare` TypeLam int' _ _ = int `compare` int'
+  TypeConst name _ _ `compare` TypeConst name' _ _ = name `compare` name'
 
   NoType `compare` _ = LT
   _ `compare` TypeConst {} = LT
@@ -102,8 +105,8 @@ instance Ord TypeVar where
 instance HasKind TypeVar where
   getKind NoType{} = Generic
   getKind (TypeVar _ kind _) = kind
-  getKind (TypeLam _ kind) = kind
-  getKind (TypeConst _ kind) = kind
+  getKind (TypeLam _ kind _) = kind
+  getKind (TypeConst _ kind _) = kind
 
 infix 6 :=>
 
@@ -117,7 +120,7 @@ instance HasKind a => HasKind (Qual a) where
 infix 5 :.
 
 data Scheme a =
-  [TypeKind] :. Qual a
+  Set TypeVar :. Qual a
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 instance HasKind a => HasKind (Scheme a) where
@@ -125,7 +128,6 @@ instance HasKind a => HasKind (Scheme a) where
 
 data Type
   = ErrorType Text
-  | Forall (Scheme Type)
   | VarType TypeVar
   | TBitsType Int
   | BoolType
@@ -140,7 +142,6 @@ data Type
 
 instance HasKind Type where
   getKind ErrorType{} = Generic
-  getKind (Forall scheme) = getKind scheme
   getKind (VarType t) = getKind t
   getKind TBitsType{} = Star
   getKind BoolType{} = Star
@@ -172,10 +173,12 @@ data Fact
   | SubConst TypeVar TypeVar -- superConst; subConst
   | InstType TypeVar TypeVar -- polytype; monotype
   | Constraint ClassHandle [TypeVar]
-  | NestedFacts Facts Facts
-  deriving (Show, Eq, Ord, Data)
+  | NestedFacts (Scheme Facts)
+  deriving (Show, Eq, Ord, Data, IsTyped)
 
 type Facts = [Fact]
+
+deriving instance IsTyped Fact => IsTyped Facts
 
 class HasKind a where
   getKind :: a -> TypeKind
@@ -199,10 +202,10 @@ makeTuple [] = VoidType
 makeTuple [t] = t
 makeTuple ts = TupleType ts
 
-forall :: Set TypeVar -> Facts -> Type -> Type
-forall s [] t
-  | null s = Forall $ [] :. [] :=> t
-forall _ _ t = Forall $ [] :. [] :=> t -- TODO: continue from here by replacing this placeholder
+forall :: Set TypeVar -> Facts -> TypeVar -> Type -> Fact
+forall s fs tVar t
+  | null s = NestedFacts $ mempty :. fs :=> [tVar `typeUnion` t] -- the trivial case
+forall s fs tVar t = NestedFacts $ s :. fs :=> [tVar `typeUnion` t]
 
 typeUnion :: TypeVar -> Type -> Fact
 typeUnion = TypeUnion

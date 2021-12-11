@@ -68,6 +68,9 @@
   - [ ] Type classes
     - [ ] MPTC
 
+- [ ] Type
+  - [ ] check correctness of lambdize&forall
+
 - [ ] write unit tests
   - [ ] for binOp: precedence, associativity etc
 
