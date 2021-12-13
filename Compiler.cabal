@@ -52,6 +52,7 @@ executable Compiler
                        CMM.Warnings
   -- other-extensions:
   build-depends:       base >= 4.13 && < 4.17,
+                       bimap ^>= 0.4.0,
                        megaparsec ^>=9.0.1,
                        mtl ^>=2.2.2,
                        text ^>=1.2.4.0,

@@ -14,7 +14,7 @@ import safe Control.Lens.Tuple
 import safe Data.Data
 import safe Data.Functor
 import qualified Data.Graph as Graph
-
+import Control.Lens.Traversal
 import safe Data.Generics.Aliases
 import safe Data.Text (Text)
 import safe qualified Data.Map as Map
@@ -24,8 +24,6 @@ import Prelude hiding (const)
 
 import safe CMM.Inference.Type
 import safe CMM.Inference.State
-import Control.Lens.Traversal
-import Data.Foldable
 
 
 class Unify a where
@@ -64,7 +62,7 @@ fresherVarType tVar = do
       TypeVar _ kind' label' -> (kind', label')
       TypeLam _ kind' label' -> (kind', label')
       TypeConst _ kind' label' -> (kind', label')
-      NoType -> (Generic, Nothing)
+      NoType -> (GenericType, Nothing)
   handleCounter += 1
   uses handleCounter $ \i -> TypeVar i kind label
 
@@ -89,8 +87,8 @@ instance UnionPropagate Type where
     facts <>= [TypeUnion argsType args, TypeUnion retType ret, SubConst retType argsType, SubConst argsType tVar]
   unionPropagate _ _ = return () -- TODO: check this
 
-matchKind :: (HasKind a, HasKind b) => a -> b -> Bool
-matchKind a b = getKind a == getKind b
+matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
+matchKind a b = getTypeKind a == getTypeKind b
 
 bind :: TypeVar -> Type -> Either [UnificationError] (Subst, Type)
 bind tVar t'@(VarType tVar')
@@ -182,18 +180,20 @@ reduce fact = case fact of
     kinding <~ (use kinding >>= Map.alterF go t)
     where
       go Nothing = return (Just kind)
-      go (Just kind') = Just <$> kind `intersect` kind'
-  -- OnRegister reg t ->
-  --   case onRegister reg t of
-  --     Nothing -> return [fact]
-  --     Just errs -> return [] -- TODO: do something about `errs`
+      go (Just kind') = return . Just $ kind <> kind'
+  InstType gen inst -> uses schemes (gen `Map.lookup`) >>= \case
+    Just scheme -> do
+      (fs', t) <- freshInst scheme
+      facts <>= inst `TypeUnion` t : fs'
+    Nothing -> facts <>= [fact]
+  OnRegister reg t -> registerKind reg >>= reduce . (`KindLimit` t)
   Constraint classHandle ts -> return () -- undefined
   NestedFacts (kinds :. fs :=> [tVar `TypeUnion` t]) -> do
     let scheme = kinds :. fs :=> t
     (fs', t') <- freshInst scheme
     tVar' <- fresherVarType tVar
     facts <>= tVar' `TypeUnion` t' : fs'
-    schemes %= Map.insert tVar scheme -- TODO: add a polytype check
+    schemes %= Map.insert tVar scheme -- TODO: simplify the scheme
 
 collect :: Graph.Tree Graph.Vertex -> [Graph.Vertex]
 collect (Graph.Node n nodes) = n : concat (collect <$> nodes)
@@ -201,10 +201,10 @@ collect (Graph.Node n nodes) = n : concat (collect <$> nodes)
 -- TODO: replace with a correct implementation
 deduceKinds :: MonadInferencer m => m ()
 deduceKinds = do
-  subKinding <- Map.toList <$> use subKinding
+  subKindings <- Map.toList <$> use subKinding
   kindings <- use kinding
   handles <- use handleCounter
-  let edges = concat ((\(from, to) -> (from,) <$> Set.toList to) <$> subKinding)
+  let edges = concat ((\(f, t) -> (f,) <$> Set.toList t) <$> subKindings)
       varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
       graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
       components = filter ((>1) .length) $ collect <$> Graph.scc graph
@@ -214,7 +214,7 @@ deduceKinds = do
       if kind == falseKind
         then errors <>= [FalseKind]
         else kinding %= (`Map.union` Map.fromList ((,kind) . (varMap Map.!) <$> vertices))
-  deduced <- traverse (foldrM intersect genericKind) kinds
+  let deduced = mconcat <$> kinds
   zipWithM_ propagateKind deduced components
 
 -- TODO: replace with a correct implementation
@@ -223,7 +223,7 @@ deduceConsts = do
   subConsts <- Map.toList <$> use subConsting
   constings <- use consting
   handles <- use handleCounter
-  let edges = concat ((\(from, to) -> (from,) <$> Set.toList to) <$> subConsts)
+  let edges = concat ((\(f, t) -> (f,) <$> Set.toList t) <$> subConsts)
       varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
       graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
       components = filter ((>1) .length) $ collect <$> Graph.scc graph
@@ -233,12 +233,8 @@ deduceConsts = do
       if minConst > maxConst
         then errors <>= [FalseConst]
         else consting %= (`Map.union` Map.fromList ((,const) . (varMap Map.!) <$> vertices))
-    deduced = foldr combineConsts (Regular, ConstExpr) <$> consts
+    deduced = mconcat consts
   zipWithM_ propagateConst deduced components
 
--- returns `falseKind` on failure (if the intersection is empty) and also writes errors
-intersect :: MonadInferencer m => Text -> Text -> m Text
-intersect a _ = return a -- TODO: this is just a placeholder
-
-combineConsts :: (Constness, Constness) -> (Constness, Constness) -> (Constness, Constness)
-combineConsts (minConst, maxConst) (minConst', maxConst') = (max minConst minConst', min maxConst maxConst')
+registerKind :: MonadInferencer m => Text -> m DataKind
+registerKind = undefined

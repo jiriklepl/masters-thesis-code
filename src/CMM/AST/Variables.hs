@@ -62,7 +62,7 @@ addCommonCases go =
       \case
         decl@(Annot ConstDecl {} (_ :: SourcePos)) -> addVarTrivial decl Star
         decl@(Annot (TypedefDecl _ names) (_ :: SourcePos)) ->
-          decl <$ traverse_ (flip (addTVar decl) Generic) (getName <$> names)
+          decl <$ traverse_ (flip (addTVar decl) GenericType) (getName <$> names)
         decl -> gmapM go decl
     goImport =
       \case

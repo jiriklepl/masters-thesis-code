@@ -1,6 +1,5 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -23,6 +22,38 @@ newtype ClassHandle
   = ClassHandle Text
   deriving (Show, Eq, Ord, Data)
 
+data DataKind
+  = GenericData
+  | FalseData
+  | DataKind (Set Int)
+  | RegisterKind Int
+  deriving (Show, Eq, Ord, Data)
+
+instance Semigroup DataKind where
+  GenericData <> a = a
+  a <> GenericData = a
+
+  FalseData <> _ = FalseData
+  _ <> FalseData = FalseData
+
+  DataKind rs <> DataKind rs' =  makeKind $ rs `Set.intersection` rs'
+    where
+      makeKind set
+        | null set = FalseData
+        | Set.size set > 1 = DataKind set
+        | otherwise = RegisterKind $ Set.findMin set
+
+  DataKind rs <> b@(RegisterKind r)
+    | r `Set.member` rs = b
+    | otherwise = FalseData
+  RegisterKind r <> DataKind rs = DataKind rs <> RegisterKind r
+
+  a@(RegisterKind r) <> RegisterKind r'
+    | r == r' = a
+    | otherwise = FalseData
+
+instance Monoid DataKind where
+  mempty = GenericData
 
 data Constness
   = Regular
@@ -41,18 +72,23 @@ instance Ord Constness where
   ConstExpr `compare` _ = GT
   _ `compare` ConstExpr = LT
 
--- (Kind, Constness, Register)
-type TypeAnnotations = (Maybe Text, Constness, Maybe Text)
+data ConstnessBounds = ConstnessBounds Constness Constness
+
+instance Semigroup ConstnessBounds where
+  minConst `ConstnessBounds` maxConst <> minConst' `ConstnessBounds` maxConst' = max minConst minConst' `ConstnessBounds` min maxConst maxConst'
+
+instance Monoid ConstnessBounds where
+  mempty = Regular `ConstnessBounds` ConstExpr
 
 data TypeKind
   = Star
   | TypeKind :-> TypeKind
-  | Generic
+  | GenericType -- wild
   deriving (Show, Data)
 
 instance Eq TypeKind where
-  Generic == _ = True
-  _ == Generic = True
+  GenericType == _ = True
+  _ == GenericType = True
 
   Star == Star = True
 
@@ -60,9 +96,9 @@ instance Eq TypeKind where
   _ == _ = False
 
 instance Ord TypeKind where
-  Generic `compare` Generic = EQ
-  Generic `compare` _ = LT
-  _ `compare` Generic = GT
+  GenericType `compare` GenericType = EQ
+  GenericType `compare` _ = LT
+  _ `compare` GenericType = GT
 
   Star `compare` Star = EQ
   Star `compare` _ = LT
@@ -102,11 +138,11 @@ instance Ord TypeVar where
   TypeVar {} `compare` TypeLam {} = LT
   TypeLam {} `compare` TypeVar {} = GT
 
-instance HasKind TypeVar where
-  getKind NoType{} = Generic
-  getKind (TypeVar _ kind _) = kind
-  getKind (TypeLam _ kind _) = kind
-  getKind (TypeConst _ kind _) = kind
+instance HasTypeKind TypeVar where
+  getTypeKind NoType{} = GenericType
+  getTypeKind (TypeVar _ kind _) = kind
+  getTypeKind (TypeLam _ kind _) = kind
+  getTypeKind (TypeConst _ kind _) = kind
 
 infix 6 :=>
 
@@ -114,8 +150,8 @@ data Qual a =
   Facts :=> a
   deriving (Show, Eq, Ord, Data, IsTyped)
 
-instance HasKind a => HasKind (Qual a) where
-  getKind (_ :=> t) = getKind t
+instance HasTypeKind a => HasTypeKind (Qual a) where
+  getTypeKind (_ :=> t) = getTypeKind t
 
 infix 5 :.
 
@@ -123,8 +159,8 @@ data Scheme a =
   Set TypeVar :. Qual a
   deriving (Show, Eq, Ord, Data, IsTyped)
 
-instance HasKind a => HasKind (Scheme a) where
-  getKind (_ :. t) = getKind t
+instance HasTypeKind a => HasTypeKind (Scheme a) where
+  getTypeKind (_ :. t) = getTypeKind t
 
 data Type
   = ErrorType Text
@@ -140,18 +176,18 @@ data Type
   | VoidType
   deriving (Show, Eq, Ord, Data, IsTyped)
 
-instance HasKind Type where
-  getKind ErrorType{} = Generic
-  getKind (VarType t) = getKind t
-  getKind TBitsType{} = Star
-  getKind BoolType{} = Star
-  getKind TupleType{} = Star -- TODO: check if all types are `Star`
-  getKind FunctionType{} = Star -- TODO: ditto
-  getKind AddrType{} = Star -- TODO: ditto
-  getKind LabelType{} = Star
-  getKind StringType{} = Star
-  getKind String16Type{} = Star
-  getKind VoidType{} = Star
+instance HasTypeKind Type where
+  getTypeKind ErrorType{} = GenericType
+  getTypeKind (VarType t) = getTypeKind t
+  getTypeKind TBitsType{} = Star
+  getTypeKind BoolType{} = Star
+  getTypeKind TupleType{} = Star -- TODO: check if all types are `Star`
+  getTypeKind FunctionType{} = Star -- TODO: ditto
+  getTypeKind AddrType{} = Star -- TODO: ditto
+  getTypeKind LabelType{} = Star
+  getTypeKind StringType{} = Star
+  getTypeKind String16Type{} = Star
+  getTypeKind VoidType{} = Star
 
 -- TODO: add methods and their instances
 newtype Class =
@@ -166,7 +202,7 @@ data Fact
   = SubType TypeVar TypeVar -- supertype; subtype
   | TypeUnion TypeVar Type -- binds the type variable to a type
   | Typing TypeVar Type -- states that the type variable follows a certain typing
-  | KindLimit Text TypeVar -- lower bound on the kind of the type variable
+  | KindLimit DataKind TypeVar -- lower bound on the kind of the type variable
   | ConstnessLimit Constness TypeVar -- lower bound on the constness of the type variable
   | OnRegister Text TypeVar -- states that the type variable stores its data to a certain register
   | SubKind TypeVar TypeVar -- superKind; subKind
@@ -180,8 +216,8 @@ type Facts = [Fact]
 
 deriving instance IsTyped Fact => IsTyped Facts
 
-class HasKind a where
-  getKind :: a -> TypeKind
+class HasTypeKind a where
+  getTypeKind :: a -> TypeKind
 
 class Data a =>
       IsTyped a
@@ -219,7 +255,7 @@ subType = SubType
 instType :: TypeVar -> TypeVar -> Fact
 instType = InstType
 
-kindedConstraint :: Text -> TypeVar -> Fact
+kindedConstraint :: DataKind -> TypeVar -> Fact
 kindedConstraint = KindLimit
 
 constExprConstraint :: TypeVar -> Fact
@@ -234,8 +270,8 @@ registerConstraint = OnRegister
 classConstraint :: ClassHandle -> [TypeVar] -> Fact
 classConstraint = Constraint
 
-genericKind :: Text
-genericKind = "generic"
+genericKind :: DataKind
+genericKind = GenericData
 
-falseKind :: Text
-falseKind = "false"
+falseKind :: DataKind
+falseKind = FalseData

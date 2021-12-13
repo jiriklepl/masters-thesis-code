@@ -24,7 +24,7 @@ type Subst = Map TypeVar Type
 data Inferencer =
   Inferencer
     { _typing :: Subst -- contains types of type variables
-    , _kinding :: Map TypeVar Text -- contains least kinds of type variables
+    , _kinding :: Map TypeVar DataKind -- contains kinds of type variables
     , _subKinding :: Map TypeVar (Set TypeVar) -- maps variables to their superKinds
     , _consting :: Map TypeVar (Constness, Constness) -- contains constness limits of type variables
     , _subConsting :: Map TypeVar (Set TypeVar) -- maps variables to their subConsts

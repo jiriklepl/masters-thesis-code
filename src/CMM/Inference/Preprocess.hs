@@ -193,7 +193,7 @@ instance Preprocess Registers a b where
         setType handle = do
           storeFact $ typeType `subType` handle
           for_ mKind $
-            storeFact .  (`kindedConstraint` handle) . getName
+            storeFact .  (`kindedConstraint` handle) . getDataKind . getName
 
         go name mStrLit = do
           handle <- lookupVar (getName name)
@@ -228,7 +228,7 @@ instance Preprocess Formal a b where
     type'' <- preprocess type'
     storeFact $ getTypeHandle type'' `subType` handle
     for_ mKind $
-        storeFact . (`kindedConstraint` handle) . getName
+        storeFact . (`kindedConstraint` handle) . getDataKind . getName
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
 instance Preprocess Stmt a b where
@@ -289,7 +289,7 @@ instance Preprocess Stmt a b where
 instance Preprocess KindName a b where
   preprocessImpl (KindName mKind name) = do
     handle <- freshTypeHandle Star
-    traverse_ (storeFact . (`kindedConstraint` handle) . getName) mKind
+    traverse_ (storeFact . (`kindedConstraint` handle) . getDataKind . getName) mKind
     return (handle, KindName mKind (preprocessTrivial name))
 
 instance Preprocess Arm a b where
@@ -313,7 +313,7 @@ instance Preprocess Actual a b where
     expr' <- preprocess expr
     let exprType = getTypeHandle expr'
     for_ mKind $ \kind ->
-      storeFact $ getName kind `kindedConstraint` exprType
+      storeFact $ (getDataKind . getName) kind `kindedConstraint` exprType
     return (exprType, Actual mKind expr')
 
 instance Preprocess Init a b where
