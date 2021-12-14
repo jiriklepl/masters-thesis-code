@@ -52,6 +52,7 @@ data InferPreprocessor =
     { _variables :: [Map Text TypeVar]
     , _typeVariables :: [Map Text TypeVar]
     , _facts :: [Facts]
+    , _cSymbols :: [Text]
     , _handleCounter :: Int
     , _currentReturn :: TypeVar
     }
@@ -64,6 +65,7 @@ initInferPreprocessor =
     { _variables = [mempty]
     , _typeVariables = [mempty]
     , _facts = [mempty]
+    , _cSymbols = mempty
     , _handleCounter = 0
     , _currentReturn = noCurrentReturn
     }
@@ -153,3 +155,6 @@ freshNamedHandle :: MonadInferPreprocessor m => TypeKind -> Text -> m TypeVar
 freshNamedHandle tKind name = do
   handleCounter += 1
   (Just name &) . (tKind &) . TypeVar  <$> use handleCounter
+
+storeCSymbol :: MonadInferPreprocessor m => Text -> m ()
+storeCSymbol = (cSymbols %=) . (:)

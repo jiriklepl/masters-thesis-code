@@ -20,13 +20,11 @@ import LLVM.IRBuilder.Module
 import LLVM.IRBuilder.Monad
 import Prettyprinter
 
-import CMM.AST
 import CMM.AST.Annot
 import CMM.AST.Blockifier
 import qualified CMM.AST.Blockifier.State as B
 import CMM.AST.Flattener
 import CMM.AST.Variables
-import CMM.FlowAnalysis
 import CMM.Inference.Preprocess as Infer
 import CMM.Inference.Preprocess.State as Infer
 import qualified CMM.Inference.Preprocess.State
@@ -44,39 +42,33 @@ main = do
   contents <- TS.getContents
   let ast =
         either undefined id .
-        parse procedure . either undefined id . parse tokenize $
+        parse unit . either undefined id . parse tokenize $
         contents
   let flattened = flatten ast
   (mined, miner) <- runStateT (preprocess ast) initInferPreprocessor
   (blockified, blockifier) <-
     runStateT
-      (blockifyProcedure flattened <* analyzeFlow flattened)
+      (blockify flattened)
       B.initBlockifier
   T.putStr . T.pack . show $ pretty blockified
-  let translated =
-        ppllvm $
-        flip
-          evalState
-          Tr.initTranslState
-            { Tr._controlFlow = B._controlFlow blockifier
-            , Tr._blockData = B._blockData blockifier
-            , Tr._blocksTable =
-                Map.fromList . (swap <$>) . Map.toList $
-                B._blocksTable blockifier
-            } $
-        buildModuleT "llvm" $
-        runIRBuilderT emptyIRBuilder $ translate blockified
-  T.putStr translated
+  -- let translated =
+  --       ppllvm $
+  --       flip
+  --         evalState
+  --         Tr.initTranslState
+  --           { Tr._controlFlow = B._controlFlow blockifier
+  --           , Tr._blockData = B._blockData blockifier
+  --           , Tr._blocksTable =
+  --               Map.fromList . (swap <$>) . Map.toList $
+  --               B._blocksTable blockifier
+  --           } $
+  --       buildModuleT "llvm" $
+  --       runIRBuilderT emptyIRBuilder $ translate blockified
+  -- T.putStr translated
   print mined
-  let annot = takeAnnot ast
   vars <-
     globalVariables
-      (Unit
-         [ withAnnot annot $
-           TopSection
-             (CMM.AST.StrLit "data")
-             [withAnnot annot $ SecProcedure ast]
-         ])
+      $ unAnnot ast
   print vars
   print
     (freeTypeVars
@@ -100,6 +92,8 @@ main = do
     fs <- use InferState.facts
     InferState.facts .= mempty
     traverse_ Infer.reduce fs
+    fs <- use InferState.facts
+    InferState.facts .= mempty
     fs <- use InferState.facts
     InferState.facts .= mempty
     traverse_ Infer.reduce fs

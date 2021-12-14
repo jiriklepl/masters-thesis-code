@@ -5,10 +5,12 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- TODO: add kinds and constnesses where they make sense
+-- TODO: all types of things inside procedures should be subtypes of the return type
 
 module CMM.Inference.Preprocess where
 
@@ -32,7 +34,6 @@ import safe CMM.Inference.Type as Infer
 import safe CMM.Parser.HasPos
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
--- TODO: kind annotations are constraints, not casts! check for any occurrence of violation of this
 
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 class Preprocess n a b where
@@ -144,12 +145,12 @@ instance Preprocess Decl a b where
       PragmaDecl name pragma ->
         PragmaDecl (preprocessTrivial name) <$> preprocess pragma
       TargetDecl targetDirectives -> TargetDecl <$> preprocessT targetDirectives
-    -- the constant is typed implicitly
+      -- the constant is typed implicitly
       ConstDecl Nothing name expr -> do
         expr' <- preprocess expr
         storeVar (getName name) (VarType $ getTypeHandle expr')
         return $ ConstDecl Nothing (preprocessTrivial name) expr'
-    -- the constant is typed explicitly
+      -- the constant is typed explicitly
       ConstDecl (Just type') name expr -> do
         handle <- lookupVar (getName name)
         expr' <- preprocess expr
@@ -213,10 +214,19 @@ instance Preprocess Procedure a b where
     (vars, tVars) <- localVariables procedure
     beginProc vars tVars
     formals' <- preprocessT formals
-    let formalTypes = VarType . getTypeHandle <$> formals'
+    let formalTypes = getTypeHandle <$> formals'
     body' <- preprocess body
+    case mConv of
+      Just (Foreign conv)
+        | conv == StrLit "C" -> do
+          retType <- getCurrentReturn
+          storeFact $ regularExprConstraint retType
+          traverse_ (storeFact . regularExprConstraint) formalTypes
+          storeCSymbol $ getName name
+        | otherwise -> undefined
+      Nothing -> return ()
     (fs , retType) <- (_2 %~ VarType) <$> endProc
-    let argumentsType = makeTuple formalTypes
+    let argumentsType = makeTuple $ VarType <$> formalTypes
     let procedureType = makeFunction argumentsType retType
     storeProc (getName name) fs procedureType
     return
@@ -276,13 +286,16 @@ instance Preprocess Stmt a b where
       ReturnStmt {} -> undefined
       label@LabelStmt {} -> do
         handle <- lookupVar (getName label)
+        storeFact $ addressKind `kindedConstraint` handle -- TODO: maybe add the constexpr constraint
         storeFact $ handle `typeConstraint` LabelType
         purePreprocess NoType label
       ContStmt {} -> undefined
       GotoStmt expr mTargets -- TODO: check if cosher
        -> do
         expr' <- preprocess expr
-        storeFact . labelConstraint $ getTypeHandle expr'
+        let exprType = getTypeHandle expr'
+        storeFact $ addressKind `kindedConstraint` exprType
+        storeFact $ exprType `typeConstraint` LabelType
         (NoType, ) . GotoStmt expr' <$> preprocessT mTargets
       CutToStmt {} -> undefined
 
@@ -304,7 +317,7 @@ instance Preprocess Lit a b where
     case lit of
       LitInt {} -> storeFact $ integerKind `kindedConstraint` handle
       LitFloat {} -> storeFact $ floatKind `kindedConstraint` handle
-      LitChar {} -> storeFact $ integerKind `kindedConstraint` handle
+      LitChar {} -> storeFact $ integerKind `kindedConstraint` handle -- TODO: check this one? but probably correctus
     storeFact $ constExprConstraint handle
     purePreprocess handle lit
 
@@ -338,6 +351,7 @@ instance Preprocess Datum a b where
     \case
       datum@(DatumLabel name) -> do
         handle <- lookupVar (getName name)
+        storeFact $ addressKind `kindedConstraint` handle
         storeFact $ handle `typeConstraint` AddrType (VarType NoType)
         purePreprocess handle datum
       datum@(DatumAlign _) -> do
@@ -353,6 +367,7 @@ instance Preprocess Datum a b where
             let initType = getTypeHandle init'
             storeFact $ typeType `subType` initType
             storeFact $ linkExprConstraint initType
+            storeFact $ addressKind `kindedConstraint` handle
             storeFact $ handle `typeConstraint` AddrType (VarType typeType)
             return init'
         return (handle, Datum type'' mSize' mInit')
@@ -378,7 +393,7 @@ instance Preprocess LValue a b where
         type'' <- preprocess type'
         expr' <- preprocess expr
         let mAsserts' = (withTypeHandle NoType <$>) <$> mAsserts
-        storeFact . addressConstraint $ getTypeHandle expr'
+        storeFact $ addressKind `kindedConstraint` getTypeHandle expr'
         return (getTypeHandle type'', LVRef type'' expr' mAsserts')
 
 instance Preprocess Expr a b where

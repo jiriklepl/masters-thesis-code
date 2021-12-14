@@ -9,6 +9,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module CMM.AST.Blockifier where
 
@@ -30,10 +31,12 @@ import safe CMM.AST.Annot
 import safe CMM.AST.BlockAnnot
 import safe CMM.AST.Blockifier.State
 import safe CMM.AST.HasName
+import safe CMM.AST.Maps
 import safe CMM.AST.Utils
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
 import safe CMM.Utils
+import safe CMM.FlowAnalysis
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 
@@ -313,36 +316,56 @@ instance GetMetadata WritesVars (Arm a) where
 instance GetMetadata DeclaresVars (Arm a) where
   getMetadata t (Arm _ body) = getMetadata t body
 
-blockifyProcedure ::
-     (Blockify n a, HasPos a, MonadBlockifier m, WithBlockAnnot a b)
-  => n a
-  -> m (n b)
-blockifyProcedure procedure = blockify procedure <* unsetBlock
-
-class Blockify n a where
+class Blockify n a b where
   blockify :: (MonadBlockify m, WithBlockAnnot a b, HasPos a) => n a -> m (n b)
 
-instance Blockify (Annot Datum) a where
+data BlockifyHint =
+  BlockifyHint
+
+type instance Constraint BlockifyHint a b =
+     (WithBlockAnnot a b, HasPos a)
+
+type instance Space BlockifyHint = Blockify'
+
+class Blockify' a b n where
+  blockify' ::
+       (MonadBlockify m, WithBlockAnnot a b, HasPos a)
+    => n a
+    -> m (n b)
+
+instance Blockify (Annot n) a b => Blockify' a b (Annot n) where
+  blockify' = blockify
+
+instance Blockify' a b Name where
+  blockify' n = return $ withBlockAnnot NoBlock <$> n
+
+instance {-# OVERLAPPABLE #-} (ASTmap BlockifyHint n a b) =>
+                              Blockify (Annot n) a b where
+  blockify (Annot n a) = withAnnot (withBlockAnnot NoBlock a) <$> astMapM BlockifyHint blockify' n
+
+instance ASTmapGen BlockifyHint a b
+
+instance Blockify (Annot Datum) a b where
   blockify datum@(Annot DatumLabel {} _) =
     storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
   blockify datum@(Annot _ _) = return $ noBlockAnnots datum
 
-instance Blockify (Annot Procedure) a where
-  blockify (Annot (Procedure mConv name formals body) a) = do
+instance Blockify (Annot Procedure) a b where
+  blockify procedure@(Annot (Procedure mConv name formals body) a) = do
     formals' <- traverse blockify formals
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
     traverse_ registerWrites formals
-    withAnnot (withBlockAnnot (Begins index) a) .
+    (withAnnot (withBlockAnnot (Begins index) a) .
       Procedure mConv (noBlockAnnots name) formals' <$>
-      blockify body
+      blockify body) <* unsetBlock <* analyzeFlow procedure <* clearBlockifier
 
-instance Blockify (Annot Body) a where
+instance Blockify (Annot Body) a b where
   blockify (Annot (Body bodyItems) a) =
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
 constructBlockified ::
-     ( Blockify (Annot n1) a1
+     ( Blockify (Annot n1) a1 b1
      , MonadBlockify m
      , WithBlockAnnot a1 b1
      , WithBlockAnnot a2 b2
@@ -356,17 +379,17 @@ constructBlockified constr a n = do
   n' <- blockify n
   return . withAnnot (withBlockAnnot (getBlockAnnot n') a) $ constr n'
 
-instance Blockify (Annot BodyItem) a where
+instance Blockify (Annot BodyItem) a b where
   blockify (Annot (BodyStmt stmt) a) = constructBlockified BodyStmt a stmt
   blockify (Annot (BodyDecl decl) a) = constructBlockified BodyDecl a decl
   blockify (Annot (BodyStackDecl stackDecl) a) =
     constructBlockified BodyStackDecl a stackDecl
 
-instance Blockify (Annot StackDecl) a where
+instance Blockify (Annot StackDecl) a b where
   blockify (Annot (StackDecl datums) a) =
     withNoBlockAnnot a . StackDecl <$> traverse blockify datums
 
-instance Blockify (Annot Decl) a where
+instance Blockify (Annot Decl) a b where
   blockify (Annot (RegDecl invar regs) a) =
     constructBlockified (RegDecl invar) a regs
   blockify (Annot (ImportDecl imports') a) =
@@ -375,15 +398,15 @@ instance Blockify (Annot Decl) a where
     storeSymbol constants "constant declaration" decl $> noBlockAnnots decl
   blockify decl@(Annot _ _) = return $ noBlockAnnots decl
 
-instance Blockify (Annot Import) a where
+instance Blockify (Annot Import) a b where
   blockify import'@(Annot Import {} _) =
     storeSymbol imports "import" import' $> noBlockAnnots import'
 
-instance Blockify (Annot Registers) a where
+instance Blockify (Annot Registers) a b where
   blockify regs@(Annot (Registers _ _ nameStrLits) _) =
     traverse_ (storeRegister . fst) nameStrLits $> noBlockAnnots regs
 
-instance Blockify (Annot Formal) a where
+instance Blockify (Annot Formal) a b where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
 storeRegister ::
@@ -404,7 +427,7 @@ storeSymbol symbolSet symbolName node = do
     then registerError node ("Duplicate " <> symbolName)
     else symbolSet .= getName node `Set.insert` symbols'
 
-instance Blockify (Annot Stmt) a where
+instance Blockify (Annot Stmt) a b where
   blockify stmt@(Annot LabelStmt {} _) = do
     addControlFlow $ getName stmt -- a possible fallthrough
     storeSymbol labels "label" stmt

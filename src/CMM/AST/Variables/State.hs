@@ -19,7 +19,7 @@ import safe Control.Lens.Setter ((%=), (+=))
 
 import safe CMM.AST.HasName (HasName(..))
 import safe CMM.Parser.HasPos (HasPos)
-import safe CMM.Inference.Type
+import safe CMM.Inference.Type ( TypeKind )
 import safe CMM.Pretty ()
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 

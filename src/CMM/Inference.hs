@@ -7,6 +7,9 @@
 
 module CMM.Inference where
 
+-- TODO: add the overlap check for instances
+-- TODO: add the overload resolution for instances
+
 import safe Control.Monad.Writer.Lazy
 import safe Control.Lens.Getter
 import safe Control.Lens.Setter
@@ -24,7 +27,6 @@ import Prelude hiding (const)
 
 import safe CMM.Inference.Type
 import safe CMM.Inference.State
-
 
 class Unify a where
   unify :: a -> a -> Either [UnificationError] (Subst, a)
@@ -51,9 +53,6 @@ instance Apply Subst where
 
 class UnionPropagate a where
   unionPropagate :: MonadInferencer m => TypeVar -> a -> m ()
-
--- equivalent :: Facts -> Facts -> Bool
--- equivalent = undefined
 
 fresherVarType :: MonadInferencer m => TypeVar -> m TypeVar
 fresherVarType tVar = do
@@ -149,24 +148,6 @@ instance Unify Type where
   unify (AddrType t) (AddrType t') = (_2 %~ AddrType) <$> unify t t'
   unify t t' = Left [Mismatch t t']
 
--- hasKind :: Text -> Type -> Maybe [UnificationError]
--- hasKind _ (SimpleType VarType{}) = Nothing
--- hasKind _ (ErrorType text) = Just [GotErrorType text]
--- hasKind _ NoType = Just []
--- hasKind kind t@Forall{} = Just [NoKind kind t]
--- hasKind kind (AnnotType (Just kind', _, _) _)
---   | kind == kind' = Just []
--- hasKind kind t = Just [NoKind kind t]
-
--- onRegister :: Text -> Type -> Maybe [UnificationError]
--- onRegister _ (SimpleType VarType{}) = Nothing
--- onRegister _ (ErrorType text) = Just [GotErrorType text]
--- onRegister _ NoType = Just []
--- onRegister reg t@Forall{} = Just [NoRegister reg t]
--- onRegister reg (AnnotType (_, _, Just reg') _)
---   | reg == reg' = Just []
--- onRegister reg t = Just [NoRegister reg t]
-
 reduce :: MonadInferencer m => Fact -> m ()
 reduce fact = case fact of
   SubType t t' -> subUnify t t'
@@ -174,8 +155,8 @@ reduce fact = case fact of
   SubConst t t' -> subConsting %= Map.insertWith Set.union t (Set.singleton t')
   Typing t t' -> addTyping $ bind t t'
   TypeUnion t t' -> unionPropagate t t' $> bind t t' >>= addTyping
-  ConstnessLimit const t ->
-    consting %= Map.insertWith max t (const, ConstExpr)
+  ConstnessLimit bounds t ->
+    consting %= Map.insertWith max t bounds
   KindLimit kind t -> do
     kinding <~ (use kinding >>= Map.alterF go t)
     where
@@ -229,7 +210,7 @@ deduceConsts = do
       components = filter ((>1) .length) $ collect <$> Graph.scc graph
       consts = catMaybes . ((`Map.lookup` constings) . (\i -> TypeVar i Star Nothing) <$>) <$> components
   let
-    propagateConst const@(minConst, maxConst) vertices =
+    propagateConst const@(minConst `ConstnessBounds` maxConst) vertices =
       if minConst > maxConst
         then errors <>= [FalseConst]
         else consting %= (`Map.union` Map.fromList ((,const) . (varMap Map.!) <$> vertices))

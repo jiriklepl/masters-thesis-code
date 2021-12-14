@@ -5,9 +5,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-
--- TODO: create a special type for Kinds
-
 module CMM.Inference.Type where
 
 import safe Data.Data
@@ -59,7 +56,7 @@ data Constness
   = Regular
   | LinkExpr
   | ConstExpr
-  deriving (Show, Eq, Data) -- TODO: make sure that they follow the correctus order
+  deriving (Show, Eq, Data)
 
 instance Ord Constness where
   Regular `compare` Regular = EQ
@@ -72,7 +69,9 @@ instance Ord Constness where
   ConstExpr `compare` _ = GT
   _ `compare` ConstExpr = LT
 
-data ConstnessBounds = ConstnessBounds Constness Constness
+data ConstnessBounds
+  = ConstnessBounds Constness Constness
+  deriving (Show, Eq, Ord, Data)
 
 instance Semigroup ConstnessBounds where
   minConst `ConstnessBounds` maxConst <> minConst' `ConstnessBounds` maxConst' = max minConst minConst' `ConstnessBounds` min maxConst maxConst'
@@ -83,7 +82,7 @@ instance Monoid ConstnessBounds where
 data TypeKind
   = Star
   | TypeKind :-> TypeKind
-  | GenericType -- wild
+  | GenericType -- wildCard
   deriving (Show, Data)
 
 instance Eq TypeKind where
@@ -181,7 +180,7 @@ instance HasTypeKind Type where
   getTypeKind (VarType t) = getTypeKind t
   getTypeKind TBitsType{} = Star
   getTypeKind BoolType{} = Star
-  getTypeKind TupleType{} = Star -- TODO: check if all types are `Star`
+  getTypeKind TupleType{} = Star -- TODO: check if all types are `Star` (when creating)
   getTypeKind FunctionType{} = Star -- TODO: ditto
   getTypeKind AddrType{} = Star -- TODO: ditto
   getTypeKind LabelType{} = Star
@@ -203,7 +202,7 @@ data Fact
   | TypeUnion TypeVar Type -- binds the type variable to a type
   | Typing TypeVar Type -- states that the type variable follows a certain typing
   | KindLimit DataKind TypeVar -- lower bound on the kind of the type variable
-  | ConstnessLimit Constness TypeVar -- lower bound on the constness of the type variable
+  | ConstnessLimit ConstnessBounds TypeVar -- lower bound on the constness of the type variable
   | OnRegister Text TypeVar -- states that the type variable stores its data to a certain register
   | SubKind TypeVar TypeVar -- superKind; subKind
   | SubConst TypeVar TypeVar -- superConst; subConst
@@ -259,10 +258,13 @@ kindedConstraint :: DataKind -> TypeVar -> Fact
 kindedConstraint = KindLimit
 
 constExprConstraint :: TypeVar -> Fact
-constExprConstraint = ConstnessLimit ConstExpr
+constExprConstraint = ConstnessLimit $ ConstnessBounds ConstExpr ConstExpr
 
 linkExprConstraint :: TypeVar -> Fact
-linkExprConstraint = ConstnessLimit LinkExpr
+linkExprConstraint = ConstnessLimit $ ConstnessBounds LinkExpr ConstExpr
+
+regularExprConstraint :: TypeVar -> Fact
+regularExprConstraint = ConstnessLimit $ ConstnessBounds Regular Regular
 
 registerConstraint :: Text -> TypeVar -> Fact
 registerConstraint = OnRegister
