@@ -24,6 +24,7 @@ import safe Data.Text (Text)
 import safe qualified CMM.AST.Annot as AST
 import safe CMM.Inference.Type
 import safe CMM.Lens
+import safe CMM.Data.Nullable
 import safe qualified CMM.Parser.HasPos as AST
 
 class HasTypeHandle a where
@@ -50,6 +51,7 @@ type MonadInferPreprocessor = MonadState InferPreprocessor
 data InferPreprocessor =
   InferPreprocessor
     { _variables :: [Map Text TypeVar]
+    , _funcVariables :: Map Text TypeVar
     , _typeVariables :: [Map Text TypeVar]
     , _facts :: [Facts]
     , _cSymbols :: [Text]
@@ -63,6 +65,7 @@ initInferPreprocessor :: InferPreprocessor
 initInferPreprocessor =
   InferPreprocessor
     { _variables = [mempty]
+    , _funcVariables = mempty
     , _typeVariables = [mempty]
     , _facts = [mempty]
     , _cSymbols = mempty
@@ -70,9 +73,10 @@ initInferPreprocessor =
     , _currentReturn = noCurrentReturn
     }
 
-beginTopLevel :: MonadInferPreprocessor m => Map Text TypeKind -> Map Text TypeKind -> m ()
-beginTopLevel vars tVars = do
+beginUnit :: MonadInferPreprocessor m => Map Text TypeKind -> Map Text TypeKind -> Map Text TypeKind -> m ()
+beginUnit vars fVars tVars = do
   variables <~ pure <$> declVars vars
+  funcVariables <~ declVars fVars
   typeVariables <~ pure <$> declVars tVars
 
 noCurrentReturn :: TypeVar
@@ -81,6 +85,9 @@ noCurrentReturn = NoType
 -- returns `NoType` on failure
 lookupVar :: MonadInferPreprocessor m => Text -> m TypeVar
 lookupVar name = lookupVarImpl name <$> use variables
+
+lookupFVar :: MonadInferPreprocessor m => Text -> m TypeVar
+lookupFVar name = lookupVarImpl name <$> uses funcVariables pure
 
 lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeVar)
 lookupProc = uses variables . (. last) . Map.lookup
@@ -121,7 +128,7 @@ endProc = do
 
 storeProc :: MonadInferPreprocessor m => Text -> Facts -> Type -> m ()
 storeProc name fs t = do
-  handle <- uses variables $ lookupVarImpl name
+  handle <- uses funcVariables $ lookupVarImpl name . pure
   storeFact $ forall (freeTypeVars fs <> freeTypeVars t) fs handle t
 
 getCurrentReturn :: MonadInferPreprocessor m => m TypeVar

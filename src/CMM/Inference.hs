@@ -8,7 +8,7 @@
 module CMM.Inference where
 
 -- TODO: add the overlap check for instances
--- TODO: add the overload resolution for instances
+-- TODO: add the overload resolution for instances to monomorphization
 
 import safe Control.Monad.Writer.Lazy
 import safe Control.Lens.Getter
@@ -16,14 +16,14 @@ import safe Control.Lens.Setter
 import safe Control.Lens.Tuple
 import safe Data.Data
 import safe Data.Functor
-import qualified Data.Graph as Graph
-import Control.Lens.Traversal
+import safe qualified Data.Graph as Graph
+import safe Control.Lens.Traversal
 import safe Data.Generics.Aliases
 import safe Data.Text (Text)
 import safe qualified Data.Map as Map
 import safe Data.Maybe
 import safe qualified Data.Set as Set
-import Prelude hiding (const)
+import safe Prelude hiding (const)
 
 import safe CMM.Inference.Type
 import safe CMM.Inference.State
@@ -168,7 +168,7 @@ reduce fact = case fact of
       facts <>= inst `TypeUnion` t : fs'
     Nothing -> facts <>= [fact]
   OnRegister reg t -> registerKind reg >>= reduce . (`KindLimit` t)
-  Constraint classHandle ts -> return () -- undefined
+  Constraint{} -> facts <>= [fact]
   NestedFacts (kinds :. fs :=> [tVar `TypeUnion` t]) -> do
     let scheme = kinds :. fs :=> t
     (fs', t') <- freshInst scheme
@@ -176,8 +176,8 @@ reduce fact = case fact of
     facts <>= tVar' `TypeUnion` t' : fs'
     schemes %= Map.insert tVar scheme -- TODO: simplify the scheme
 
-collect :: Graph.Tree Graph.Vertex -> [Graph.Vertex]
-collect (Graph.Node n nodes) = n : concat (collect <$> nodes)
+collectVertices :: Graph.Tree Graph.Vertex -> [Graph.Vertex]
+collectVertices (Graph.Node n nodes) = n : concat (collectVertices <$> nodes)
 
 -- TODO: replace with a correct implementation
 deduceKinds :: MonadInferencer m => m ()
@@ -188,7 +188,7 @@ deduceKinds = do
   let edges = concat ((\(f, t) -> (f,) <$> Set.toList t) <$> subKindings)
       varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
       graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
-      components = filter ((>1) .length) $ collect <$> Graph.scc graph
+      components = filter ((>1) .length) $ collectVertices <$> Graph.scc graph
       kinds = catMaybes . ((`Map.lookup` kindings) . (\i -> TypeVar i Star Nothing) <$>) <$> components
   let
     propagateKind kind vertices =
@@ -207,7 +207,7 @@ deduceConsts = do
   let edges = concat ((\(f, t) -> (f,) <$> Set.toList t) <$> subConsts)
       varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
       graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
-      components = filter ((>1) .length) $ collect <$> Graph.scc graph
+      components = filter ((>1) .length) $ collectVertices <$> Graph.scc graph
       consts = catMaybes . ((`Map.lookup` constings) . (\i -> TypeVar i Star Nothing) <$>) <$> components
   let
     propagateConst const@(minConst `ConstnessBounds` maxConst) vertices =

@@ -94,6 +94,7 @@ main = do
     traverse_ Infer.reduce fs
     fs <- use InferState.facts
     InferState.facts .= mempty
+    traverse_ Infer.reduce fs
     fs <- use InferState.facts
     InferState.facts .= mempty
     traverse_ Infer.reduce fs

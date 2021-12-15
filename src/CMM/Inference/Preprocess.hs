@@ -23,6 +23,8 @@ import safe Data.Function
 import safe Data.Traversable
 import safe Prelude hiding (init)
 
+import safe CMM.Data.Tuple
+
 import safe CMM.AST as AST
 import safe CMM.AST.Annot as AST
 import safe CMM.AST.HasName as AST
@@ -102,6 +104,7 @@ withTypeHandledAnnot ::
      WithTypeHandle a b => TypeVar -> a -> n b -> Annot n b
 withTypeHandledAnnot = (withAnnot .) . withTypeHandle
 
+-- TODO: create a better name
 purePreprocess ::
      (Monad m, WithTypeHandle a b, Functor n)
   => TypeVar
@@ -110,7 +113,9 @@ purePreprocess ::
 purePreprocess handle = return . (handle, ) . (withTypeHandle handle <$>)
 
 instance Preprocess Unit a b where
-  preprocessImpl (Unit topLevels) = (NoType, ) . Unit <$> preprocessT topLevels
+  preprocessImpl unit@(Unit topLevels) = do
+    globalVariables unit >>= uncurry3 beginUnit
+    (NoType, ) . Unit <$> preprocessT topLevels
 
 instance Preprocess Section a b where
   preprocessImpl =
@@ -211,14 +216,13 @@ instance Preprocess Registers a b where
 -- TODO: consult conventions with man
 instance Preprocess Procedure a b where
   preprocessImpl procedure@(Procedure mConv name formals body) = do
-    (vars, tVars) <- localVariables procedure
-    beginProc vars tVars
+    localVariables procedure >>= uncurry beginProc . complSnd3
     formals' <- preprocessT formals
     let formalTypes = getTypeHandle <$> formals'
     body' <- preprocess body
     case mConv of
-      Just (Foreign conv)
-        | conv == StrLit "C" -> do
+      Just (Foreign (StrLit conv))
+        | conv ==  "C" -> do
           retType <- getCurrentReturn
           storeFact $ regularExprConstraint retType
           traverse_ (storeFact . regularExprConstraint) formalTypes
@@ -272,7 +276,22 @@ instance Preprocess Stmt a b where
           exprTypes
         return (NoType, AssignStmt lvalues' exprs')
       PrimOpStmt {} -> undefined
-      CallStmt {} -> undefined
+      (CallStmt names mConv expr actuals mTargets annots) -> do -- TODO: this is just a placeholder
+        retTypes <- traverse (\_ -> freshTypeHandle Star) names
+        argTypes <- traverse (\_ -> freshTypeHandle Star) actuals
+
+        names' <- preprocessT names
+        expr' <- preprocess expr
+        actuals' <- preprocessT actuals
+        mTargets' <- preprocessT mTargets
+        annots' <- preprocessT annots
+
+        storeFact $ getTypeHandle expr' `typeUnion` makeFunction (makeTuple (VarType <$> argTypes)) (makeTuple (VarType <$> retTypes))
+
+        traverse_ storeFact $ zipWith subType (getTypeHandle <$> names') retTypes
+        traverse_ storeFact $ zipWith subType argTypes (getTypeHandle <$> actuals')
+
+        return (NoType, CallStmt names' mConv expr' actuals' mTargets' annots')
       JumpStmt {} -> undefined
       ReturnStmt mConv Nothing actuals
       -- TODO: consult conventions with man
@@ -386,8 +405,12 @@ instance Preprocess LValue a b where
   preprocessImpl =
     \case
       lvName@LVName {} -> do
-        handle <- lookupVar (getName lvName)
-        purePreprocess handle lvName
+        lookupFVar (getName lvName) >>= \case
+          NoType -> lookupVar (getName lvName) >>= (`purePreprocess` lvName)
+          scheme -> do
+            handle <- freshTypeHandle Star
+            storeFact $ scheme `instType` handle
+            purePreprocess handle lvName
     -- TODO: is there a constraint on expr? probably yes -> consult with the man
       LVRef type' expr mAsserts -> do
         type'' <- preprocess type'

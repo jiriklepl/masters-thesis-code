@@ -26,6 +26,7 @@ import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 data CollectedVariables =
   CollectedVariables
     { _variables :: Map Text TypeKind
+    , _funcVariables :: Map Text TypeKind
     , _typeVariables :: Map Text TypeKind
     , _errors :: Int
     , _warnings :: Int
@@ -34,7 +35,7 @@ data CollectedVariables =
 initCollectedVariables :: CollectedVariables
 initCollectedVariables =
   CollectedVariables
-    {_variables = mempty, _typeVariables = mempty, _errors = 0, _warnings = 0}
+    {_variables = mempty, _funcVariables = mempty, _typeVariables = mempty, _errors = 0, _warnings = 0}
 
 type MonadCollectVariables m = (MonadState CollectedVariables m, MonadIO m)
 
@@ -64,10 +65,20 @@ addVarTrivial n tKind = n <$ addVar n (getName n) tKind
 
 addTVar :: (HasPos n, Pretty n, MonadCollectVariables m) => n -> Text -> TypeKind -> m ()
 addTVar node tVar tKind = do
-  uses variables (tVar `Map.member`) >>= \case
+  uses typeVariables (tVar `Map.member`) >>= \case
     True -> registerError node "Duplicate type variable"
-    False -> variables %= Map.insert tVar tKind
+    False -> typeVariables %= Map.insert tVar tKind
 
 addTVarTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m) => n -> TypeKind -> m n
 addTVarTrivial n tKind = n <$ addTVar n (getName n) tKind
+
+addFVar :: (HasPos n, Pretty n, MonadCollectVariables m) => n -> Text -> TypeKind -> m ()
+addFVar node var tKind = do
+  uses funcVariables (var `Map.member`) >>= \case
+    True -> registerError node "Duplicate function variable"
+    False -> funcVariables %= Map.insert var tKind
+
+addFVarTrivial ::
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m) => n -> TypeKind -> m n
+addFVarTrivial n tKind = n <$ addFVar n (getName n) tKind

@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module CMM.Inference.Type where
 
@@ -12,8 +13,9 @@ import safe Data.Generics.Aliases (extQ)
 
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-
 import safe Data.Text (Text)
+
+import safe CMM.Data.Nullable
 
 newtype ClassHandle
   = ClassHandle Text
@@ -51,6 +53,13 @@ instance Semigroup DataKind where
 
 instance Monoid DataKind where
   mempty = GenericData
+
+instance Fallbackable DataKind where
+  FalseData ?? a = a
+  a ?? _ = a
+
+instance Nullable DataKind where
+  nullVal = FalseData
 
 data Constness
   = Regular
@@ -109,6 +118,13 @@ instance Ord TypeKind where
       GT -> GT
       EQ -> r `compare` r'
 
+instance Fallbackable TypeKind where
+  GenericType ?? kind = kind
+  kind ?? _ = kind
+
+instance Nullable TypeKind where
+  nullVal = GenericType
+
 data TypeVar
   = NoType
   | TypeVar Int TypeKind (Maybe Text) -- TODO: change text to something even more useful; also: reduce repetition
@@ -136,6 +152,13 @@ instance Ord TypeVar where
 
   TypeVar {} `compare` TypeLam {} = LT
   TypeLam {} `compare` TypeVar {} = GT
+
+instance Fallbackable TypeVar where
+  NoType ?? tVar = tVar
+  tVar ?? _ = tVar
+
+instance Nullable TypeVar where
+  nullVal = NoType
 
 instance HasTypeKind TypeVar where
   getTypeKind NoType{} = GenericType
@@ -174,6 +197,10 @@ data Type
   | String16Type
   | VoidType
   deriving (Show, Eq, Ord, Data, IsTyped)
+
+instance Fallbackable Type where
+  ErrorType {} ?? a = a
+  a ?? _ = a
 
 instance HasTypeKind Type where
   getTypeKind ErrorType{} = GenericType
@@ -225,7 +252,12 @@ class Data a =>
   freeTypeVars = go
     where
       go :: Data d => d -> Set TypeVar
-      go = (Set.unions . gmapQ go) `extQ` leaf
+      go = (Set.unions . gmapQ go) `extQ` factCase `extQ` leaf
+
+      factCase = \case
+        InstType _ tVar' -> Set.singleton tVar'
+        fact -> Set.unions $ gmapQ go fact
+
       leaf tVar@TypeVar {} = Set.singleton tVar
       leaf _ = mempty
 

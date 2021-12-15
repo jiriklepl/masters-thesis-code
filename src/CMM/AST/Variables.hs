@@ -21,23 +21,23 @@ import safe CMM.AST.HasName
 import safe CMM.AST.Variables.State
 import safe CMM.Parser.HasPos
 
-localVariables :: (MonadIO m, HasPos a) => Procedure a -> m (Map Text TypeKind, Map Text TypeKind)
+localVariables :: (MonadIO m, HasPos a) => Procedure a -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
 localVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addCommonCases $ gmapM go
 
-globalVariables :: (MonadIO m, HasPos a) => Unit a -> m (Map Text TypeKind, Map Text TypeKind)
+globalVariables :: (MonadIO m, HasPos a) => Unit a -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
 variablesCommon ::
-     MonadIO m => StateT CollectedVariables m a -> m (Map Text TypeKind, Map Text TypeKind)
+     MonadIO m => StateT CollectedVariables m a -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
 variablesCommon go = do
   result <- execStateT go initCollectedVariables
-  return (result ^. variables, result ^. typeVariables)
+  return (result ^. variables, result ^. funcVariables, result ^. typeVariables)
 
 infixr 3 $|
 
@@ -91,7 +91,7 @@ addGlobalCases go = goProcedure $| goSection $| go
   where
     goProcedure =
       \case
-        (procedure :: Annot Procedure SourcePos) -> addVarTrivial procedure Star
+        (procedure :: Annot Procedure SourcePos) -> addFVarTrivial procedure Star
     goSection =
       \case
         (section :: Annot Section SourcePos) -> gmapM goSectionItems section
@@ -109,7 +109,7 @@ addSectionCases go = goProcedure $| go
     goProcedure =
       \case
         (procedure :: Annot Procedure SourcePos) ->
-          addVarTrivial procedure Star <* gmapM goLabels procedure
+          addFVarTrivial procedure Star <* gmapM goLabels procedure
     goLabels :: (Data d, MonadCollectVariables m) => d -> m d
     goLabels = addLabelCases $ gmapM goLabels
 
