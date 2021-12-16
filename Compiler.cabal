@@ -22,7 +22,9 @@ common common-options
 executable Compiler
   import:              common-options
   main-is:             Compiler/Main.hs
-  other-modules:       CMM.Lexer,
+  other-modules:       CMM.Data.Nullable,
+                       CMM.Data.Tuple,
+                       CMM.Lexer,
                        CMM.Lens,
                        CMM.Parser,
                        CMM.Parser.HasPos,

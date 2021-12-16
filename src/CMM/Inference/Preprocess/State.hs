@@ -24,7 +24,6 @@ import safe Data.Text (Text)
 import safe qualified CMM.AST.Annot as AST
 import safe CMM.Inference.Type
 import safe CMM.Lens
-import safe CMM.Data.Nullable
 import safe qualified CMM.Parser.HasPos as AST
 
 class HasTypeHandle a where

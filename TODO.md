@@ -1,5 +1,7 @@
 # TO-DO list
 
+- [ ] add monotype checker (or whatever)
+
 - [ ] translate c-- to llvm <-
 
 - [x] change "Language" to "CMM"

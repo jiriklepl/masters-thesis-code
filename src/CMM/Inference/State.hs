@@ -27,6 +27,7 @@ data Inferencer =
     , _kinding :: Map TypeVar DataKind -- contains kinds of type variables
     , _subKinding :: Map TypeVar (Set TypeVar) -- maps variables to their superKinds
     , _consting :: Map TypeVar ConstnessBounds -- contains constness limits of type variables
+    , _unifying :: Map TypeVar (Set Type)
     , _subConsting :: Map TypeVar (Set TypeVar) -- maps variables to their subConsts
     , _handleCounter :: Int
     , _errors :: [UnificationError]
@@ -44,6 +45,7 @@ initInferencer handleCounter =
     , _kinding = mempty
     , _subKinding = mempty
     , _consting = mempty
+    , _unifying = mempty
     , _subConsting = mempty
     , _handleCounter = handleCounter
     , _facts = mempty

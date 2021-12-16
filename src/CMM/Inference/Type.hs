@@ -1,14 +1,16 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
 
 module CMM.Inference.Type where
 
 import safe Data.Data
+import safe Control.Lens.TH
 import safe Data.Generics.Aliases (extQ)
 
 import safe Data.Set (Set)
@@ -79,11 +81,13 @@ instance Ord Constness where
   _ `compare` ConstExpr = LT
 
 data ConstnessBounds
-  = ConstnessBounds Constness Constness
+  = ConstnessBounds { _minConst :: Constness, _maxConst :: Constness }
   deriving (Show, Eq, Ord, Data)
 
+makeLenses ''ConstnessBounds
+
 instance Semigroup ConstnessBounds where
-  minConst `ConstnessBounds` maxConst <> minConst' `ConstnessBounds` maxConst' = max minConst minConst' `ConstnessBounds` min maxConst maxConst'
+  l `ConstnessBounds` h <> l' `ConstnessBounds` h' = max l l' `ConstnessBounds` min h h'
 
 instance Monoid ConstnessBounds where
   mempty = Regular `ConstnessBounds` ConstExpr

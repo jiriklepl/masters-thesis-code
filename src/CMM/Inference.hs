@@ -16,6 +16,7 @@ import safe Control.Lens.Setter
 import safe Control.Lens.Tuple
 import safe Data.Data
 import safe Data.Functor
+import safe Data.Function
 import safe qualified Data.Graph as Graph
 import safe Control.Lens.Traversal
 import safe Data.Generics.Aliases
@@ -24,6 +25,7 @@ import safe qualified Data.Map as Map
 import safe Data.Maybe
 import safe qualified Data.Set as Set
 import safe Prelude hiding (const)
+import Data.Foldable
 
 import safe CMM.Inference.Type
 import safe CMM.Inference.State
@@ -51,8 +53,14 @@ instance Apply Fact
 instance Apply Subst where
   subst' `apply` subst = (apply subst' <$> subst) <> subst'
 
-class UnionPropagate a where
-  unionPropagate :: MonadInferencer m => TypeVar -> a -> m ()
+addUnifying :: MonadInferencer m => TypeVar -> Type -> m ()
+addUnifying tVar t = do
+  unifs <- use unifying
+  traverse_ (traverse_ (unionPropagate t)) unifs
+  unifying .= Map.insertWith Set.union tVar (Set.singleton t) unifs
+
+class UnionPropagate a b where
+  unionPropagate :: MonadInferencer m => a -> b -> m ()
 
 fresherVarType :: MonadInferencer m => TypeVar -> m TypeVar
 fresherVarType tVar = do
@@ -73,16 +81,34 @@ freshInst (given :. facts' :=> t) = do
       leaf tVar = fromMaybe tVar (tVar `Map.lookup` varMap)
   return (transform facts', transform t)
 
-instance UnionPropagate Type where
-  unionPropagate NoType  _ = return () -- error "Implementation error"
+instance UnionPropagate Type Type where
+  unionPropagate (ErrorType text) (ErrorType text') = errors <>= [GotErrorType text, GotErrorType text']
+  unionPropagate (ErrorType text) _ = errors <>= [GotErrorType text]
   unionPropagate _ (ErrorType text) = errors <>= [GotErrorType text]
-  unionPropagate tVar (VarType tVar') = facts <>= [SubType tVar tVar', SubType tVar' tVar]
+  unionPropagate (VarType tVar) t = unionPropagate tVar t
+  unionPropagate t (VarType tVar) = unionPropagate tVar t
+  unionPropagate (TupleType ts) (TupleType ts') =
+    zipWithM_ unionPropagate ts ts'
+  unionPropagate (FunctionType arg ret) (FunctionType arg' ret') =
+    unionPropagate arg arg' >> unionPropagate ret ret'
+  unionPropagate (AddrType t) (AddrType t') =
+    unionPropagate t t'
+  unionPropagate _ _ = return () -- TODO: check this
+
+-- TODO: maybe add simplifications for types that already depend just on tVars
+instance UnionPropagate TypeVar Type where
+  unionPropagate NoType  _ = return () -- TODO: error "Implementation error"
+  unionPropagate _ (ErrorType text) = errors <>= [GotErrorType text]
+  unionPropagate tVar (VarType tVar') = do
+    facts <>= [SubType tVar tVar', SubType tVar' tVar]
   unionPropagate tVar (TupleType ts) = do
     tTypes <- traverse (\_ -> freshTypeHandle Star) ts
+    addUnifying tVar $ makeTuple (VarType <$> tTypes)
     facts <>= zipWith TypeUnion tTypes ts <> fmap (SubConst tVar) tTypes
   unionPropagate tVar (FunctionType args ret) = do
     argsType <- freshTypeHandle Star
     retType <- freshTypeHandle Star
+    addUnifying tVar $ VarType argsType `makeFunction` VarType retType
     facts <>= [TypeUnion argsType args, TypeUnion retType ret, SubConst retType argsType, SubConst argsType tVar]
   unionPropagate _ _ = return () -- TODO: check this
 
@@ -176,46 +202,37 @@ reduce fact = case fact of
     facts <>= tVar' `TypeUnion` t' : fs'
     schemes %= Map.insert tVar scheme -- TODO: simplify the scheme
 
-collectVertices :: Graph.Tree Graph.Vertex -> [Graph.Vertex]
-collectVertices (Graph.Node n nodes) = n : concat (collectVertices <$> nodes)
+collectVertices :: MonadInferencer m =>
+  Getting
+    (Map.Map TypeVar (Set.Set TypeVar))
+    Inferencer
+    (Map.Map TypeVar (Set.Set TypeVar))
+  -> m [(TypeVar, TypeVar)]
+collectVertices from = do
+  from' <- Map.toList <$> use from
+  handles <- use handleCounter
+  let edges = concat ((\(f, t) -> (f,) <$> Set.toList t) <$> from')
+      varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
+      graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
+      vs = Graph.vertices graph
+      pairs = [(v, v') | v <- vs, v' <- vs, v /= v', Graph.path graph v v']
+  return $ pairs <&> both %~ \i -> varMap Map.! i
 
--- TODO: replace with a correct implementation
 deduceKinds :: MonadInferencer m => m ()
 deduceKinds = do
-  subKindings <- Map.toList <$> use subKinding
-  kindings <- use kinding
-  handles <- use handleCounter
-  let edges = concat ((\(f, t) -> (f,) <$> Set.toList t) <$> subKindings)
-      varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
-      graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
-      components = filter ((>1) .length) $ collectVertices <$> Graph.scc graph
-      kinds = catMaybes . ((`Map.lookup` kindings) . (\i -> TypeVar i Star Nothing) <$>) <$> components
-  let
-    propagateKind kind vertices =
-      if kind == falseKind
-        then errors <>= [FalseKind]
-        else kinding %= (`Map.union` Map.fromList ((,kind) . (varMap Map.!) <$> vertices))
-  let deduced = mconcat <$> kinds
-  zipWithM_ propagateKind deduced components
+  pairs <- collectVertices subKinding
+  for_ pairs $ \(v, v') ->
+    uses kinding (v' `Map.lookup`) >>= traverse_
+      ((kinding %=) . Map.insertWith (<>) v)
 
--- TODO: replace with a correct implementation
 deduceConsts :: MonadInferencer m => m ()
 deduceConsts = do
-  subConsts <- Map.toList <$> use subConsting
-  constings <- use consting
-  handles <- use handleCounter
-  let edges = concat ((\(f, t) -> (f,) <$> Set.toList t) <$> subConsts)
-      varMap = Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$> uncurry (<>) (unzip edges)
-      graph = Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
-      components = filter ((>1) .length) $ collectVertices <$> Graph.scc graph
-      consts = catMaybes . ((`Map.lookup` constings) . (\i -> TypeVar i Star Nothing) <$>) <$> components
-  let
-    propagateConst const@(minConst `ConstnessBounds` maxConst) vertices =
-      if minConst > maxConst
-        then errors <>= [FalseConst]
-        else consting %= (`Map.union` Map.fromList ((,const) . (varMap Map.!) <$> vertices))
-    deduced = mconcat consts
-  zipWithM_ propagateConst deduced components
+  pairs <- collectVertices subConsting
+  for_ pairs $ \(v, v') -> do
+    uses consting (v' `Map.lookup`) >>= traverse_
+      ((consting %=) . Map.insertWith (<>) v . (maxConst .~ ConstExpr))
+    uses consting (v `Map.lookup`) >>= traverse_
+      ((consting %=) . Map.insertWith (<>) v' . (minConst .~ Regular))
 
 registerKind :: MonadInferencer m => Text -> m DataKind
 registerKind = undefined
