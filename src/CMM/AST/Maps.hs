@@ -11,13 +11,46 @@
 
 module CMM.AST.Maps where
 
-import safe Data.Functor.Identity
+import safe Data.Functor.Identity (Identity(runIdentity))
 import safe qualified Data.Kind as Kind
 
 import safe CMM.AST
-import safe CMM.AST.Annot
-import safe CMM.Control.Applicative
-import safe Control.Applicative
+  ( Actual(..)
+  , Alias(..)
+  , Arm(..)
+  , Asserts(..)
+  , Body(..)
+  , BodyItem(..)
+  , CallAnnot(..)
+  , Datum(..)
+  , Decl(..)
+  , Export
+  , Expr(..)
+  , Flow(..)
+  , Formal(..)
+  , Import
+  , Init(..)
+  , KindName(..)
+  , LValue(..)
+  , Lit
+  , Name
+  , Pragma
+  , Procedure(..)
+  , Range(..)
+  , Registers(..)
+  , Section(..)
+  , Size(..)
+  , StackDecl(..)
+  , Stmt(..)
+  , TargetDirective
+  , Targets(..)
+  , TopLevel(..)
+  , Type
+  , Unit(..)
+  )
+import safe CMM.AST.Annot (Annot)
+import safe CMM.Control.Applicative (liftA4, liftA6)
+import safe Control.Applicative (Applicative(liftA2), liftA3)
 
 type family Constraint hint a b :: Kind.Constraint
 

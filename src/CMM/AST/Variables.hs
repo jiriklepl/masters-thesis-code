@@ -6,20 +6,41 @@
 
 module CMM.AST.Variables where
 
-import safe Control.Lens.Getter
-import safe Control.Monad.State
-import safe Data.Data
-import safe Data.Foldable
-import safe Data.Generics.Aliases
+import safe Control.Lens.Getter ((^.))
+import safe Control.Monad.State (MonadIO, StateT, execStateT)
+import safe Data.Data (Data(gmapM), Typeable)
+import safe Data.Foldable (traverse_)
+import safe Data.Generics.Aliases (extM)
 import safe Data.Map (Map)
 import safe Data.Text (Text)
 
 import safe CMM.AST
-import safe CMM.AST.Annot
-import safe CMM.AST.HasName
+  ( Datum(DatumLabel)
+  , Decl(ConstDecl, TypedefDecl)
+  , Formal
+  , Import
+  , Procedure
+  , Registers(Registers)
+  , Section
+  , Stmt(LabelStmt)
+  , Unit
+  )
+import safe CMM.AST.Annot (Annot, Annotation(Annot))
+import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.AST.Variables.State
-import safe CMM.Inference.Type
-import safe CMM.Parser.HasPos
+  ( CollectedVariables
+  , MonadCollectVariables
+  , addFVarTrivial
+  , addTVar
+  , addVar
+  , addVarTrivial
+  , funcVariables
+  , initCollectedVariables
+  , typeVariables
+  , variables
+  )
+import safe CMM.Inference.Type (TypeKind(GenericType, Star))
+import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 
 localVariables ::
      (MonadIO m, HasPos a)

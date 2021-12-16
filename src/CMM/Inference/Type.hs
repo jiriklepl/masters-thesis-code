@@ -9,8 +9,8 @@
 
 module CMM.Inference.Type where
 
-import safe Control.Lens.TH
-import safe Data.Data
+import safe Control.Lens.TH (makeLenses)
+import safe Data.Data (Data(gmapQ))
 import safe Data.Generics.Aliases (extQ)
 
 import safe Data.Set (Set)

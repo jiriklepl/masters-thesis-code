@@ -6,17 +6,66 @@
 
 module CMM.Parser where
 
-import safe Control.Applicative hiding (many)
-import safe Data.Functor
-import safe Data.Maybe
+import safe Control.Applicative (Applicative(liftA2), (<**>), liftA3)
+import safe Data.Functor (($>))
+import safe Data.Maybe (fromMaybe)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Void
-import safe Text.Megaparsec hiding (State)
+import safe Data.Void (Void)
+import safe Text.Megaparsec
+  ( MonadParsec(lookAhead, token, try)
+  , Parsec
+  , SourcePos
+  , (<|>)
+  , between
+  , choice
+  , many
+  , optional
+  , sepBy1
+  , sepEndBy
+  , sepEndBy1
+  )
 
 import safe CMM.AST
-import safe CMM.AST.Annot
-import safe CMM.Control.Applicative
+  ( Actual(..)
+  , Alias(..)
+  , Arm(..)
+  , Asserts(..)
+  , Body(..)
+  , BodyItem(..)
+  , CallAnnot(..)
+  , Conv(..)
+  , Datum(..)
+  , Decl(..)
+  , Endian(..)
+  , Export(..)
+  , Expr(..)
+  , Flow(..)
+  , Formal(..)
+  , Import(..)
+  , Init(..)
+  , Kind(..)
+  , KindName(..)
+  , LValue(..)
+  , Lit(..)
+  , Name(..)
+  , Op(..)
+  , Procedure(..)
+  , Range(..)
+  , Registers(..)
+  , Section(..)
+  , Size(..)
+  , StackDecl(..)
+  , Stmt(..)
+  , StrLit(..)
+  , TargetDirective(..)
+  , Targets(..)
+  , TopLevel(..)
+  , Type(..)
+  , Unit(..)
+  )
+import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
+import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
 
 import safe qualified CMM.Lexer as L
 

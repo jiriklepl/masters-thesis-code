@@ -9,9 +9,68 @@ module CMM.Pretty
   ) where
 
 import safe Prettyprinter
+  ( Doc
+  , Pretty(pretty)
+  , (<+>)
+  , angles
+  , braces
+  , brackets
+  , colon
+  , comma
+  , dquotes
+  , enclose
+  , equals
+  , hsep
+  , indent
+  , parens
+  , punctuate
+  , semi
+  , slash
+  , space
+  , squotes
+  , vsep
+  )
 
 import safe CMM.AST
-import safe CMM.AST.Annot
+  ( Actual(..)
+  , Alias(..)
+  , Arm(..)
+  , Asserts(..)
+  , Body(..)
+  , BodyItem(..)
+  , CallAnnot(..)
+  , Conv(..)
+  , Datum(..)
+  , Decl(..)
+  , Endian(..)
+  , Export(..)
+  , Expr(..)
+  , Flow(..)
+  , Formal(..)
+  , Import(..)
+  , Init(..)
+  , Kind(..)
+  , KindName(..)
+  , LValue(..)
+  , Lit(..)
+  , Name(..)
+  , Op(..)
+  , Pragma
+  , Procedure(..)
+  , Range(..)
+  , Registers(..)
+  , Section(..)
+  , Size(..)
+  , StackDecl(..)
+  , Stmt(..)
+  , StrLit(..)
+  , TargetDirective(..)
+  , Targets(..)
+  , TopLevel(..)
+  , Type(..)
+  , Unit(..)
+  )
+import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
 commaSep :: [Doc ann] -> Doc ann
 commaSep xs = hsep $ punctuate comma xs

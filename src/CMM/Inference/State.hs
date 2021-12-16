@@ -5,11 +5,11 @@
 
 module CMM.Inference.State where
 
-import safe Control.Lens.Getter
-import safe Control.Lens.Setter
-import safe Control.Lens.TH
-import safe Control.Monad.State.Lazy
-import safe Data.Function
+import safe Control.Lens.Getter (use)
+import safe Control.Lens.Setter ((+=))
+import safe Control.Lens.TH (makeLenses)
+import safe Control.Monad.State.Lazy (MonadIO, MonadState)
+import safe Data.Function ((&))
 import safe Data.Map (Map)
 import safe Data.Set (Set)
 import safe Data.Text (Text)

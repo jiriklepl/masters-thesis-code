@@ -27,16 +27,60 @@ import safe Prelude hiding (reads)
 import safe Prettyprinter (Pretty)
 
 import safe CMM.AST
-import safe CMM.AST.Annot
+  ( Actual(..)
+  , Arm(..)
+  , Body(..)
+  , BodyItem(..)
+  , CallAnnot(..)
+  , Datum(..)
+  , Decl(..)
+  , Expr(..)
+  , Flow(..)
+  , Formal
+  , Import(..)
+  , KindName
+  , LValue(..)
+  , Name
+  , Procedure(..)
+  , Range(..)
+  , Registers(..)
+  , StackDecl(..)
+  , Stmt(..)
+  , Targets(..)
+  )
+import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot)
 import safe CMM.AST.BlockAnnot
+  ( BlockAnnot(..)
+  , HasBlockAnnot(..)
+  , WithBlockAnnot(..)
+  )
 import safe CMM.AST.Blockifier.State
-import safe CMM.AST.HasName
-import safe CMM.AST.Maps
+  ( Blockifier
+  , blockData
+  , blocksTable
+  , clearBlockifier
+  , constants
+  , continuations
+  , controlFlow
+  , currentBlock
+  , currentData
+  , imports
+  , labels
+  , registerError
+  , registerWarning
+  , registers
+  , stackLabels
+  )
+import safe CMM.AST.HasName (HasName(..))
+import safe CMM.AST.Maps (ASTmap(..), ASTmapGen, Constraint, Space)
 import safe CMM.AST.Utils
-import safe CMM.FlowAnalysis
-import safe CMM.Parser.HasPos
+  ( GetTrivialGotoTarget(getTrivialGotoTarget)
+  , getExprLVName
+  )
+import safe CMM.FlowAnalysis (analyzeFlow)
+import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
-import safe CMM.Utils
+import safe CMM.Utils (addPrefix)
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 

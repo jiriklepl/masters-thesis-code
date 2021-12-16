@@ -13,26 +13,89 @@
 -- TODO: all types of things inside procedures should be subtypes of the return type
 module CMM.Inference.Preprocess where
 
-import safe Control.Applicative
-import safe Control.Lens.Setter
-import safe Control.Lens.Tuple
-import safe Control.Monad.State.Lazy
-import safe Data.Foldable
-import safe Data.Function
-import safe Data.Traversable
+import safe Control.Applicative (Applicative(liftA2))
+import safe Control.Lens.Setter ((%~))
+import safe Control.Lens.Tuple (Field2(_2))
+import safe Control.Monad.State.Lazy (MonadIO, zipWithM_)
+import safe Data.Foldable (for_, traverse_)
+import safe Data.Traversable (for)
 import safe Prelude hiding (init)
 
-import safe CMM.Data.Tuple
+import safe CMM.Data.Tuple (complSnd3, uncurry3)
 
 import safe CMM.AST as AST
-import safe CMM.AST.Annot as AST
-import safe CMM.AST.HasName as AST
-import safe CMM.AST.Maps as AST
-import safe CMM.AST.Variables as AST
+  ( Actual(..)
+  , Arm
+  , Conv(..)
+  , Datum(..)
+  , Decl(..)
+  , Export(..)
+  , Expr(..)
+  , Formal(..)
+  , Import(..)
+  , Init(..)
+  , KindName(..)
+  , LValue(..)
+  , Lit(..)
+  , Op(..)
+  , Procedure(..)
+  , Registers(..)
+  , Section(..)
+  , Size(..)
+  , Stmt(..)
+  , StrLit(..)
+  , Targets
+  , Type(..)
+  , Unit(..)
+  )
+import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot)
+import safe CMM.AST.HasName as AST (HasName(getName))
+import safe CMM.AST.Maps as AST (ASTmap(..), ASTmapGen, Constraint, Space)
+import safe CMM.AST.Variables as AST (globalVariables, localVariables)
 import safe CMM.Inference.BuiltIn as Infer
+  ( addressKind
+  , floatKind
+  , getDataKind
+  , getNamedOperator
+  , integerKind
+  )
 import safe CMM.Inference.Preprocess.State as Infer
+  ( HasTypeHandle(getTypeHandle)
+  , MonadInferPreprocessor
+  , WithTypeHandle(..)
+  , beginProc
+  , beginUnit
+  , endProc
+  , freshTypeHandle
+  , getCurrentReturn
+  , lookupFVar
+  , lookupTVar
+  , lookupVar
+  , storeCSymbol
+  , storeFact
+  , storeProc
+  , storeTVar
+  , storeVar
+  )
 import safe CMM.Inference.Type as Infer
-import safe CMM.Parser.HasPos
+  ( Fact(SubConst, SubKind, SubType, Typing)
+  , Type(AddrType, BoolType, LabelType, String16Type, StringType,
+     TBitsType, VarType)
+  , TypeKind(Star)
+  , TypeVar(NoType)
+  , constExprConstraint
+  , instType
+  , kindedConstraint
+  , linkExprConstraint
+  , makeFunction
+  , makeTuple
+  , registerConstraint
+  , regularExprConstraint
+  , subType
+  , typeConstraint
+  , typeUnion
+  )
+import safe CMM.Parser.HasPos (HasPos)
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable

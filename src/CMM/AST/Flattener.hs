@@ -12,8 +12,37 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
 import safe CMM.AST
-import safe CMM.AST.Annot
-import safe CMM.Utils
+  ( Actual
+  , Alias
+  , Arm(..)
+  , Asserts
+  , Body(..)
+  , BodyItem(..)
+  , CallAnnot
+  , Export
+  , Expr(..)
+  , Flow
+  , Formal
+  , Import
+  , Init
+  , KindName
+  , LValue(..)
+  , Lit
+  , Name(..)
+  , Pragma
+  , Procedure(..)
+  , Range
+  , Registers
+  , Section(..)
+  , Size
+  , Stmt(..)
+  , TargetDirective
+  , Targets
+  , TopLevel(..)
+  , Unit(..)
+  )
+import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
+import safe CMM.Utils (addPrefix)
 
 class Flatten n where
   flatten :: n a -> n a

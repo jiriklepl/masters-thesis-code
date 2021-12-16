@@ -7,8 +7,16 @@ module CMM.AST.Utils where
 import safe Data.Text (Text)
 
 import safe CMM.AST
-import safe CMM.AST.Annot
-import safe CMM.AST.HasName
+  ( ASTNode
+  , Arm(..)
+  , Body(..)
+  , BodyItem(..)
+  , Expr(..)
+  , LValue(..)
+  , Stmt(..)
+  )
+import safe CMM.AST.Annot (Annot, Annotation(Annot), unAnnot)
+import safe CMM.AST.HasName (HasName(getName))
 
 class EnsureNode n' n where
   ensureNode :: n' a -> n a

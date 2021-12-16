@@ -10,20 +10,29 @@
 
 module CMM.Inference.Preprocess.State where
 
-import safe Control.Applicative
-import safe Control.Lens.Getter
-import safe Control.Lens.Setter
+import safe Control.Applicative (Alternative((<|>)))
+import safe Control.Lens.Getter (use, uses)
+import safe Control.Lens.Setter ((%=), (+=), (.=), (<~))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadState)
-import safe Data.Function
+import safe Data.Function ((&))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe
+import safe Data.Maybe (fromMaybe)
 import safe Data.Text (Text)
 
 import safe qualified CMM.AST.Annot as AST
 import safe CMM.Inference.Type
-import safe CMM.Lens
+  ( Fact
+  , Facts
+  , IsTyped(freeTypeVars)
+  , Type
+  , TypeKind(Star)
+  , TypeVar(NoType, TypeVar)
+  , forall
+  , typeUnion
+  )
+import safe CMM.Lens (exchange)
 import safe qualified CMM.Parser.HasPos as AST
 
 class HasTypeHandle a where

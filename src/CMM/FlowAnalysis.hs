@@ -7,26 +7,34 @@ module CMM.FlowAnalysis
   ( analyzeFlow
   ) where
 
-import safe Control.Lens.Getter
-import safe Control.Lens.Setter
-import safe Control.Lens.Tuple
-import safe Control.Monad.State.Lazy
-import safe Data.Foldable
-import safe Data.Functor
+import safe Control.Lens.Getter ((^.), use, uses)
+import safe Control.Lens.Setter ((.=))
+import safe Control.Lens.Tuple (Field3(_3))
+import safe Control.Monad.State.Lazy (unless)
 import safe qualified Data.Graph as Graph
-import safe Data.List
+import safe Data.List (elemIndex, sortOn)
 import safe qualified Data.Map as Map
 import safe qualified Data.Set as Set
 import safe qualified Data.Text as T
-import safe Data.Tuple
+import safe Data.Tuple (swap)
 import safe Prelude hiding (reads)
 
-import safe CMM.AST
-import safe CMM.AST.Annot
+import safe CMM.AST (Procedure)
+import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.Blockifier.State
-import safe CMM.Parser.HasPos
+  ( MonadBlockifier
+  , blockData
+  , blocksTable
+  , continuations
+  , controlFlow
+  , labels
+  , registerError
+  , registerWarning
+  , registers
+  )
+import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
-import safe CMM.Utils
+import safe CMM.Utils (doWhile, hasPrefix)
 
 analyzeFlow :: (HasPos a, MonadBlockifier m) => Annot Procedure a -> m ()
 analyzeFlow procedure@(Annot _ _)

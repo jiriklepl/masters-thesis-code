@@ -7,7 +7,23 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
 import safe CMM.AST
-import safe CMM.AST.Annot
+  ( Conv(..)
+  , Datum(..)
+  , Decl(..)
+  , Export(..)
+  , Formal(..)
+  , Import(..)
+  , Kind(..)
+  , KindName(..)
+  , LValue(..)
+  , Name(..)
+  , Procedure(..)
+  , Stmt(..)
+  , StrLit(..)
+  , TopLevel(..)
+  , Type(..)
+  )
+import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
 class HasName n where
   getName :: n -> Text
