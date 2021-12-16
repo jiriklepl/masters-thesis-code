@@ -33,10 +33,10 @@ import safe CMM.AST.Blockifier.State
 import safe CMM.AST.HasName
 import safe CMM.AST.Maps
 import safe CMM.AST.Utils
+import safe CMM.FlowAnalysis
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
 import safe CMM.Utils
-import safe CMM.FlowAnalysis
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 
@@ -328,10 +328,7 @@ type instance Constraint BlockifyHint a b =
 type instance Space BlockifyHint = Blockify'
 
 class Blockify' a b n where
-  blockify' ::
-       (MonadBlockify m, WithBlockAnnot a b, HasPos a)
-    => n a
-    -> m (n b)
+  blockify' :: (MonadBlockify m, WithBlockAnnot a b, HasPos a) => n a -> m (n b)
 
 instance Blockify (Annot n) a b => Blockify' a b (Annot n) where
   blockify' = blockify
@@ -341,7 +338,8 @@ instance Blockify' a b Name where
 
 instance {-# OVERLAPPABLE #-} (ASTmap BlockifyHint n a b) =>
                               Blockify (Annot n) a b where
-  blockify (Annot n a) = withAnnot (withBlockAnnot NoBlock a) <$> astMapM BlockifyHint blockify' n
+  blockify (Annot n a) =
+    withAnnot (withBlockAnnot NoBlock a) <$> astMapM BlockifyHint blockify' n
 
 instance ASTmapGen BlockifyHint a b
 
@@ -357,8 +355,11 @@ instance Blockify (Annot Procedure) a b where
     currentBlock ?= index
     traverse_ registerWrites formals
     (withAnnot (withBlockAnnot (Begins index) a) .
-      Procedure mConv (noBlockAnnots name) formals' <$>
-      blockify body) <* unsetBlock <* analyzeFlow procedure <* clearBlockifier
+     Procedure mConv (noBlockAnnots name) formals' <$>
+     blockify body) <*
+      unsetBlock <*
+      analyzeFlow procedure <*
+      clearBlockifier
 
 instance Blockify (Annot Body) a b where
   blockify (Annot (Body bodyItems) a) =

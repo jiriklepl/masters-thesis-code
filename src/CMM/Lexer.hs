@@ -9,17 +9,36 @@ module CMM.Lexer
   , tokenize
   ) where
 
-import safe Control.Applicative hiding (Const, many)
-import safe Data.Functor
-import safe Data.Maybe
+import safe Control.Applicative
+  ( Alternative((<|>))
+  , Applicative(liftA2)
+  , optional
+  )
+import safe Data.Functor (($>), void)
+import safe Data.Maybe (isNothing)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
-import safe Data.Void
-import safe Text.Megaparsec hiding (State, Token, token)
+import safe Data.Void (Void)
+import safe Text.Megaparsec
+  ( MonadParsec(eof, notFollowedBy, try)
+  , Parsec
+  , SourcePos
+  , choice
+  , getSourcePos
+  , many
+  , manyTill
+  , oneOf
+  )
 import safe Text.Megaparsec.Char
+  ( alphaNumChar
+  , char
+  , letterChar
+  , space1
+  , string
+  )
 import safe qualified Text.Megaparsec.Char.Lexer as L
 
-import safe CMM.AST.Annot
+import safe CMM.AST.Annot (Annot, withAnnot)
 
 type Lexer = Parsec Void Text
 

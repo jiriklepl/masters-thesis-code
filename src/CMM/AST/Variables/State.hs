@@ -8,18 +8,18 @@
 
 module CMM.AST.Variables.State where
 
+import safe Control.Lens.Getter (uses)
+import safe Control.Lens.Setter ((%=), (+=))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State (MonadIO, MonadState)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
-import safe Control.Lens.Getter (uses)
-import safe Control.Lens.Setter ((%=), (+=))
 
 import safe CMM.AST.HasName (HasName(..))
+import safe CMM.Inference.Type (TypeKind)
 import safe CMM.Parser.HasPos (HasPos)
-import safe CMM.Inference.Type ( TypeKind )
 import safe CMM.Pretty ()
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 
@@ -35,7 +35,12 @@ data CollectedVariables =
 initCollectedVariables :: CollectedVariables
 initCollectedVariables =
   CollectedVariables
-    {_variables = mempty, _funcVariables = mempty, _typeVariables = mempty, _errors = 0, _warnings = 0}
+    { _variables = mempty
+    , _funcVariables = mempty
+    , _typeVariables = mempty
+    , _errors = 0
+    , _warnings = 0
+    }
 
 type MonadCollectVariables m = (MonadState CollectedVariables m, MonadIO m)
 
@@ -53,32 +58,56 @@ registerWarning node message = do
   warnings += 1
   makeMessage mkWarning node message
 
-addVar :: (HasPos n, Pretty n, MonadCollectVariables m) => n -> Text -> TypeKind -> m ()
+addVar ::
+     (HasPos n, Pretty n, MonadCollectVariables m)
+  => n
+  -> Text
+  -> TypeKind
+  -> m ()
 addVar node var tKind = do
   uses variables (var `Map.member`) >>= \case
     True -> registerError node "Duplicate variable"
     False -> variables %= Map.insert var tKind
 
 addVarTrivial ::
-     (HasPos n, Pretty n, HasName n, MonadCollectVariables m) => n -> TypeKind -> m n
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+  => n
+  -> TypeKind
+  -> m n
 addVarTrivial n tKind = n <$ addVar n (getName n) tKind
 
-addTVar :: (HasPos n, Pretty n, MonadCollectVariables m) => n -> Text -> TypeKind -> m ()
+addTVar ::
+     (HasPos n, Pretty n, MonadCollectVariables m)
+  => n
+  -> Text
+  -> TypeKind
+  -> m ()
 addTVar node tVar tKind = do
   uses typeVariables (tVar `Map.member`) >>= \case
     True -> registerError node "Duplicate type variable"
     False -> typeVariables %= Map.insert tVar tKind
 
 addTVarTrivial ::
-     (HasPos n, Pretty n, HasName n, MonadCollectVariables m) => n -> TypeKind -> m n
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+  => n
+  -> TypeKind
+  -> m n
 addTVarTrivial n tKind = n <$ addTVar n (getName n) tKind
 
-addFVar :: (HasPos n, Pretty n, MonadCollectVariables m) => n -> Text -> TypeKind -> m ()
+addFVar ::
+     (HasPos n, Pretty n, MonadCollectVariables m)
+  => n
+  -> Text
+  -> TypeKind
+  -> m ()
 addFVar node var tKind = do
   uses funcVariables (var `Map.member`) >>= \case
     True -> registerError node "Duplicate function variable"
     False -> funcVariables %= Map.insert var tKind
 
 addFVarTrivial ::
-     (HasPos n, Pretty n, HasName n, MonadCollectVariables m) => n -> TypeKind -> m n
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+  => n
+  -> TypeKind
+  -> m n
 addFVarTrivial n tKind = n <$ addFVar n (getName n) tKind

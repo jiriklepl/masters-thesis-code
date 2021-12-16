@@ -11,13 +11,12 @@
 
 -- TODO: add kinds and constnesses where they make sense
 -- TODO: all types of things inside procedures should be subtypes of the return type
-
 module CMM.Inference.Preprocess where
 
-import safe Control.Monad.State.Lazy
 import safe Control.Applicative
 import safe Control.Lens.Setter
 import safe Control.Lens.Tuple
+import safe Control.Monad.State.Lazy
 import safe Data.Foldable
 import safe Data.Function
 import safe Data.Traversable
@@ -36,7 +35,6 @@ import safe CMM.Inference.Type as Infer
 import safe CMM.Parser.HasPos
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
-
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 class Preprocess n a b where
   preprocess ::
@@ -100,8 +98,7 @@ preprocessT ::
   -> m (t (Annot n b))
 preprocessT = traverse preprocess
 
-withTypeHandledAnnot ::
-     WithTypeHandle a b => TypeVar -> a -> n b -> Annot n b
+withTypeHandledAnnot :: WithTypeHandle a b => TypeVar -> a -> n b -> Annot n b
 withTypeHandledAnnot = (withAnnot .) . withTypeHandle
 
 -- TODO: create a better name
@@ -195,12 +192,10 @@ instance Preprocess Registers a b where
   preprocessImpl (Registers mKind type' nameStrLits) = do
     type'' <- preprocess type'
     let typeType = getTypeHandle type''
-
         setType handle = do
           storeFact $ typeType `subType` handle
           for_ mKind $
-            storeFact .  (`kindedConstraint` handle) . getDataKind . getName
-
+            storeFact . (`kindedConstraint` handle) . getDataKind . getName
         go name mStrLit = do
           handle <- lookupVar (getName name)
           setType handle
@@ -209,7 +204,6 @@ instance Preprocess Registers a b where
             Just (StrLit strLit) -> do
               storeFact $ registerConstraint strLit handle
               return (withTypeHandle handle <$> name, Just (StrLit strLit))
-
     nameStrLits' <- traverse (uncurry go) nameStrLits
     return (NoType, Registers mKind type'' nameStrLits')
 
@@ -222,27 +216,25 @@ instance Preprocess Procedure a b where
     body' <- preprocess body
     case mConv of
       Just (Foreign (StrLit conv))
-        | conv ==  "C" -> do
+        | conv == "C" -> do
           retType <- getCurrentReturn
           storeFact $ regularExprConstraint retType
           traverse_ (storeFact . regularExprConstraint) formalTypes
           storeCSymbol $ getName name
         | otherwise -> undefined
       Nothing -> return ()
-    (fs , retType) <- (_2 %~ VarType) <$> endProc
+    (fs, retType) <- (_2 %~ VarType) <$> endProc
     let argumentsType = makeTuple $ VarType <$> formalTypes
     let procedureType = makeFunction argumentsType retType
     storeProc (getName name) fs procedureType
-    return
-      (NoType, Procedure mConv (preprocessTrivial name) formals' body')
+    return (NoType, Procedure mConv (preprocessTrivial name) formals' body')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do
     handle <- lookupVar (getName name)
     type'' <- preprocess type'
     storeFact $ getTypeHandle type'' `subType` handle
-    for_ mKind $
-        storeFact . (`kindedConstraint` handle) . getDataKind . getName
+    for_ mKind $ storeFact . (`kindedConstraint` handle) . getDataKind . getName
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
 instance Preprocess Stmt a b where
@@ -276,21 +268,24 @@ instance Preprocess Stmt a b where
           exprTypes
         return (NoType, AssignStmt lvalues' exprs')
       PrimOpStmt {} -> undefined
-      (CallStmt names mConv expr actuals mTargets annots) -> do -- TODO: this is just a placeholder
+      (CallStmt names mConv expr actuals mTargets annots) -- TODO: this is just a placeholder
+       -> do
         retTypes <- traverse (\_ -> freshTypeHandle Star) names
         argTypes <- traverse (\_ -> freshTypeHandle Star) actuals
-
         names' <- preprocessT names
         expr' <- preprocess expr
         actuals' <- preprocessT actuals
         mTargets' <- preprocessT mTargets
         annots' <- preprocessT annots
-
-        storeFact $ getTypeHandle expr' `typeUnion` makeFunction (makeTuple (VarType <$> argTypes)) (makeTuple (VarType <$> retTypes))
-
-        traverse_ storeFact $ zipWith subType (getTypeHandle <$> names') retTypes
-        traverse_ storeFact $ zipWith subType argTypes (getTypeHandle <$> actuals')
-
+        storeFact $
+          getTypeHandle expr' `typeUnion`
+          makeFunction
+            (makeTuple (VarType <$> argTypes))
+            (makeTuple (VarType <$> retTypes))
+        traverse_ storeFact $
+          zipWith subType (getTypeHandle <$> names') retTypes
+        traverse_ storeFact $
+          zipWith subType argTypes (getTypeHandle <$> actuals')
         return (NoType, CallStmt names' mConv expr' actuals' mTargets' annots')
       JumpStmt {} -> undefined
       ReturnStmt mConv Nothing actuals
@@ -321,7 +316,9 @@ instance Preprocess Stmt a b where
 instance Preprocess KindName a b where
   preprocessImpl (KindName mKind name) = do
     handle <- freshTypeHandle Star
-    traverse_ (storeFact . (`kindedConstraint` handle) . getDataKind . getName) mKind
+    traverse_
+      (storeFact . (`kindedConstraint` handle) . getDataKind . getName)
+      mKind
     return (handle, KindName mKind (preprocessTrivial name))
 
 instance Preprocess Arm a b where
@@ -360,10 +357,11 @@ instance Preprocess Init a b where
         return (handle, ExprInit exprs')
       strInit@StrInit {} -> strInitCommon StringType strInit
       strInit@Str16Init {} -> strInitCommon String16Type strInit
-      where strInitCommon c strInit = do
-              handle <- freshTypeHandle Star
-              storeFact $ handle `typeConstraint` c
-              purePreprocess handle strInit
+    where
+      strInitCommon c strInit = do
+        handle <- freshTypeHandle Star
+        storeFact $ handle `typeConstraint` c
+        purePreprocess handle strInit
 
 instance Preprocess Datum a b where
   preprocessImpl =
@@ -424,7 +422,8 @@ instance Preprocess Expr a b where
     \case
       ParExpr expr -> ParExpr `preprocessInherit` expr
       LVExpr lvalue -> LVExpr `preprocessInherit` lvalue
-      BinOpExpr op left right -> do -- TODO: implement correctly, this is just a placeholder
+      BinOpExpr op left right -- TODO: implement correctly, this is just a placeholder
+       -> do
         handle <- freshTypeHandle Star
         left' <- preprocess left
         let leftType = getTypeHandle left'
@@ -464,8 +463,10 @@ instance Preprocess Expr a b where
         fType <- freshTypeHandle Star
         opScheme <- freshTypeHandle Star
         actuals' <- preprocessT actuals
-        storeFact $ tupleType `typeUnion` makeTuple (VarType . getTypeHandle <$> actuals')
-        storeFact $ fType `typeUnion` makeFunction (VarType argType) (VarType retType)
+        storeFact $
+          tupleType `typeUnion` makeTuple (VarType . getTypeHandle <$> actuals')
+        storeFact $
+          fType `typeUnion` makeFunction (VarType argType) (VarType retType)
         storeFact $ opScheme `typeUnion` getNamedOperator (getName name)
         storeFact $ opScheme `instType` fType
         storeFact $ argType `subType` tupleType
@@ -483,7 +484,8 @@ instance Preprocess Expr a b where
         let leftType = VarType $ getTypeHandle left'
             rightType = VarType $ getTypeHandle left'
         storeFact $ tupleType `typeUnion` makeTuple [leftType, rightType]
-        storeFact $ fType `typeUnion` makeFunction (VarType argType) (VarType retType)
+        storeFact $
+          fType `typeUnion` makeFunction (VarType argType) (VarType retType)
         storeFact $ opScheme `typeUnion` getNamedOperator (getName name)
         storeFact $ opScheme `instType` fType
         storeFact $ argType `subType` tupleType

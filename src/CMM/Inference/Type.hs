@@ -9,8 +9,8 @@
 
 module CMM.Inference.Type where
 
-import safe Data.Data
 import safe Control.Lens.TH
+import safe Data.Data
 import safe Data.Generics.Aliases (extQ)
 
 import safe Data.Set (Set)
@@ -19,8 +19,8 @@ import safe Data.Text (Text)
 
 import safe CMM.Data.Nullable
 
-newtype ClassHandle
-  = ClassHandle Text
+newtype ClassHandle =
+  ClassHandle Text
   deriving (Show, Eq, Ord, Data)
 
 data DataKind
@@ -33,22 +33,18 @@ data DataKind
 instance Semigroup DataKind where
   GenericData <> a = a
   a <> GenericData = a
-
   FalseData <> _ = FalseData
   _ <> FalseData = FalseData
-
-  DataKind rs <> DataKind rs' =  makeKind $ rs `Set.intersection` rs'
+  DataKind rs <> DataKind rs' = makeKind $ rs `Set.intersection` rs'
     where
       makeKind set
         | null set = FalseData
         | Set.size set > 1 = DataKind set
         | otherwise = RegisterKind $ Set.findMin set
-
   DataKind rs <> b@(RegisterKind r)
     | r `Set.member` rs = b
     | otherwise = FalseData
   RegisterKind r <> DataKind rs = DataKind rs <> RegisterKind r
-
   a@(RegisterKind r) <> RegisterKind r'
     | r == r' = a
     | otherwise = FalseData
@@ -73,21 +69,23 @@ instance Ord Constness where
   Regular `compare` Regular = EQ
   LinkExpr `compare` LinkExpr = EQ
   ConstExpr `compare` ConstExpr = EQ
-
   Regular `compare` _ = LT
   _ `compare` Regular = GT
-
   ConstExpr `compare` _ = GT
   _ `compare` ConstExpr = LT
 
-data ConstnessBounds
-  = ConstnessBounds { _minConst :: Constness, _maxConst :: Constness }
+data ConstnessBounds =
+  ConstnessBounds
+    { _minConst :: Constness
+    , _maxConst :: Constness
+    }
   deriving (Show, Eq, Ord, Data)
 
 makeLenses ''ConstnessBounds
 
 instance Semigroup ConstnessBounds where
-  l `ConstnessBounds` h <> l' `ConstnessBounds` h' = max l l' `ConstnessBounds` min h h'
+  ConstnessBounds low high <> ConstnessBounds low' high' =
+    max low low' `ConstnessBounds` min high high'
 
 instance Monoid ConstnessBounds where
   mempty = Regular `ConstnessBounds` ConstExpr
@@ -101,9 +99,7 @@ data TypeKind
 instance Eq TypeKind where
   GenericType == _ = True
   _ == GenericType = True
-
   Star == Star = True
-
   (l :-> r) == (l' :-> r') = l == l' && r == r'
   _ == _ = False
 
@@ -111,11 +107,9 @@ instance Ord TypeKind where
   GenericType `compare` GenericType = EQ
   GenericType `compare` _ = LT
   _ `compare` GenericType = GT
-
   Star `compare` Star = EQ
   Star `compare` _ = LT
   _ `compare` Star = GT
-
   (l :-> r) `compare` (l' :-> r') =
     case l `compare` l' of
       LT -> LT
@@ -147,13 +141,10 @@ instance Ord TypeVar where
   TypeVar int _ _ `compare` TypeVar int' _ _ = int `compare` int'
   TypeLam int _ _ `compare` TypeLam int' _ _ = int `compare` int'
   TypeConst name _ _ `compare` TypeConst name' _ _ = name `compare` name'
-
   NoType `compare` _ = LT
   _ `compare` TypeConst {} = LT
-
   _ `compare` NoType = GT
   TypeConst {} `compare` _ = GT
-
   TypeVar {} `compare` TypeLam {} = LT
   TypeLam {} `compare` TypeVar {} = GT
 
@@ -165,7 +156,7 @@ instance Nullable TypeVar where
   nullVal = NoType
 
 instance HasTypeKind TypeVar where
-  getTypeKind NoType{} = GenericType
+  getTypeKind NoType {} = GenericType
   getTypeKind (TypeVar _ kind _) = kind
   getTypeKind (TypeLam _ kind _) = kind
   getTypeKind (TypeConst _ kind _) = kind
@@ -207,17 +198,17 @@ instance Fallbackable Type where
   a ?? _ = a
 
 instance HasTypeKind Type where
-  getTypeKind ErrorType{} = GenericType
+  getTypeKind ErrorType {} = GenericType
   getTypeKind (VarType t) = getTypeKind t
-  getTypeKind TBitsType{} = Star
-  getTypeKind BoolType{} = Star
-  getTypeKind TupleType{} = Star -- TODO: check if all types are `Star` (when creating)
-  getTypeKind FunctionType{} = Star -- TODO: ditto
-  getTypeKind AddrType{} = Star -- TODO: ditto
-  getTypeKind LabelType{} = Star
-  getTypeKind StringType{} = Star
-  getTypeKind String16Type{} = Star
-  getTypeKind VoidType{} = Star
+  getTypeKind TBitsType {} = Star
+  getTypeKind BoolType {} = Star
+  getTypeKind TupleType {} = Star -- TODO: check if all types are `Star` (when creating)
+  getTypeKind FunctionType {} = Star -- TODO: ditto
+  getTypeKind AddrType {} = Star -- TODO: ditto
+  getTypeKind LabelType {} = Star
+  getTypeKind StringType {} = Star
+  getTypeKind String16Type {} = Star
+  getTypeKind VoidType {} = Star
 
 -- TODO: add methods and their instances
 newtype Class =
@@ -257,11 +248,10 @@ class Data a =>
     where
       go :: Data d => d -> Set TypeVar
       go = (Set.unions . gmapQ go) `extQ` factCase `extQ` leaf
-
-      factCase = \case
-        InstType _ tVar' -> Set.singleton tVar'
-        fact -> Set.unions $ gmapQ go fact
-
+      factCase =
+        \case
+          InstType _ tVar' -> Set.singleton tVar'
+          fact -> Set.unions $ gmapQ go fact
       leaf tVar@TypeVar {} = Set.singleton tVar
       leaf _ = mempty
 

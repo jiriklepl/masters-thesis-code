@@ -19,30 +19,29 @@ getSymbolicOperator :: Op -> Infer.Type
 getSymbolicOperator = undefined
 
 builtInKinds :: Bimap Text DataKind
-builtInKinds = Bimap.fromList
-  [ ("!false", FalseData)
-  , ("!generic", GenericData)
-  , ("address", addressKind)
-  , ("float", floatKind)
-  , ("", integerKind)
-  ]
+builtInKinds =
+  Bimap.fromList
+    [ ("!false", FalseData)
+    , ("!generic", GenericData)
+    , ("address", addressKind)
+    , ("float", floatKind)
+    , ("", integerKind)
+    ]
 
 getDataKind :: Text -> DataKind
-getDataKind name = if name `Bimap.member` builtInKinds
-  then builtInKinds Bimap.! name
-  else mempty
+getDataKind name =
+  if name `Bimap.member` builtInKinds
+    then builtInKinds Bimap.! name
+    else mempty
 
 translateDataKind :: DataKind -> Maybe Text
-translateDataKind name = if name `Bimap.memberR` builtInKinds
-  then Just $ builtInKinds Bimap.!> name
-  else Nothing
+translateDataKind name =
+  if name `Bimap.memberR` builtInKinds
+    then Just $ builtInKinds Bimap.!> name
+    else Nothing
 
 builtInRegisters :: Bimap Text Int
-builtInRegisters = Bimap.fromList $
-  zip
-    [
-    ]
-    [0..]
+builtInRegisters = Bimap.fromList $ zip [] [0 ..]
 
 -- TODO: add to `Preprocess` (after adding the typed labels)
 addressKind :: DataKind

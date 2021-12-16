@@ -15,26 +15,34 @@ import safe Data.Map (Map)
 import safe Data.Text (Text)
 
 import safe CMM.AST
-import safe CMM.Inference.Type
 import safe CMM.AST.Annot
 import safe CMM.AST.HasName
 import safe CMM.AST.Variables.State
+import safe CMM.Inference.Type
 import safe CMM.Parser.HasPos
 
-localVariables :: (MonadIO m, HasPos a) => Procedure a -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
+localVariables ::
+     (MonadIO m, HasPos a)
+  => Procedure a
+  -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
 localVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addCommonCases $ gmapM go
 
-globalVariables :: (MonadIO m, HasPos a) => Unit a -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
+globalVariables ::
+     (MonadIO m, HasPos a)
+  => Unit a
+  -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
 variablesCommon ::
-     MonadIO m => StateT CollectedVariables m a -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
+     MonadIO m
+  => StateT CollectedVariables m a
+  -> m (Map Text TypeKind, Map Text TypeKind, Map Text TypeKind)
 variablesCommon go = do
   result <- execStateT go initCollectedVariables
   return (result ^. variables, result ^. funcVariables, result ^. typeVariables)
@@ -62,7 +70,8 @@ addCommonCases go =
       \case
         decl@(Annot ConstDecl {} (_ :: SourcePos)) -> addVarTrivial decl Star
         decl@(Annot (TypedefDecl _ names) (_ :: SourcePos)) ->
-          decl <$ traverse_ (flip (addTVar decl) GenericType) (getName <$> names)
+          decl <$
+          traverse_ (flip (addTVar decl) GenericType) (getName <$> names)
         decl -> gmapM go decl
     goImport =
       \case
@@ -71,7 +80,9 @@ addCommonCases go =
       \case
         registers@(Annot (Registers _ _ nameStrLits) (_ :: SourcePos)) ->
           registers <$
-          traverse_ (flip (addVar registers) Star) (getName . fst <$> nameStrLits)
+          traverse_
+            (flip (addVar registers) Star)
+            (getName . fst <$> nameStrLits)
     goDatum =
       \case
         datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum Star
@@ -91,7 +102,8 @@ addGlobalCases go = goProcedure $| goSection $| go
   where
     goProcedure =
       \case
-        (procedure :: Annot Procedure SourcePos) -> addFVarTrivial procedure Star
+        (procedure :: Annot Procedure SourcePos) ->
+          addFVarTrivial procedure Star
     goSection =
       \case
         (section :: Annot Section SourcePos) -> gmapM goSectionItems section

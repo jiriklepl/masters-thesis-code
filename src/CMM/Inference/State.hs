@@ -5,21 +5,19 @@
 
 module CMM.Inference.State where
 
-
-import safe Control.Monad.State.Lazy
-import safe Control.Lens.Setter
 import safe Control.Lens.Getter
+import safe Control.Lens.Setter
 import safe Control.Lens.TH
-import safe Data.Text (Text)
+import safe Control.Monad.State.Lazy
+import safe Data.Function
 import safe Data.Map (Map)
 import safe Data.Set (Set)
-import safe Data.Function
+import safe Data.Text (Text)
 
-import safe CMM.Inference.Type
 import safe CMM.Inference.BuiltIn
+import safe CMM.Inference.Type
 
 type Subst = Map TypeVar Type
-
 
 data Inferencer =
   Inferencer
@@ -36,7 +34,7 @@ data Inferencer =
     , _context :: Facts
     , _schemes :: Map TypeVar (Scheme Type)
     }
-    deriving (Show)
+  deriving (Show)
 
 initInferencer :: Int -> Inferencer
 initInferencer handleCounter =
@@ -77,4 +75,4 @@ makeLenses ''Inferencer
 freshTypeHandle :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHandle tKind = do
   handleCounter += 1
-  (Nothing &) . (tKind &) . TypeVar  <$> use handleCounter
+  (Nothing &) . (tKind &) . TypeVar <$> use handleCounter
