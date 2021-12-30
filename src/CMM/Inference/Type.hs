@@ -1,15 +1,14 @@
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module CMM.Inference.Type where
 
-import safe Control.Lens.TH (makeLenses)
 import safe Data.Data (Data(gmapQ))
 import safe Data.Generics.Aliases (extQ)
 
@@ -17,7 +16,12 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
-import safe CMM.Data.Nullable
+import safe CMM.Data.Bounds ( Bounds(Bounds) )
+import safe CMM.Data.Nullable ( Nullable(..), Fallbackable(..) )
+import safe CMM.Data.Lattice
+import safe CMM.Data.Dioid
+import safe CMM.Data.Orderable
+import safe CMM.Parser.HasPos ( SourcePos )
 
 newtype ClassHandle =
   ClassHandle Text
@@ -28,29 +32,11 @@ data DataKind
   | FalseData
   | DataKind (Set Int)
   | RegisterKind Int
-  deriving (Show, Eq, Ord, Data)
+  deriving (Show, Eq, Data)
 
-instance Semigroup DataKind where
-  GenericData <> a = a
-  a <> GenericData = a
-  FalseData <> _ = FalseData
-  _ <> FalseData = FalseData
-  DataKind rs <> DataKind rs' = makeKind $ rs `Set.intersection` rs'
-    where
-      makeKind set
-        | null set = FalseData
-        | Set.size set > 1 = DataKind set
-        | otherwise = RegisterKind $ Set.findMin set
-  DataKind rs <> b@(RegisterKind r)
-    | r `Set.member` rs = b
-    | otherwise = FalseData
-  RegisterKind r <> DataKind rs = DataKind rs <> RegisterKind r
-  a@(RegisterKind r) <> RegisterKind r'
-    | r == r' = a
-    | otherwise = FalseData
-
-instance Monoid DataKind where
-  mempty = GenericData
+instance Orderable DataKind OrdDataKind where
+  makeOrdered = OrdDataKind
+  unmakeOrdered = getDataKind
 
 instance Fallbackable DataKind where
   FalseData ?? a = a
@@ -58,6 +44,65 @@ instance Fallbackable DataKind where
 
 instance Nullable DataKind where
   nullVal = FalseData
+
+instance Bounded DataKind where
+  minBound = GenericData
+  maxBound = FalseData
+
+makeDataKind :: Set Int -> DataKind
+makeDataKind set
+  | null set = FalseData
+  | Set.size set > 1 = DataKind set
+  | otherwise = RegisterKind $ Set.findMin set
+
+instance Lattice DataKind where
+  GenericData /\ a = a
+  FalseData /\ _ = FalseData
+  DataKind rs /\ DataKind rs' = makeDataKind $ rs `Set.intersection` rs'
+  DataKind rs /\ b@(RegisterKind r)
+    | r `Set.member` rs = b
+    | otherwise = FalseData
+  a@(RegisterKind r) /\ RegisterKind r'
+    | r == r' = a
+    | otherwise = FalseData
+  a /\ b = b /\ a
+
+  GenericData \/ _ = GenericData
+  FalseData \/ a = a
+  DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
+  DataKind rs \/ RegisterKind r = DataKind $ r `Set.insert` rs
+  RegisterKind r \/ RegisterKind r' = DataKind $ Set.singleton r `Set.union` Set.singleton r'
+  a \/ b = b \/ a
+
+instance Semigroup DataKind where
+  (<>) = (\/)
+
+instance Monoid DataKind where
+  mempty = FalseData
+
+instance Dioid DataKind where
+  (<.>) = (/\)
+  mfull = GenericData
+
+newtype OrdDataKind = OrdDataKind { getDataKind :: DataKind }
+                    deriving (Show, Eq, Data)
+
+instance Ord OrdDataKind where
+  OrdDataKind GenericData `compare` OrdDataKind GenericData = EQ
+  OrdDataKind FalseData `compare` OrdDataKind FalseData = EQ
+  OrdDataKind (DataKind set) `compare` OrdDataKind (DataKind set') = set `compare` set'
+  OrdDataKind (RegisterKind int) `compare` OrdDataKind (RegisterKind int') = int `compare` int'
+
+  OrdDataKind GenericData `compare` _ = LT
+  _ `compare` OrdDataKind GenericData = GT
+  OrdDataKind FalseData `compare` _ = LT
+  _ `compare` (OrdDataKind FalseData) = GT
+  OrdDataKind (DataKind _) `compare` _ = LT
+  _ `compare` OrdDataKind (DataKind _) = GT
+
+instance Bounded OrdDataKind where
+  minBound = OrdDataKind minBound
+  maxBound = OrdDataKind maxBound
 
 data Constness
   = Regular
@@ -74,21 +119,9 @@ instance Ord Constness where
   ConstExpr `compare` _ = GT
   _ `compare` ConstExpr = LT
 
-data ConstnessBounds =
-  ConstnessBounds
-    { _minConst :: Constness
-    , _maxConst :: Constness
-    }
-  deriving (Show, Eq, Ord, Data)
-
-makeLenses ''ConstnessBounds
-
-instance Semigroup ConstnessBounds where
-  ConstnessBounds low high <> ConstnessBounds low' high' =
-    max low low' `ConstnessBounds` min high high'
-
-instance Monoid ConstnessBounds where
-  mempty = Regular `ConstnessBounds` ConstExpr
+instance Bounded Constness where
+  minBound = Regular
+  maxBound = ConstExpr
 
 data TypeKind
   = Star
@@ -123,11 +156,25 @@ instance Fallbackable TypeKind where
 instance Nullable TypeKind where
   nullVal = GenericType
 
+data TVarAnnot
+  = NoTVarAnnot
+  | TVarInst TypeVar
+  | TVarAST Text SourcePos
+  | TVarBuiltIn Text
+  deriving (Show, Data)
+
+instance Fallbackable TVarAnnot where
+  NoTVarAnnot ?? kind = kind
+  kind ?? _ = kind
+
+instance Nullable TVarAnnot where
+  nullVal = NoTVarAnnot
+
 data TypeVar
   = NoType
-  | TypeVar Int TypeKind (Maybe Text) -- TODO: change text to something even more useful; also: reduce repetition
-  | TypeLam Int TypeKind (Maybe Text)
-  | TypeConst Text TypeKind (Maybe Text)
+  | TypeVar Int TypeKind TVarAnnot -- TODO: change text to something even more useful; also: reduce repetition
+  | TypeLam Int TypeKind TVarAnnot
+  | TypeConst Text TypeKind TVarAnnot
   deriving (Show, Data, IsTyped)
 
 instance Eq TypeVar where
@@ -223,8 +270,8 @@ data Fact
   = SubType TypeVar TypeVar -- supertype; subtype
   | TypeUnion TypeVar Type -- binds the type variable to a type
   | Typing TypeVar Type -- states that the type variable follows a certain typing
-  | KindLimit DataKind TypeVar -- lower bound on the kind of the type variable
-  | ConstnessLimit ConstnessBounds TypeVar -- lower bound on the constness of the type variable
+  | KindLimit (Bounds OrdDataKind Lattice) TypeVar -- lower bound on the kind of the type variable
+  | ConstnessLimit (Bounds Constness Ord) TypeVar -- lower bound on the constness of the type variable
   | OnRegister Text TypeVar -- states that the type variable stores its data to a certain register
   | SubKind TypeVar TypeVar -- superKind; subKind
   | SubConst TypeVar TypeVar -- superConst; subConst
@@ -280,17 +327,20 @@ subType = SubType
 instType :: TypeVar -> TypeVar -> Fact
 instType = InstType
 
-kindedConstraint :: DataKind -> TypeVar -> Fact
-kindedConstraint = KindLimit
+minKindConstraint :: DataKind -> TypeVar -> Fact
+minKindConstraint = KindLimit . (`Bounds` maxBound) . OrdDataKind
+
+maxKindConstraint :: DataKind -> TypeVar -> Fact
+maxKindConstraint = KindLimit . (minBound `Bounds`) . OrdDataKind
 
 constExprConstraint :: TypeVar -> Fact
-constExprConstraint = ConstnessLimit $ ConstnessBounds ConstExpr ConstExpr
+constExprConstraint = ConstnessLimit $ Bounds ConstExpr ConstExpr
 
 linkExprConstraint :: TypeVar -> Fact
-linkExprConstraint = ConstnessLimit $ ConstnessBounds LinkExpr ConstExpr
+linkExprConstraint = ConstnessLimit $ Bounds LinkExpr ConstExpr
 
 regularExprConstraint :: TypeVar -> Fact
-regularExprConstraint = ConstnessLimit $ ConstnessBounds Regular Regular
+regularExprConstraint = ConstnessLimit $ Bounds Regular Regular
 
 registerConstraint :: Text -> TypeVar -> Fact
 registerConstraint = OnRegister

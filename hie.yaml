@@ -3,6 +3,24 @@ cradle:
     - path: "src/Compiler/Main.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Data/Nullable.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Tuple.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Bounds.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Orderable.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Lattice.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Dioid.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Lexer.hs"
       component: "Compiler:exe:Compiler"
 

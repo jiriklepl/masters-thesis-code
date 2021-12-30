@@ -16,15 +16,17 @@ import safe Data.Text (Text)
 
 import safe CMM.Inference.BuiltIn
 import safe CMM.Inference.Type
+import safe CMM.Data.Lattice
+import safe CMM.Data.Bounds
 
 type Subst = Map TypeVar Type
 
 data Inferencer =
   Inferencer
     { _typing :: Subst -- contains types of type variables
-    , _kinding :: Map TypeVar DataKind -- contains kinds of type variables
+    , _kinding :: Map TypeVar (Bounds DataKind Lattice) -- contains kinds of type variables
     , _subKinding :: Map TypeVar (Set TypeVar) -- maps variables to their superKinds
-    , _consting :: Map TypeVar ConstnessBounds -- contains constness limits of type variables
+    , _consting :: Map TypeVar (Bounds Constness Ord) -- contains constness limits of type variables
     , _unifying :: Map TypeVar (Set Type)
     , _subConsting :: Map TypeVar (Set TypeVar) -- maps variables to their subConsts
     , _handleCounter :: Int
@@ -72,7 +74,7 @@ type MonadInferencer m = (MonadState Inferencer m, MonadIO m)
 
 makeLenses ''Inferencer
 
-freshTypeHandle :: MonadInferencer m => TypeKind -> m TypeVar
-freshTypeHandle tKind = do
+freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
+freshTypeHelper tKind = do
   handleCounter += 1
-  (Nothing &) . (tKind &) . TypeVar <$> use handleCounter
+  (NoTVarAnnot &) . (tKind &) . TypeVar <$> use handleCounter

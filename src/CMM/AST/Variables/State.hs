@@ -6,6 +6,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE Rank2Types #-}
 
+-- TODO: make an alias for `Map Text (SourcePos, TypeKind)`
+
 module CMM.AST.Variables.State where
 
 import safe Control.Lens.Getter (uses)
@@ -19,15 +21,15 @@ import safe Prettyprinter (Pretty)
 
 import safe CMM.AST.HasName (HasName(..))
 import safe CMM.Inference.Type (TypeKind)
-import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 
 data CollectedVariables =
   CollectedVariables
-    { _variables :: Map Text TypeKind
-    , _funcVariables :: Map Text TypeKind
-    , _typeVariables :: Map Text TypeKind
+    { _variables :: Map Text (SourcePos, TypeKind)
+    , _funcVariables :: Map Text (SourcePos, TypeKind)
+    , _typeVariables :: Map Text (SourcePos, TypeKind)
     , _errors :: Int
     , _warnings :: Int
     }
@@ -67,7 +69,7 @@ addVar ::
 addVar node var tKind = do
   uses variables (var `Map.member`) >>= \case
     True -> registerError node "Duplicate variable"
-    False -> variables %= Map.insert var tKind
+    False -> variables %= Map.insert var (getPos node, tKind)
 
 addVarTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
@@ -85,7 +87,7 @@ addTVar ::
 addTVar node tVar tKind = do
   uses typeVariables (tVar `Map.member`) >>= \case
     True -> registerError node "Duplicate type variable"
-    False -> typeVariables %= Map.insert tVar tKind
+    False -> typeVariables %= Map.insert tVar (getPos node, tKind)
 
 addTVarTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
@@ -103,7 +105,7 @@ addFVar ::
 addFVar node var tKind = do
   uses funcVariables (var `Map.member`) >>= \case
     True -> registerError node "Duplicate function variable"
-    False -> funcVariables %= Map.insert var tKind
+    False -> funcVariables %= Map.insert var (getPos node, tKind)
 
 addFVarTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m)

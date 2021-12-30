@@ -24,6 +24,10 @@ executable Compiler
   main-is:             Compiler/Main.hs
   other-modules:       CMM.Data.Nullable,
                        CMM.Data.Tuple,
+                       CMM.Data.Bounds,
+                       CMM.Data.Orderable,
+                       CMM.Data.Lattice,
+                       CMM.Data.Dioid,
                        CMM.Lexer,
                        CMM.Lens,
                        CMM.Parser,

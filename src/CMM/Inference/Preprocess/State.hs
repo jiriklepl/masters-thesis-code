@@ -21,17 +21,9 @@ import safe qualified Data.Map as Map
 import safe Data.Maybe (fromMaybe)
 import safe Data.Text (Text)
 
+import safe CMM.Parser.HasPos
 import safe qualified CMM.AST.Annot as AST
 import safe CMM.Inference.Type
-  ( Fact
-  , Facts
-  , IsTyped(freeTypeVars)
-  , Type
-  , TypeKind(Star)
-  , TypeVar(NoType, TypeVar)
-  , forall
-  , typeUnion
-  )
 import safe CMM.Lens (exchange)
 import safe qualified CMM.Parser.HasPos as AST
 
@@ -83,9 +75,9 @@ initInferPreprocessor =
 
 beginUnit ::
      MonadInferPreprocessor m
-  => Map Text TypeKind
-  -> Map Text TypeKind
-  -> Map Text TypeKind
+  => Map Text (SourcePos, TypeKind)
+  -> Map Text (SourcePos, TypeKind)
+  -> Map Text (SourcePos, TypeKind)
   -> m ()
 beginUnit vars fVars tVars = do
   variables <~ pure <$> declVars vars
@@ -118,18 +110,18 @@ storeVar name handle = do
   storeVarImpl name handle vars
 
 beginProc ::
-     MonadInferPreprocessor m => Map Text TypeKind -> Map Text TypeKind -> m ()
+     (MonadInferPreprocessor m) => Map Text (SourcePos, TypeKind) -> Map Text (SourcePos, TypeKind) -> m ()
 beginProc vars tVars = do
   vars' <- declVars vars
   variables %= (vars' :)
   tVars' <- declVars tVars
   typeVariables %= (tVars' :)
   facts %= ([] :)
-  currentReturn <~ freshTypeHandle Star
+  currentReturn <~ freshTypeHelper Star
 
 declVars ::
-     MonadInferPreprocessor m => Map Text TypeKind -> m (Map Text TypeVar)
-declVars = Map.traverseWithKey (&) . (freshNamedHandle <$>)
+     MonadInferPreprocessor m => Map Text (SourcePos, TypeKind) -> m (Map Text TypeVar)
+declVars = Map.traverseWithKey (\name (pos, kind) -> freshTypeHandle kind name pos)
 
 endProc :: MonadInferPreprocessor m => m (Facts, TypeVar)
 endProc = do
@@ -162,15 +154,15 @@ storeFact f = do
   ~(h:t) <- use facts
   facts .= (f : h) : t
 
-freshTypeHandle :: MonadInferPreprocessor m => TypeKind -> m TypeVar
-freshTypeHandle tKind = do
+freshTypeHandle :: (MonadInferPreprocessor m, HasPos n) => TypeKind -> Text -> n -> m TypeVar
+freshTypeHandle tKind name node = do
   handleCounter += 1
-  (Nothing &) . (tKind &) . TypeVar <$> use handleCounter
+  (TVarAST name (getPos node) &) . (tKind &) . TypeVar <$> use handleCounter
 
-freshNamedHandle :: MonadInferPreprocessor m => TypeKind -> Text -> m TypeVar
-freshNamedHandle tKind name = do
+freshTypeHelper :: MonadInferPreprocessor m => TypeKind -> m TypeVar
+freshTypeHelper tKind = do
   handleCounter += 1
-  (Just name &) . (tKind &) . TypeVar <$> use handleCounter
+  (NoTVarAnnot &) . (tKind &) . TypeVar <$> use handleCounter
 
 storeCSymbol :: MonadInferPreprocessor m => Text -> m ()
 storeCSymbol = (cSymbols %=) . (:)

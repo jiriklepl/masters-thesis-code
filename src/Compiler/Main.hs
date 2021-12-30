@@ -7,6 +7,7 @@ import Control.Monad.State as State
 import qualified Data.Map as Map
 
 import Control.Lens
+
 -- import Data.Text as T
 import Data.Text.IO as TS
 import Data.Tuple
@@ -67,8 +68,8 @@ main = do
   print
     (freeTypeVars
        (TupleType
-          [ VarType (TypeVar 20 Infer.Star Nothing)
-          , VarType (TypeVar 30 Infer.Star Nothing)
+          [ VarType (TypeVar 20 Infer.Star NoTVarAnnot)
+          , VarType (TypeVar 30 Infer.Star NoTVarAnnot)
           ]))
   print (CMM.Inference.Preprocess.State._facts miner)
   execStateT

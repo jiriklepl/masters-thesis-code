@@ -29,6 +29,8 @@ import safe Prelude hiding (const)
 
 import safe CMM.Inference.State
 import safe CMM.Inference.Type
+import safe CMM.Data.Bounds
+import safe CMM.Data.Orderable
 
 class Unify a where
   unify :: a -> a -> Either [UnificationError] (Subst, a)
@@ -64,14 +66,8 @@ class UnionPropagate a b where
 
 fresherVarType :: MonadInferencer m => TypeVar -> m TypeVar
 fresherVarType tVar = do
-  let (kind, label) =
-        case tVar of
-          TypeVar _ kind' label' -> (kind', label')
-          TypeLam _ kind' label' -> (kind', label')
-          TypeConst _ kind' label' -> (kind', label')
-          NoType -> (GenericType, Nothing)
   handleCounter += 1
-  uses handleCounter $ \i -> TypeVar i kind label
+  uses handleCounter $ \i -> TypeVar i (getTypeKind tVar) (TVarInst tVar)
 
 freshInst :: (MonadInferencer m, MonadIO m, Data a) => Scheme a -> m (Facts, a)
 freshInst (given :. facts' :=> t) = do
@@ -102,12 +98,12 @@ instance UnionPropagate TypeVar Type where
   unionPropagate tVar (VarType tVar') = do
     facts <>= [SubType tVar tVar', SubType tVar' tVar]
   unionPropagate tVar (TupleType ts) = do
-    tTypes <- traverse (\_ -> freshTypeHandle Star) ts
+    tTypes <- traverse (\_ -> freshTypeHelper Star) ts
     addUnifying tVar $ makeTuple (VarType <$> tTypes)
     facts <>= zipWith TypeUnion tTypes ts <> fmap (SubConst tVar) tTypes
   unionPropagate tVar (FunctionType args ret) = do
-    argsType <- freshTypeHandle Star
-    retType <- freshTypeHandle Star
+    argsType <- freshTypeHelper Star
+    retType <- freshTypeHelper Star
     addUnifying tVar $ VarType argsType `makeFunction` VarType retType
     facts <>=
       [ TypeUnion argsType args
@@ -193,18 +189,19 @@ reduce fact =
       subConsting %= Map.insertWith Set.union t (Set.singleton t')
     Typing t t' -> addTyping $ bind t t'
     TypeUnion t t' -> unionPropagate t t' $> bind t t' >>= addTyping
-    ConstnessLimit bounds t -> consting %= Map.insertWith max t bounds
-    KindLimit kind t -> do
+    ConstnessLimit bounds t -> consting %= Map.insertWith (<>) t bounds
+    KindLimit (Bounds minKind maxKind) t -> do
       kinding <~ (use kinding >>= Map.alterF go t)
-      where go Nothing = return (Just kind)
-            go (Just kind') = return . Just $ kind <> kind'
+      where go Nothing = return (Just kindBounds)
+            go (Just kind) = return . Just $ kindBounds <> kind
+            kindBounds = unmakeOrdered minKind `Bounds` unmakeOrdered maxKind
     InstType gen inst ->
       uses schemes (gen `Map.lookup`) >>= \case
         Just scheme -> do
           (fs', t) <- freshInst scheme
           facts <>= inst `TypeUnion` t : fs'
         Nothing -> facts <>= [fact]
-    OnRegister reg t -> registerKind reg >>= reduce . (`KindLimit` t)
+    OnRegister reg t -> registerKind reg >>= reduce . (`KindLimit` t) . (`Bounds` maxBound) . makeOrdered
     Constraint {} -> facts <>= [fact]
     NestedFacts (kinds :. fs :=> [tVar `TypeUnion` t]) -> do
       let scheme = kinds :. fs :=> t
@@ -233,9 +230,11 @@ collectVertices from = do
 deduceKinds :: MonadInferencer m => m ()
 deduceKinds = do
   pairs <- collectVertices subKinding
-  for_ pairs $ \(v, v') ->
+  for_ pairs $ \(v, v') -> do
     uses kinding (v' `Map.lookup`) >>=
-    traverse_ ((kinding %=) . Map.insertWith (<>) v)
+      traverse_ ((kinding %=) . Map.insertWith (<>) v . (upperBound .~ maxBound))
+    uses kinding (v `Map.lookup`) >>=
+      traverse_ ((kinding %=) . Map.insertWith (<>) v' . (lowerBound .~ minBound))
 
 deduceConsts :: MonadInferencer m => m ()
 deduceConsts = do
@@ -243,9 +242,9 @@ deduceConsts = do
   for_ pairs $ \(v, v') -> do
     uses consting (v' `Map.lookup`) >>=
       traverse_
-        ((consting %=) . Map.insertWith (<>) v . (maxConst .~ ConstExpr))
+        ((consting %=) . Map.insertWith (<>) v . (lowerBound .~ minBound))
     uses consting (v `Map.lookup`) >>=
-      traverse_ ((consting %=) . Map.insertWith (<>) v' . (minConst .~ Regular))
+      traverse_ ((consting %=) . Map.insertWith (<>) v' . (upperBound .~ maxBound))
 
 registerKind :: MonadInferencer m => Text -> m DataKind
 registerKind = undefined
