@@ -12,6 +12,8 @@ import safe Control.Lens.Setter
 import safe Control.Lens.Traversal
 import safe Control.Lens.Tuple
 
+import safe Control.Applicative
+
 -- TODO: add the overlap check for instances
 -- TODO: add the overload resolution for instances to monomorphization
 import safe Control.Monad.Writer.Lazy
@@ -26,12 +28,11 @@ import safe Data.Maybe
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Prelude hiding (const)
-import safe Control.Applicative
 
-import safe CMM.Inference.State
-import safe CMM.Inference.Type
 import safe CMM.Data.Bounds
 import safe CMM.Data.Orderable
+import safe CMM.Inference.State
+import safe CMM.Inference.Type
 
 class Unify a where
   unify :: a -> a -> Either [UnificationError] (Subst, a)
@@ -60,7 +61,8 @@ addUnifying :: MonadInferencer m => TypeVar -> Type -> m Facts
 addUnifying tVar t = do
   unifs <- use unifying
   unifying .= Map.insertWith Set.union tVar (Set.singleton t) unifs
-  concat . concat <$> traverse (traverse (unionPropagate t)) (Set.toList <$> Map.elems unifs)
+  concat . concat <$>
+    traverse (traverse (unionPropagate t)) (Set.toList <$> Map.elems unifs)
 
 class UnionPropagate a b where
   unionPropagate :: MonadInferencer m => a -> b -> m Facts
@@ -107,15 +109,17 @@ instance UnionPropagate TypeVar Type where
     return [SubType tVar tVar', SubType tVar' tVar]
   unionPropagate tVar (TupleType ts) = do
     tTypes <- traverse (\_ -> freshTypeHelper Star) ts
-    (zipWith TypeUnion tTypes ts <> fmap (SubConst tVar) tTypes ++) <$> addUnifying tVar (makeTuple $ VarType <$> tTypes)
+    (zipWith TypeUnion tTypes ts <> fmap (SubConst tVar) tTypes ++) <$>
+      addUnifying tVar (makeTuple $ VarType <$> tTypes)
   unionPropagate tVar (FunctionType args ret) = do
     argsType <- freshTypeHelper Star
     retType <- freshTypeHelper Star
     ([ TypeUnion argsType args
-      , TypeUnion retType ret
-      , SubConst retType argsType
-      , SubConst argsType tVar
-     ] ++) <$> addUnifying tVar (VarType argsType `makeFunction` VarType retType)
+     , TypeUnion retType ret
+     , SubConst retType argsType
+     , SubConst argsType tVar
+     ] ++) <$>
+      addUnifying tVar (VarType argsType `makeFunction` VarType retType)
   unionPropagate _ _ = return [] -- TODO: check this
 
 matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
@@ -195,8 +199,7 @@ reduce fact =
       subConsting %= Map.insertWith Set.union t (Set.singleton t')
       return []
     Typing t t' -> addTyping (bind t t') $> []
-    TypeUnion t t' ->
-      unionPropagate t t' <* addTyping (bind t t')
+    TypeUnion t t' -> unionPropagate t t' <* addTyping (bind t t')
     ConstnessLimit bounds t -> do
       consting %= Map.insertWith (<>) t bounds
       return []
@@ -212,7 +215,9 @@ reduce fact =
           (fs', t) <- freshInst scheme
           return $ inst `TypeUnion` t : fs'
         Nothing -> return [fact]
-    OnRegister reg t -> registerKind reg >>= reduce . (`KindLimit` t) . (`Bounds` maxBound) . makeOrdered
+    OnRegister reg t ->
+      registerKind reg >>= reduce . (`KindLimit` t) . (`Bounds` maxBound) .
+      makeOrdered
     Constraint {} -> return [fact]
     NestedFacts (kinds :. fs :=> [tVar `TypeUnion` t]) -> do
       let scheme = kinds :. fs :=> t
@@ -243,9 +248,11 @@ deduceKinds = do
   pairs <- collectVertices subKinding
   for_ pairs $ \(v, v') -> do
     uses kinding (v' `Map.lookup`) >>=
-      traverse_ ((kinding %=) . Map.insertWith (<>) v . (upperBound .~ maxBound))
+      traverse_
+        ((kinding %=) . Map.insertWith (<>) v . (upperBound .~ maxBound))
     uses kinding (v `Map.lookup`) >>=
-      traverse_ ((kinding %=) . Map.insertWith (<>) v' . (lowerBound .~ minBound))
+      traverse_
+        ((kinding %=) . Map.insertWith (<>) v' . (lowerBound .~ minBound))
 
 deduceConsts :: MonadInferencer m => m ()
 deduceConsts = do
@@ -255,7 +262,8 @@ deduceConsts = do
       traverse_
         ((consting %=) . Map.insertWith (<>) v . (lowerBound .~ minBound))
     uses consting (v `Map.lookup`) >>=
-      traverse_ ((consting %=) . Map.insertWith (<>) v' . (upperBound .~ maxBound))
+      traverse_
+        ((consting %=) . Map.insertWith (<>) v' . (upperBound .~ maxBound))
 
 registerKind :: MonadInferencer m => Text -> m DataKind
 registerKind = undefined

@@ -7,7 +7,6 @@
 {-# LANGUAGE Rank2Types #-}
 
 -- TODO: make an alias for `Map Text (SourcePos, TypeKind)`
-
 module CMM.AST.Variables.State where
 
 import safe Control.Lens.Getter (uses)

@@ -45,7 +45,9 @@ import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 localVariables ::
      (MonadIO m, HasPos a)
   => Procedure a
-  -> m (Map Text (SourcePos, TypeKind), Map Text (SourcePos, TypeKind), Map Text (SourcePos, TypeKind))
+  -> m ( Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind))
 localVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
@@ -54,7 +56,9 @@ localVariables n = variablesCommon . go $ getPos <$> n
 globalVariables ::
      (MonadIO m, HasPos a)
   => Unit a
-  -> m (Map Text (SourcePos, TypeKind), Map Text (SourcePos, TypeKind), Map Text (SourcePos, TypeKind))
+  -> m ( Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind))
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
@@ -63,7 +67,9 @@ globalVariables n = variablesCommon . go $ getPos <$> n
 variablesCommon ::
      MonadIO m
   => StateT CollectedVariables m a
-  -> m (Map Text (SourcePos, TypeKind), Map Text (SourcePos, TypeKind), Map Text (SourcePos, TypeKind))
+  -> m ( Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind))
 variablesCommon go = do
   result <- execStateT go initCollectedVariables
   return (result ^. variables, result ^. funcVariables, result ^. typeVariables)

@@ -18,8 +18,8 @@ import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (Field2(_2))
 import safe Control.Monad.State.Lazy (MonadIO, zipWithM_)
 import safe Data.Foldable (for_, traverse_)
-import safe Data.Traversable (for)
 import safe qualified Data.Text as T
+import safe Data.Traversable (for)
 import safe Prelude hiding (init)
 
 import safe CMM.Data.Tuple (complSnd3, uncurry3)
@@ -68,6 +68,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   , beginUnit
   , endProc
   , freshTypeHandle
+  , freshTypeHelper
   , getCurrentReturn
   , lookupFVar
   , lookupTVar
@@ -76,7 +77,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFact
   , storeProc
   , storeTVar
-  , storeVar, freshTypeHelper
+  , storeVar
   )
 import safe CMM.Inference.Type as Infer
   ( Fact(SubConst, SubKind, SubType, Typing)
@@ -86,11 +87,11 @@ import safe CMM.Inference.Type as Infer
   , TypeVar(NoType)
   , constExprConstraint
   , instType
-  , maxKindConstraint
-  , minKindConstraint
   , linkExprConstraint
   , makeFunction
   , makeTuple
+  , maxKindConstraint
+  , minKindConstraint
   , registerConstraint
   , regularExprConstraint
   , subType
@@ -299,7 +300,8 @@ instance Preprocess Formal a b where
     handle <- lookupVar (getName name)
     type'' <- preprocess type'
     storeFact $ getTypeHandle type'' `subType` handle
-    for_ mKind $ storeFact . (`minKindConstraint` handle) . getDataKind . getName
+    for_ mKind $
+      storeFact . (`minKindConstraint` handle) . getDataKind . getName
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
 instance Preprocess Stmt a b where
@@ -335,8 +337,13 @@ instance Preprocess Stmt a b where
       PrimOpStmt {} -> undefined
       (CallStmt names mConv expr actuals mTargets annots) -- TODO: this is just a placeholder
        -> do
-        retTypes <- traverse (\name -> freshTypeHandle Star (getName name) name) names
-        argTypes <- traverse (\(num, actual) -> freshTypeHandle Star (T.pack $ "actual" <> show num) actual) (zip [0..] actuals)
+        retTypes <-
+          traverse (\name -> freshTypeHandle Star (getName name) name) names
+        argTypes <-
+          traverse
+            (\(num, actual) ->
+               freshTypeHandle Star (T.pack $ "actual" <> show num) actual)
+            (zip [0 ..] actuals)
         names' <- preprocessT names
         expr' <- preprocess expr
         actuals' <- preprocessT actuals

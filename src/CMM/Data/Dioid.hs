@@ -6,12 +6,14 @@ module CMM.Data.Dioid where
 
 import safe Data.Monoid
 
-import safe qualified Data.Set as Set
-import safe Data.Set (Set)
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
+import safe qualified Data.Set as Set
+import safe Data.Set (Set)
 
-class Monoid a => Dioid a where
+class Monoid a =>
+      Dioid a
+  where
   (<+>) :: a -> a -> a
   (<+>) = (<>)
   (<.>) :: a -> a -> a

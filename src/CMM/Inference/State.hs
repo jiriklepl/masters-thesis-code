@@ -14,10 +14,10 @@ import safe Data.Map (Map)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 
+import safe CMM.Data.Bounds
+import safe CMM.Data.Lattice
 import safe CMM.Inference.BuiltIn
 import safe CMM.Inference.Type
-import safe CMM.Data.Lattice
-import safe CMM.Data.Bounds
 
 type Subst = Map TypeVar Type
 

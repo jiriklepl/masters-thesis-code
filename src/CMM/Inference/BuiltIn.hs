@@ -3,9 +3,9 @@
 
 module CMM.Inference.BuiltIn where
 
-import Data.Bimap (Bimap)
-import safe Control.Lens.Tuple
 import safe Control.Lens.Setter
+import safe Control.Lens.Tuple
+import Data.Bimap (Bimap)
 import qualified Data.Bimap as Bimap
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
@@ -16,8 +16,8 @@ import safe CMM.Data.Orderable
 import safe CMM.Inference.Type as Infer
   ( DataKind(DataKind, FalseData, GenericData)
   , Facts
-  , Type
   , OrdDataKind
+  , Type
   )
 
 getNamedOperator :: Text -> Infer.Type
@@ -28,13 +28,14 @@ getSymbolicOperator = undefined
 
 builtInKinds :: Bimap Text OrdDataKind
 builtInKinds =
-  Bimap.fromList $ (_2 %~ makeOrdered) <$>
-    [ ("!false", FalseData)
-    , ("!generic", GenericData)
-    , ("address", addressKind)
-    , ("float", floatKind)
-    , ("", integerKind)
-    ]
+  Bimap.fromList $
+  (_2 %~ makeOrdered) <$>
+  [ ("!false", FalseData)
+  , ("!generic", GenericData)
+  , ("address", addressKind)
+  , ("float", floatKind)
+  , ("", integerKind)
+  ]
 
 getDataKind :: Text -> DataKind
 getDataKind name =

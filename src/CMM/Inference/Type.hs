@@ -16,12 +16,12 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
-import safe CMM.Data.Bounds ( Bounds(Bounds) )
-import safe CMM.Data.Nullable ( Nullable(..), Fallbackable(..) )
-import safe CMM.Data.Lattice
+import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Dioid
+import safe CMM.Data.Lattice
+import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 import safe CMM.Data.Orderable
-import safe CMM.Parser.HasPos ( SourcePos )
+import safe CMM.Parser.HasPos (SourcePos)
 
 newtype ClassHandle =
   ClassHandle Text
@@ -66,12 +66,12 @@ instance Lattice DataKind where
     | r == r' = a
     | otherwise = FalseData
   a /\ b = b /\ a
-
   GenericData \/ _ = GenericData
   FalseData \/ a = a
   DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
   DataKind rs \/ RegisterKind r = DataKind $ r `Set.insert` rs
-  RegisterKind r \/ RegisterKind r' = DataKind $ Set.singleton r `Set.union` Set.singleton r'
+  RegisterKind r \/ RegisterKind r' =
+    DataKind $ Set.singleton r `Set.union` Set.singleton r'
   a \/ b = b \/ a
 
 instance Semigroup DataKind where
@@ -84,15 +84,19 @@ instance Dioid DataKind where
   (<.>) = (/\)
   mfull = GenericData
 
-newtype OrdDataKind = OrdDataKind { getDataKind :: DataKind }
-                    deriving (Show, Eq, Data)
+newtype OrdDataKind =
+  OrdDataKind
+    { getDataKind :: DataKind
+    }
+  deriving (Show, Eq, Data)
 
 instance Ord OrdDataKind where
   OrdDataKind GenericData `compare` OrdDataKind GenericData = EQ
   OrdDataKind FalseData `compare` OrdDataKind FalseData = EQ
-  OrdDataKind (DataKind set) `compare` OrdDataKind (DataKind set') = set `compare` set'
-  OrdDataKind (RegisterKind int) `compare` OrdDataKind (RegisterKind int') = int `compare` int'
-
+  OrdDataKind (DataKind set) `compare` OrdDataKind (DataKind set') =
+    set `compare` set'
+  OrdDataKind (RegisterKind int) `compare` OrdDataKind (RegisterKind int') =
+    int `compare` int'
   OrdDataKind GenericData `compare` _ = LT
   _ `compare` OrdDataKind GenericData = GT
   OrdDataKind FalseData `compare` _ = LT

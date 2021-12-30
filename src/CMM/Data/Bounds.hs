@@ -6,11 +6,11 @@
 
 module CMM.Data.Bounds where
 
-import safe Data.Data (Data)
-import safe Data.Kind as Kind ( Type, Constraint )
 import Control.Lens.TH (makeLenses)
+import safe Data.Data (Data)
+import safe Data.Kind as Kind (Constraint, Type)
 
-import safe CMM.Data.Lattice ( Lattice(..), join, meet )
+import safe CMM.Data.Lattice (Lattice(..), join, meet)
 
 data Bounds a (b :: Kind.Type -> Kind.Constraint) =
   Bounds
@@ -22,15 +22,13 @@ data Bounds a (b :: Kind.Type -> Kind.Constraint) =
 makeLenses ''Bounds
 
 instance Lattice a => Semigroup (Bounds a Lattice) where
-  Bounds low high <> Bounds low' high' =
-    meet low low' `Bounds` join high high'
+  Bounds low high <> Bounds low' high' = meet low low' `Bounds` join high high'
 
 instance (Lattice a, Bounded a) => Monoid (Bounds a Lattice) where
   mempty = minBound `Bounds` maxBound
 
 instance Ord a => Semigroup (Bounds a Ord) where
-  Bounds low high <> Bounds low' high' =
-    max low low' `Bounds` min high high'
+  Bounds low high <> Bounds low' high' = max low low' `Bounds` min high high'
 
 instance (Ord a, Bounded a) => Monoid (Bounds a Ord) where
   mempty = minBound `Bounds` maxBound
