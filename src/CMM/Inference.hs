@@ -26,6 +26,7 @@ import safe Data.Maybe
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Prelude hiding (const)
+import safe Control.Applicative
 
 import safe CMM.Inference.State
 import safe CMM.Inference.Type
@@ -55,14 +56,14 @@ instance Apply Fact
 instance Apply Subst where
   subst' `apply` subst = (apply subst' <$> subst) <> subst'
 
-addUnifying :: MonadInferencer m => TypeVar -> Type -> m ()
+addUnifying :: MonadInferencer m => TypeVar -> Type -> m Facts
 addUnifying tVar t = do
   unifs <- use unifying
-  traverse_ (traverse_ (unionPropagate t)) unifs
   unifying .= Map.insertWith Set.union tVar (Set.singleton t) unifs
+  concat . concat <$> traverse (traverse (unionPropagate t)) (Set.toList <$> Map.elems unifs)
 
 class UnionPropagate a b where
-  unionPropagate :: MonadInferencer m => a -> b -> m ()
+  unionPropagate :: MonadInferencer m => a -> b -> m Facts
 
 fresherVarType :: MonadInferencer m => TypeVar -> m TypeVar
 fresherVarType tVar = do
@@ -78,40 +79,44 @@ freshInst (given :. facts' :=> t) = do
   return (transform facts', transform t)
 
 instance UnionPropagate Type Type where
-  unionPropagate (ErrorType text) (ErrorType text') =
+  unionPropagate (ErrorType text) (ErrorType text') = do
     errors <>= [GotErrorType text, GotErrorType text']
-  unionPropagate (ErrorType text) _ = errors <>= [GotErrorType text]
-  unionPropagate _ (ErrorType text) = errors <>= [GotErrorType text]
+    return []
+  unionPropagate (ErrorType text) _ = do
+    errors <>= [GotErrorType text]
+    return []
+  unionPropagate _ (ErrorType text) = do
+    errors <>= [GotErrorType text]
+    return []
   unionPropagate (VarType tVar) t = unionPropagate tVar t
   unionPropagate t (VarType tVar) = unionPropagate tVar t
   unionPropagate (TupleType ts) (TupleType ts') =
-    zipWithM_ unionPropagate ts ts'
+    concat <$> zipWithM unionPropagate ts ts'
   unionPropagate (FunctionType arg ret) (FunctionType arg' ret') =
-    unionPropagate arg arg' >> unionPropagate ret ret'
+    liftA2 (++) (unionPropagate arg arg') (unionPropagate ret ret')
   unionPropagate (AddrType t) (AddrType t') = unionPropagate t t'
-  unionPropagate _ _ = return () -- TODO: check this
+  unionPropagate _ _ = return [] -- TODO: check this
 
 -- TODO: maybe add simplifications for types that already depend just on tVars
 instance UnionPropagate TypeVar Type where
-  unionPropagate NoType _ = return () -- TODO: error "Implementation error"
-  unionPropagate _ (ErrorType text) = errors <>= [GotErrorType text]
+  unionPropagate NoType _ = return [] -- TODO: error "Implementation error"
+  unionPropagate _ (ErrorType text) = do
+    errors <>= [GotErrorType text]
+    return []
   unionPropagate tVar (VarType tVar') = do
-    facts <>= [SubType tVar tVar', SubType tVar' tVar]
+    return [SubType tVar tVar', SubType tVar' tVar]
   unionPropagate tVar (TupleType ts) = do
     tTypes <- traverse (\_ -> freshTypeHelper Star) ts
-    addUnifying tVar $ makeTuple (VarType <$> tTypes)
-    facts <>= zipWith TypeUnion tTypes ts <> fmap (SubConst tVar) tTypes
+    (zipWith TypeUnion tTypes ts <> fmap (SubConst tVar) tTypes ++) <$> addUnifying tVar (makeTuple $ VarType <$> tTypes)
   unionPropagate tVar (FunctionType args ret) = do
     argsType <- freshTypeHelper Star
     retType <- freshTypeHelper Star
-    addUnifying tVar $ VarType argsType `makeFunction` VarType retType
-    facts <>=
-      [ TypeUnion argsType args
+    ([ TypeUnion argsType args
       , TypeUnion retType ret
       , SubConst retType argsType
       , SubConst argsType tVar
-      ]
-  unionPropagate _ _ = return () -- TODO: check this
+     ] ++) <$> addUnifying tVar (VarType argsType `makeFunction` VarType retType)
+  unionPropagate _ _ = return [] -- TODO: check this
 
 matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
 matchKind a b = getTypeKind a == getTypeKind b
@@ -126,10 +131,9 @@ bind tVar t'
       else Left [BadKind (VarType tVar) t']
   | otherwise = Left [Occurs tVar t']
 
-subUnify :: MonadInferencer m => TypeVar -> TypeVar -> m ()
-subUnify tVar tVar' = do
-  facts <>= [SubKind tVar tVar', SubConst tVar tVar']
-  unifyVars tVar tVar'
+subUnify :: MonadInferencer m => TypeVar -> TypeVar -> m Facts
+subUnify tVar tVar' =
+  unifyVars tVar tVar' $> [SubKind tVar tVar', SubConst tVar tVar']
 
 unifyVars :: MonadInferencer m => TypeVar -> TypeVar -> m ()
 unifyVars tVar tVar' =
@@ -180,18 +184,25 @@ instance Unify Type where
   unify (AddrType t) (AddrType t') = (_2 %~ AddrType) <$> unify t t'
   unify t t' = Left [Mismatch t t']
 
-reduce :: MonadInferencer m => Fact -> m ()
+reduce :: MonadInferencer m => Fact -> m Facts
 reduce fact =
   case fact of
     SubType t t' -> subUnify t t'
-    SubKind t t' -> subKinding %= Map.insertWith Set.union t' (Set.singleton t)
-    SubConst t t' ->
+    SubKind t t' -> do
+      subKinding %= Map.insertWith Set.union t' (Set.singleton t)
+      return []
+    SubConst t t' -> do
       subConsting %= Map.insertWith Set.union t (Set.singleton t')
-    Typing t t' -> addTyping $ bind t t'
-    TypeUnion t t' -> unionPropagate t t' $> bind t t' >>= addTyping
-    ConstnessLimit bounds t -> consting %= Map.insertWith (<>) t bounds
+      return []
+    Typing t t' -> addTyping (bind t t') $> []
+    TypeUnion t t' ->
+      unionPropagate t t' <* addTyping (bind t t')
+    ConstnessLimit bounds t -> do
+      consting %= Map.insertWith (<>) t bounds
+      return []
     KindLimit (Bounds minKind maxKind) t -> do
       kinding <~ (use kinding >>= Map.alterF go t)
+      return []
       where go Nothing = return (Just kindBounds)
             go (Just kind) = return . Just $ kindBounds <> kind
             kindBounds = unmakeOrdered minKind `Bounds` unmakeOrdered maxKind
@@ -199,16 +210,16 @@ reduce fact =
       uses schemes (gen `Map.lookup`) >>= \case
         Just scheme -> do
           (fs', t) <- freshInst scheme
-          facts <>= inst `TypeUnion` t : fs'
-        Nothing -> facts <>= [fact]
+          return $ inst `TypeUnion` t : fs'
+        Nothing -> return [fact]
     OnRegister reg t -> registerKind reg >>= reduce . (`KindLimit` t) . (`Bounds` maxBound) . makeOrdered
-    Constraint {} -> facts <>= [fact]
+    Constraint {} -> return [fact]
     NestedFacts (kinds :. fs :=> [tVar `TypeUnion` t]) -> do
       let scheme = kinds :. fs :=> t
       (fs', t') <- freshInst scheme
       tVar' <- fresherVarType tVar
-      facts <>= tVar' `TypeUnion` t' : fs'
       schemes %= Map.insert tVar scheme -- TODO: simplify the scheme
+      return $ tVar' `TypeUnion` t' : fs'
 
 collectVertices ::
      MonadInferencer m

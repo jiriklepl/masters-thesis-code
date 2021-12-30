@@ -74,28 +74,16 @@ main = do
   print (CMM.Inference.Preprocess.State._facts miner)
   execStateT
     (do let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
-        traverse_ Infer.reduce fs
-        fs <- use InferState.facts
-        InferState.facts .= mempty
-        traverse_ Infer.reduce fs
-        fs <- use InferState.facts
-        InferState.facts .= mempty
-        traverse_ Infer.reduce fs
-        fs <- use InferState.facts
-        InferState.facts .= mempty
-        traverse_ Infer.reduce fs
-        fs <- use InferState.facts
-        InferState.facts .= mempty
-        traverse_ Infer.reduce fs
-        fs <- use InferState.facts
-        InferState.facts .= mempty
-        traverse_ Infer.reduce fs
-        fs <- use InferState.facts
-        InferState.facts .= mempty
-        traverse_ Infer.reduce fs
+        fs <- Prelude.concat <$> traverse Infer.reduce fs
+        fs <- Prelude.concat <$> traverse Infer.reduce fs
+        fs <- Prelude.concat <$> traverse Infer.reduce fs
+        fs <- Prelude.concat <$> traverse Infer.reduce fs
+        fs <- Prelude.concat <$> traverse Infer.reduce fs
+        fs <- Prelude.concat <$> traverse Infer.reduce fs
+        fs <- Prelude.concat <$> traverse Infer.reduce fs
         deduceKinds
         deduceConsts
-        use InferState.facts)
+        return fs)
     (InferState.initInferencer
        (CMM.Inference.Preprocess.State._handleCounter miner)) >>=
     print
