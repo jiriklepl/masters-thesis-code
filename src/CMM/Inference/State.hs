@@ -34,7 +34,7 @@ data Inferencer =
     , _facts :: Facts
     , _assumps :: Facts
     , _context :: Facts
-    , _schemes :: Map TypeVar (Scheme Type)
+    , _schemes :: Map TypeVar (Set (Scheme Type))
     }
   deriving (Show)
 

@@ -74,16 +74,9 @@ main = do
   print (CMM.Inference.Preprocess.State._facts miner)
   execStateT
     (do let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
-        fs <- Prelude.concat <$> traverse Infer.reduce fs
-        fs <- Prelude.concat <$> traverse Infer.reduce fs
-        fs <- Prelude.concat <$> traverse Infer.reduce fs
-        fs <- Prelude.concat <$> traverse Infer.reduce fs
-        fs <- Prelude.concat <$> traverse Infer.reduce fs
-        fs <- Prelude.concat <$> traverse Infer.reduce fs
-        fs <- Prelude.concat <$> traverse Infer.reduce fs
+        solve fs
         deduceKinds
-        deduceConsts
-        return fs)
+        deduceConsts)
     (InferState.initInferencer
        (CMM.Inference.Preprocess.State._handleCounter miner)) >>=
     print

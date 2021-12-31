@@ -17,21 +17,22 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.Data.Bounds (Bounds(Bounds))
-import safe CMM.Data.Dioid
-import safe CMM.Data.Lattice
+import safe CMM.Data.Dioid ( Dioid((<.>), mfull) )
+import safe CMM.Data.Lattice ( Lattice(..) )
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
-import safe CMM.Data.Orderable
+import safe CMM.Data.Orderable ( Orderable(..) )
 import safe CMM.Parser.HasPos (SourcePos)
 
 newtype ClassHandle =
   ClassHandle Text
   deriving (Show, Eq, Ord, Data)
 
+-- | DataKind specifies the semantics and register allocability of the types that map onto it via kinding
 data DataKind
-  = GenericData
-  | FalseData
-  | DataKind (Set Int)
-  | RegisterKind Int
+  = GenericData -- | The most generic data kind
+  | DataKind (Set Int) -- | The regular case for data kinds
+  | RegisterKind Int -- | The kind that denotes a singleton set of registers
+  | FalseData -- | The empty data kind
   deriving (Show, Eq, Data)
 
 instance Orderable DataKind OrdDataKind where
@@ -49,6 +50,7 @@ instance Bounded DataKind where
   minBound = GenericData
   maxBound = FalseData
 
+-- | Transforms the given `Set` of `Int`s denoting physical registers into a corresponding `DataKind`
 makeDataKind :: Set Int -> DataKind
 makeDataKind set
   | null set = FalseData
@@ -71,7 +73,7 @@ instance Lattice DataKind where
   DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
   DataKind rs \/ RegisterKind r = DataKind $ r `Set.insert` rs
   RegisterKind r \/ RegisterKind r' =
-    DataKind $ Set.singleton r `Set.union` Set.singleton r'
+    makeDataKind $ Set.singleton r `Set.union` Set.singleton r'
   a \/ b = b \/ a
 
 instance Semigroup DataKind where
@@ -176,7 +178,7 @@ instance Nullable TVarAnnot where
 
 data TypeVar
   = NoType
-  | TypeVar Int TypeKind TVarAnnot -- TODO: change text to something even more useful; also: reduce repetition
+  | TypeVar Int TypeKind TVarAnnot -- TODO: reduce repetition
   | TypeLam Int TypeKind TVarAnnot
   | TypeConst Text TypeKind TVarAnnot
   deriving (Show, Data, IsTyped)
@@ -281,7 +283,7 @@ data Fact
   | SubConst TypeVar TypeVar -- superConst; subConst
   | InstType TypeVar TypeVar -- polytype; monotype
   | Constraint ClassHandle [TypeVar]
-  | NestedFacts (Scheme Facts)
+  | NestedFact (Scheme Fact)
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 type Facts = [Fact]
@@ -306,9 +308,11 @@ class Data a =>
       leaf tVar@TypeVar {} = Set.singleton tVar
       leaf _ = mempty
 
+-- | Transforms the two given `Type`s into a function `Type`
 makeFunction :: Type -> Type -> Type
 makeFunction = FunctionType
 
+-- | Transforms the given list of `Type`s into a tuple `Type` (there are special cases for an empty list and for a singleton)
 makeTuple :: [Type] -> Type
 makeTuple [] = VoidType
 makeTuple [t] = t
@@ -316,44 +320,49 @@ makeTuple ts = TupleType ts
 
 forall :: Set TypeVar -> Facts -> TypeVar -> Type -> Fact
 forall s fs tVar t
-  | null s = NestedFacts $ mempty :. fs :=> [tVar `typeUnion` t] -- the trivial case
-forall s fs tVar t = NestedFacts $ s :. fs :=> [tVar `typeUnion` t]
+  | null s = NestedFact $ mempty :. fs :=> tVar `typeUnion` t -- the trivial case
+forall s fs tVar t = NestedFact $ s :. fs :=> tVar `typeUnion` t
 
+-- | States that the given `TypeVar` type variable is unified with the given `Type`
 typeUnion :: TypeVar -> Type -> Fact
 typeUnion = TypeUnion
 
+-- | States that the given `TypeVar` type variable follows the typing dictated by the `Type` (note that this does not imply type unification nor any subtyping)
 typeConstraint :: TypeVar -> Type -> Fact
 typeConstraint = Typing
 
+-- | States that the given `TypeVar` type variable is subtyped by another `TypeVar` type variable
 subType :: TypeVar -> TypeVar -> Fact
 subType = SubType
 
+-- | States that the given `TypeVar` type variable is instantiated into another `TypeVar` type variable
 instType :: TypeVar -> TypeVar -> Fact
 instType = InstType
 
+-- | States the minimum kind `DataKind` of a `TypeVar` type variable
 minKindConstraint :: DataKind -> TypeVar -> Fact
 minKindConstraint = KindLimit . (`Bounds` maxBound) . OrdDataKind
 
+-- | States the maximum kind `DataKind` of a `TypeVar` type variable
 maxKindConstraint :: DataKind -> TypeVar -> Fact
 maxKindConstraint = KindLimit . (minBound `Bounds`) . OrdDataKind
 
+-- | States that the given `TypeVar` (type variable) is a compile-time expression
 constExprConstraint :: TypeVar -> Fact
 constExprConstraint = ConstnessLimit $ Bounds ConstExpr ConstExpr
 
+-- | States that the given `TypeVar` (type variable) is a link-time expression
 linkExprConstraint :: TypeVar -> Fact
 linkExprConstraint = ConstnessLimit $ Bounds LinkExpr ConstExpr
 
+-- | States that the given `TypeVar` (type variable) is a regular (aka. run-time) expression
 regularExprConstraint :: TypeVar -> Fact
 regularExprConstraint = ConstnessLimit $ Bounds Regular Regular
 
+-- | States that the given `TypeVar` type variables is to be allocated to the register given by the given `Text` (this is a stronger version of `minKindConstraint`)
 registerConstraint :: Text -> TypeVar -> Fact
 registerConstraint = OnRegister
 
+-- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
 classConstraint :: ClassHandle -> [TypeVar] -> Fact
 classConstraint = Constraint
-
-genericKind :: DataKind
-genericKind = GenericData
-
-falseKind :: DataKind
-falseKind = FalseData
