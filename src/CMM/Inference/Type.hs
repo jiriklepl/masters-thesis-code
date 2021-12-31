@@ -17,10 +17,10 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.Data.Bounds (Bounds(Bounds))
-import safe CMM.Data.Dioid ( Dioid((<.>), mfull) )
-import safe CMM.Data.Lattice ( Lattice(..) )
+import safe CMM.Data.Dioid (Dioid((<.>), mfull))
+import safe CMM.Data.Lattice (Lattice(..))
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
-import safe CMM.Data.Orderable ( Orderable(..) )
+import safe CMM.Data.Orderable (Orderable(..))
 import safe CMM.Parser.HasPos (SourcePos)
 
 newtype ClassHandle =

@@ -14,23 +14,23 @@ import safe Control.Lens.Tuple
 
 import safe Control.Applicative
 
+import Control.Monad.State.Lazy
 -- TODO: add the overlap check for instances
 -- TODO: add the overload resolution for instances to monomorphization
 import safe Control.Monad.Writer.Lazy
 import safe Data.Data
-import Data.Foldable
-import Data.Traversable
-import Data.List
 import Data.Either
-import Control.Monad.State.Lazy
+import Data.Foldable
 import safe Data.Function
 import safe Data.Functor
 import safe Data.Generics.Aliases
 import safe qualified Data.Graph as Graph
+import Data.List
 import safe qualified Data.Map as Map
 import safe Data.Maybe
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
+import Data.Traversable
 import safe Prelude hiding (const)
 
 import safe CMM.Data.Bounds
@@ -65,8 +65,8 @@ addUnifying :: MonadInferencer m => TypeVar -> Type -> m Facts
 addUnifying tVar t = do
   unifs <- use unifying
   unifying .= Map.insertWith Set.union tVar (Set.singleton t) unifs
-  concat . concat <$>
-    traverse (unionPropagate t) `traverse` (Set.toList <$> Map.elems unifs)
+  concat . concat <$> traverse (unionPropagate t) `traverse`
+    (Set.toList <$> Map.elems unifs)
 
 class UnionPropagate a b where
   unionPropagate :: MonadInferencer m => a -> b -> m Facts
@@ -195,7 +195,7 @@ instance Unify Type where
 reduceOne :: MonadInferencer m => Fact -> m (Bool, Facts)
 reduceOne fact =
   case fact of
-    SubType t t' -> (True,) <$> subUnify t t'
+    SubType t t' -> (True, ) <$> subUnify t t'
     SubKind t t' -> do
       subKinding %= Map.insertWith Set.union t' (Set.singleton t)
       return (True, [])
@@ -203,7 +203,7 @@ reduceOne fact =
       subConsting %= Map.insertWith Set.union t (Set.singleton t')
       return (True, [])
     Typing t t' -> addTyping (bind t t') $> (True, [])
-    TypeUnion t t' -> (True,) <$> unionPropagate t t' <* addTyping (bind t t')
+    TypeUnion t t' -> (True, ) <$> unionPropagate t t' <* addTyping (bind t t')
     ConstnessLimit bounds t -> do
       consting %= Map.insertWith (<>) t bounds
       return (True, [])
@@ -223,12 +223,17 @@ reduceOne fact =
       (fs', t') <- freshInst scheme
       tVar' <- fresherVarType tVar
       schemes %= Map.insertWith (<>) tVar (Set.singleton scheme) -- TODO: simplify the scheme
-      return . (True,) $ tVar' `TypeUnion` t' : fs'
+      return . (True, ) $ tVar' `TypeUnion` t' : fs'
     NestedFact _ -> undefined -- error
 
 reduceMany :: MonadInferencer m => Facts -> m (Facts, Facts)
 reduceMany facts = do
-  let (instFacts, facts') = partition (\case InstType{} -> True; _ -> False) facts
+  let (instFacts, facts') =
+        partition
+          (\case
+             InstType {} -> True
+             _ -> False)
+          facts
   (changes, newFacts) <- (_2 %~ concat) . unzip <$> traverse reduceOne facts'
   if or changes
     then (_1 %~ (instFacts ++)) <$> reduceMany newFacts
@@ -237,7 +242,8 @@ reduceMany facts = do
 reduce :: MonadInferencer m => Facts -> m (Facts, Facts)
 reduce facts = do
   result@(instFacts, facts') <- reduceMany facts
-  (instFacts', facts'') <- (_2 %~ concat) . partitionEithers <$> traverse go instFacts
+  (instFacts', facts'') <-
+    (_2 %~ concat) . partitionEithers <$> traverse go instFacts
   if null facts''
     then return result
     else (_1 %~ (instFacts' ++)) <$> reduce (facts'' ++ facts')
@@ -256,15 +262,19 @@ reduce facts = do
 solve :: MonadInferencer m => Facts -> m ()
 solve facts = do
   (instFacts, facts') <- reduce facts
-  use errors >>= \errs -> if null errs
-    then if null instFacts
-      then unless (null facts') undefined -- error
-      else solve' ((\(InstType gen inst) -> (gen, inst)) <$> instFacts) facts'
-    else undefined -- error
+  use errors >>= \errs ->
+    if null errs
+      then if null instFacts
+             then unless (null facts') undefined -- error
+             else solve'
+                    ((\(InstType gen inst) -> (gen, inst)) <$> instFacts)
+                    facts'
+      else undefined -- error
 
 solve' :: MonadInferencer m => [(TypeVar, TypeVar)] -> Facts -> m ()
 solve' instFacts facts = do
-  schemes' <- (Set.toList <$>) <$> uses schemes (Map.!) <&> (<$> ((^. _1) <$> instFacts))
+  schemes' <-
+    (Set.toList <$>) <$> uses schemes (Map.!) <&> (<$> ((^. _1) <$> instFacts))
   let tVars = (^. _2) <$> instFacts
   go schemes' tVars >>= \case
     Just facts' -> solve (facts' ++ facts)
@@ -273,20 +283,23 @@ solve' instFacts facts = do
     go ((scheme:choices):schemes'') (tVar:tVars') = do
       state <- get
       (fs', t) <- freshInst scheme
-      result <- go schemes'' tVars' >>= \case
-        Just fs'' -> do
-          noErrors <- uses errors null
-          if noErrors
-            then return . Just $ tVar `TypeUnion` t : fs' ++ fs''
-            else return Nothing
-        _ -> return Nothing
+      result <-
+        go schemes'' tVars' >>= \case
+          Just fs'' -> do
+            noErrors <- uses errors null
+            if noErrors
+              then return . Just $ tVar `TypeUnion` t : fs' ++ fs''
+              else return Nothing
+          _ -> return Nothing
       case result of
         Just {} -> return result -- no errors encountered
-        _ -> if null choices
-              then return Nothing -- all branches failed
-              else do -- try another branch
-                put state -- rollback
-                go (choices:schemes'') (tVar:tVars')
+        _ ->
+          if null choices
+            then return Nothing -- all branches failed
+                      -- try another branch
+            else do
+              put state -- rollback
+              go (choices : schemes'') (tVar : tVars')
     go [] [] = return $ Just []
     go _ [] = error "implementation error" -- TODO: make this nicer
     go [] _ = error "implementation error" -- TODO: make this nicer
