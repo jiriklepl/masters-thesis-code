@@ -33,10 +33,12 @@ liftA6 f a b c d e g = liftA5 f a b c d e <*> g
 
 infixl 4 <*<
 
+-- | Applicative version of the dot operator
 (<*<) :: Applicative f => f (b -> c) -> f (a -> b) -> f (a -> c)
 (<*<) = liftA2 (.)
 
 infixl 4 >*>
 
+-- | Applicative version of the flipped dot operator
 (>*>) :: Applicative f => f (a -> b) -> f (b -> c) -> f (a -> c)
 (>*>) = liftA2 (flip (.))

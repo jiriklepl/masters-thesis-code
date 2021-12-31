@@ -145,6 +145,7 @@ storeProc name fs t = do
 getCurrentReturn :: MonadInferPreprocessor m => m TypeVar
 getCurrentReturn = use currentReturn
 
+-- | Stores the given type variable `handle` under the given `name` to the state monad
 storeTVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeTVar name handle = do
   vars <- use typeVariables
@@ -155,11 +156,13 @@ storeVarImpl ::
 storeVarImpl name handle vars =
   storeFact $ lookupVarImpl name vars `typeUnion` handle
 
+-- | Stores the given `fact` to the state monad
 storeFact :: MonadInferPreprocessor m => Fact -> m ()
-storeFact f = do
+storeFact fact = do
   ~(h:t) <- use facts
-  facts .= (f : h) : t
+  facts .= (fact : h) : t
 
+-- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
 freshTypeHandle ::
      (MonadInferPreprocessor m, HasPos n) => TypeKind -> Text -> n -> m TypeVar
 freshTypeHandle tKind name node = do
