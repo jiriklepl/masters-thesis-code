@@ -23,18 +23,42 @@ type Subst = Map TypeVar Type
 
 data Inferencer =
   Inferencer
-    { _typing :: Subst -- contains types of type variables
-    , _kinding :: Map TypeVar (Bounds DataKind Lattice) -- contains kinds of type variables
-    , _subKinding :: Map TypeVar (Set TypeVar) -- maps variables to their superKinds
-    , _consting :: Map TypeVar (Bounds Constness Ord) -- contains constness limits of type variables
-    , _unifying :: Map TypeVar (Set Type)
-    , _subConsting :: Map TypeVar (Set TypeVar) -- maps variables to their subConsts
-    , _handleCounter :: Int
-    , _errors :: [UnificationError]
-    , _facts :: Facts
-    , _assumps :: Facts
-    , _context :: Facts
-    , _schemes :: Map TypeVar (Set (Scheme Type))
+    {
+    -- | Contains types of type variables
+    _typing :: Subst
+    ,
+    -- | Contains kind limits of type variables
+    _kinding :: Map TypeVar (Bounds DataKind Lattice)
+    ,
+    -- | Maps variables to their respective superKinding variables (forms a graph)
+    _subKinding :: Map TypeVar (Set TypeVar)
+    ,
+    -- | Contains constness limits of type variables
+    _consting :: Map TypeVar (Bounds Constness Ord)
+    ,
+    -- |
+    _unifying :: Map TypeVar (Set Type)
+    ,
+    -- | Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
+    _subConsting :: Map TypeVar (Set TypeVar)
+    ,
+    -- | TODO
+    _handleCounter :: Int
+    ,
+    -- | TODO
+    _errors :: [UnificationError]
+    ,
+    -- | TODO
+    _facts :: Facts
+    ,
+    -- | TODO
+    _assumps :: Facts
+    ,
+    -- | TODO
+    _context :: Facts
+    ,
+    -- | TODO
+    _schemes :: Map TypeVar (Set (Scheme Type))
     }
   deriving (Show)
 

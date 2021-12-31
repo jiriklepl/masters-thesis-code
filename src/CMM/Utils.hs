@@ -16,11 +16,14 @@ getPrefix = T.takeWhile (/= ':')
 hasPrefix :: Text -> Bool
 hasPrefix = isJust . T.find (== ':')
 
+-- | Implementation of the standard while loop
 while :: Monad m => m Bool -> m a -> m ()
 while cond action = cond >>= flip when (action *> while cond action)
 
+-- | Implementation of the standard do-while loop (condition appended to the do-block)
 doWhile :: Monad m => m Bool -> m ()
 doWhile action = action >>= flip when (doWhile action)
 
+-- | Implementation of the standard repeat-until loop (condition appended to the repeat-block)
 repeatUntil :: Monad m => m Bool -> m ()
 repeatUntil action = action >>= flip unless (repeatUntil action)
