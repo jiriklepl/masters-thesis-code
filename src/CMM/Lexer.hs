@@ -48,10 +48,12 @@ data Reserved
   | Aligned
   | Also
   | As
+  | Auto
   | Big
   | Bits
   | Byteorder
   | Case
+  | Class
   | Const
   | Continuation
   | Cut
@@ -64,6 +66,7 @@ data Reserved
   | If
   | Import
   | In
+  | Instance
   | Invariant
   | Invisible
   | Jump
@@ -80,6 +83,7 @@ data Reserved
   | Semi
   | Span
   | Stackdata
+  | Struct
   | Switch
   | Target
   | Targets
@@ -99,6 +103,8 @@ data Token a
   | CharLit Char
   | FloatLit Float
   | IntLit (Int, Bool)
+  | Arr
+  | DArr
   | Colon
   | DColon
   | Semicolon
@@ -202,9 +208,11 @@ token =
     , keyword "aligned" $> Keyword Aligned
     , keyword "also" $> Keyword Also
     , keyword "as" $> Keyword As
+    , keyword "auto" $> Keyword Auto
     , keyword "big" $> Keyword Big
     , keyword "byteorder" $> Keyword Byteorder
     , keyword "case" $> Keyword Case
+    , keyword "class" $> Keyword Class
     , keyword "const" $> Keyword Const
     , keyword "continuation" $> Keyword Continuation
     , keyword "cut" $> Keyword Cut
@@ -217,6 +225,7 @@ token =
     , keyword "if" $> Keyword If
     , keyword "import" $> Keyword Import
     , keyword "in" $> Keyword In
+    , keyword "instance" $> Keyword Instance
     , keyword "invariant" $> Keyword Invariant
     , keyword "invisible" $> Keyword Invisible
     , keyword "jump" $> Keyword Jump
@@ -233,6 +242,7 @@ token =
     , keyword "semi" $> Keyword Semi
     , keyword "span" $> Keyword Span
     , keyword "stackdata" $> Keyword Stackdata
+    , keyword "struct" $> Keyword Struct
     , keyword "switch" $> Keyword Switch
     , keyword "target" $> Keyword Target
     , keyword "targets" $> Keyword Targets
@@ -258,7 +268,7 @@ token =
     , symbol "`" $> Backtick
     , symbol "%" *> choice [symbol "%" $> DPercent, pure Percent]
     , symbol "~" $> Tilde
-    , symbol "-" $> Minus
+    , symbol "-" *> choice [symbol ">" $> Arr, pure Minus]
     , symbol "+" $> Plus
     , symbol "/" $> Slash
     , symbol "*" $> Star
@@ -266,7 +276,7 @@ token =
     , symbol "|" $> Pipe
     , symbol "^" $> Caret
     , symbol "!=" $> Neq
-    , symbol "=" *> choice [symbol "=" $> Eq, pure EqSign]
+    , symbol "=" *> choice [symbol "=" $> Eq, symbol ">" $> DArr, pure EqSign]
     , stringLiteral
     , charLiteral
     , try float

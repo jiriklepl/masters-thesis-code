@@ -47,7 +47,7 @@ import safe CMM.AST as AST
   , StrLit(..)
   , Targets
   , Type(..)
-  , Unit(..)
+  , Unit(..), ParaType (ParaType)
   )
 import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot)
 import safe CMM.AST.HasName as AST (HasName(getName))
@@ -82,15 +82,14 @@ import safe CMM.Inference.Preprocess.State as Infer
 import safe CMM.Inference.Type as Infer
   ( Fact(SubConst, SubKind, SubType, Typing)
   , Type(AddrType, BoolType, LabelType, String16Type, StringType,
-     TBitsType, VarType)
-  , TypeKind(Star)
+     TBitsType, VarType, AppType)
+  , TypeKind(Star, GenericType)
   , TypeVar(NoType)
   , constExprConstraint
   , instType
   , linkExprConstraint
   , makeFunction
   , makeTuple
-  , maxKindConstraint
   , minKindConstraint
   , registerConstraint
   , regularExprConstraint
@@ -253,6 +252,23 @@ instance Preprocess AST.Type a b where
       tName@(TName name) -> do
         handle <- lookupTVar (getName name)
         purePreprocess handle tName
+      tAuto@(TAuto Nothing) -> do
+        handle <- freshTypeHelper Star
+        purePreprocess handle tAuto
+      tAuto@(TAuto (Just name)) -> do
+        handle <- lookupTVar (getName name)
+        purePreprocess handle tAuto
+      TPar parType -> do
+        parType' <- preprocess parType
+        return (getTypeHandle parType', TPar parType')
+
+instance Preprocess ParaType a b where
+  preprocessImpl (ParaType type' types') = do
+    type'' <- preprocess type'
+    types'' <- traverse preprocess types'
+    handle <- freshTypeHelper GenericType -- TODO: determine the kind
+    storeFact $ handle `typeUnion` AppType (VarType $ getTypeHandle type'') (VarType . getTypeHandle <$> types'')
+    return (handle, ParaType type'' types'')
 
 instance Preprocess Registers a b where
   preprocessImpl (Registers mKind type' nameStrLits) = do
@@ -343,7 +359,7 @@ instance Preprocess Stmt a b where
           traverse
             (\(num, actual) ->
                freshTypeHandle Star (T.pack $ "actual" <> show num) actual)
-            (zip [0 ..] actuals)
+            (zip [0 :: Int ..] actuals)
         names' <- preprocessT names
         expr' <- preprocess expr
         actuals' <- preprocessT actuals

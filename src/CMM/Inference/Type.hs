@@ -239,6 +239,7 @@ data Type
   | BoolType
   | TupleType [Type]
   | FunctionType Type Type
+  | AppType Type [Type]
   | AddrType Type
   | LabelType
   | StringType

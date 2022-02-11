@@ -68,7 +68,7 @@ import safe CMM.AST
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..)
+  , Unit(..), Class (Class), Instance (Instance), Struct (Struct), ParaName (ParaName), Method (Method), ParaType (ParaType)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -83,6 +83,9 @@ maybeSpacedL = maybe mempty ((space <>) . pretty)
 
 maybeSpacedR :: Pretty a => Maybe a -> Doc ann
 maybeSpacedR = maybe mempty ((<> space) . pretty)
+
+darrow :: Doc ann
+darrow = "=>"
 
 ifTrue :: Monoid a => Bool -> a -> a
 ifTrue bool x =
@@ -101,6 +104,9 @@ instance Pretty (TopLevel a) where
     "section" <+> pretty name <+> bracesBlock items
   pretty (TopDecl decl) = pretty decl
   pretty (TopProcedure procedure) = pretty procedure
+  pretty (TopClass class') = pretty class'
+  pretty (TopInstance instance') = pretty instance'
+  pretty (TopStruct struct) = pretty struct
 
 instance Pretty (Section a) where
   pretty (SecDecl decl) = pretty decl
@@ -125,6 +131,31 @@ instance Pretty (Decl a) where
     "pragma" <+> pretty name <+> braces (pretty pragma)
   pretty (TargetDecl targetDirectives) =
     "target" <+> hsep (pretty <$> targetDirectives) <> semi
+
+instance Pretty (Class a) where
+  pretty (Class [] paraName methods) =
+    "class" <+> pretty paraName <+> bracesBlock methods
+  pretty (Class paraNames paraName methods) =
+    "class" <+> commaSep (pretty <$> paraNames) <+> darrow <+> pretty paraName <+> bracesBlock methods
+
+instance Pretty (Instance a) where
+  pretty (Instance [] paraName methods) =
+    "instance" <+> pretty paraName <+> bracesBlock methods
+  pretty (Instance paraNames paraName methods) =
+    "instance" <+> commaSep (pretty <$> paraNames) <+> darrow <+> pretty paraName <+> bracesBlock methods
+
+instance Pretty (Method a) where
+  pretty (Method procedure) = pretty procedure
+
+instance Pretty (Struct a) where
+  pretty (Struct paraName datums) =
+    "struct" <+> pretty paraName <+> bracesBlock datums
+
+instance Pretty (ParaName a) where
+  pretty (ParaName name []) =
+    pretty name
+  pretty (ParaName name types) =
+    pretty name <+> hsep (pretty <$> types)
 
 instance Pretty (TargetDirective a) where
   pretty (MemSize int) = "memsize" <+> pretty int
@@ -325,6 +356,11 @@ instance Pretty (Lit a) where
 instance Pretty (Type a) where
   pretty (TBits int) = "bits" <> pretty int
   pretty (TName name) = pretty name
+  pretty (TAuto mName) = "auto" <> maybe mempty (parens . pretty) mName
+  pretty (TPar paraType) = parens $ pretty paraType
+
+instance Pretty (ParaType a) where
+  pretty (ParaType type' types) = hsep $ pretty <$> (type':types)
 
 instance Pretty Conv where
   pretty (Foreign string) = "foreign" <+> pretty string

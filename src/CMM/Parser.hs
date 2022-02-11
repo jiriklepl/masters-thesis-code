@@ -62,7 +62,7 @@ import safe CMM.AST
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..)
+  , Unit(..), Class (..), Instance (..), ParaName (..), Struct (..), Method (..), ParaType (..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
@@ -180,11 +180,44 @@ unit = withSourcePos $ Unit <$> many topLevel
 topLevel :: SourceParser TopLevel
 topLevel =
   withSourcePos $
-  choice [sectionTopLevel, TopDecl <$> decl, TopProcedure <$> try procedure]
+  choice [sectionTopLevel, classTopLevel, instanceTopLevel, structTopLevel, TopDecl <$> decl, TopProcedure <$> try procedure]
 
 sectionTopLevel :: ULocParser TopLevel
 sectionTopLevel =
   keyword L.Section *> liftA2 TopSection stringLiteral (braces $ many section)
+
+classTopLevel :: ULocParser TopLevel
+classTopLevel =
+  keyword L.Class *> (TopClass <$> class')
+
+class' :: SourceParser Class
+class' = withSourcePos $ choice
+  [ try $ liftA3 Class (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many method)
+  , liftA2 (Class []) paraName (braces $ many method)
+  ]
+
+instanceTopLevel :: ULocParser TopLevel
+instanceTopLevel =
+  keyword L.Instance *> (TopInstance <$> instance')
+
+instance' :: SourceParser Instance
+instance' = withSourcePos $ choice
+  [ try $ liftA3 Instance (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many method)
+  , liftA2 (Instance []) paraName (braces $ many method)
+  ]
+
+method :: SourceParser Method
+method = withSourcePos $ Method <$> procedure
+
+structTopLevel :: ULocParser TopLevel
+structTopLevel =
+  keyword L.Struct *> (TopStruct <$> struct)
+
+struct :: SourceParser Struct
+struct = withSourcePos $ liftA2 Struct paraName (braces $ many datum)
+
+paraName :: SourceParser ParaName
+paraName = withSourcePos $ liftA2 ParaName identifier (many type')
 
 section :: SourceParser Section
 section =
@@ -220,14 +253,14 @@ constDecl =
   keyword L.Const *>
   liftA2
     (uncurry ConstDecl)
-    (try (liftA2 (,) (optional typeToken) identifier) <|>
+    (try (liftA2 (,) (optional type') identifier) <|>
      (Nothing, ) <$> identifier)
     (symbol L.EqSign *> expr) <*
   semicolon
 
 typedefDecl :: ULocParser Decl
 typedefDecl =
-  keyword L.Typedef *> liftA2 TypedefDecl typeToken identifiers <* semicolon
+  keyword L.Typedef *> liftA2 TypedefDecl type' identifiers <* semicolon
 
 pragmaDecl :: ULocParser Decl
 pragmaDecl = keyword L.Pragma *> liftA2 PragmaDecl identifier (braces pragma)
@@ -269,7 +302,7 @@ procedure =
   withSourcePos $ liftA4 Procedure (optional convention) identifier formals body
 
 formal :: SourceParser Formal
-formal = withSourcePos $ liftA4 Formal mKind invariant typeToken identifier
+formal = withSourcePos $ liftA4 Formal mKind invariant type' identifier
 
 formals :: Parser [Annot Formal SourcePos]
 formals = parens $ formal `sepEndBy` comma
@@ -317,7 +350,7 @@ labelDatum :: ULocParser Datum
 labelDatum = DatumLabel <$> identifier <* colon
 
 justDatum :: ULocParser Datum
-justDatum = liftA3 Datum typeToken (optional size) (optional init') <* semicolon
+justDatum = liftA3 Datum type' (optional size) (optional init') <* semicolon
 
 init' :: SourceParser Init
 init' = withSourcePos $ choice [stringInit, string16Init, initList]
@@ -340,21 +373,30 @@ registers =
   liftA3
     Registers
     mKind
-    typeToken
+    type'
     (commaList
        (liftA2
           (,)
           (withSourcePos identifier)
           (optional $ symbol L.EqSign *> stringLiteral)))
 
-typeToken :: SourceParser Type
-typeToken = withSourcePos $ bitsType' <|> nameType
+type' :: SourceParser Type
+type' = withSourcePos $ choice [parensType, autoType, bitsType', nameType]
+
+parensType :: ULocParser Type
+parensType = TPar <$> parens paraType
+
+autoType :: ULocParser Type
+autoType = TAuto <$> optional (parens identifier)
 
 bitsType' :: ULocParser Type
 bitsType' = TBits <$> bitsType
 
 nameType :: ULocParser Type
 nameType = TName <$> identifier
+
+paraType :: SourceParser ParaType
+paraType = withSourcePos $ liftA2 ParaType type' (many type')
 
 mKind :: Parser (Maybe Kind)
 mKind = optional $ Kind <$> stringLiteral
@@ -450,7 +492,7 @@ lvalue = withSourcePos $ try lvRef <|> lvName
 
 lvRef :: ULocParser LValue
 lvRef =
-  liftA3 LVRef typeToken (symbol L.LBracket *> expr) (optional asserts) <*
+  liftA3 LVRef type' (symbol L.LBracket *> expr) (optional asserts) <*
   symbol L.RBracket
 
 lvName :: ULocParser LValue
@@ -551,7 +593,7 @@ litExpr =
   liftA2
     LitExpr
     (withSourcePos $ choice [charExpr, floatExpr, intExpr])
-    (optional $ symbol L.DColon *> typeToken)
+    (optional $ symbol L.DColon *> type')
 
 intExpr :: ULocParser Lit
 intExpr = LitInt . fst <$> intLit

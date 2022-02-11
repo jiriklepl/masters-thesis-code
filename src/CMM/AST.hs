@@ -30,6 +30,9 @@ data TopLevel a
   = TopSection StrLit [Annot Section a]
   | TopDecl (Annot Decl a)
   | TopProcedure (Annot Procedure a)
+  | TopClass (Annot Class a)
+  | TopInstance (Annot Instance a)
+  | TopStruct (Annot Struct a)
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (TopLevel ())
@@ -54,6 +57,36 @@ data Decl a
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Decl ())
+
+data Class a
+  = Class [Annot ParaName a] (Annot ParaName a) [Annot Method a]
+  deriving (Show, Functor, Data, ASTNode, AST)
+
+deriving instance Eq (Class ())
+
+data Instance a
+  = Instance [Annot ParaName a] (Annot ParaName a) [Annot Method a]
+  deriving (Show, Functor, Data, ASTNode, AST)
+
+deriving instance Eq (Instance ())
+
+newtype Method a
+  = Method (Annot Procedure a)
+  deriving (Show, Functor, Data, ASTNode, AST)
+
+deriving instance Eq (Method ())
+
+data Struct a
+  = Struct (Annot ParaName a) [Annot Datum a]
+  deriving (Show, Functor, Data, ASTNode, AST)
+
+deriving instance Eq (Struct ())
+
+data ParaName a
+  = ParaName (Name a) [Annot Type a]
+  deriving (Show, Functor, Data, ASTNode, AST)
+
+deriving instance Eq (ParaName ())
 
 data TargetDirective a
   = MemSize Int
@@ -245,6 +278,12 @@ data Lit a
 data Type a
   = TBits Int
   | TName (Name a)
+  | TAuto (Maybe (Name a))
+  | TPar (Annot ParaType a)
+  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+
+data ParaType a
+  = ParaType (Annot Type a) [Annot Type a]
   deriving (Show, Functor, Data, Eq, ASTNode, AST)
 
 newtype Conv =

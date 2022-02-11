@@ -1,5 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module CMM.AST.HasName where
 
@@ -21,7 +22,7 @@ import safe CMM.AST
   , Stmt(..)
   , StrLit(..)
   , TopLevel(..)
-  , Type(..)
+  , Type(..), Struct (Struct), Instance (Instance), Class (Class), ParaName (ParaName)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -38,11 +39,26 @@ instance HasName (TopLevel a) where
   getName (TopProcedure p) = getName p
   getName (TopDecl d) = getName d
   getName (TopSection (StrLit n) _) = n
+  getName (TopClass c) = getName c
+  getName (TopInstance i) = getName i
+  getName (TopStruct s) = getName s
 
 instance HasName (Decl a) where
   getName (ConstDecl _ n _) = getName n
   getName (PragmaDecl n _) = getName n
   getName _ = error "This declaration does not have a name"
+
+instance HasName (Class a) where
+  getName (Class _ n _) = getName n
+
+instance HasName (Instance a) where
+  getName (Instance _ n _) = getName n
+
+instance HasName (Struct a) where
+  getName (Struct n _) = getName n
+
+instance HasName (ParaName a) where
+  getName (ParaName n _) = getName n
 
 instance HasName (Import a) where
   getName (Import _ n) = getName n
@@ -78,6 +94,7 @@ instance HasName (LValue a) where
 instance HasName (Type a) where
   getName (TName n) = getName n
   getName (TBits n) = T.pack $ "bits" ++ show n
+  getName _ = error "This type does not have a name"
 
 instance HasName Conv where
   getName (Foreign (StrLit n)) = n

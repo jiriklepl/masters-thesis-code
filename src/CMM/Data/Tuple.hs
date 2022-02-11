@@ -1,3 +1,5 @@
+{-# LANGUAGE Safe #-}
+
 module CMM.Data.Tuple where
 
 uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
