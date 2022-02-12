@@ -59,22 +59,23 @@ data Decl a
 deriving instance Eq (Decl ())
 
 data Class a
-  = Class [Annot ParaName a] (Annot ParaName a) [Annot Method a]
+  = Class [Annot ParaName a] (Annot ParaName a) [Annot ClassMethod a]
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Class ())
 
 data Instance a
-  = Instance [Annot ParaName a] (Annot ParaName a) [Annot Method a]
+  = Instance [Annot ParaName a] (Annot ParaName a) [Annot Procedure a]
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Instance ())
 
-newtype Method a
-  = Method (Annot Procedure a)
+data ClassMethod a
+  = MethodDecl (Annot ProcedureDecl a)
+  | MethodImpl (Annot Procedure a)
   deriving (Show, Functor, Data, ASTNode, AST)
 
-deriving instance Eq (Method ())
+deriving instance Eq (ClassMethod ())
 
 data Struct a
   = Struct (Annot ParaName a) [Annot Datum a]
@@ -151,10 +152,22 @@ data BodyItem a
 deriving instance Eq (BodyItem ())
 
 data Procedure a =
-  Procedure (Maybe Conv) (Name a) [Annot Formal a] (Annot Body a)
+  Procedure (Annot ProcedureHeader a) (Annot Body a)
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Procedure ())
+
+newtype ProcedureDecl a =
+  ProcedureDecl (Annot ProcedureHeader a)
+  deriving (Show, Functor, Data, ASTNode, AST)
+
+deriving instance Eq (ProcedureDecl ())
+
+data ProcedureHeader a =
+  ProcedureHeader (Maybe Conv) (Name a) [Annot Formal a] (Maybe (Annot Type a))
+  deriving (Show, Functor, Data, ASTNode, AST)
+
+deriving instance Eq (ProcedureHeader ())
 
 data Formal a =
   Formal (Maybe Kind) Bool (Annot Type a) (Name a)

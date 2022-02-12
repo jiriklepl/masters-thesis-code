@@ -22,7 +22,7 @@ import safe CMM.AST
   , Stmt(..)
   , StrLit(..)
   , TopLevel(..)
-  , Type(..), Struct (Struct), Instance (Instance), Class (Class), ParaName (ParaName)
+  , Type(..), Struct (..), Instance (..), Class (..), ParaName (..), ProcedureHeader (..), ProcedureDecl (..), ClassMethod (..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -54,6 +54,10 @@ instance HasName (Class a) where
 instance HasName (Instance a) where
   getName (Instance _ n _) = getName n
 
+instance HasName (ClassMethod a) where
+  getName (MethodDecl p) = getName p
+  getName (MethodImpl p) = getName p
+
 instance HasName (Struct a) where
   getName (Struct n _) = getName n
 
@@ -71,7 +75,13 @@ instance HasName (Datum a) where
   getName _ = error "This datum does not have a name"
 
 instance HasName (Procedure a) where
-  getName (Procedure _ n _ _) = getName n
+  getName (Procedure h _) = getName h
+
+instance HasName (ProcedureDecl a) where
+  getName (ProcedureDecl h) = getName h
+
+instance HasName (ProcedureHeader a) where
+  getName (ProcedureHeader _ n _ _) = getName n
 
 instance HasName (Formal a) where
   getName (Formal _ _ _ n) = getName n

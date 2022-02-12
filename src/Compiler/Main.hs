@@ -41,9 +41,8 @@ import Data.Foldable (traverse_)
 main :: IO ()
 main = do
   contents <- TS.getContents
-  let ast =
-        either undefined id . parse unit . either undefined id . parse tokenize $
-        contents
+  let tokens = either undefined id $ parse tokenize contents
+  let ast = either undefined id $ parse unit tokens
   let flattened = flatten ast
   (mined, miner) <- runStateT (preprocess ast) initInferPreprocessor
   (blockified, blockifier) <- runStateT (blockify flattened) B.initBlockifier
@@ -62,6 +61,8 @@ main = do
   --       buildModuleT "llvm" $
   --       runIRBuilderT emptyIRBuilder $ translate blockified
   -- T.putStr translated
+  print $ void <$> tokens
+  print $ void ast
   print mined
   vars <- globalVariables $ unAnnot ast
   print vars

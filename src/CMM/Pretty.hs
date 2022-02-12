@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module CMM.Pretty
@@ -68,7 +69,7 @@ import safe CMM.AST
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), Class (Class), Instance (Instance), Struct (Struct), ParaName (ParaName), Method (Method), ParaType (ParaType)
+  , Unit(..), Class (Class), Instance (Instance), Struct (Struct), ParaName (ParaName), ClassMethod (..), ParaType (ParaType), ProcedureHeader (ProcedureHeader), ProcedureDecl (ProcedureDecl)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -144,8 +145,9 @@ instance Pretty (Instance a) where
   pretty (Instance paraNames paraName methods) =
     "instance" <+> commaSep (pretty <$> paraNames) <+> darrow <+> pretty paraName <+> bracesBlock methods
 
-instance Pretty (Method a) where
-  pretty (Method procedure) = pretty procedure
+instance Pretty (ClassMethod a) where
+  pretty (MethodDecl procedureDecl) = pretty procedureDecl
+  pretty (MethodImpl procedure) = pretty procedure
 
 instance Pretty (Struct a) where
   pretty (Struct paraName datums) =
@@ -212,9 +214,18 @@ instance Pretty (BodyItem a) where
   pretty (BodyStmt stmt) = pretty stmt
 
 instance Pretty (Procedure a) where
-  pretty (Procedure mConv name formals body) =
-    maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals) <+>
-    pretty body
+  pretty (Procedure header body) =
+    pretty header <+> pretty body
+
+instance Pretty (ProcedureDecl a) where
+  pretty (ProcedureDecl header) =
+    pretty header <> semi
+
+instance Pretty (ProcedureHeader a) where
+  pretty (ProcedureHeader mConv name formals Nothing) =
+    maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals)
+  pretty (ProcedureHeader mConv name formals (Just type')) =
+    maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals) <+> pretty type'
 
 instance Pretty (Formal a) where
   pretty (Formal mKind invar type_ name) =

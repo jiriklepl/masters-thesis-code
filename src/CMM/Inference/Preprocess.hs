@@ -47,9 +47,9 @@ import safe CMM.AST as AST
   , StrLit(..)
   , Targets
   , Type(..)
-  , Unit(..), ParaType (ParaType)
+  , Unit(..), ParaType (ParaType), ProcedureHeader (ProcedureHeader), Name
   )
-import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot)
+import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot, unAnnot, takeAnnot)
 import safe CMM.AST.HasName as AST (HasName(getName))
 import safe CMM.AST.Maps as AST (ASTmap(..), ASTmapGen, Constraint, Space)
 import safe CMM.AST.Variables as AST (globalVariables, localVariables)
@@ -106,9 +106,7 @@ class Preprocess n a b where
        (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
     => Annot n a
     -> m (Annot n b)
-  preprocess (Annot n a) =
-    preprocessImpl n >>= \(handle, n') ->
-      return $ withTypeHandledAnnot handle a n'
+  preprocess (Annot n a) = preprocessFinalize a $ preprocessImpl n
   preprocessImpl ::
        (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
     => n a
@@ -116,6 +114,11 @@ class Preprocess n a b where
 
 preprocessTrivial :: (Functor n, WithTypeHandle a b) => n a -> n b
 preprocessTrivial = (withTypeHandle NoType <$>)
+
+preprocessFinalize :: (Monad m, WithTypeHandle a b) =>
+  a -> m (TypeVar, n b) -> m (Annot n b)
+preprocessFinalize a preprocessed = preprocessed >>= \(handle, n') ->
+      return $ withTypeHandledAnnot handle a n'
 
 data PreprocessHint =
   PreprocessHint
@@ -130,6 +133,9 @@ class Preprocess' a b n where
        (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
     => n a
     -> m (n b)
+
+instance (WithTypeHandle a b, HasPos a) => Preprocess' a b Name where
+  preprocess' = return . preprocessTrivial
 
 instance Preprocess n a b => Preprocess' a b (Annot n) where
   preprocess' = preprocess
@@ -290,12 +296,14 @@ instance Preprocess Registers a b where
     return (NoType, Registers mKind type'' nameStrLits')
 
 -- TODO: consult conventions with man
-instance Preprocess Procedure a b where
-  preprocessImpl procedure@(Procedure mConv name formals body) = do
-    localVariables procedure >>= uncurry beginProc . complSnd3
+preprocessProcedureHeader ::
+       (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
+    => ProcedureHeader a
+    -> m (TypeVar, ProcedureHeader b)
+preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
     formals' <- preprocessT formals
+    mType' <- preprocessT mType
     let formalTypes = getTypeHandle <$> formals'
-    body' <- preprocess body
     case mConv of
       Just (Foreign (StrLit conv))
         | conv == "C" -> do
@@ -305,11 +313,22 @@ instance Preprocess Procedure a b where
           storeCSymbol $ getName name
         | otherwise -> undefined
       Nothing -> return ()
+    for_ mType' $ \type' -> do
+      retType <- getCurrentReturn
+      storeFact $ getTypeHandle type' `subType` retType
     (fs, retType) <- (_2 %~ VarType) <$> endProc
     let argumentsType = makeTuple $ VarType <$> formalTypes
     let procedureType = makeFunction argumentsType retType
     storeProc (getName name) fs procedureType
-    return (NoType, Procedure mConv (preprocessTrivial name) formals' body')
+    return (NoType, ProcedureHeader mConv (preprocessTrivial name) formals' mType')
+
+-- TODO: consult conventions with man
+instance Preprocess Procedure a b where
+  preprocessImpl procedure@(Procedure header body) = do
+    localVariables procedure >>= uncurry beginProc . complSnd3
+    body' <- preprocess body
+    header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
+    return (NoType, Procedure header' body')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do

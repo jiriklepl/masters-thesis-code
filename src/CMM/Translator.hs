@@ -104,7 +104,7 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
          Translate m Procedure a (m L.Operand) where
-  translate (Annot (Procedure _ name formals body) annot) =
+  translate (Annot (Procedure (Annot (ProcedureHeader _ name formals _) _) body) annot) =
     go $ getBlockAnnot annot
     where
       go =

@@ -62,7 +62,7 @@ import safe CMM.AST
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), Class (..), Instance (..), ParaName (..), Struct (..), Method (..), ParaType (..)
+  , Unit(..), Class (..), Instance (..), ParaName (..), Struct (..), ClassMethod (..), ParaType (..), ProcedureHeader (..), ProcedureDecl (..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
@@ -192,8 +192,8 @@ classTopLevel =
 
 class' :: SourceParser Class
 class' = withSourcePos $ choice
-  [ try $ liftA3 Class (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many method)
-  , liftA2 (Class []) paraName (braces $ many method)
+  [ try $ liftA3 Class (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many classMethod)
+  , liftA2 (Class []) paraName (braces $ many classMethod)
   ]
 
 instanceTopLevel :: ULocParser TopLevel
@@ -202,12 +202,18 @@ instanceTopLevel =
 
 instance' :: SourceParser Instance
 instance' = withSourcePos $ choice
-  [ try $ liftA3 Instance (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many method)
-  , liftA2 (Instance []) paraName (braces $ many method)
+  [ try $ liftA3 Instance (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many procedure)
+  , liftA2 (Instance []) paraName (braces $ many procedure)
   ]
 
-method :: SourceParser Method
-method = withSourcePos $ Method <$> procedure
+classMethod :: SourceParser ClassMethod
+classMethod = withSourcePos $  do
+  procedureHeader' <- procedureHeader
+  let decl' = withSourcePos . pure $ ProcedureDecl procedureHeader'
+  choice
+    [ semicolon *> (MethodDecl <$> decl')
+    , MethodImpl <$> withSourcePos (Procedure procedureHeader' <$> body)
+    ]
 
 structTopLevel :: ULocParser TopLevel
 structTopLevel =
@@ -297,9 +303,13 @@ pointerSizeDirective = keyword L.Pointersize *> (PointerSize . fst <$> intLit)
 wordSizeDirective :: ULocParser TargetDirective
 wordSizeDirective = keyword L.Wordsize *> (WordSize . fst <$> intLit)
 
+procedureHeader :: SourceParser ProcedureHeader
+procedureHeader =
+  withSourcePos $ liftA4 ProcedureHeader (optional convention) identifier formals (optional type')
+
 procedure :: SourceParser Procedure
 procedure =
-  withSourcePos $ liftA4 Procedure (optional convention) identifier formals body
+  withSourcePos $ liftA2 Procedure procedureHeader body
 
 formal :: SourceParser Formal
 formal = withSourcePos $ liftA4 Formal mKind invariant type' identifier
@@ -387,7 +397,7 @@ parensType :: ULocParser Type
 parensType = TPar <$> parens paraType
 
 autoType :: ULocParser Type
-autoType = TAuto <$> optional (parens identifier)
+autoType = TAuto <$> (keyword L.Auto *> optional (parens identifier))
 
 bitsType' :: ULocParser Type
 bitsType' = TBits <$> bitsType

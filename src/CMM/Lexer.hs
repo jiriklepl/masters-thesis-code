@@ -1,6 +1,7 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module CMM.Lexer
   ( Lexer
@@ -136,7 +137,7 @@ data Token a
   | EqSign
   | DotDot
   | Caret
-  deriving (Eq, Ord, Show)
+  deriving (Functor, Eq, Ord, Show)
 
 type SourceLexer = Lexer (Annot Token SourcePos)
 

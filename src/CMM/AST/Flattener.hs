@@ -39,7 +39,7 @@ import safe CMM.AST
   , TargetDirective
   , Targets
   , TopLevel(..)
-  , Unit(..)
+  , Unit(..), Class (Class), Instance (Instance), ClassMethod (MethodDecl, MethodImpl), Struct, ProcedureDecl (ProcedureDecl), ProcedureHeader (ProcedureHeader), ParaType, Type
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Utils (addPrefix)
@@ -69,7 +69,22 @@ instance Flatten Unit where
 instance Flatten TopLevel where
   flatten (TopSection strLit items) = TopSection strLit $ flatten <$> items
   flatten (TopProcedure procedure) = TopProcedure $ flatten procedure
-  flatten (TopDecl decl) = TopDecl decl
+  flatten topDecl@TopDecl {} = topDecl
+  flatten (TopClass class') = TopClass $ flatten class'
+  flatten (TopInstance instance') = TopInstance $ flatten instance'
+  flatten topStruct@TopStruct {} = topStruct
+
+instance Flatten Class where
+  flatten (Class paraNames paraName methods) =
+    Class paraNames paraName $ flatten <$> methods
+instance Flatten Instance where
+  flatten (Instance paraNames paraName methods) =
+    Instance paraNames paraName $ flatten <$> methods
+instance Flatten ClassMethod where
+  flatten methodDecl@MethodDecl {} = methodDecl
+  flatten (MethodImpl procedure) = MethodImpl $ flatten procedure
+
+instance FlattenTrivial Struct
 
 instance Flatten Section where
   flatten (SecDecl decl) = SecDecl decl
@@ -199,8 +214,16 @@ instance FlattenStmt (Annot Stmt) where
   flattenStmt stmt = pure [toBodyStmt stmt]
 
 instance Flatten Procedure where
-  flatten (Procedure mConv name formals body) =
-    Procedure mConv (flatten name) (flatten <$> formals) (flatten body)
+  flatten (Procedure header body) =
+    Procedure (flatten header) (flatten body)
+
+instance Flatten ProcedureDecl where
+  flatten (ProcedureDecl header) =
+    ProcedureDecl $ flatten header
+
+instance Flatten ProcedureHeader where
+  flatten (ProcedureHeader mConv name formals mType) =
+    ProcedureHeader mConv (flatten name) (flatten <$> formals) (flatten <$> mType)
 
 instance FlattenTrivial Formal
 
@@ -226,6 +249,10 @@ instance FlattenTrivial Targets
 instance FlattenTrivial Expr
 
 instance FlattenTrivial Lit
+
+instance FlattenTrivial Type
+
+instance FlattenTrivial ParaType
 
 instance FlattenTrivial Asserts
 

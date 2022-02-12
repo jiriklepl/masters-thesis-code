@@ -45,8 +45,8 @@ import safe CMM.AST
   , TargetDirective
   , Targets(..)
   , TopLevel(..)
-  , Type
-  , Unit(..)
+  , Type(..)
+  , Unit(..), ProcedureHeader (..), ProcedureDecl (..), ClassMethod (..), ParaName (ParaName), Class (..), Instance (..), Struct (..), ParaType (..)
   )
 import safe CMM.AST.Annot (Annot)
 import safe CMM.Control.Applicative (liftA4, liftA6)
@@ -109,13 +109,16 @@ trivial = pure . (error "Is not a trivial functor" <$>)
 instance ASTmapCTX1 hint a b TopLevel => ASTmap hint Unit a b where
   astMapM _ f (Unit a) = Unit <$> traverse f a
 
-instance ASTmapCTX3 hint a b Decl Procedure Section =>
+instance ASTmapCTX6 hint a b Class Decl Instance Procedure Section Struct =>
          ASTmap hint TopLevel a b where
   astMapM _ f =
     \case
       TopSection strLit a -> TopSection strLit <$> traverse f a
       TopDecl a -> TopDecl <$> f a
       TopProcedure a -> TopProcedure <$> f a
+      TopClass a -> TopClass <$> f a
+      TopInstance a -> TopInstance <$> f a
+      TopStruct a -> TopStruct <$> f a
 
 instance ASTmapCTX5 hint a b Datum Decl Expr Procedure Section =>
          ASTmap hint Section a b where
@@ -139,6 +142,29 @@ instance ( ASTmapCTX8 hint a b Export Expr Import Name Pragma Registers TargetDi
       RegDecl a b -> RegDecl a <$> f b
       PragmaDecl a b -> liftA2 PragmaDecl (f a) (f b)
       TargetDecl a -> TargetDecl <$> traverse f a
+
+instance ASTmapCTX2 hint a b ParaName ClassMethod =>
+         ASTmap hint Class a b where
+  astMapM _ f (Class a b c) = liftA3 Class (traverse f a) (f b) (traverse f c)
+
+instance ASTmapCTX2 hint a b ParaName Procedure =>
+         ASTmap hint Instance a b where
+  astMapM _ f (Instance a b c) = liftA3 Instance (traverse f a) (f b) (traverse f c)
+
+instance ASTmapCTX2 hint a b Procedure ProcedureDecl =>
+         ASTmap hint ClassMethod a b where
+  astMapM _ f =
+    \case
+      MethodDecl a -> MethodDecl <$> f a
+      MethodImpl a -> MethodImpl <$> f a
+
+instance ASTmapCTX2 hint a b ParaName Datum =>
+         ASTmap hint Struct a b where
+  astMapM _ f (Struct a b) = liftA2 Struct (f a) (traverse f b)
+
+instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
+         ASTmap hint ParaName a b where
+  astMapM _ f (ParaName a b) = liftA2 ParaName (f a) (traverse f b)
 
 instance ASTmap hint TargetDirective a b where
   astMapM _ _ = trivial
@@ -188,11 +214,23 @@ instance (ASTmapCTX3 hint a b Decl StackDecl Stmt) =>
       BodyStackDecl a -> BodyStackDecl <$> f a
       BodyStmt a -> BodyStmt <$> f a
 
-instance (ASTmapCTX2 hint a b Body Formal, Space hint a b Name) =>
+instance ASTmapCTX2 hint a b Body ProcedureHeader =>
          ASTmap hint Procedure a b where
   astMapM _ f =
     \case
-      Procedure a b c d -> liftA3 (Procedure a) (f b) (traverse f c) (f d)
+      Procedure a b -> liftA2 Procedure (f a) (f b)
+
+instance ASTmapCTX1 hint a b ProcedureHeader =>
+         ASTmap hint ProcedureDecl a b where
+  astMapM _ f =
+    \case
+      ProcedureDecl a -> ProcedureDecl <$> f a
+
+instance (ASTmapCTX2 hint a b Formal Type, Space hint a b Name) =>
+         ASTmap hint ProcedureHeader a b where
+  astMapM _ f =
+    \case
+      ProcedureHeader a b c d -> liftA3 (ProcedureHeader a) (f b) (traverse f c) (traverse f d)
 
 instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
          ASTmap hint Formal a b where
@@ -307,8 +345,16 @@ instance (ASTmapCTX5 hint a b Actual Expr Lit LValue Type, Space hint a b Name) 
 instance ASTmap hint Lit a b where
   astMapM _ _ = trivial
 
-instance ASTmap hint Type a b where
-  astMapM _ _ = trivial
+instance (ASTmapCTX1 hint a b ParaType, Space hint a b Name) => ASTmap hint Type a b where
+  astMapM _ f =
+    \case
+      TBits a -> pure $ TBits a
+      TName a -> TName <$> f a
+      TAuto a -> TAuto <$> traverse f a
+      TPar a -> TPar <$> f a
+
+instance ASTmapCTX1 hint a b Type => ASTmap hint ParaType a b where
+  astMapM _ f (ParaType a b) = liftA2 ParaType (f a) (traverse f b)
 
 instance ASTmapCTX1 hint a b Name => ASTmap hint Asserts a b where
   astMapM _ f =

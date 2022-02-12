@@ -11,6 +11,8 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module CMM.AST.Blockifier where
 
 import safe Control.Lens.Getter (use, uses)
@@ -46,7 +48,7 @@ import safe CMM.AST
   , Registers(..)
   , StackDecl(..)
   , Stmt(..)
-  , Targets(..)
+  , Targets(..), ProcedureHeader (ProcedureHeader)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot)
 import safe CMM.AST.BlockAnnot
@@ -392,14 +394,21 @@ instance Blockify (Annot Datum) a b where
     storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
   blockify datum@(Annot _ _) = return $ noBlockAnnots datum
 
+blockifyProcedureHeader :: (MonadBlockify m, HasPos a, WithBlockAnnot a b) =>
+  Annotation ProcedureHeader a
+  -> m (Annot ProcedureHeader b)
+blockifyProcedureHeader (Annot (ProcedureHeader mConv name formals mType) a) = do
+  formals' <- traverse blockify formals
+  traverse_ registerWrites formals
+  return . withNoBlockAnnot a $ ProcedureHeader mConv (noBlockAnnots name) formals' (noBlockAnnots <$> mType)
+
 instance Blockify (Annot Procedure) a b where
-  blockify procedure@(Annot (Procedure mConv name formals body) a) = do
-    formals' <- traverse blockify formals
+  blockify procedure@(Annot (Procedure header body) a) = do
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
-    traverse_ registerWrites formals
-    (withAnnot (withBlockAnnot (Begins index) a) .
-     Procedure mConv (noBlockAnnots name) formals' <$>
+    header' <- blockifyProcedureHeader header
+    (withAnnot (Begins index `withBlockAnnot` a) .
+     Procedure header' <$>
      blockify body) <*
       unsetBlock <*
       analyzeFlow procedure <*
