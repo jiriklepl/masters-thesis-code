@@ -23,12 +23,14 @@ import safe CMM.Inference.Type (TypeKind)
 import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
+import Control.Monad (unless)
 
 data CollectedVariables =
   CollectedVariables
     { _variables :: Map Text (SourcePos, TypeKind)
     , _funcVariables :: Map Text (SourcePos, TypeKind)
     , _typeVariables :: Map Text (SourcePos, TypeKind)
+    , _typeConstants :: Map Text (SourcePos, TypeKind)
     , _errors :: Int
     , _warnings :: Int
     }
@@ -39,6 +41,7 @@ initCollectedVariables =
     { _variables = mempty
     , _funcVariables = mempty
     , _typeVariables = mempty
+    , _typeConstants = mempty
     , _errors = 0
     , _warnings = 0
     }
@@ -77,6 +80,24 @@ addVarTrivial ::
   -> m n
 addVarTrivial n tKind = n <$ addVar n (getName n) tKind
 
+addTCon ::
+     (HasPos n, Pretty n, MonadCollectVariables m)
+  => n
+  -> Text
+  -> TypeKind
+  -> m ()
+addTCon node tVar tKind = do
+  uses typeConstants (tVar `Map.member`) >>= \case
+    True -> registerError node "Duplicate type variable"
+    False -> typeConstants %= Map.insert tVar (getPos node, tKind)
+
+addTConTrivial ::
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+  => n
+  -> TypeKind
+  -> m n
+addTConTrivial n tKind = n <$ addTCon n (getName n) tKind
+
 addTVar ::
      (HasPos n, Pretty n, MonadCollectVariables m)
   => n
@@ -84,9 +105,8 @@ addTVar ::
   -> TypeKind
   -> m ()
 addTVar node tVar tKind = do
-  uses typeVariables (tVar `Map.member`) >>= \case
-    True -> registerError node "Duplicate type variable"
-    False -> typeVariables %= Map.insert tVar (getPos node, tKind)
+    uses typeVariables (tVar `Map.member`) >>= flip unless
+      (typeVariables %= Map.insert tVar (getPos node, tKind))
 
 addTVarTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m)

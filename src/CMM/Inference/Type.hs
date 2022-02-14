@@ -15,6 +15,7 @@ import safe Data.Generics.Aliases (extQ)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
+import qualified Data.Text as T
 
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Dioid (Dioid((<.>), mfull))
@@ -131,24 +132,40 @@ instance Bounded Constness where
 
 data TypeKind
   = Star
-  | TypeKind :-> TypeKind
+  | Constraint
   | GenericType -- wildCard
+  | ErrorKind Text
+  | TypeKind :-> TypeKind
   deriving (Show, Data)
 
 instance Eq TypeKind where
-  GenericType == _ = True
-  _ == GenericType = True
   Star == Star = True
+  Constraint == Constraint = True
+  GenericType == GenericType = True
+
+  ErrorKind _ == _ = False
+  _ == ErrorKind _ = False
+
   (l :-> r) == (l' :-> r') = l == l' && r == r'
   _ == _ = False
 
 instance Ord TypeKind where
-  GenericType `compare` GenericType = EQ
-  GenericType `compare` _ = LT
-  _ `compare` GenericType = GT
   Star `compare` Star = EQ
   Star `compare` _ = LT
   _ `compare` Star = GT
+
+  Constraint `compare` Constraint = EQ
+  Constraint `compare` _ = LT
+  _ `compare` Constraint = GT
+
+  GenericType `compare` GenericType = EQ
+  GenericType `compare` _ = LT
+  _ `compare` GenericType = GT
+
+  ErrorKind s `compare` ErrorKind s' = s `compare` s'
+  ErrorKind _ `compare` _ = LT
+  _ `compare` ErrorKind _ = GT
+
   (l :-> r) `compare` (l' :-> r') =
     case l `compare` l' of
       LT -> LT
@@ -258,6 +275,10 @@ instance HasTypeKind Type where
   getTypeKind BoolType {} = Star
   getTypeKind TupleType {} = Star -- TODO: check if all types are `Star` (when creating)
   getTypeKind FunctionType {} = Star -- TODO: ditto
+  getTypeKind (AppType t _) = case getTypeKind t of
+    _ :-> k -> k
+    GenericType -> GenericType
+    _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
   getTypeKind AddrType {} = Star -- TODO: ditto
   getTypeKind LabelType {} = Star
   getTypeKind StringType {} = Star
@@ -283,7 +304,7 @@ data Fact
   | SubKind TypeVar TypeVar -- superKind; subKind
   | SubConst TypeVar TypeVar -- superConst; subConst
   | InstType TypeVar TypeVar -- polytype; monotype
-  | Constraint ClassHandle [TypeVar]
+  | ClassConstraint ClassHandle [TypeVar]
   | NestedFact (Scheme Fact)
   deriving (Show, Eq, Ord, Data, IsTyped)
 
@@ -366,4 +387,4 @@ registerConstraint = OnRegister
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
 classConstraint :: ClassHandle -> [TypeVar] -> Fact
-classConstraint = Constraint
+classConstraint = ClassConstraint

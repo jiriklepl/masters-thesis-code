@@ -14,7 +14,7 @@ import safe Control.Lens.Tuple
 
 import safe Control.Applicative
 
-import Control.Monad.State.Lazy
+import Control.Monad.State.Lazy hiding (state)
 -- TODO: add the overlap check for instances
 -- TODO: add the overload resolution for instances to monomorphization
 import safe Control.Monad.Writer.Lazy
@@ -63,10 +63,13 @@ instance Apply Subst where
 
 addUnifying :: MonadInferencer m => TypeVar -> Type -> m Facts
 addUnifying tVar t = do
-  unifs <- use unifying
-  unifying .= Map.insertWith Set.union tVar (Set.singleton t) unifs
-  concat . concat <$> traverse (unionPropagate t) `traverse`
-    (Set.toList <$> Map.elems unifs)
+  (found, unifs') <- uses unifying $ Map.insertLookupWithKey (const Set.union) tVar (Set.singleton t)
+  unifying .= unifs'
+  case found of
+    Nothing -> return []
+    Just old -> if t `Set.member` old
+      then return []
+      else concat <$> unionPropagate t `traverse` Set.toList old
 
 class UnionPropagate a b where
   unionPropagate :: MonadInferencer m => a -> b -> m Facts
@@ -116,18 +119,38 @@ instance UnionPropagate TypeVar Type where
     (zipWith TypeUnion tTypes ts <> fmap (SubConst tVar) tTypes ++) <$>
       addUnifying tVar (makeTuple $ VarType <$> tTypes)
   unionPropagate tVar (FunctionType args ret) = do
-    argsType <- freshTypeHelper Star
-    retType <- freshTypeHelper Star
-    ([ TypeUnion argsType args
-     , TypeUnion retType ret
-     , SubConst retType argsType
-     , SubConst argsType tVar
-     ] ++) <$>
+    (fs, argsType) <- case args of
+      VarType argsType -> return ([], argsType)
+      _ -> do
+        argsType <- freshTypeHelper Star
+        return ([TypeUnion argsType args], argsType)
+    (fs', retType) <- case ret of
+      VarType retType -> return ([], retType)
+      _ -> do
+        retType <- freshTypeHelper Star
+        return ([TypeUnion retType ret], retType)
+    ((fs ++ fs' ++
+      [ SubConst retType argsType
+      , SubConst argsType tVar
+      ]) ++) <$>
       addUnifying tVar (VarType argsType `makeFunction` VarType retType)
   unionPropagate _ _ = return [] -- TODO: check this
 
 matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
-matchKind a b = getTypeKind a == getTypeKind b
+matchKind a b = getTypeKind a `go` getTypeKind b
+  where
+    ErrorKind _ `go` _ = False
+    _ `go` ErrorKind _ = False
+
+    GenericType `go` _ = True
+    _ `go` GenericType = True
+
+    Constraint `go` Constraint = True
+
+    Star `go` Star = True
+
+    (l :-> r) `go` (l' :-> r') = go l l' && go r r'
+    _ `go` _ = False
 
 bind :: TypeVar -> Type -> Either [UnificationError] (Subst, Type)
 bind tVar t'@(VarType tVar')
@@ -217,7 +240,7 @@ reduceOne fact =
     OnRegister reg t ->
       registerKind reg >>= reduceOne . (`KindLimit` t) . (`Bounds` maxBound) .
       makeOrdered
-    Constraint {} -> return (False, [fact]) -- undefined
+    ClassConstraint {} -> return (False, [fact]) -- undefined
     NestedFact (tVars :. fs :=> tVar `TypeUnion` t) -> do
       let scheme = tVars :. fs :=> t
       (fs', t') <- freshInst scheme
@@ -227,26 +250,26 @@ reduceOne fact =
     NestedFact _ -> undefined -- error
 
 reduceMany :: MonadInferencer m => Facts -> m (Facts, Facts)
-reduceMany facts = do
-  let (instFacts, facts') =
+reduceMany facts' = do
+  let (instFacts, facts'') =
         partition
           (\case
              InstType {} -> True
              _ -> False)
-          facts
-  (changes, newFacts) <- (_2 %~ concat) . unzip <$> traverse reduceOne facts'
+          facts'
+  (changes, newFacts) <- (_2 %~ concat) . unzip <$> traverse reduceOne facts''
   if or changes
     then (_1 %~ (instFacts ++)) <$> reduceMany newFacts
     else return (instFacts, newFacts)
 
 reduce :: MonadInferencer m => Facts -> m (Facts, Facts)
-reduce facts = do
-  result@(instFacts, facts') <- reduceMany facts
-  (instFacts', facts'') <-
+reduce facts' = do
+  result@(instFacts, facts'') <- reduceMany facts'
+  (instFacts', facts''') <-
     (_2 %~ concat) . partitionEithers <$> traverse go instFacts
-  if null facts''
+  if null facts'''
     then return result
-    else (_1 %~ (instFacts' ++)) <$> reduce (facts'' ++ facts')
+    else (_1 %~ (instFacts' ++)) <$> reduce (facts''' ++ facts'')
   where
     go fact@(InstType gen inst) =
       uses schemes (gen `Map.lookup`) >>= \case
@@ -260,24 +283,24 @@ reduce facts = do
     go _ = undefined -- impl error
 
 solve :: MonadInferencer m => Facts -> m ()
-solve facts = do
-  (instFacts, facts') <- reduce facts
+solve facts' = do
+  (instFacts, facts'') <- reduce facts'
   use errors >>= \errs ->
     if null errs
       then if null instFacts
-             then unless (null facts') undefined -- error
+             then unless (null facts'') undefined -- error
              else solve'
                     ((\(InstType gen inst) -> (gen, inst)) <$> instFacts)
-                    facts'
+                    facts''
       else undefined -- error
 
 solve' :: MonadInferencer m => [(TypeVar, TypeVar)] -> Facts -> m ()
-solve' instFacts facts = do
+solve' instFacts facts' = do
   schemes' <-
     (Set.toList <$>) <$> uses schemes (Map.!) <&> (<$> ((^. _1) <$> instFacts))
   let tVars = (^. _2) <$> instFacts
   go schemes' tVars >>= \case
-    Just facts' -> solve (facts' ++ facts)
+    Just facts'' -> solve (facts'' ++ facts')
     Nothing -> return ()
   where
     go ((scheme:choices):schemes'') (tVar:tVars') = do
@@ -314,10 +337,10 @@ collectVertices from = do
   handles <- use handleCounter
   let edges = concat ((\(f, t) -> (f, ) <$> Set.toList t) <$> from')
       varMap =
-        Map.fromList $ (\tVar@(TypeVar i _ _) -> (i, tVar)) <$>
+        Map.fromList $ (\tVar@(~(TypeVar i _ _)) -> (i, tVar)) <$>
         uncurry (<>) (unzip edges)
       graph =
-        Graph.buildG (1, handles) $ (both %~ \(TypeVar i _ _) -> i) <$> edges
+        Graph.buildG (1, handles) $ (both %~ \(~(TypeVar i _ _)) -> i) <$> edges
       vs = Graph.vertices graph
       pairs = [(v, v') | v <- vs, v' <- vs, v /= v', Graph.path graph v v']
   return $ pairs <&> both %~ \i -> varMap Map.! i

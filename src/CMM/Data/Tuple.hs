@@ -16,3 +16,15 @@ complSnd3 (a, _, c) = (a, c)
 
 complThd3 :: (a, b, c) -> (a, b)
 complThd3 (a, b, _) = (a, b)
+
+complFst4 :: (a, b, c, d) -> (b, c, d)
+complFst4 (_, b, c, d) = (b, c, d)
+
+complSnd4 :: (a, b, c, d) -> (a, c, d)
+complSnd4 (a, _, c, d) = (a, c, d)
+
+complThd4 :: (a, b, c, d) -> (a, b, d)
+complThd4 (a, b, _, d) = (a, b, d)
+
+complFrth4 :: (a, b, c, d) -> (a, b, c)
+complFrth4 (a, b, c, _) = (a, b, c)

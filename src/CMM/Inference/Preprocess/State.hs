@@ -52,6 +52,7 @@ data InferPreprocessor =
   InferPreprocessor
     { _variables :: [Map Text TypeVar]
     , _funcVariables :: Map Text TypeVar
+    , _typeConstants :: [Map Text TypeVar]
     , _typeVariables :: [Map Text TypeVar]
     , _facts :: [Facts]
     , _cSymbols :: [Text]
@@ -66,6 +67,7 @@ initInferPreprocessor =
   InferPreprocessor
     { _variables = [mempty]
     , _funcVariables = mempty
+    , _typeConstants = [mempty]
     , _typeVariables = [mempty]
     , _facts = [mempty]
     , _cSymbols = mempty
@@ -79,10 +81,10 @@ beginUnit ::
   -> Map Text (SourcePos, TypeKind)
   -> Map Text (SourcePos, TypeKind)
   -> m ()
-beginUnit vars fVars tVars = do
+beginUnit vars fVars tCons = do
   variables <~ pure <$> declVars vars
   funcVariables <~ declVars fVars
-  typeVariables <~ pure <$> declVars tVars
+  typeConstants <~ pure <$> declVars tCons
 
 noCurrentReturn :: TypeVar
 noCurrentReturn = NoType
@@ -96,6 +98,9 @@ lookupFVar name = lookupVarImpl name <$> uses funcVariables pure
 
 lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeVar)
 lookupProc = uses variables . (. last) . Map.lookup
+
+lookupTCon :: MonadInferPreprocessor m => Text -> m TypeVar
+lookupTCon name = lookupVarImpl name <$> use typeConstants
 
 lookupTVar :: MonadInferPreprocessor m => Text -> m TypeVar
 lookupTVar name = lookupVarImpl name <$> use typeVariables
@@ -113,12 +118,15 @@ beginProc ::
      (MonadInferPreprocessor m)
   => Map Text (SourcePos, TypeKind)
   -> Map Text (SourcePos, TypeKind)
+  -> Map Text (SourcePos, TypeKind)
   -> m ()
-beginProc vars tVars = do
+beginProc vars tCons tVars = do
   vars' <- declVars vars
   variables %= (vars' :)
+  tCons' <- declVars tCons
+  typeConstants %= (tCons' :)
   tVars' <- declVars tVars
-  typeVariables %= (tVars' :)
+  typeVariables %= reverse . (tVars' :) . reverse
   facts %= ([] :)
   currentReturn <~ freshTypeHelper Star
 
@@ -132,7 +140,8 @@ declVars =
 endProc :: MonadInferPreprocessor m => m (Facts, TypeVar)
 endProc = do
   variables %= tail
-  typeVariables %= tail
+  typeConstants %= tail
+  typeVariables %= init
   ~(h:t) <- use facts
   facts .= t
   (h, ) <$> exchange currentReturn noCurrentReturn
@@ -144,6 +153,12 @@ storeProc name fs t = do
 
 getCurrentReturn :: MonadInferPreprocessor m => m TypeVar
 getCurrentReturn = use currentReturn
+
+-- | Stores the given type variable `handle` under the given `name` to the state monad
+storeTCon :: MonadInferPreprocessor m => Text -> Type -> m ()
+storeTCon name handle = do
+  vars <- use typeConstants
+  storeVarImpl name handle vars
 
 -- | Stores the given type variable `handle` under the given `name` to the state monad
 storeTVar :: MonadInferPreprocessor m => Text -> Type -> m ()

@@ -22,7 +22,7 @@ import safe qualified Data.Text as T
 import safe Data.Traversable (for)
 import safe Prelude hiding (init)
 
-import safe CMM.Data.Tuple (complSnd3, uncurry3)
+import safe CMM.Data.Tuple (uncurry3, complFrth4)
 
 import safe CMM.AST as AST
   ( Actual(..)
@@ -47,7 +47,7 @@ import safe CMM.AST as AST
   , StrLit(..)
   , Targets
   , Type(..)
-  , Unit(..), ParaType (ParaType), ProcedureHeader (ProcedureHeader), Name
+  , Unit(..), ParaType (..), ProcedureHeader (..), Name, ProcedureDecl (..)
   )
 import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot, unAnnot, takeAnnot)
 import safe CMM.AST.HasName as AST (HasName(getName))
@@ -71,13 +71,13 @@ import safe CMM.Inference.Preprocess.State as Infer
   , freshTypeHelper
   , getCurrentReturn
   , lookupFVar
-  , lookupTVar
+  , lookupTCon
   , lookupVar
   , storeCSymbol
   , storeFact
   , storeProc
-  , storeTVar
-  , storeVar
+  , storeTCon
+  , storeVar, lookupTVar
   )
 import safe CMM.Inference.Type as Infer
   ( Fact(SubConst, SubKind, SubType, Typing)
@@ -182,7 +182,7 @@ purePreprocess handle = return . (handle, ) . (withTypeHandle handle <$>)
 
 instance Preprocess Unit a b where
   preprocessImpl unit@(Unit topLevels) = do
-    globalVariables unit >>= uncurry3 beginUnit
+    globalVariables unit >>= uncurry3 beginUnit . complFrth4
     (NoType, ) . Unit <$> preprocessT topLevels
 
 instance Preprocess Section a b where
@@ -235,7 +235,7 @@ instance Preprocess Decl a b where
       TypedefDecl type' names -> do
         type'' <- preprocess type'
         let handle = VarType $ getTypeHandle type''
-        traverse_ (`storeTVar` handle) (getName <$> names)
+        traverse_ (`storeTCon` handle) (getName <$> names)
         return $ TypedefDecl type'' (preprocessTrivial <$> names)
 
 instance Preprocess Import a b where
@@ -256,7 +256,7 @@ instance Preprocess AST.Type a b where
         storeFact $ handle `typeUnion` TBitsType int
         purePreprocess handle tBits
       tName@(TName name) -> do
-        handle <- lookupTVar (getName name)
+        handle <- lookupTCon (getName name)
         purePreprocess handle tName
       tAuto@(TAuto Nothing) -> do
         handle <- freshTypeHelper Star
@@ -322,13 +322,21 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
     storeProc (getName name) fs procedureType
     return (NoType, ProcedureHeader mConv (preprocessTrivial name) formals' mType')
 
--- TODO: consult conventions with man
+-- TODO: consult conventions with the man
 instance Preprocess Procedure a b where
   preprocessImpl procedure@(Procedure header body) = do
-    localVariables procedure >>= uncurry beginProc . complSnd3
+    (vars, _, tCons, tVars) <- localVariables procedure
+    beginProc vars tCons tVars
     body' <- preprocess body
     header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
     return (NoType, Procedure header' body')
+
+instance Preprocess ProcedureDecl a b where
+  preprocessImpl procedure@(ProcedureDecl header) = do
+    (vars, _, tCons, tVars) <- localVariables procedure
+    beginProc vars tCons tVars
+    header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
+    return (NoType, ProcedureDecl header')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do
