@@ -23,7 +23,7 @@ import safe CMM.AST
   , Registers(Registers)
   , Section
   , Stmt(LabelStmt)
-  , Unit, Struct (Struct), ParaName (ParaName), Class (Class), Type (TAuto)
+  , Unit, Struct (Struct), ParaName (ParaName), Class (Class), Type (TAuto), ProcedureDecl
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.HasName (HasName(getName))
@@ -65,7 +65,19 @@ globalVariables ::
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
-    go = addGlobalCases $ addCommonCases $ gmapM go
+    go = addGlobalCases $ addProcedureCases $ addCommonCases $ gmapM go
+
+classVariables ::
+     (MonadIO m, Data (n SourcePos), Functor n, HasPos a)
+  => n a
+  -> m ( Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind)
+       , Map Text (SourcePos, TypeKind))
+classVariables n = variablesCommon . go $ getPos <$> n
+  where
+    go :: (Data d, MonadCollectVariables m) => d -> m d
+    go = addTAutoCases $ addProcedureCases $ gmapM go
 
 variablesCommon ::
      MonadIO m
@@ -126,7 +138,7 @@ addCommonCases go =
         stmt -> gmapM go stmt
 
 addGlobalCases :: CasesAdder m a
-addGlobalCases go = goClass *|* goStruct *|* goProcedure *|* goSection *|* go
+addGlobalCases go = goClass *|* goStruct *|* goSection *|* go
   where
     goClass =
       \case
@@ -137,15 +149,23 @@ addGlobalCases go = goClass *|* goStruct *|* goProcedure *|* goSection *|* go
       \case
         struct@(Annot (Struct (Annot (ParaName _ args) _) _) (_ :: SourcePos)) -> do
           struct <$ addTCon struct (getName struct) (foldr (:->) Star (Star <$ args))
-    goProcedure =
-      \case
-        (procedure :: Annot Procedure SourcePos) ->
-          addFVarTrivial procedure Star
     goSection =
       \case
         (section :: Annot Section SourcePos) -> gmapM goSectionItems section
     goSectionItems :: (Data d, MonadCollectVariables m) => d -> m d
     goSectionItems = addSectionCases $ addCommonCases $ gmapM goSectionItems
+
+addProcedureCases :: CasesAdder m a
+addProcedureCases go = goProcedure *|* goProcedureDecl *|* go
+  where
+    goProcedure =
+      \case
+        (procedure :: Annot Procedure SourcePos) ->
+          addFVarTrivial procedure Star
+    goProcedureDecl =
+      \case
+        (procedureDecl :: Annot ProcedureDecl SourcePos) ->
+          addFVarTrivial procedureDecl Star
 
 addSectionCases :: CasesAdder m a
 addSectionCases go = goProcedure *|* go

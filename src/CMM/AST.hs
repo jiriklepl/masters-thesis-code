@@ -59,35 +59,28 @@ data Decl a
 deriving instance Eq (Decl ())
 
 data Class a
-  = Class [Annot ParaName a] (Annot ParaName a) [Annot ClassMethod a]
+  = Class [Annot (ParaName Type) a] (Annot (ParaName Name) a) [Annot ProcedureDecl a]
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Class ())
 
 data Instance a
-  = Instance [Annot ParaName a] (Annot ParaName a) [Annot Procedure a]
+  = Instance [Annot (ParaName Type) a] (Annot (ParaName Type) a) [Annot Procedure a]
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Instance ())
 
-data ClassMethod a
-  = MethodDecl (Annot ProcedureDecl a)
-  | MethodImpl (Annot Procedure a)
-  deriving (Show, Functor, Data, ASTNode, AST)
-
-deriving instance Eq (ClassMethod ())
-
 data Struct a
-  = Struct (Annot ParaName a) [Annot Datum a]
+  = Struct (Annot (ParaName Name) a) [Annot Datum a]
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Struct ())
 
-data ParaName a
-  = ParaName (Name a) [Annot Type a]
+data ParaName param a
+  = ParaName (Name a) [Annot param a]
   deriving (Show, Functor, Data, ASTNode, AST)
 
-deriving instance Eq (ParaName ())
+deriving instance Eq (param ()) => Eq (ParaName param ())
 
 data TargetDirective a
   = MemSize Int
@@ -278,6 +271,7 @@ data Expr a
   | NegExpr (Annot Expr a)
   | InfixExpr (Name a) (Annot Expr a) (Annot Expr a)
   | PrefixExpr (Name a) [Annot Actual a]
+  | MemberExpr (Annot Expr a) (Annot Name a)
   deriving (Show, Functor, Data, ASTNode, AST)
 
 deriving instance Eq (Expr ())

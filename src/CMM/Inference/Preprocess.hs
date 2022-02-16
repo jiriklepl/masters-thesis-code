@@ -13,7 +13,7 @@
 -- TODO: all types of things inside procedures should be subtypes of the return type
 module CMM.Inference.Preprocess where
 
-import safe Control.Applicative (Applicative(liftA2))
+import safe Control.Applicative (Applicative(liftA2), liftA3)
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (Field2(_2))
 import safe Control.Monad.State.Lazy (MonadIO, zipWithM_)
@@ -47,12 +47,12 @@ import safe CMM.AST as AST
   , StrLit(..)
   , Targets
   , Type(..)
-  , Unit(..), ParaType (..), ProcedureHeader (..), Name, ProcedureDecl (..)
+  , Unit(..), ParaType (..), ProcedureHeader (..), Name, ProcedureDecl (..), Class (Class), Instance (Instance)
   )
 import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot, unAnnot, takeAnnot)
 import safe CMM.AST.HasName as AST (HasName(getName))
 import safe CMM.AST.Maps as AST (ASTmap(..), ASTmapGen, Constraint, Space)
-import safe CMM.AST.Variables as AST (globalVariables, localVariables)
+import safe CMM.AST.Variables as AST (globalVariables, localVariables, classVariables)
 import safe CMM.Inference.BuiltIn as Infer
   ( addressKind
   , floatKind
@@ -77,7 +77,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFact
   , storeProc
   , storeTCon
-  , storeVar, lookupTVar
+  , storeVar, lookupTVar, pushClass, pullContext, pushInstance
   )
 import safe CMM.Inference.Type as Infer
   ( Fact(SubConst, SubKind, SubType, Typing)
@@ -237,6 +237,22 @@ instance Preprocess Decl a b where
         let handle = VarType $ getTypeHandle type''
         traverse_ (`storeTCon` handle) (getName <$> names)
         return $ TypedefDecl type'' (preprocessTrivial <$> names)
+
+instance Preprocess Class a b where
+  preprocessImpl class'@(Class paraNames paraName methods) = do
+    (_, _, _, tVars) <- classVariables class'
+    pushClass (getName class') tVars
+    (NoType,)
+      <$> liftA3 Class (preprocessT paraNames) (preprocess paraName) (preprocessT methods)
+      <* pullContext
+
+instance Preprocess Instance a b where
+  preprocessImpl instance'@(Instance paraNames paraName methods) = do
+    (_, methods', _, tVars) <- classVariables instance'
+    pushInstance (getName instance') methods' tVars
+    (NoType,)
+      <$> liftA3 Instance (preprocessT paraNames) (preprocess paraName) (preprocessT methods)
+      <* pullContext
 
 instance Preprocess Import a b where
   preprocessImpl import'@Import {} = do

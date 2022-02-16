@@ -39,7 +39,7 @@ import safe CMM.AST
   , TargetDirective
   , Targets
   , TopLevel(..)
-  , Unit(..), Class (Class), Instance (Instance), ClassMethod (MethodDecl, MethodImpl), Struct, ProcedureDecl (ProcedureDecl), ProcedureHeader (ProcedureHeader), ParaType, Type
+  , Unit(..), Class (Class), Instance (Instance), Struct, ProcedureDecl (ProcedureDecl), ProcedureHeader (ProcedureHeader), ParaType, Type
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Utils (addPrefix)
@@ -77,12 +77,10 @@ instance Flatten TopLevel where
 instance Flatten Class where
   flatten (Class paraNames paraName methods) =
     Class paraNames paraName $ flatten <$> methods
+
 instance Flatten Instance where
   flatten (Instance paraNames paraName methods) =
     Instance paraNames paraName $ flatten <$> methods
-instance Flatten ClassMethod where
-  flatten methodDecl@MethodDecl {} = methodDecl
-  flatten (MethodImpl procedure) = MethodImpl $ flatten procedure
 
 instance FlattenTrivial Struct
 

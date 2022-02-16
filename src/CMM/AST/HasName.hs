@@ -22,7 +22,7 @@ import safe CMM.AST
   , Stmt(..)
   , StrLit(..)
   , TopLevel(..)
-  , Type(..), Struct (..), Instance (..), Class (..), ParaName (..), ProcedureHeader (..), ProcedureDecl (..), ClassMethod (..)
+  , Type(..), Struct (..), Instance (..), Class (..), ParaName (..), ProcedureHeader (..), ProcedureDecl (..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -54,14 +54,10 @@ instance HasName (Class a) where
 instance HasName (Instance a) where
   getName (Instance _ n _) = getName n
 
-instance HasName (ClassMethod a) where
-  getName (MethodDecl p) = getName p
-  getName (MethodImpl p) = getName p
-
 instance HasName (Struct a) where
   getName (Struct n _) = getName n
 
-instance HasName (ParaName a) where
+instance HasName ((ParaName param) a) where
   getName (ParaName n _) = getName n
 
 instance HasName (Import a) where

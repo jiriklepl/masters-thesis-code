@@ -46,7 +46,7 @@ import safe CMM.AST
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), ProcedureHeader (..), ProcedureDecl (..), ClassMethod (..), ParaName (ParaName), Class (..), Instance (..), Struct (..), ParaType (..)
+  , Unit(..), ProcedureHeader (..), ProcedureDecl (..), ParaName (ParaName), Class (..), Instance (..), Struct (..), ParaType (..)
   )
 import safe CMM.AST.Annot (Annot)
 import safe CMM.Control.Applicative (liftA4, liftA6)
@@ -143,27 +143,20 @@ instance ( ASTmapCTX8 hint a b Export Expr Import Name Pragma Registers TargetDi
       PragmaDecl a b -> liftA2 PragmaDecl (f a) (f b)
       TargetDecl a -> TargetDecl <$> traverse f a
 
-instance ASTmapCTX2 hint a b ParaName ClassMethod =>
+instance ASTmapCTX3 hint a b (ParaName Name) (ParaName Type) ProcedureDecl =>
          ASTmap hint Class a b where
   astMapM _ f (Class a b c) = liftA3 Class (traverse f a) (f b) (traverse f c)
 
-instance ASTmapCTX2 hint a b ParaName Procedure =>
+instance ASTmapCTX2 hint a b (ParaName Type) Procedure =>
          ASTmap hint Instance a b where
   astMapM _ f (Instance a b c) = liftA3 Instance (traverse f a) (f b) (traverse f c)
 
-instance ASTmapCTX2 hint a b Procedure ProcedureDecl =>
-         ASTmap hint ClassMethod a b where
-  astMapM _ f =
-    \case
-      MethodDecl a -> MethodDecl <$> f a
-      MethodImpl a -> MethodImpl <$> f a
-
-instance ASTmapCTX2 hint a b ParaName Datum =>
+instance ASTmapCTX2 hint a b (ParaName Name) Datum =>
          ASTmap hint Struct a b where
   astMapM _ f (Struct a b) = liftA2 Struct (f a) (traverse f b)
 
-instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
-         ASTmap hint ParaName a b where
+instance (ASTmapCTX1 hint a b param, Space hint a b Name) =>
+         ASTmap hint (ParaName param) a b where
   astMapM _ f (ParaName a b) = liftA2 ParaName (f a) (traverse f b)
 
 instance ASTmap hint TargetDirective a b where

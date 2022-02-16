@@ -62,7 +62,7 @@ import safe CMM.AST
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), Class (..), Instance (..), ParaName (..), Struct (..), ClassMethod (..), ParaType (..), ProcedureHeader (..), ProcedureDecl (..)
+  , Unit(..), Class (..), Instance (..), ParaName (..), Struct (..), ParaType (..), ProcedureHeader (..), ProcedureDecl (..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
@@ -192,9 +192,11 @@ classTopLevel =
 
 class' :: SourceParser Class
 class' = withSourcePos $ choice
-  [ try $ liftA3 Class (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many classMethod)
-  , liftA2 (Class []) paraName (braces $ many classMethod)
+  [ try $ liftA3 Class (sepBy1 paraName comma <* symbol L.DArr) paraName classBody
+  , liftA2 (Class []) paraName classBody
   ]
+  where
+    classBody = braces $ many (withSourcePos $ ProcedureDecl <$> procedureHeader <* semicolon)
 
 instanceTopLevel :: ULocParser TopLevel
 instanceTopLevel =
@@ -206,15 +208,6 @@ instance' = withSourcePos $ choice
   , liftA2 (Instance []) paraName (braces $ many procedure)
   ]
 
-classMethod :: SourceParser ClassMethod
-classMethod = withSourcePos $  do
-  procedureHeader' <- procedureHeader
-  let decl' = withSourcePos . pure $ ProcedureDecl procedureHeader'
-  choice
-    [ semicolon *> (MethodDecl <$> decl')
-    , MethodImpl <$> withSourcePos (Procedure procedureHeader' <$> body)
-    ]
-
 structTopLevel :: ULocParser TopLevel
 structTopLevel =
   keyword L.Struct *> (TopStruct <$> struct)
@@ -222,8 +215,14 @@ structTopLevel =
 struct :: SourceParser Struct
 struct = withSourcePos $ liftA2 Struct paraName (braces $ many datum)
 
-paraName :: SourceParser ParaName
-paraName = withSourcePos $ liftA2 ParaName identifier (many type')
+class ParaName' param where
+  paraName :: SourceParser (ParaName param)
+
+instance ParaName' Type where
+  paraName = withSourcePos $ liftA2 ParaName identifier (many type')
+
+instance ParaName' Name where
+  paraName = withSourcePos $ liftA2 ParaName identifier (many $ withSourcePos identifier)
 
 section :: SourceParser Section
 section =

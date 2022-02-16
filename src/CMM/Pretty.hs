@@ -69,7 +69,7 @@ import safe CMM.AST
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), Class (Class), Instance (Instance), Struct (Struct), ParaName (ParaName), ClassMethod (..), ParaType (ParaType), ProcedureHeader (ProcedureHeader), ProcedureDecl (ProcedureDecl)
+  , Unit(..), Class (Class), Instance (Instance), Struct (Struct), ParaName (ParaName), ParaType (ParaType), ProcedureHeader (ProcedureHeader), ProcedureDecl (ProcedureDecl)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -145,15 +145,11 @@ instance Pretty (Instance a) where
   pretty (Instance paraNames paraName methods) =
     "instance" <+> commaSep (pretty <$> paraNames) <+> darrow <+> pretty paraName <+> bracesBlock methods
 
-instance Pretty (ClassMethod a) where
-  pretty (MethodDecl procedureDecl) = pretty procedureDecl
-  pretty (MethodImpl procedure) = pretty procedure
-
 instance Pretty (Struct a) where
   pretty (Struct paraName datums) =
     "struct" <+> pretty paraName <+> bracesBlock datums
 
-instance Pretty (ParaName a) where
+instance Pretty (param a) => Pretty (ParaName param a) where
   pretty (ParaName name []) =
     pretty name
   pretty (ParaName name types) =

@@ -18,6 +18,7 @@ import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Function ((&))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Set (Set)
 import safe Data.Maybe (fromMaybe)
 import safe Data.Text (Text)
 
@@ -56,11 +57,11 @@ data InferPreprocessor =
     , _typeVariables :: [Map Text TypeVar]
     , _facts :: [Facts]
     , _cSymbols :: [Text]
+    , _currentContext :: [Context]
+    , _classDatabase :: Map Text ClassData
     , _handleCounter :: Int
     , _currentReturn :: TypeVar
     }
-
-makeLenses ''InferPreprocessor
 
 initInferPreprocessor :: InferPreprocessor
 initInferPreprocessor =
@@ -71,9 +72,34 @@ initInferPreprocessor =
     , _typeVariables = [mempty]
     , _facts = [mempty]
     , _cSymbols = mempty
+    , _currentContext = [GlobalCtx]
+    , _classDatabase = mempty
     , _handleCounter = 0
     , _currentReturn = noCurrentReturn
     }
+
+data Context
+  = GlobalCtx
+  | ClassCtx Text
+  | InstanceCtx Text
+  -- | SectionCtx Text
+
+newtype ClassData =
+  ClassData
+  { _methodDecls :: Set Text
+  }
+
+initClassData :: Set Text -> ClassData
+initClassData decls =
+  ClassData
+  { _methodDecls = decls
+  }
+
+noCurrentReturn :: TypeVar
+noCurrentReturn = NoType
+
+makeLenses ''InferPreprocessor
+makeLenses ''ClassData
 
 beginUnit ::
      MonadInferPreprocessor m
@@ -85,9 +111,6 @@ beginUnit vars fVars tCons = do
   variables <~ pure <$> declVars vars
   funcVariables <~ declVars fVars
   typeConstants <~ pure <$> declVars tCons
-
-noCurrentReturn :: TypeVar
-noCurrentReturn = NoType
 
 -- returns `NoType` on failure
 lookupVar :: MonadInferPreprocessor m => Text -> m TypeVar
@@ -115,7 +138,7 @@ storeVar name handle = do
   storeVarImpl name handle vars
 
 beginProc ::
-     (MonadInferPreprocessor m)
+     MonadInferPreprocessor m
   => Map Text (SourcePos, TypeKind)
   -> Map Text (SourcePos, TypeKind)
   -> Map Text (SourcePos, TypeKind)
@@ -153,6 +176,36 @@ storeProc name fs t = do
 
 getCurrentReturn :: MonadInferPreprocessor m => m TypeVar
 getCurrentReturn = use currentReturn
+
+pushTypeVariables :: MonadInferPreprocessor m => Map Text (SourcePos, TypeKind) -> m ()
+pushTypeVariables tVars = do
+  tVars' <- declVars tVars
+  typeVariables %= reverse . (tVars' :) . reverse
+
+pushClass ::
+     MonadInferPreprocessor m
+  => Text
+  -> Map Text (SourcePos, TypeKind)
+  -> m ()
+pushClass name tVars = do
+  currentContext %= (ClassCtx name :)
+  pushTypeVariables tVars
+
+pushInstance ::
+     MonadInferPreprocessor m
+  => Text
+  -> Map Text (SourcePos, TypeKind)
+  -> Map Text (SourcePos, TypeKind)
+  -> m ()
+pushInstance name fVars tVars = do
+  currentContext %= (InstanceCtx name :)
+  pushTypeVariables tVars
+  undefined
+
+pullContext :: MonadInferPreprocessor m => m ()
+pullContext = do
+  typeVariables %= init
+  currentContext %= tail
 
 -- | Stores the given type variable `handle` under the given `name` to the state monad
 storeTCon :: MonadInferPreprocessor m => Text -> Type -> m ()

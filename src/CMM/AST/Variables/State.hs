@@ -15,6 +15,7 @@ import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State (MonadIO, MonadState)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
 
@@ -31,6 +32,7 @@ data CollectedVariables =
     , _funcVariables :: Map Text (SourcePos, TypeKind)
     , _typeVariables :: Map Text (SourcePos, TypeKind)
     , _typeConstants :: Map Text (SourcePos, TypeKind)
+    , _typeClasses :: Map Text (SourcePos, TypeKind, Set Text {- method decls -})
     , _errors :: Int
     , _warnings :: Int
     }
@@ -42,6 +44,7 @@ initCollectedVariables =
     , _funcVariables = mempty
     , _typeVariables = mempty
     , _typeConstants = mempty
+    , _typeClasses = mempty
     , _errors = 0
     , _warnings = 0
     }
