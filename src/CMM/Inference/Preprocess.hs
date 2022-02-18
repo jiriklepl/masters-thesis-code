@@ -13,16 +13,15 @@
 -- TODO: all types of things inside procedures should be subtypes of the return type
 module CMM.Inference.Preprocess where
 
-import safe Control.Applicative (Applicative(liftA2), liftA3)
+import safe Control.Applicative (Applicative(liftA2))
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (Field2(_2))
 import safe Control.Monad.State.Lazy (MonadIO, zipWithM_)
 import safe Data.Foldable (for_, traverse_)
+import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe Data.Traversable (for)
 import safe Prelude hiding (init)
-
-import safe CMM.Data.Tuple (uncurry3, complFrth4)
 
 import safe CMM.AST as AST
   ( Actual(..)
@@ -47,12 +46,12 @@ import safe CMM.AST as AST
   , StrLit(..)
   , Targets
   , Type(..)
-  , Unit(..), ParaType (..), ProcedureHeader (..), Name, ProcedureDecl (..), Class (Class), Instance (Instance)
+  , Unit(..), ParaType (..), ProcedureHeader (..), Name, Class (Class), Instance (Instance), ParaName (ParaName)
   )
 import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot, unAnnot, takeAnnot)
 import safe CMM.AST.HasName as AST (HasName(getName))
 import safe CMM.AST.Maps as AST (ASTmap(..), ASTmapGen, Constraint, Space)
-import safe CMM.AST.Variables as AST (globalVariables, localVariables, classVariables)
+import safe CMM.AST.Variables as AST (globalVariables, localVariables, classVariables, instanceVariables)
 import safe CMM.Inference.BuiltIn as Infer
   ( addressKind
   , floatKind
@@ -77,13 +76,13 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFact
   , storeProc
   , storeTCon
-  , storeVar, lookupTVar, pushClass, pullContext, pushInstance
+  , storeVar, lookupTVar, pushClass, pullContext, pushInstance, lookupClass, pushTypeVariables, pullTypeVariables
   )
 import safe CMM.Inference.Type as Infer
   ( Fact(SubConst, SubKind, SubType, Typing)
   , Type(AddrType, BoolType, LabelType, String16Type, StringType,
      TBitsType, VarType, AppType)
-  , TypeKind(Star, GenericType)
+  , TypeKind(Star, GenericType, Constraint)
   , TypeVar(NoType)
   , constExprConstraint
   , instType
@@ -182,7 +181,9 @@ purePreprocess handle = return . (handle, ) . (withTypeHandle handle <$>)
 
 instance Preprocess Unit a b where
   preprocessImpl unit@(Unit topLevels) = do
-    globalVariables unit >>= uncurry3 beginUnit . complFrth4
+    (vars, fVars, fIVars, tCons, _, tClasses, sMems) <- globalVariables unit
+    beginUnit vars fVars fIVars tCons tClasses sMems
+
     (NoType, ) . Unit <$> preprocessT topLevels
 
 instance Preprocess Section a b where
@@ -240,19 +241,48 @@ instance Preprocess Decl a b where
 
 instance Preprocess Class a b where
   preprocessImpl class'@(Class paraNames paraName methods) = do
-    (_, _, _, tVars) <- classVariables class'
-    pushClass (getName class') tVars
+    (_, _, _, _, tVars, _, _) <- classVariables class'
+    pushTypeVariables tVars
+    paraNames' <- preprocessT paraNames
+    paraName' <- preprocess paraName
+    pushClass (nameAndHandle paraName') (nameAndHandle <$> paraNames')
     (NoType,)
-      <$> liftA3 Class (preprocessT paraNames) (preprocess paraName) (preprocessT methods)
-      <* pullContext
+      . Class paraNames' paraName' <$>  preprocessT methods
+      <* pullContext <* pullTypeVariables
 
 instance Preprocess Instance a b where
   preprocessImpl instance'@(Instance paraNames paraName methods) = do
-    (_, methods', _, tVars) <- classVariables instance'
-    pushInstance (getName instance') methods' tVars
+    (_, _, _, _, tVars, _, _) <- instanceVariables instance'
+    pushTypeVariables tVars
+    paraNames' <- preprocessT paraNames
+    paraName' <- preprocess paraName
+    pushInstance (nameAndHandle paraName') (nameAndHandle <$> paraNames')
     (NoType,)
-      <$> liftA3 Instance (preprocessT paraNames) (preprocess paraName) (preprocessT methods)
-      <* pullContext
+      . Instance paraNames' paraName' <$> preprocessT methods
+      <* pullContext <* pullTypeVariables
+
+nameAndHandle :: HasTypeHandle a => Annot (ParaName param) a -> (Text, TypeVar)
+nameAndHandle paraName = (getName paraName, getTypeHandle paraName)
+
+class Preprocess param a b => PreprocessParam param a b where
+  preprocessParam :: (MonadInferPreprocessor m, WithTypeHandle a b, HasPos a, MonadIO m) => Annot param a -> m (Annot param b)
+
+instance PreprocessParam Name a b where
+  preprocessParam name = do
+    handle <- lookupTVar $ getName name
+    return $ withTypeHandle handle <$> name
+
+instance PreprocessParam AST.Type a b where
+  preprocessParam = preprocess
+
+instance PreprocessParam param a b => Preprocess (ParaName param) a b where
+  preprocessImpl (ParaName name params) = do
+    let name' = preprocessTrivial name
+    params' <- traverse preprocessParam params
+    class' <- lookupClass $ getName name'
+    handle <- freshTypeHelper Constraint
+    storeFact $ handle `typeUnion` AppType (VarType class') (VarType . getTypeHandle <$> params')
+    return (handle, ParaName name' params')
 
 instance Preprocess Import a b where
   preprocessImpl import'@Import {} = do
@@ -341,18 +371,11 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
 -- TODO: consult conventions with the man
 instance Preprocess Procedure a b where
   preprocessImpl procedure@(Procedure header body) = do
-    (vars, _, tCons, tVars) <- localVariables procedure
+    (vars, _, _, tCons, tVars, _, _) <- localVariables procedure
     beginProc vars tCons tVars
     body' <- preprocess body
     header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
     return (NoType, Procedure header' body')
-
-instance Preprocess ProcedureDecl a b where
-  preprocessImpl procedure@(ProcedureDecl header) = do
-    (vars, _, tCons, tVars) <- localVariables procedure
-    beginProc vars tCons tVars
-    header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
-    return (NoType, ProcedureDecl header')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do

@@ -24,10 +24,6 @@ import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 import safe CMM.Data.Orderable (Orderable(..))
 import safe CMM.Parser.HasPos (SourcePos)
 
-newtype ClassHandle =
-  ClassHandle Text
-  deriving (Show, Eq, Ord, Data)
-
 -- | DataKind specifies the semantics and register allocability of the types that map onto it via kinding
 data DataKind
   = GenericData -- | The most generic data kind
@@ -304,7 +300,8 @@ data Fact
   | SubKind TypeVar TypeVar -- superKind; subKind
   | SubConst TypeVar TypeVar -- superConst; subConst
   | InstType TypeVar TypeVar -- polytype; monotype
-  | ClassConstraint ClassHandle [TypeVar]
+  | ClassConstraint Text TypeVar
+  | ClassFact Text TypeVar
   | NestedFact (Scheme Fact)
   deriving (Show, Eq, Ord, Data, IsTyped)
 
@@ -386,5 +383,9 @@ registerConstraint :: Text -> TypeVar -> Fact
 registerConstraint = OnRegister
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
-classConstraint :: ClassHandle -> [TypeVar] -> Fact
+classConstraint :: Text -> TypeVar -> Fact
 classConstraint = ClassConstraint
+
+-- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
+classFact :: Text -> TypeVar -> Fact
+classFact = ClassFact

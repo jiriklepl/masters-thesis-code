@@ -240,7 +240,14 @@ reduceOne fact =
     OnRegister reg t ->
       registerKind reg >>= reduceOne . (`KindLimit` t) . (`Bounds` maxBound) .
       makeOrdered
-    ClassConstraint {} -> return (False, [fact]) -- undefined
+    ClassFact name handle -> do
+      addClassFact name handle
+      return (True, [])
+    ClassConstraint  name handle -> do
+      classFacts' <- use classFacts
+      case name `Map.lookup` classFacts' of
+        Nothing -> return (False, [fact])
+        Just handles -> undefined
     NestedFact (tVars :. fs :=> tVar `TypeUnion` t) -> do
       let scheme = tVars :. fs :=> t
       (fs', t') <- freshInst scheme

@@ -666,7 +666,15 @@ negExpr :: SourceParser Expr
 negExpr =
   withSourcePos (symbol L.Minus *> (NegExpr <$> negExpr)) <|>
   withSourcePos (symbol L.Tilde *> (ComExpr <$> negExpr)) <|>
-  simpleExpr
+  memberExpr
+
+memberExpr :: SourceParser Expr
+memberExpr = do
+  expr' <- simpleExpr
+  choice
+    [ symbol L.Arr *> withSourcePos (MemberExpr expr' <$> withSourcePos identifier)
+    , return expr'
+    ]
 
 prefixExpr :: SourceParser Expr
 prefixExpr =

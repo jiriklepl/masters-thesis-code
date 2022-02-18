@@ -30,9 +30,11 @@ data CollectedVariables =
   CollectedVariables
     { _variables :: Map Text (SourcePos, TypeKind)
     , _funcVariables :: Map Text (SourcePos, TypeKind)
-    , _typeVariables :: Map Text (SourcePos, TypeKind)
+    , _funcInstVariables :: Map Text (SourcePos, TypeKind)
     , _typeConstants :: Map Text (SourcePos, TypeKind)
+    , _typeVariables :: Map Text (SourcePos, TypeKind)
     , _typeClasses :: Map Text (SourcePos, TypeKind, Set Text {- method decls -})
+    , _structMembers :: Map Text (SourcePos, TypeKind)
     , _errors :: Int
     , _warnings :: Int
     }
@@ -42,9 +44,11 @@ initCollectedVariables =
   CollectedVariables
     { _variables = mempty
     , _funcVariables = mempty
-    , _typeVariables = mempty
+    , _funcInstVariables = mempty
     , _typeConstants = mempty
+    , _typeVariables = mempty
     , _typeClasses = mempty
+    , _structMembers = mempty
     , _errors = 0
     , _warnings = 0
     }
@@ -135,3 +139,57 @@ addFVarTrivial ::
   -> TypeKind
   -> m n
 addFVarTrivial n tKind = n <$ addFVar n (getName n) tKind
+
+addFIVar ::
+     (HasPos n, Pretty n, MonadCollectVariables m)
+  => n
+  -> Text
+  -> TypeKind
+  -> m ()
+addFIVar node var tKind = do
+  uses funcInstVariables (var `Map.member`) >>= \case
+    True -> registerError node "Duplicate function variable"
+    False -> funcInstVariables %= Map.insert var (getPos node, tKind)
+
+addFIVarTrivial ::
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+  => n
+  -> TypeKind
+  -> m n
+addFIVarTrivial n tKind = n <$ addFVar n (getName n) tKind
+
+addTClass ::
+     (HasPos n, Pretty n, MonadCollectVariables m)
+  => n
+  -> Text
+  -> TypeKind
+  -> Set Text
+  -> m ()
+addTClass node tVar tKind methods = do
+    uses typeClasses (tVar `Map.member`) >>= flip unless
+      (typeClasses %= Map.insert tVar (getPos node, tKind, methods))
+
+addTClassTrivial ::
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+  => n
+  -> TypeKind
+  -> Set Text
+  -> m n
+addTClassTrivial n tKind methods = n <$ addTClass n (getName n) tKind methods
+
+addSMem ::
+     (HasPos n, Pretty n, MonadCollectVariables m)
+  => n
+  -> Text
+  -> TypeKind
+  -> m ()
+addSMem node tVar tKind = do
+    uses structMembers (tVar `Map.member`) >>= flip unless
+      (structMembers %= Map.insert tVar (getPos node, tKind))
+
+addSMemTrivial ::
+     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+  => n
+  -> TypeKind
+  -> m n
+addSMemTrivial n tKind = n <$ addSMem n (getName n) tKind

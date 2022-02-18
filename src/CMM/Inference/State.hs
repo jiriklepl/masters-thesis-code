@@ -6,12 +6,14 @@
 module CMM.Inference.State where
 
 import safe Control.Lens.Getter (use)
-import safe Control.Lens.Setter ((+=))
+import safe Control.Lens.Setter ((+=), (%=))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Function ((&))
 import safe Data.Map (Map)
+import safe qualified Data.Map as Map
 import safe Data.Set (Set)
+import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.Data.Bounds
@@ -49,6 +51,9 @@ data Inferencer =
     _errors :: [UnificationError]
     ,
     -- | TODO
+    _classFacts :: Map Text (Set TypeVar)
+    ,
+    -- | TODO
     _facts :: Facts
     ,
     -- | TODO
@@ -72,6 +77,7 @@ initInferencer handleCounter =
     , _unifying = mempty
     , _subConsting = mempty
     , _handleCounter = handleCounter
+    , _classFacts = mempty
     , _facts = mempty
     , _assumps = mempty
     , _errors = mempty
@@ -102,3 +108,6 @@ freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHelper tKind = do
   handleCounter += 1
   (NoTVarAnnot &) . (tKind &) . TypeVar <$> use handleCounter
+
+addClassFact :: MonadInferencer m => Text -> TypeVar  -> m ()
+addClassFact name handle = classFacts %= Map.insertWith Set.union name (Set.singleton handle)
