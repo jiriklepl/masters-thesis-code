@@ -51,7 +51,10 @@ data Inferencer =
     _errors :: [UnificationError]
     ,
     -- | TODO
-    _classFacts :: Map Text (Set TypeVar)
+    _classSchemes :: Map Text (Scheme TypeVar)
+    ,
+    -- | TODO
+    _instanceSchemes :: Map Text (Set (Scheme TypeVar))
     ,
     -- | TODO
     _facts :: Facts
@@ -77,7 +80,8 @@ initInferencer handleCounter =
     , _unifying = mempty
     , _subConsting = mempty
     , _handleCounter = handleCounter
-    , _classFacts = mempty
+    , _classSchemes = mempty
+    , _instanceSchemes = mempty
     , _facts = mempty
     , _assumps = mempty
     , _errors = mempty
@@ -87,7 +91,7 @@ initInferencer handleCounter =
 
 data UnificationError
   = Occurs TypeVar Type
-  | Mismatch Type Type
+  | Mismatch Text Type Type
   | NoSubType Type Type -- supertype; subtype
   | NoConstness Constness Type
   | NoKind Text Type
@@ -109,5 +113,5 @@ freshTypeHelper tKind = do
   handleCounter += 1
   (NoTVarAnnot &) . (tKind &) . TypeVar <$> use handleCounter
 
-addClassFact :: MonadInferencer m => Text -> TypeVar  -> m ()
-addClassFact name handle = classFacts %= Map.insertWith Set.union name (Set.singleton handle)
+-- addClassFact :: MonadInferencer m => Text -> TypeVar  -> m ()
+-- addClassFact name handle = classFacts %= Map.insertWith Set.union name (Set.singleton handle)

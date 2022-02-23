@@ -191,22 +191,28 @@ instance Nullable TVarAnnot where
 
 data TypeVar
   = NoType
-  | TypeVar Int TypeKind TVarAnnot -- TODO: reduce repetition
+  | TypeVar Int TypeKind TVarAnnot
   | TypeLam Int TypeKind TVarAnnot
-  | TypeConst Text TypeKind TVarAnnot
+  | TypeConst Int TypeKind TVarAnnot
   deriving (Show, Data, IsTyped)
+
+typeVarId :: TypeVar -> Int
+typeVarId NoType = undefined
+typeVarId (TypeVar int _ _) = int
+typeVarId (TypeLam int _ _) = int
+typeVarId (TypeConst int _ _) = int
 
 instance Eq TypeVar where
   TypeVar int _ _ == TypeVar int' _ _ = int == int'
   TypeLam int _ _ == TypeLam int' _ _ = int == int'
-  TypeConst name _ _ == TypeConst name' _ _ = name == name'
+  TypeConst int _ _ == TypeConst int' _ _ = int == int'
   _ == _ = False
 
 instance Ord TypeVar where
   NoType `compare` NoType = EQ
   TypeVar int _ _ `compare` TypeVar int' _ _ = int `compare` int'
   TypeLam int _ _ `compare` TypeLam int' _ _ = int `compare` int'
-  TypeConst name _ _ `compare` TypeConst name' _ _ = name `compare` name'
+  TypeConst int _ _ `compare` TypeConst int' _ _ = int `compare` int'
   NoType `compare` _ = LT
   _ `compare` TypeConst {} = LT
   _ `compare` NoType = GT
@@ -293,6 +299,8 @@ newtype Inst =
 data Fact
   = SubType TypeVar TypeVar -- supertype; subtype
   | TypeUnion TypeVar Type -- binds the type variable to a type
+  | ClassUnion TypeVar Type -- binds the type variable to a type
+  | InstanceUnion TypeVar Type -- binds the type variable to a type
   | Typing TypeVar Type -- states that the type variable follows a certain typing
   | KindLimit (Bounds OrdDataKind Lattice) TypeVar -- lower bound on the kind of the type variable
   | ConstnessLimit (Bounds Constness Ord) TypeVar -- lower bound on the constness of the type variable
@@ -306,8 +314,6 @@ data Fact
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 type Facts = [Fact]
-
-deriving instance IsTyped Fact => IsTyped Facts
 
 class HasTypeKind a where
   getTypeKind :: a -> TypeKind
@@ -327,6 +333,8 @@ class Data a =>
       leaf tVar@TypeVar {} = Set.singleton tVar
       leaf _ = mempty
 
+deriving instance IsTyped a => IsTyped [a]
+
 -- | Transforms the two given `Type`s into a function `Type`
 makeFunction :: Type -> Type -> Type
 makeFunction = FunctionType
@@ -337,14 +345,22 @@ makeTuple [] = VoidType
 makeTuple [t] = t
 makeTuple ts = TupleType ts
 
-forall :: Set TypeVar -> Facts -> TypeVar -> Type -> Fact
-forall s fs tVar t
-  | null s = NestedFact $ mempty :. fs :=> tVar `typeUnion` t -- the trivial case
-forall s fs tVar t = NestedFact $ s :. fs :=> tVar `typeUnion` t
+forall :: Set TypeVar -> Facts -> Fact -> Fact
+forall s fs f
+  | null s = NestedFact $ mempty :. fs :=> f -- the trivial case
+forall s fs f = NestedFact $ s :. fs :=> f
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
 typeUnion :: TypeVar -> Type -> Fact
 typeUnion = TypeUnion
+
+-- | States that the given `TypeVar` type variable is unified with the given `Type`
+classUnion :: TypeVar -> Type -> Fact
+classUnion = ClassUnion
+
+-- | States that the given `TypeVar` type variable is unified with the given `Type`
+instanceUnion :: TypeVar -> Type -> Fact
+instanceUnion = InstanceUnion
 
 -- | States that the given `TypeVar` type variable follows the typing dictated by the `Type` (note that this does not imply type unification nor any subtyping)
 typeConstraint :: TypeVar -> Type -> Fact

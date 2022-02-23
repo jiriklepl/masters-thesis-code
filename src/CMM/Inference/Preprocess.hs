@@ -46,7 +46,7 @@ import safe CMM.AST as AST
   , StrLit(..)
   , Targets
   , Type(..)
-  , Unit(..), ParaType (..), ProcedureHeader (..), Name, Class (Class), Instance (Instance), ParaName (ParaName)
+  , Unit(..), ParaType (..), ProcedureHeader (..), Name, Class (Class), Instance (Instance), ParaName (ParaName), ProcedureDecl (ProcedureDecl)
   )
 import safe CMM.AST.Annot as AST (Annot, Annotation(Annot), withAnnot, unAnnot, takeAnnot)
 import safe CMM.AST.HasName as AST (HasName(getName))
@@ -76,7 +76,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFact
   , storeProc
   , storeTCon
-  , storeVar, lookupTVar, pushClass, pullContext, pushInstance, lookupClass, pushTypeVariables, pullTypeVariables
+  , storeVar, lookupTVar, pushClass, pullContext, pushInstance, lookupClass, pushTypeVariables, pullTypeVariables, pushFacts
   )
 import safe CMM.Inference.Type as Infer
   ( Fact(SubConst, SubKind, SubType, Typing)
@@ -254,6 +254,7 @@ instance Preprocess Instance a b where
   preprocessImpl instance'@(Instance paraNames paraName methods) = do
     (_, _, _, _, tVars, _, _) <- instanceVariables instance'
     pushTypeVariables tVars
+    pushFacts
     paraNames' <- preprocessT paraNames
     paraName' <- preprocess paraName
     pushInstance (nameAndHandle paraName') (nameAndHandle <$> paraNames')
@@ -376,6 +377,14 @@ instance Preprocess Procedure a b where
     body' <- preprocess body
     header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
     return (NoType, Procedure header' body')
+
+
+instance Preprocess ProcedureDecl a b where
+  preprocessImpl procedure@(ProcedureDecl header) = do
+    (vars, _, _, tCons, tVars, _, _) <- localVariables procedure
+    beginProc vars tCons tVars
+    header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
+    return (NoType, ProcedureDecl header')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do

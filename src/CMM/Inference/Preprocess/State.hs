@@ -20,6 +20,7 @@ import safe Data.Function ((&))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
+import safe qualified Data.Set as Set
 import safe Data.Maybe (fromMaybe)
 import safe Data.Text (Text)
 
@@ -171,7 +172,7 @@ beginProc vars tCons tVars = do
   typeConstants %= (tCons' :)
   tVars' <- declVars tVars
   typeVariables %= reverse . (tVars' :) . reverse
-  facts %= ([] :)
+  pushFacts
   currentReturn <~ freshTypeHelper Star
 
 declVars ::
@@ -192,26 +193,33 @@ endProc = do
 
 storeProc :: MonadInferPreprocessor m => Text -> Facts -> Type -> m ()
 storeProc name fs t = do
+  tVars <- collectTVars
   uses currentContext head >>= \case
     GlobalCtx -> do
       handle <- lookupFVar name
-      storeFact $ forall (freeTypeVars fs <> freeTypeVars t) fs handle t
-    ClassCtx classHandle' superHandles -> do
+      storeFact $ forall tVars fs (handle `typeUnion` t)
+    ClassCtx classHandle' _ -> do
       handle <- lookupFVar name
       iHandle <- lookupFIVar name
       iHandle' <- freshTypeHelper Star
       let fICall = iHandle `InstType` iHandle'
       let fIFact = iHandle' `typeUnion` makeFunction (VarType $ snd classHandle') t
-      let fs' = fICall : fIFact : (uncurry ClassConstraint <$> (classHandle' : superHandles)) <> fs
-      storeFact $ forall (freeTypeVars fs' <> freeTypeVars t) fs' handle t
+      let fs' = fICall : fIFact : uncurry ClassConstraint classHandle' : fs
+      storeFact $ forall tVars fs' (handle `classUnion` t)
     InstanceCtx classHandle' superHandles -> do
       handle <- lookupFIVar name
       let t' = makeFunction (VarType $ snd classHandle') t
-      let fs' = (uncurry ClassConstraint <$> (classHandle' : superHandles)) <> fs
-      storeFact $ forall (freeTypeVars fs' <> freeTypeVars t') fs' handle t'
+      let fs' = {- TODO: maybe there has to be: (uncurry ClassConstraint <$> superHandles) <> -} fs
+      let fs'' = (uncurry ClassFact <$> superHandles) <> fs
+      storeFact $ forall tVars fs' (handle `classUnion` t')
+      storeFact $ forall tVars fs'' (handle `instanceUnion` t')
 
 getCurrentReturn :: MonadInferPreprocessor m => m TypeVar
 getCurrentReturn = use currentReturn
+
+pushFacts :: MonadInferPreprocessor m => m ()
+pushFacts = do
+  facts %= ([] :)
 
 pushTypeVariables :: MonadInferPreprocessor m => Map Text (SourcePos, TypeKind) -> m ()
 pushTypeVariables tVars = do
@@ -222,12 +230,17 @@ pullTypeVariables :: MonadInferPreprocessor m => m ()
 pullTypeVariables = do
   typeVariables %= init
 
+collectTVars :: MonadInferPreprocessor m => m (Set TypeVar)
+collectTVars = uses typeVariables (Set.fromList . Map.elems . Map.unions)
+
 pushClass ::
      MonadInferPreprocessor m
   => (Text, TypeVar)
   -> [(Text, TypeVar)]
   -> m ()
-pushClass handle supHandles = do
+pushClass handle supHandles = do -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
+  tVars <- collectTVars
+  storeFact $ forall tVars (uncurry ClassConstraint <$> supHandles) (uncurry ClassFact handle)
   currentContext %= (ClassCtx handle supHandles :)
 
 pushInstance ::
@@ -235,8 +248,11 @@ pushInstance ::
   => (Text, TypeVar)
   -> [(Text, TypeVar)]
   -> m ()
-pushInstance handle supHandles = do
-  storeFact $ uncurry classFact handle
+pushInstance handle supHandles = do -- TODO: solve type variables not in scope in superclasses
+  ~(fs:facts') <- use facts
+  facts .= facts'
+  tVars <- collectTVars
+  storeFact $ forall tVars ((uncurry ClassFact <$> supHandles) <> fs) (uncurry ClassConstraint handle)
   currentContext %= (InstanceCtx handle supHandles :)
 
 pullContext :: MonadInferPreprocessor m => m ()
