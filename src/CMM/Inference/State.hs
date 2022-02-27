@@ -9,18 +9,13 @@ import safe Control.Lens.Getter (use)
 import safe Control.Lens.Setter ((+=), (%=))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
-import safe Data.Function ((&))
 import safe Data.Map (Map)
-import safe qualified Data.Map as Map
 import safe Data.Bimap (Bimap)
 import safe qualified Data.Bimap as Bimap
 import safe Data.Set (Set)
-import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.Data.Bounds
-import safe CMM.Data.Lattice
-import safe CMM.Inference.BuiltIn
 import safe CMM.Inference.Type
 import safe CMM.Inference.TypeHandle
 
@@ -63,9 +58,6 @@ data Inferencer =
     _instanceSchemes :: Map Text (Set (Scheme TypeVar))
     ,
     -- | TODO
-    _facts :: Facts
-    ,
-    -- | TODO
     _schemes :: Map TypeVar (Set (Scheme Type))
     }
   deriving (Show)
@@ -83,7 +75,6 @@ initInferencer handleCounter =
     , _handleCounter = handleCounter
     , _classSchemes = mempty
     , _instanceSchemes = mempty
-    , _facts = mempty
     , _errors = mempty
     , _schemes = mempty
     }

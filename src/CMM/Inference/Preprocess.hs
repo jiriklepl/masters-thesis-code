@@ -66,7 +66,6 @@ import safe CMM.Inference.Preprocess.State as Infer
   , beginProc
   , beginUnit
   , endProc
-  , freshTypeHandle
   , freshTypeHelper
   , getCurrentReturn
   , lookupFVar
@@ -76,28 +75,29 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFact
   , storeProc
   , storeTCon
-  , storeVar, lookupTVar, pushClass, pullContext, pushInstance, lookupClass, pushTypeVariables, pullTypeVariables, pushFacts, freshASTTypeHandle, getTypeHandleId
+  , storeVar, lookupTVar, pushClass, pullContext, pushInstance, lookupClass, pushTypeVariables, pullTypeVariables, pushFacts, freshASTTypeHandle, getTypeHandleId, lookupFIVar
   )
 import safe CMM.Inference.Type as Infer
-  ( Fact(SubConst, SubKind, SubType, Typing)
-  , Type(VarType, ComplType)
-  , TypeKind(Star, GenericType, Constraint)
+  ( TypeKind(Star, GenericType, Constraint)
   , TypeVar(NoType)
   , constExprConstraint
   , instType
   , linkExprConstraint
   , makeFunction
   , makeTuple
-  , minKindConstraint
+  , maxKindConstraint
+  , unstorableConstraint
   , registerConstraint
   , regularExprConstraint
   , subType
   , typeConstraint
-  , typeUnion, TypeCompl (AppType, AddrType, TBitsType, BoolType, LabelType, StringType, String16Type), ToType (toType), subKind, subConst
+  , typeUnion, TypeCompl (AppType, AddrType, TBitsType, BoolType, LabelType, StringType, String16Type), ToType (toType), subConst, Type (VarType, ComplType), minKindConstraint
   )
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Inference.TypeHandle
 import Data.Functor ((<&>))
+import qualified Data.Map as Map
+import safe Control.Monad ( (>=>))
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -184,6 +184,15 @@ instance Preprocess Unit a b where
   preprocessImpl unit@(Unit topLevels) = do
     (vars, fVars, fIVars, tCons, _, tClasses, sMems) <- globalVariables unit
     beginUnit vars fVars fIVars tCons tClasses sMems
+
+    let
+      storeFacts var = do
+        storeFact $ constExprConstraint var
+        storeFact $ maxKindConstraint addressKind var
+        storeFact $ minKindConstraint addressKind var -- TODO: think this through
+
+    for_ (Map.keys fIVars) $ lookupFIVar >=> storeFacts . handleId
+    for_ (Map.keys fVars) $ lookupFVar >=> storeFacts . handleId
 
     (emptyTypeHandle, ) . Unit <$> preprocessT topLevels
 
@@ -334,7 +343,7 @@ instance Preprocess Registers a b where
         setType handle = do
           storeFact $ typeType `subType` handle
           for_ mKind $
-            storeFact . (`minKindConstraint` handle) . getDataKind . getName
+            storeFact . (`maxKindConstraint` handle) . getDataKind . getName
         go name mStrLit = do
           handle <- lookupVar (getName name)
           setType $ handleId handle
@@ -396,7 +405,7 @@ instance Preprocess Formal a b where
     type'' <- preprocess type'
     storeFact $ getTypeHandleId type'' `subType` handleId handle
     for_ mKind $
-      storeFact . (`minKindConstraint` handleId handle) . getDataKind . getName
+      storeFact . (`maxKindConstraint` handleId handle) . getDataKind . getName
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
 instance Preprocess Stmt a b where
@@ -462,12 +471,13 @@ instance Preprocess Stmt a b where
         let retType = makeTuple (VarType . handleId . getTypeHandle <$> actuals')
         handle <- handleId <$> freshTypeHelper Star
         storeFact $ handle `typeUnion` retType
+        storeFact $ unstorableConstraint retType
         getCurrentReturn >>= storeFact . (`subType` handle) . handleId
         return (emptyTypeHandle, ReturnStmt mConv Nothing actuals')
       ReturnStmt {} -> undefined
       label@LabelStmt {} -> do
         handle <- lookupVar (getName label)
-        storeFact $ addressKind `minKindConstraint` handleId handle -- TODO: maybe add the constexpr constraint
+        storeFact $ addressKind `maxKindConstraint` handleId handle -- TODO: maybe add the constexpr constraint
         storeFact $ handleId handle `typeConstraint` ComplType LabelType
         purePreprocess handle label
       ContStmt {} -> undefined
@@ -475,7 +485,7 @@ instance Preprocess Stmt a b where
        -> do
         expr' <- preprocess expr
         let exprType = handleId $ getTypeHandle expr'
-        storeFact $ addressKind `minKindConstraint` exprType
+        storeFact $ addressKind `maxKindConstraint` exprType
         storeFact $ exprType `typeConstraint` ComplType LabelType
         (emptyTypeHandle, ) . GotoStmt expr' <$> preprocessT mTargets
       CutToStmt {} -> undefined
@@ -485,7 +495,7 @@ instance Preprocess KindName a b where
   preprocessImpl (KindName mKind name) = do
     handle <- freshTypeHelper Star
     traverse_
-      (storeFact . (`minKindConstraint` handleId handle) . getDataKind . getName)
+      (storeFact . (`maxKindConstraint` handleId handle) . getDataKind . getName)
       mKind
     return (handle, KindName mKind (preprocessTrivial name))
 
@@ -499,9 +509,9 @@ instance Preprocess Lit a b where
   preprocessImpl lit = do
     handle <- freshTypeHelper Star
     case lit of
-      LitInt {} -> storeFact $ integerKind `minKindConstraint` handleId handle
-      LitFloat {} -> storeFact $ floatKind `minKindConstraint` handleId handle
-      LitChar {} -> storeFact $ integerKind `minKindConstraint` handleId handle -- TODO: check this one? but probably correctus
+      LitInt {} -> storeFact $ integerKind `maxKindConstraint` handleId handle
+      LitFloat {} -> storeFact $ floatKind `maxKindConstraint` handleId handle
+      LitChar {} -> storeFact $ integerKind `maxKindConstraint` handleId handle -- TODO: check this one? but probably correctus
     storeFact $ constExprConstraint $ handleId handle
     purePreprocess handle lit
 
@@ -510,7 +520,7 @@ instance Preprocess Actual a b where
     expr' <- preprocess expr
     let exprType = getTypeHandle expr'
     for_ mKind $ \kind ->
-      storeFact $ (getDataKind . getName) kind `minKindConstraint` handleId exprType
+      storeFact $ (getDataKind . getName) kind `maxKindConstraint` handleId exprType
     return (exprType, Actual mKind expr')
 
 instance Preprocess Init a b where
@@ -536,7 +546,7 @@ instance Preprocess Datum a b where
     \case
       datum@(DatumLabel name) -> do
         handle <- lookupVar (getName name)
-        storeFact $ addressKind `minKindConstraint` handleId handle
+        storeFact $ addressKind `maxKindConstraint` handleId handle
         storeFact $ handleId handle `typeConstraint` toType (AddrType $ VarType NoType)
         purePreprocess handle datum
       datum@(DatumAlign _) -> do
@@ -552,7 +562,7 @@ instance Preprocess Datum a b where
             let initType = handleId $ getTypeHandle init'
             storeFact $ typeType `subType`  initType
             storeFact $ linkExprConstraint initType
-            storeFact $ addressKind `minKindConstraint` handleId handle
+            storeFact $ addressKind `maxKindConstraint` handleId handle
             storeFact $ handleId handle `typeConstraint` AddrType (VarType typeType)
             return init'
         return (handle, Datum type'' mSize' mInit')
@@ -582,7 +592,7 @@ instance Preprocess LValue a b where
         type'' <- preprocess type'
         expr' <- preprocess expr
         let mAsserts' = (withTypeHandle emptyTypeHandle <$>) <$> mAsserts
-        storeFact $ addressKind `minKindConstraint` getTypeHandleId expr'
+        storeFact $ addressKind `maxKindConstraint` getTypeHandleId expr'
         return (getTypeHandle type'', LVRef type'' expr' mAsserts')
 
 instance Preprocess Expr a b where
@@ -599,6 +609,7 @@ instance Preprocess Expr a b where
         right' <- preprocess right
         let rightType = handleId $ getTypeHandle right'
         storeFact $ handleId operator `typeUnion` makeFunction [leftType, rightType] (handleId handle)
+        storeFact $ addressKind `maxKindConstraint` handleId operator
         if op `elem` [EqOp, NeqOp, GtOp, LtOp, GeOp, LeOp]
           then do
             storeFact $ leftType `typeConstraint` rightType
@@ -625,19 +636,20 @@ instance Preprocess Expr a b where
         return (litType, LitExpr lit' mType')
       PrefixExpr name actuals -> do -- TODO: fix this
         handle <- freshTypeHelper Star
-        tupleType <- freshTypeHelper Star
+        tupleType <- handleId <$> freshTypeHelper Star
         argType <- freshTypeHelper Star
         retType <- freshTypeHelper Star
         fType <- freshTypeHelper Star
         opScheme <- freshTypeHelper Star
         actuals' <- preprocessT actuals
         storeFact $
-          handleId tupleType `typeUnion` makeTuple (handleId . getTypeHandle <$> actuals')
+          tupleType `typeUnion` makeTuple (handleId . getTypeHandle <$> actuals')
+        storeFact $ unstorableConstraint tupleType
         storeFact $
           handleId fType `typeUnion` makeFunction [handleId argType] (handleId retType)
         storeFact $ handleId opScheme `typeUnion` getNamedOperator (getName name)
         storeFact $ handleId opScheme `instType` handleId fType
-        storeFact $ handleId argType `subType` handleId tupleType
+        storeFact $ handleId argType `subType` tupleType
         storeFact $ handleId handle `subType` handleId retType
         return (handle, PrefixExpr (preprocessTrivial name) actuals')
       InfixExpr name left right -> do

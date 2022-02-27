@@ -12,11 +12,10 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.AST as AST (Op)
-import safe CMM.Data.Orderable
+import safe CMM.Data.Ordered
 import safe CMM.Inference.Type as Infer
-  ( DataKind(DataKind, FalseData, GenericData)
+  ( DataKind(DataKind, Unstorable, GenericData)
   , Facts
-  , OrdDataKind
   , Type
   )
 
@@ -26,11 +25,11 @@ getNamedOperator = undefined
 getSymbolicOperator :: Op -> Infer.Type
 getSymbolicOperator = undefined
 
-builtInKinds :: Bimap Text OrdDataKind
+builtInKinds :: Bimap Text (Ordered DataKind)
 builtInKinds =
   Bimap.fromList $
-  (_2 %~ makeOrdered) <$>
-  [ ("!false", FalseData)
+  (_2 %~ Ordered) <$>
+  [ ("!false", Unstorable)
   , ("!generic", GenericData)
   , ("address", addressKind)
   , ("float", floatKind)
@@ -40,13 +39,13 @@ builtInKinds =
 getDataKind :: Text -> DataKind
 getDataKind name =
   if name `Bimap.member` builtInKinds
-    then unmakeOrdered $ builtInKinds Bimap.! name
+    then unOrdered $ builtInKinds Bimap.! name
     else mempty
 
 translateDataKind :: DataKind -> Maybe Text
 translateDataKind name =
-  if makeOrdered name `Bimap.memberR` builtInKinds
-    then Just $ builtInKinds Bimap.!> makeOrdered name
+  if Ordered name `Bimap.memberR` builtInKinds
+    then Just $ builtInKinds Bimap.!> Ordered name
     else Nothing
 
 builtInRegisters :: Bimap Text Int

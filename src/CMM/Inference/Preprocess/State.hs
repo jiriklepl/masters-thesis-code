@@ -204,22 +204,22 @@ storeProc name fs x = do
   uses currentContext head >>= \case
     GlobalCtx -> do
       handle <- lookupFVar name
-      storeFact $ forall tVars fs (handleId handle `typeUnion` t)
+      storeFact $ forall tVars [handleId handle `typeUnion` t] fs
     ClassCtx classHandle' _ -> do
       handle <- lookupFVar name
       iHandle <- lookupFIVar name
       iHandle' <- freshTypeHelper Star
       let fICall = handleId iHandle `instType` handleId iHandle'
       let fIFact = handleId iHandle' `typeUnion` makeFunction [VarType . handleId $ snd classHandle'] t
-      let fs' = fICall : fIFact : uncurry classConstraint (classHandle' & _2 %~ handleId) : fs
-      storeFact $ forall tVars fs' (handleId handle `classUnion` t)
+      let fs' = Fact fICall : Fact fIFact : (Fact . uncurry classConstraint $ classHandle' & _2 %~ handleId) : fs
+      storeFact $ forall tVars [handleId handle `classUnion` t] fs'
     InstanceCtx classHandle' superHandles -> do
       handle <- lookupFIVar name
       let t' = makeFunction [VarType . handleId $ snd classHandle'] t
       let fs' = {- TODO: maybe there has to be: (uncurry ClassConstraint <$> superHandles) <> -} fs
-      let fs'' = (uncurry classFact . (_2 %~ handleId) <$> superHandles) <> fs
-      storeFact $ forall tVars fs' (handleId handle `classUnion` t')
-      storeFact $ forall tVars fs'' (handleId handle `instanceUnion` t')
+      let fs'' = (Fact . uncurry classFact . (_2 %~ handleId) <$> superHandles) <> fs
+      storeFact $ forall tVars [handleId handle `classUnion` t'] fs'
+      storeFact $ forall tVars [handleId handle `instanceUnion` t'] fs''
 
 getCurrentReturn :: MonadInferPreprocessor m => m TypeHandle
 getCurrentReturn = use currentReturn
@@ -247,7 +247,7 @@ pushClass ::
   -> m ()
 pushClass handle supHandles = do -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
   tVars <- collectTVars
-  storeFact $ forall tVars (uncurry classConstraint . (_2 %~ handleId) <$> supHandles) (uncurry classFact $ handle & _2 %~ handleId)
+  storeFact $ forall tVars  [uncurry classFact $ handle & _2 %~ handleId] (Fact . uncurry classConstraint . (_2 %~ handleId) <$> supHandles)
   currentContext %= (ClassCtx handle supHandles :)
 
 pushInstance ::
@@ -259,7 +259,7 @@ pushInstance handle supHandles = do -- TODO: solve type variables not in scope i
   ~(fs:facts') <- use facts
   facts .= facts'
   tVars <- collectTVars
-  storeFact $ forall tVars ((uncurry classFact . (_2 %~ handleId) <$> supHandles) <> fs) (uncurry classConstraint $ handle & _2 %~ handleId)
+  storeFact $ forall tVars [uncurry classConstraint $ handle & _2 %~ handleId] ((Fact . uncurry classFact . (_2 %~ handleId) <$> supHandles) <> fs)
   currentContext %= (InstanceCtx handle supHandles :)
 
 pullContext :: MonadInferPreprocessor m => m ()
@@ -284,10 +284,18 @@ storeVarImpl name handle vars =
   storeFact $ handleId (lookupVarImpl name vars) `typeUnion` handle
 
 -- | Stores the given `fact` to the state monad
-storeFact :: MonadInferPreprocessor m => Fact -> m ()
-storeFact fact = do
-  ~(h:t) <- use facts
-  facts .= (fact : h) : t
+class StoreFact a where
+  storeFact :: MonadInferPreprocessor m => a -> m ()
+
+instance StoreFact (FlatFact Type) where
+  storeFact fact = do
+    ~(h:t) <- use facts
+    facts .= (Fact fact : h) : t
+
+instance StoreFact Fact where
+  storeFact fact = do
+    ~(h:t) <- use facts
+    facts .= (fact : h) : t
 
 -- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
 freshASTTypeHandle ::

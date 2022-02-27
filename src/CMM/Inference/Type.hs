@@ -6,6 +6,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module CMM.Inference.Type where
 
@@ -21,91 +23,76 @@ import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Dioid (Dioid((<.>), mfull))
 import safe CMM.Data.Lattice (Lattice(..))
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
-import safe CMM.Data.Orderable (Orderable(..))
+import safe CMM.Data.Ordered (Ordered(..))
 import safe CMM.Parser.HasPos (SourcePos)
+import safe Data.PartialOrd (PartialOrd)
+import safe qualified Data.PartialOrd as PartialOrd
 
 -- | DataKind specifies the semantics and register allocability of the types that map onto it via kinding
 data DataKind
   = GenericData -- | The most generic data kind
   | DataKind (Set Int) -- | The regular case for data kinds
-  | RegisterKind Int -- | The kind that denotes a singleton set of registers
-  | FalseData -- | The empty data kind
+  | Unstorable -- | The empty data kind
   deriving (Show, Eq, Data)
 
-instance Orderable DataKind OrdDataKind where
-  makeOrdered = OrdDataKind
-  unmakeOrdered = getDataKind
+instance PartialOrd DataKind where
+  _ <= GenericData = True
+  GenericData <= _ = False
+  Unstorable <= _ = True
+  _ <= Unstorable = False
+  DataKind rs <= DataKind rs' = rs PartialOrd.<= rs'
 
 instance Fallbackable DataKind where
-  FalseData ?? a = a
+  Unstorable ?? a = a
   a ?? _ = a
 
 instance Nullable DataKind where
-  nullVal = FalseData
+  nullVal = Unstorable
 
 instance Bounded DataKind where
-  minBound = GenericData
-  maxBound = FalseData
+  minBound = Unstorable
+  maxBound = GenericData
 
 -- | Transforms the given `Set` of `Int`s denoting physical registers into a corresponding `DataKind`
 makeDataKind :: Set Int -> DataKind
 makeDataKind set
-  | null set = FalseData
-  | Set.size set > 1 = DataKind set
-  | otherwise = RegisterKind $ Set.findMin set
+  | null set = Unstorable
+  | otherwise = DataKind set
 
-instance {-# OVERLAPPING #-} Lattice DataKind where
+instance Lattice DataKind where
   GenericData /\ a = a
-  FalseData /\ _ = FalseData
+  Unstorable /\ _ = Unstorable
   DataKind rs /\ DataKind rs' = makeDataKind $ rs `Set.intersection` rs'
-  DataKind rs /\ b@(RegisterKind r)
-    | r `Set.member` rs = b
-    | otherwise = FalseData
-  a@(RegisterKind r) /\ RegisterKind r'
-    | r == r' = a
-    | otherwise = FalseData
   a /\ b = b /\ a
+
   GenericData \/ _ = GenericData
-  FalseData \/ a = a
+  Unstorable \/ a = a
   DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
-  DataKind rs \/ RegisterKind r = DataKind $ r `Set.insert` rs
-  RegisterKind r \/ RegisterKind r' =
-    makeDataKind $ Set.singleton r `Set.union` Set.singleton r'
   a \/ b = b \/ a
 
 instance Semigroup DataKind where
   (<>) = (\/)
 
 instance Monoid DataKind where
-  mempty = FalseData
+  mempty = Unstorable
 
 instance Dioid DataKind where
   (<.>) = (/\)
   mfull = GenericData
 
-newtype OrdDataKind =
-  OrdDataKind
-    { getDataKind :: DataKind
-    }
-  deriving (Show, Eq, Data)
-
-instance Ord OrdDataKind where
-  OrdDataKind GenericData `compare` OrdDataKind GenericData = EQ
-  OrdDataKind FalseData `compare` OrdDataKind FalseData = EQ
-  OrdDataKind (DataKind set) `compare` OrdDataKind (DataKind set') =
+instance Ord (Ordered DataKind) where
+  Ordered GenericData `compare` Ordered GenericData = EQ
+  Ordered Unstorable `compare` Ordered Unstorable = EQ
+  Ordered (DataKind set) `compare` Ordered (DataKind set') =
     set `compare` set'
-  OrdDataKind (RegisterKind int) `compare` OrdDataKind (RegisterKind int') =
-    int `compare` int'
-  OrdDataKind GenericData `compare` _ = LT
-  _ `compare` OrdDataKind GenericData = GT
-  OrdDataKind FalseData `compare` _ = LT
-  _ `compare` (OrdDataKind FalseData) = GT
-  OrdDataKind (DataKind _) `compare` _ = LT
-  _ `compare` OrdDataKind (DataKind _) = GT
+  Ordered GenericData `compare` _ = LT
+  _ `compare` Ordered GenericData = GT
+  Ordered Unstorable `compare` _ = LT
+  _ `compare` (Ordered Unstorable) = GT
 
-instance Bounded OrdDataKind where
-  minBound = OrdDataKind minBound
-  maxBound = OrdDataKind maxBound
+instance Bounded (Ordered DataKind) where
+  minBound = Ordered minBound
+  maxBound = Ordered maxBound
 
 data Constness
   = Regular
@@ -113,18 +100,27 @@ data Constness
   | ConstExpr
   deriving (Show, Eq, Data)
 
+deriving instance Ord (Ordered Constness)
+
 instance Ord Constness where
   Regular `compare` Regular = EQ
   LinkExpr `compare` LinkExpr = EQ
   ConstExpr `compare` ConstExpr = EQ
-  Regular `compare` _ = LT
-  _ `compare` Regular = GT
-  ConstExpr `compare` _ = GT
-  _ `compare` ConstExpr = LT
+  Regular `compare` _ = GT
+  _ `compare` Regular = LT
+  LinkExpr `compare` _ = GT
+  _ `compare` LinkExpr = LT
+
+instance PartialOrd Constness where
+  (<=) = (Prelude.<=)
+
+instance Lattice Constness where
+  (/\) = min
+  (\/) = max
 
 instance Bounded Constness where
-  minBound = Regular
-  maxBound = ConstExpr
+  minBound = ConstExpr
+  maxBound = Regular
 
 data TypeKind
   = Star
@@ -192,33 +188,26 @@ instance Nullable TypeAnnot where
 data TypeVar
   = NoType
   | TypeVar Int TypeKind
-  | TypeLam Int TypeKind
-  | TypeConst Int TypeKind
   deriving (Show, Data, IsTyped)
 
 varId :: TypeVar -> Int
 varId NoType = undefined
 varId (TypeVar int _) = int
-varId (TypeLam int _) = int
-varId (TypeConst int _) = int
+
+toLam :: TypeVar -> TypeCompl a
+toLam NoType = undefined
+toLam (TypeVar int kind) = LamType int kind
 
 instance Eq TypeVar where
   TypeVar int _ == TypeVar int' _ = int == int'
-  TypeLam int _ == TypeLam int' _ = int == int'
-  TypeConst int _ == TypeConst int' _ = int == int'
   _ == _ = False
 
 instance Ord TypeVar where
   NoType `compare` NoType = EQ
   TypeVar int _ `compare` TypeVar int' _ = int `compare` int'
-  TypeLam int _ `compare` TypeLam int' _ = int `compare` int'
-  TypeConst int _ `compare` TypeConst int' _ = int `compare` int'
+
   NoType `compare` _ = LT
-  _ `compare` TypeConst {} = LT
   _ `compare` NoType = GT
-  TypeConst {} `compare` _ = GT
-  TypeVar {} `compare` TypeLam {} = LT
-  TypeLam {} `compare` TypeVar {} = GT
 
 instance Fallbackable TypeVar where
   NoType ?? tVar = tVar
@@ -230,8 +219,6 @@ instance Nullable TypeVar where
 instance HasTypeKind TypeVar where
   getTypeKind NoType {} = GenericType
   getTypeKind (TypeVar _ kind) = kind
-  getTypeKind (TypeLam _ kind) = kind
-  getTypeKind (TypeConst _ kind) = kind
 
 type PrimType = TypeCompl TypeVar
 
@@ -240,28 +227,24 @@ data TypeCompl a
   | FunctionType [a] a
   | AppType a a
   | AddrType a
+  | LamType Int TypeKind
+  | ConstType Int TypeKind
   | StringType
   | String16Type
   | LabelType
   | TBitsType Int
   | BoolType
   | VoidType
-  deriving (Show, Eq, Ord, Data, IsTyped)
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data, IsTyped)
 
 instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
-  getTypeKind TupleType {} = Star -- TODO: check if all types are `Star` (when creating)
-  getTypeKind FunctionType {} = Star -- TODO: ditto
   getTypeKind (AppType t _) = case getTypeKind t of
     _ :-> k -> k
     GenericType -> GenericType
     _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
-  getTypeKind AddrType {} = Star -- TODO: ditto
-  getTypeKind StringType {} = Star
-  getTypeKind String16Type {} = Star
-  getTypeKind LabelType {} = Star
-  getTypeKind TBitsType {} = Star
-  getTypeKind BoolType {} = Star
-  getTypeKind VoidType {} = Star
+  getTypeKind (LamType _ kind) = kind
+  getTypeKind (ConstType _ kind) = kind
+  getTypeKind _ = Star
 
 data Type
   = ErrorType Text
@@ -288,15 +271,12 @@ instance ToType TypeVar where
   toType = VarType
 
 instance ToType a => ToType (TypeCompl a) where
-  toType (TupleType ts) = ComplType . TupleType $ toType <$> ts
-  toType (FunctionType ts t) = ComplType $ FunctionType (toType <$> ts) (toType t)
-  toType (AppType t t') = ComplType $ AppType (toType t) (toType t')
-  toType (AddrType t) = ComplType $ AddrType (toType t)
+  toType = ComplType . fmap toType
 
 infix 6 :=>
 
 data Qual a =
-  Facts :=> a
+  FlatFacts :=> a
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 instance HasTypeKind a => HasTypeKind (Qual a) where
@@ -320,23 +300,29 @@ newtype Inst =
   Inst (Scheme [Type])
   deriving (Show, Data)
 
-data Fact
-  = SubType Type Type -- supertype; subtype
-  | TypeUnion Type Type -- binds the type to a type
-  | ClassUnion Type Type -- binds the type to a type
-  | InstanceUnion Type Type -- binds the type to a type
-  | Typing Type Type -- states that the type follows a certain typing
-  | KindLimit (Bounds OrdDataKind) Type -- lower bound on the kind of the type variable
-  | ConstnessLimit (Bounds Constness) Type -- lower bound on the constness of the type variable
-  | OnRegister Text TypeVar -- states that the type variable stores its data to a certain register
-  | SubKind Type Type -- superKind; subKind
-  | SubConst Type Type -- superConst; subConst
-  | InstType Type Type -- polytype; monotype
-  | ClassConstraint Text Type
-  | ClassFact Text Type
-  | NestedFact (Scheme Fact)
+data FlatFact a
+  = SubType a a -- supertype; subtype
+  | Union a a -- binds the type to a type
+  | ClassUnion a a -- binds the type to a type
+  | InstanceUnion a a -- binds the type to a type
+  | Typing a a -- states that the type follows a certain typing
+  | KindBounds (Bounds (Ordered DataKind)) a -- lower bound on the kind of the type variable
+  | ConstnessBounds (Bounds Constness) a -- lower bound on the constness of the type variable
+  | OnRegister Text a -- states that the type variable stores its data to a certain register
+  | SubKind a a -- superKind; subKind
+  | SubConst a a -- superConst; subConst
+  | InstType a a -- polytype; monotype
+  | ClassConstraint Text a
+  | ClassFact Text a
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data, IsTyped)
+
+data NestedFact a
+  = Fact (FlatFact a)
+  | NestedFact (Scheme [NestedFact a])
   deriving (Show, Eq, Ord, Data, IsTyped)
 
+type FlatFacts = [FlatFact Type]
+type Fact = NestedFact Type
 type Facts = [Fact]
 
 class HasTypeKind a where
@@ -352,8 +338,10 @@ class Data a =>
       go = (Set.unions . gmapQ go) `extQ` factCase `extQ` leaf
       factCase =
         \case
-          InstType _ tVar' -> freeTypeVars tVar'
-          fact -> Set.unions $ gmapQ go fact
+          Fact (InstType _ t') -> freeTypeVars t'
+          NestedFact (tVars :. flatFacts :=> nestedFacts) ->
+            (freeTypeVars flatFacts <> freeTypeVars nestedFacts) `Set.difference` tVars
+          (fact :: Fact) -> Set.unions $ gmapQ go fact
       leaf tVar@TypeVar {} = Set.singleton tVar
       leaf _ = mempty
 
@@ -367,72 +355,73 @@ makeFunction = FunctionType
 makeTuple :: [a] -> TypeCompl a
 makeTuple = TupleType
 
-forall :: Set TypeVar -> Facts -> Fact -> Fact
+forall :: Set TypeVar -> FlatFacts -> Facts -> Fact
 forall s fs f
   | null s = NestedFact $ mempty :. fs :=> f -- the trivial case
 forall s fs f = NestedFact $ s :. fs :=> f
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
 
-typeUnion :: (ToType a, ToType b) => a -> b -> Fact
-typeUnion t t' = toType t `TypeUnion` toType t'
+typeUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
+typeUnion t t' = toType t `Union` toType t'
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
-classUnion :: (ToType a, ToType b) => a -> b -> Fact
-classUnion t t' = toType t `ClassUnion` toType t'
+classUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
+classUnion t t' =  toType t `ClassUnion` toType t'
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
-instanceUnion :: (ToType a, ToType b) => a -> b -> Fact
+instanceUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
 instanceUnion t t' = toType t `InstanceUnion` toType t'
 
 -- | States that the given `TypeVar` type variable follows the typing dictated by the `Type` (note that this does not imply type unification nor any subtyping)
-typeConstraint :: (ToType a, ToType b) => a -> b -> Fact
+typeConstraint :: (ToType a, ToType b) => a -> b -> FlatFact Type
 typeConstraint t t' = toType t `Typing` toType t'
 
 -- | States that the given `TypeVar` type variable is subtyped by another `TypeVar` type variable
-subType :: (ToType a, ToType b) => a -> b -> Fact
+subType :: (ToType a, ToType b) => a -> b -> FlatFact Type
 subType t t' = toType t `SubType` toType t'
 
--- | TODO
-subKind :: (ToType a, ToType b) => a -> b -> Fact
+subKind :: (ToType a, ToType b) => a -> b -> FlatFact Type
 subKind t t' = toType t `SubKind` toType t'
 
--- | TODO
-subConst :: (ToType a, ToType b) => a -> b -> Fact
+subConst :: (ToType a, ToType b) => a -> b -> FlatFact Type
 subConst t t' = toType t `SubConst` toType t'
 
 -- | States that the given `TypeVar` type variable is instantiated into another `TypeVar` type variable
-instType :: (ToType a, ToType b) => a -> b -> Fact
+instType :: (ToType a, ToType b) => a -> b -> FlatFact Type
 instType t t' = toType t `InstType` toType t'
 
 -- | States the minimum kind `DataKind` of a `TypeVar` type variable
-minKindConstraint :: ToType a => DataKind -> a -> Fact
-minKindConstraint = (. toType) . KindLimit . (`Bounds` maxBound) . OrdDataKind
+minKindConstraint :: ToType a => DataKind -> a -> FlatFact Type
+minKindConstraint = (. toType) . KindBounds . (`Bounds` maxBound) . Ordered
 
 -- | States the maximum kind `DataKind` of a `TypeVar` type variable
-maxKindConstraint :: ToType a => DataKind -> a -> Fact
-maxKindConstraint = (. toType) . KindLimit . (minBound `Bounds`) . OrdDataKind
+maxKindConstraint :: ToType a => DataKind -> a -> FlatFact Type
+maxKindConstraint = (. toType) . KindBounds . (minBound `Bounds`) . Ordered
+
+unstorableConstraint :: ToType a => a -> FlatFact Type
+unstorableConstraint = KindBounds (minBound `Bounds` minBound) . toType
 
 -- | States that the given `TypeVar` (type variable) is a compile-time expression
-constExprConstraint :: ToType a => a -> Fact
-constExprConstraint = (. toType) . ConstnessLimit $ Bounds ConstExpr ConstExpr
+constExprConstraint :: ToType a => a -> FlatFact Type
+constExprConstraint = (. toType) . ConstnessBounds $ Bounds ConstExpr ConstExpr
 
 -- | States that the given `TypeVar` (type variable) is a link-time expression
-linkExprConstraint :: ToType a => a -> Fact
-linkExprConstraint = (. toType) . ConstnessLimit $ Bounds LinkExpr ConstExpr
+linkExprConstraint :: ToType a => a -> FlatFact Type
+linkExprConstraint = (. toType) . ConstnessBounds $ Bounds ConstExpr LinkExpr
 
 -- | States that the given `TypeVar` (type variable) is a regular (aka. run-time) expression
-regularExprConstraint :: ToType a => a -> Fact
-regularExprConstraint = (. toType) . ConstnessLimit $ Bounds Regular Regular
+regularExprConstraint :: ToType a => a -> FlatFact Type
+regularExprConstraint = (. toType) . ConstnessBounds $ Bounds Regular Regular
 
 -- | States that the given `TypeVar` type variables is to be allocated to the register given by the given `Text` (this is a stronger version of `minKindConstraint`)
-registerConstraint :: Text -> TypeVar -> Fact
-registerConstraint = OnRegister
+registerConstraint :: ToType a => Text -> a -> FlatFact Type
+registerConstraint = (. toType) . OnRegister
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
-classConstraint :: ToType a => Text -> a -> Fact
+classConstraint :: ToType a => Text -> a -> FlatFact Type
 classConstraint name t = name `ClassConstraint` toType t
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
-classFact :: ToType a => Text -> a -> Fact
+classFact :: ToType a => Text -> a -> FlatFact Type
 classFact name t = name `ClassFact` toType t

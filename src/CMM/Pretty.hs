@@ -354,6 +354,8 @@ instance Pretty (Expr a) where
     pretty left <+> "`" <> pretty name <> "`" <+> pretty right
   pretty (PrefixExpr name actuals) =
     "%" <> pretty name <> parens (commaSep $ pretty <$> actuals)
+  pretty (MemberExpr expr field) =
+    pretty expr <> "->" <> pretty field
 
 instance Pretty (Lit a) where
   pretty (LitInt int) = pretty int

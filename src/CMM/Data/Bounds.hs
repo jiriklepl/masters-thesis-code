@@ -2,14 +2,17 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module CMM.Data.Bounds where
 
-import Control.Lens.TH (makeLenses)
+import safe Prelude hiding (Ord(..))
+import safe Prelude (Ord)
 import safe Data.Data (Data)
-
 import safe CMM.Data.Lattice (Lattice(..), join, meet)
+import safe Data.PartialOrd ( PartialOrd((<=), (>=), (>)) )
+import safe Control.Lens.TH (makeLenses)
 
 data Bounds a =
   Bounds
@@ -25,3 +28,17 @@ instance Lattice a => Semigroup (Bounds a) where
 
 instance (Lattice a, Bounded a) => Monoid (Bounds a) where
   mempty = minBound `Bounds` maxBound
+
+absurdBounds :: Bounded a => Bounds a
+absurdBounds = maxBound `Bounds` minBound
+
+isTrivial :: PartialOrd a => Bounds a -> Bool
+isTrivial (Bounds low high) = low >= high
+
+isAbsurd :: PartialOrd a => Bounds a -> Bool
+isAbsurd (Bounds low high) = low > high
+
+normalizeAbsurd :: (PartialOrd a, Bounded a) => Bounds a -> Bounds a
+normalizeAbsurd bounds@(Bounds low high) = if low <= high
+  then bounds
+  else absurdBounds
