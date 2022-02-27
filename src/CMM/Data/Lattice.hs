@@ -1,4 +1,6 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module CMM.Data.Lattice where
 
@@ -17,14 +19,14 @@ meet = (/\)
 join :: Lattice a => a -> a -> a
 join = (\/)
 
-instance Lattice Bool where
-  (/\) = (&&)
-  (\/) = (||)
+instance Ord a => Lattice a where
+  (/\) = min
+  (\/) = max
 
-instance Ord a => Lattice (Set a) where
+instance {-# OVERLAPPING #-}  Ord a => Lattice (Set a) where
   (/\) = Set.intersection
   (\/) = Set.union
 
-instance Ord k => Lattice (Map k v) where
+instance {-# OVERLAPPING #-} Ord k => Lattice (Map k v) where
   (/\) = Map.intersection
   (\/) = Map.union

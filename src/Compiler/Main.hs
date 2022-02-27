@@ -69,8 +69,8 @@ main = do
   print
     (freeTypeVars
        (TupleType
-          [ VarType (TypeVar 20 Infer.Star NoTVarAnnot)
-          , VarType (TypeVar 30 Infer.Star NoTVarAnnot)
+          [ VarType (TypeVar 20 Infer.Star)
+          , VarType (TypeVar 30 Infer.Star)
           ]))
   print $ CMM.Inference.Preprocess.State._facts miner
   execStateT

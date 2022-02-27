@@ -54,7 +54,7 @@ makeDataKind set
   | Set.size set > 1 = DataKind set
   | otherwise = RegisterKind $ Set.findMin set
 
-instance Lattice DataKind where
+instance {-# OVERLAPPING #-} Lattice DataKind where
   GenericData /\ a = a
   FalseData /\ _ = FalseData
   DataKind rs /\ DataKind rs' = makeDataKind $ rs `Set.intersection` rs'
@@ -175,44 +175,44 @@ instance Fallbackable TypeKind where
 instance Nullable TypeKind where
   nullVal = GenericType
 
-data TVarAnnot
-  = NoTVarAnnot
-  | TVarInst TypeVar
-  | TVarAST Text SourcePos
-  | TVarBuiltIn Text
+data TypeAnnot
+  = NoTypeAnnot
+  | TypeInst TypeVar
+  | TypeAST Text SourcePos
+  | TypeBuiltIn Text
   deriving (Show, Data)
 
-instance Fallbackable TVarAnnot where
-  NoTVarAnnot ?? kind = kind
+instance Fallbackable TypeAnnot where
+  NoTypeAnnot ?? kind = kind
   kind ?? _ = kind
 
-instance Nullable TVarAnnot where
-  nullVal = NoTVarAnnot
+instance Nullable TypeAnnot where
+  nullVal = NoTypeAnnot
 
 data TypeVar
   = NoType
-  | TypeVar Int TypeKind TVarAnnot
-  | TypeLam Int TypeKind TVarAnnot
-  | TypeConst Int TypeKind TVarAnnot
+  | TypeVar Int TypeKind
+  | TypeLam Int TypeKind
+  | TypeConst Int TypeKind
   deriving (Show, Data, IsTyped)
 
-typeVarId :: TypeVar -> Int
-typeVarId NoType = undefined
-typeVarId (TypeVar int _ _) = int
-typeVarId (TypeLam int _ _) = int
-typeVarId (TypeConst int _ _) = int
+varId :: TypeVar -> Int
+varId NoType = undefined
+varId (TypeVar int _) = int
+varId (TypeLam int _) = int
+varId (TypeConst int _) = int
 
 instance Eq TypeVar where
-  TypeVar int _ _ == TypeVar int' _ _ = int == int'
-  TypeLam int _ _ == TypeLam int' _ _ = int == int'
-  TypeConst int _ _ == TypeConst int' _ _ = int == int'
+  TypeVar int _ == TypeVar int' _ = int == int'
+  TypeLam int _ == TypeLam int' _ = int == int'
+  TypeConst int _ == TypeConst int' _ = int == int'
   _ == _ = False
 
 instance Ord TypeVar where
   NoType `compare` NoType = EQ
-  TypeVar int _ _ `compare` TypeVar int' _ _ = int `compare` int'
-  TypeLam int _ _ `compare` TypeLam int' _ _ = int `compare` int'
-  TypeConst int _ _ `compare` TypeConst int' _ _ = int `compare` int'
+  TypeVar int _ `compare` TypeVar int' _ = int `compare` int'
+  TypeLam int _ `compare` TypeLam int' _ = int `compare` int'
+  TypeConst int _ `compare` TypeConst int' _ = int `compare` int'
   NoType `compare` _ = LT
   _ `compare` TypeConst {} = LT
   _ `compare` NoType = GT
@@ -229,9 +229,69 @@ instance Nullable TypeVar where
 
 instance HasTypeKind TypeVar where
   getTypeKind NoType {} = GenericType
-  getTypeKind (TypeVar _ kind _) = kind
-  getTypeKind (TypeLam _ kind _) = kind
-  getTypeKind (TypeConst _ kind _) = kind
+  getTypeKind (TypeVar _ kind) = kind
+  getTypeKind (TypeLam _ kind) = kind
+  getTypeKind (TypeConst _ kind) = kind
+
+type PrimType = TypeCompl TypeVar
+
+data TypeCompl a
+  = TupleType [a]
+  | FunctionType [a] a
+  | AppType a a
+  | AddrType a
+  | StringType
+  | String16Type
+  | LabelType
+  | TBitsType Int
+  | BoolType
+  | VoidType
+  deriving (Show, Eq, Ord, Data, IsTyped)
+
+instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
+  getTypeKind TupleType {} = Star -- TODO: check if all types are `Star` (when creating)
+  getTypeKind FunctionType {} = Star -- TODO: ditto
+  getTypeKind (AppType t _) = case getTypeKind t of
+    _ :-> k -> k
+    GenericType -> GenericType
+    _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
+  getTypeKind AddrType {} = Star -- TODO: ditto
+  getTypeKind StringType {} = Star
+  getTypeKind String16Type {} = Star
+  getTypeKind LabelType {} = Star
+  getTypeKind TBitsType {} = Star
+  getTypeKind BoolType {} = Star
+  getTypeKind VoidType {} = Star
+
+data Type
+  = ErrorType Text
+  | VarType TypeVar
+  | ComplType (TypeCompl Type)
+  deriving (Show, Eq, Ord, Data, IsTyped)
+
+instance Fallbackable Type where
+  ErrorType {} ?? a = a
+  a ?? _ = a
+
+instance HasTypeKind Type where
+  getTypeKind ErrorType {} = GenericType
+  getTypeKind (VarType t) = getTypeKind t
+  getTypeKind (ComplType t)  = getTypeKind t
+
+class ToType a where
+  toType :: a -> Type
+
+instance ToType Type where
+  toType = id
+
+instance ToType TypeVar where
+  toType = VarType
+
+instance ToType a => ToType (TypeCompl a) where
+  toType (TupleType ts) = ComplType . TupleType $ toType <$> ts
+  toType (FunctionType ts t) = ComplType $ FunctionType (toType <$> ts) (toType t)
+  toType (AppType t t') = ComplType $ AppType (toType t) (toType t')
+  toType (AddrType t) = ComplType $ AddrType (toType t)
 
 infix 6 :=>
 
@@ -251,42 +311,6 @@ data Scheme a =
 instance HasTypeKind a => HasTypeKind (Scheme a) where
   getTypeKind (_ :. t) = getTypeKind t
 
-data Type
-  = ErrorType Text
-  | VarType TypeVar
-  | TBitsType Int
-  | BoolType
-  | TupleType [Type]
-  | FunctionType Type Type
-  | AppType Type [Type]
-  | AddrType Type
-  | LabelType
-  | StringType
-  | String16Type
-  | VoidType
-  deriving (Show, Eq, Ord, Data, IsTyped)
-
-instance Fallbackable Type where
-  ErrorType {} ?? a = a
-  a ?? _ = a
-
-instance HasTypeKind Type where
-  getTypeKind ErrorType {} = GenericType
-  getTypeKind (VarType t) = getTypeKind t
-  getTypeKind TBitsType {} = Star
-  getTypeKind BoolType {} = Star
-  getTypeKind TupleType {} = Star -- TODO: check if all types are `Star` (when creating)
-  getTypeKind FunctionType {} = Star -- TODO: ditto
-  getTypeKind (AppType t _) = case getTypeKind t of
-    _ :-> k -> k
-    GenericType -> GenericType
-    _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
-  getTypeKind AddrType {} = Star -- TODO: ditto
-  getTypeKind LabelType {} = Star
-  getTypeKind StringType {} = Star
-  getTypeKind String16Type {} = Star
-  getTypeKind VoidType {} = Star
-
 -- TODO: add methods and their instances
 newtype Class =
   Class (Scheme [Inst])
@@ -297,19 +321,19 @@ newtype Inst =
   deriving (Show, Data)
 
 data Fact
-  = SubType TypeVar TypeVar -- supertype; subtype
-  | TypeUnion TypeVar Type -- binds the type variable to a type
-  | ClassUnion TypeVar Type -- binds the type variable to a type
-  | InstanceUnion TypeVar Type -- binds the type variable to a type
-  | Typing TypeVar Type -- states that the type variable follows a certain typing
-  | KindLimit (Bounds OrdDataKind Lattice) TypeVar -- lower bound on the kind of the type variable
-  | ConstnessLimit (Bounds Constness Ord) TypeVar -- lower bound on the constness of the type variable
+  = SubType Type Type -- supertype; subtype
+  | TypeUnion Type Type -- binds the type to a type
+  | ClassUnion Type Type -- binds the type to a type
+  | InstanceUnion Type Type -- binds the type to a type
+  | Typing Type Type -- states that the type follows a certain typing
+  | KindLimit (Bounds OrdDataKind) Type -- lower bound on the kind of the type variable
+  | ConstnessLimit (Bounds Constness) Type -- lower bound on the constness of the type variable
   | OnRegister Text TypeVar -- states that the type variable stores its data to a certain register
-  | SubKind TypeVar TypeVar -- superKind; subKind
-  | SubConst TypeVar TypeVar -- superConst; subConst
-  | InstType TypeVar TypeVar -- polytype; monotype
-  | ClassConstraint Text TypeVar
-  | ClassFact Text TypeVar
+  | SubKind Type Type -- superKind; subKind
+  | SubConst Type Type -- superConst; subConst
+  | InstType Type Type -- polytype; monotype
+  | ClassConstraint Text Type
+  | ClassFact Text Type
   | NestedFact (Scheme Fact)
   deriving (Show, Eq, Ord, Data, IsTyped)
 
@@ -328,7 +352,7 @@ class Data a =>
       go = (Set.unions . gmapQ go) `extQ` factCase `extQ` leaf
       factCase =
         \case
-          InstType _ tVar' -> Set.singleton tVar'
+          InstType _ tVar' -> freeTypeVars tVar'
           fact -> Set.unions $ gmapQ go fact
       leaf tVar@TypeVar {} = Set.singleton tVar
       leaf _ = mempty
@@ -336,14 +360,12 @@ class Data a =>
 deriving instance IsTyped a => IsTyped [a]
 
 -- | Transforms the two given `Type`s into a function `Type`
-makeFunction :: Type -> Type -> Type
+makeFunction :: [a] -> a -> TypeCompl a
 makeFunction = FunctionType
 
 -- | Transforms the given list of `Type`s into a tuple `Type` (there are special cases for an empty list and for a singleton)
-makeTuple :: [Type] -> Type
-makeTuple [] = VoidType
-makeTuple [t] = t
-makeTuple ts = TupleType ts
+makeTuple :: [a] -> TypeCompl a
+makeTuple = TupleType
 
 forall :: Set TypeVar -> Facts -> Fact -> Fact
 forall s fs f
@@ -351,57 +373,66 @@ forall s fs f
 forall s fs f = NestedFact $ s :. fs :=> f
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
-typeUnion :: TypeVar -> Type -> Fact
-typeUnion = TypeUnion
+
+typeUnion :: (ToType a, ToType b) => a -> b -> Fact
+typeUnion t t' = toType t `TypeUnion` toType t'
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
-classUnion :: TypeVar -> Type -> Fact
-classUnion = ClassUnion
+classUnion :: (ToType a, ToType b) => a -> b -> Fact
+classUnion t t' = toType t `ClassUnion` toType t'
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
-instanceUnion :: TypeVar -> Type -> Fact
-instanceUnion = InstanceUnion
+instanceUnion :: (ToType a, ToType b) => a -> b -> Fact
+instanceUnion t t' = toType t `InstanceUnion` toType t'
 
 -- | States that the given `TypeVar` type variable follows the typing dictated by the `Type` (note that this does not imply type unification nor any subtyping)
-typeConstraint :: TypeVar -> Type -> Fact
-typeConstraint = Typing
+typeConstraint :: (ToType a, ToType b) => a -> b -> Fact
+typeConstraint t t' = toType t `Typing` toType t'
 
 -- | States that the given `TypeVar` type variable is subtyped by another `TypeVar` type variable
-subType :: TypeVar -> TypeVar -> Fact
-subType = SubType
+subType :: (ToType a, ToType b) => a -> b -> Fact
+subType t t' = toType t `SubType` toType t'
+
+-- | TODO
+subKind :: (ToType a, ToType b) => a -> b -> Fact
+subKind t t' = toType t `SubKind` toType t'
+
+-- | TODO
+subConst :: (ToType a, ToType b) => a -> b -> Fact
+subConst t t' = toType t `SubConst` toType t'
 
 -- | States that the given `TypeVar` type variable is instantiated into another `TypeVar` type variable
-instType :: TypeVar -> TypeVar -> Fact
-instType = InstType
+instType :: (ToType a, ToType b) => a -> b -> Fact
+instType t t' = toType t `InstType` toType t'
 
 -- | States the minimum kind `DataKind` of a `TypeVar` type variable
-minKindConstraint :: DataKind -> TypeVar -> Fact
-minKindConstraint = KindLimit . (`Bounds` maxBound) . OrdDataKind
+minKindConstraint :: ToType a => DataKind -> a -> Fact
+minKindConstraint = (. toType) . KindLimit . (`Bounds` maxBound) . OrdDataKind
 
 -- | States the maximum kind `DataKind` of a `TypeVar` type variable
-maxKindConstraint :: DataKind -> TypeVar -> Fact
-maxKindConstraint = KindLimit . (minBound `Bounds`) . OrdDataKind
+maxKindConstraint :: ToType a => DataKind -> a -> Fact
+maxKindConstraint = (. toType) . KindLimit . (minBound `Bounds`) . OrdDataKind
 
 -- | States that the given `TypeVar` (type variable) is a compile-time expression
-constExprConstraint :: TypeVar -> Fact
-constExprConstraint = ConstnessLimit $ Bounds ConstExpr ConstExpr
+constExprConstraint :: ToType a => a -> Fact
+constExprConstraint = (. toType) . ConstnessLimit $ Bounds ConstExpr ConstExpr
 
 -- | States that the given `TypeVar` (type variable) is a link-time expression
-linkExprConstraint :: TypeVar -> Fact
-linkExprConstraint = ConstnessLimit $ Bounds LinkExpr ConstExpr
+linkExprConstraint :: ToType a => a -> Fact
+linkExprConstraint = (. toType) . ConstnessLimit $ Bounds LinkExpr ConstExpr
 
 -- | States that the given `TypeVar` (type variable) is a regular (aka. run-time) expression
-regularExprConstraint :: TypeVar -> Fact
-regularExprConstraint = ConstnessLimit $ Bounds Regular Regular
+regularExprConstraint :: ToType a => a -> Fact
+regularExprConstraint = (. toType) . ConstnessLimit $ Bounds Regular Regular
 
 -- | States that the given `TypeVar` type variables is to be allocated to the register given by the given `Text` (this is a stronger version of `minKindConstraint`)
 registerConstraint :: Text -> TypeVar -> Fact
 registerConstraint = OnRegister
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
-classConstraint :: Text -> TypeVar -> Fact
-classConstraint = ClassConstraint
+classConstraint :: ToType a => Text -> a -> Fact
+classConstraint name t = name `ClassConstraint` toType t
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
-classFact :: Text -> TypeVar -> Fact
-classFact = ClassFact
+classFact :: ToType a => Text -> a -> Fact
+classFact name t = name `ClassFact` toType t

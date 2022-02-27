@@ -48,6 +48,7 @@ executable Compiler
                        CMM.Inference,
                        CMM.Inference.State,
                        CMM.Inference.Type,
+                       CMM.Inference.TypeHandle,
                        CMM.Inference.BuiltIn,
                        CMM.Inference.Preprocess,
                        CMM.Inference.Preprocess.State,

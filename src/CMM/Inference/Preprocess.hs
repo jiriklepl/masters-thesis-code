@@ -76,12 +76,11 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFact
   , storeProc
   , storeTCon
-  , storeVar, lookupTVar, pushClass, pullContext, pushInstance, lookupClass, pushTypeVariables, pullTypeVariables, pushFacts
+  , storeVar, lookupTVar, pushClass, pullContext, pushInstance, lookupClass, pushTypeVariables, pullTypeVariables, pushFacts, freshASTTypeHandle, getTypeHandleId
   )
 import safe CMM.Inference.Type as Infer
   ( Fact(SubConst, SubKind, SubType, Typing)
-  , Type(AddrType, BoolType, LabelType, String16Type, StringType,
-     TBitsType, VarType, AppType)
+  , Type(VarType, ComplType)
   , TypeKind(Star, GenericType, Constraint)
   , TypeVar(NoType)
   , constExprConstraint
@@ -94,9 +93,11 @@ import safe CMM.Inference.Type as Infer
   , regularExprConstraint
   , subType
   , typeConstraint
-  , typeUnion
+  , typeUnion, TypeCompl (AppType, AddrType, TBitsType, BoolType, LabelType, StringType, String16Type), ToType (toType), subKind, subConst
   )
 import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Inference.TypeHandle
+import Data.Functor ((<&>))
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -109,13 +110,13 @@ class Preprocess n a b where
   preprocessImpl ::
        (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
     => n a
-    -> m (TypeVar, n b)
+    -> m (TypeHandle, n b)
 
 preprocessTrivial :: (Functor n, WithTypeHandle a b) => n a -> n b
-preprocessTrivial = (withTypeHandle NoType <$>)
+preprocessTrivial = (withTypeHandle emptyTypeHandle <$>)
 
 preprocessFinalize :: (Monad m, WithTypeHandle a b) =>
-  a -> m (TypeVar, n b) -> m (Annot n b)
+  a -> m (TypeHandle, n b) -> m (Annot n b)
 preprocessFinalize a preprocessed = preprocessed >>= \(handle, n') ->
       return $ withTypeHandledAnnot handle a n'
 
@@ -154,7 +155,7 @@ pass = astMapM PreprocessHint preprocess'
 
 instance {-# OVERLAPPABLE #-} ASTmap PreprocessHint n a b =>
                               Preprocess n a b where
-  preprocessImpl = fmap (NoType, ) . pass
+  preprocessImpl = fmap (emptyTypeHandle, ) . pass
 
 preprocessT ::
      ( Preprocess n a b
@@ -168,15 +169,15 @@ preprocessT ::
   -> m (t (Annot n b))
 preprocessT = traverse preprocess
 
-withTypeHandledAnnot :: WithTypeHandle a b => TypeVar -> a -> n b -> Annot n b
+withTypeHandledAnnot :: WithTypeHandle a b => TypeHandle -> a -> n b -> Annot n b
 withTypeHandledAnnot = (withAnnot .) . withTypeHandle
 
 -- TODO: create a better name
 purePreprocess ::
      (Monad m, WithTypeHandle a b, Functor n)
-  => TypeVar
+  => TypeHandle
   -> n a
-  -> m (TypeVar, n b)
+  -> m (TypeHandle, n b)
 purePreprocess handle = return . (handle, ) . (withTypeHandle handle <$>)
 
 instance Preprocess Unit a b where
@@ -184,11 +185,11 @@ instance Preprocess Unit a b where
     (vars, fVars, fIVars, tCons, _, tClasses, sMems) <- globalVariables unit
     beginUnit vars fVars fIVars tCons tClasses sMems
 
-    (NoType, ) . Unit <$> preprocessT topLevels
+    (emptyTypeHandle, ) . Unit <$> preprocessT topLevels
 
 instance Preprocess Section a b where
   preprocessImpl =
-    ((NoType, ) <$>) . \case
+    ((emptyTypeHandle, ) <$>) . \case
       SecDecl decl -> SecDecl <$> preprocess decl
       SecProcedure procedure -> SecProcedure <$> preprocess procedure
       SecDatum datum -> SecDatum <$> preprocess datum
@@ -204,15 +205,17 @@ preprocessSpanCommon ::
   -> m (Annot Expr b, Annot Expr b)
 preprocessSpanCommon key value = do
   key' <- preprocess key
+  let keyType = getTypeHandleId key'
   value' <- preprocess value
-  storeFact $ constExprConstraint (getTypeHandle key')
-  storeFact $ linkExprConstraint (getTypeHandle value')
-  storeFact $ getTypeHandle value' `subType` getTypeHandle key'
+  let valueType = getTypeHandleId key'
+  storeFact $ constExprConstraint keyType
+  storeFact $ linkExprConstraint valueType
+  storeFact $ valueType `subType` keyType
   return (key', value')
 
 instance Preprocess Decl a b where
   preprocessImpl =
-    ((NoType, ) <$>) . \case
+    ((emptyTypeHandle, ) <$>) . \case
       ImportDecl imports -> ImportDecl <$> preprocessT imports
       ExportDecl exports -> ExportDecl <$> preprocessT exports
       RegDecl invar registers -> RegDecl invar <$> preprocess registers
@@ -222,20 +225,21 @@ instance Preprocess Decl a b where
       -- the constant is typed implicitly
       ConstDecl Nothing name expr -> do
         expr' <- preprocess expr
-        storeVar (getName name) (VarType $ getTypeHandle expr')
+        storeVar (getName name) (VarType $ getTypeHandleId expr')
         return $ ConstDecl Nothing (preprocessTrivial name) expr'
       -- the constant is typed explicitly
       ConstDecl (Just type') name expr -> do
         handle <- lookupVar (getName name)
         expr' <- preprocess expr
         type'' <- preprocess type'
-        storeFact $ getTypeHandle type'' `subType` handle
-        storeFact $ constExprConstraint handle
-        storeFact $ handle `subType` getTypeHandle expr'
+        let typeType = getTypeHandleId type''
+        storeFact $ typeType `subType` handleId handle
+        storeFact $ constExprConstraint $ handleId handle
+        storeFact $ handleId handle `subType` getTypeHandleId expr'
         return $ ConstDecl (Just type'') (preprocessTrivial name) expr'
       TypedefDecl type' names -> do
         type'' <- preprocess type'
-        let handle = VarType $ getTypeHandle type''
+        let handle = VarType $ getTypeHandleId type''
         traverse_ (`storeTCon` handle) (getName <$> names)
         return $ TypedefDecl type'' (preprocessTrivial <$> names)
 
@@ -246,7 +250,7 @@ instance Preprocess Class a b where
     paraNames' <- preprocessT paraNames
     paraName' <- preprocess paraName
     pushClass (nameAndHandle paraName') (nameAndHandle <$> paraNames')
-    (NoType,)
+    (emptyTypeHandle,)
       . Class paraNames' paraName' <$>  preprocessT methods
       <* pullContext <* pullTypeVariables
 
@@ -258,11 +262,11 @@ instance Preprocess Instance a b where
     paraNames' <- preprocessT paraNames
     paraName' <- preprocess paraName
     pushInstance (nameAndHandle paraName') (nameAndHandle <$> paraNames')
-    (NoType,)
+    (emptyTypeHandle,)
       . Instance paraNames' paraName' <$> preprocessT methods
       <* pullContext <* pullTypeVariables
 
-nameAndHandle :: HasTypeHandle a => Annot (ParaName param) a -> (Text, TypeVar)
+nameAndHandle :: HasTypeHandle a => Annot (ParaName param) a -> (Text, TypeHandle)
 nameAndHandle paraName = (getName paraName, getTypeHandle paraName)
 
 class Preprocess param a b => PreprocessParam param a b where
@@ -282,7 +286,7 @@ instance PreprocessParam param a b => Preprocess (ParaName param) a b where
     params' <- traverse preprocessParam params
     class' <- lookupClass $ getName name'
     handle <- freshTypeHelper Constraint
-    storeFact $ handle `typeUnion` AppType (VarType class') (VarType . getTypeHandle <$> params')
+    storeFact $ handleId handle `typeUnion` foldl ((toType .) . AppType) (toType $ handleId class') (toType . getTypeHandleId <$> params')
     return (handle, ParaName name' params')
 
 instance Preprocess Import a b where
@@ -300,7 +304,7 @@ instance Preprocess AST.Type a b where
     \case
       tBits@(TBits int) -> do
         handle <- freshTypeHelper Star
-        storeFact $ handle `typeUnion` TBitsType int
+        storeFact $ handleId handle `typeUnion` ComplType (TBitsType int)
         purePreprocess handle tBits
       tName@(TName name) -> do
         handle <- lookupTCon (getName name)
@@ -320,41 +324,41 @@ instance Preprocess ParaType a b where
     type'' <- preprocess type'
     types'' <- traverse preprocess types'
     handle <- freshTypeHelper GenericType -- TODO: determine the kind
-    storeFact $ handle `typeUnion` AppType (VarType $ getTypeHandle type'') (VarType . getTypeHandle <$> types'')
+    storeFact $ handleId handle `typeUnion` foldl ((toType .) . AppType) (toType $ getTypeHandleId type'') (toType . getTypeHandleId <$> types'')
     return (handle, ParaType type'' types'')
 
 instance Preprocess Registers a b where
   preprocessImpl (Registers mKind type' nameStrLits) = do
     type'' <- preprocess type'
-    let typeType = getTypeHandle type''
+    let typeType = getTypeHandleId type''
         setType handle = do
           storeFact $ typeType `subType` handle
           for_ mKind $
             storeFact . (`minKindConstraint` handle) . getDataKind . getName
         go name mStrLit = do
           handle <- lookupVar (getName name)
-          setType handle
+          setType $ handleId handle
           case mStrLit of
             Nothing -> return (withTypeHandle handle <$> name, Nothing)
             Just (StrLit strLit) -> do
-              storeFact $ registerConstraint strLit handle
+              storeFact $ strLit `registerConstraint` handleId handle
               return (withTypeHandle handle <$> name, Just (StrLit strLit))
     nameStrLits' <- traverse (uncurry go) nameStrLits
-    return (NoType, Registers mKind type'' nameStrLits')
+    return (emptyTypeHandle, Registers mKind type'' nameStrLits')
 
 -- TODO: consult conventions with man
 preprocessProcedureHeader ::
        (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
     => ProcedureHeader a
-    -> m (TypeVar, ProcedureHeader b)
+    -> m (TypeHandle, ProcedureHeader b)
 preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
     formals' <- preprocessT formals
     mType' <- preprocessT mType
-    let formalTypes = getTypeHandle <$> formals'
+    let formalTypes = getTypeHandleId <$> formals'
     case mConv of
       Just (Foreign (StrLit conv))
         | conv == "C" -> do
-          retType <- getCurrentReturn
+          retType <- handleId <$> getCurrentReturn
           storeFact $ regularExprConstraint retType
           traverse_ (storeFact . regularExprConstraint) formalTypes
           storeCSymbol $ getName name
@@ -362,12 +366,12 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
       Nothing -> return ()
     for_ mType' $ \type' -> do
       retType <- getCurrentReturn
-      storeFact $ getTypeHandle type' `subType` retType
-    (fs, retType) <- (_2 %~ VarType) <$> endProc
-    let argumentsType = makeTuple $ VarType <$> formalTypes
+      storeFact $ getTypeHandleId type' `subType` handleId retType
+    (fs, retType) <- (_2 %~ VarType . handleId) <$> endProc
+    let argumentsType = VarType <$> formalTypes
     let procedureType = makeFunction argumentsType retType
     storeProc (getName name) fs procedureType
-    return (NoType, ProcedureHeader mConv (preprocessTrivial name) formals' mType')
+    return (emptyTypeHandle, ProcedureHeader mConv (preprocessTrivial name) formals' mType')
 
 -- TODO: consult conventions with the man
 instance Preprocess Procedure a b where
@@ -376,7 +380,7 @@ instance Preprocess Procedure a b where
     beginProc vars tCons tVars
     body' <- preprocess body
     header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
-    return (NoType, Procedure header' body')
+    return (emptyTypeHandle, Procedure header' body')
 
 
 instance Preprocess ProcedureDecl a b where
@@ -384,56 +388,56 @@ instance Preprocess ProcedureDecl a b where
     (vars, _, _, tCons, tVars, _, _) <- localVariables procedure
     beginProc vars tCons tVars
     header' <- preprocessFinalize (takeAnnot header) $ preprocessProcedureHeader (unAnnot header)
-    return (NoType, ProcedureDecl header')
+    return (emptyTypeHandle, ProcedureDecl header')
 
 instance Preprocess Formal a b where
   preprocessImpl (Formal mKind invar type' name) = do
     handle <- lookupVar (getName name)
     type'' <- preprocess type'
-    storeFact $ getTypeHandle type'' `subType` handle
+    storeFact $ getTypeHandleId type'' `subType` handleId handle
     for_ mKind $
-      storeFact . (`minKindConstraint` handle) . getDataKind . getName
+      storeFact . (`minKindConstraint` handleId handle) . getDataKind . getName
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
 instance Preprocess Stmt a b where
   preprocessImpl =
     \case
-      EmptyStmt -> purePreprocess NoType EmptyStmt
+      EmptyStmt -> purePreprocess emptyTypeHandle EmptyStmt
       IfStmt cond thenBody mElseBody -> do
         cond' <- preprocess cond
-        storeFact $ getTypeHandle cond' `typeConstraint` BoolType
-        (NoType, ) <$>
+        storeFact $ getTypeHandleId cond' `typeConstraint` ComplType BoolType
+        (emptyTypeHandle, ) <$>
           liftA2 (IfStmt cond') (preprocess thenBody) (preprocessT mElseBody)
       SwitchStmt scrutinee arms -> do
         scrutinee' <- preprocess scrutinee
-        let scrutineeType = getTypeHandle scrutinee'
+        let scrutineeType = getTypeHandleId scrutinee'
         arms' <- preprocessT arms
-        let armTypes = getTypeHandle <$> arms'
+        let armTypes = getTypeHandleId <$> arms'
         traverse_ (storeFact . subType scrutineeType) armTypes
-        return (NoType, SwitchStmt scrutinee' arms')
+        return (emptyTypeHandle, SwitchStmt scrutinee' arms')
       SpanStmt key value body -> do
         (key', value') <- preprocessSpanCommon key value
         body' <- preprocess body
-        return (NoType, SpanStmt key' value' body')
+        return (emptyTypeHandle, SpanStmt key' value' body')
       AssignStmt lvalues exprs -> do
         lvalues' <- preprocessT lvalues
         exprs' <- preprocessT exprs
-        let exprTypes = getTypeHandle <$> exprs'
+        let exprTypes = getTypeHandleId <$> exprs'
         zipWithM_
           (\lvalue exprType ->
-             storeFact $ getTypeHandle lvalue `subType` exprType)
+             storeFact $ getTypeHandleId lvalue `subType` exprType)
           lvalues'
           exprTypes
-        return (NoType, AssignStmt lvalues' exprs')
+        return (emptyTypeHandle, AssignStmt lvalues' exprs')
       PrimOpStmt {} -> undefined
       (CallStmt names mConv expr actuals mTargets annots) -- TODO: this is just a placeholder
        -> do
         retTypes <-
-          traverse (\name -> freshTypeHandle Star (getName name) name) names
+          (handleId <$>) <$> traverse (\name -> freshASTTypeHandle (getName name) name Star) names
         argTypes <-
-          traverse
+          (handleId <$>) <$> traverse
             (\(num, actual) ->
-               freshTypeHandle Star (T.pack $ "actual" <> show num) actual)
+               freshASTTypeHandle (T.pack $ "actual" <> show num) actual Star)
             (zip [0 :: Int ..] actuals)
         names' <- preprocessT names
         expr' <- preprocess expr
@@ -441,39 +445,39 @@ instance Preprocess Stmt a b where
         mTargets' <- preprocessT mTargets
         annots' <- preprocessT annots
         storeFact $
-          getTypeHandle expr' `typeUnion`
+          getTypeHandleId expr' `typeUnion`
           makeFunction
-            (makeTuple (VarType <$> argTypes))
-            (makeTuple (VarType <$> retTypes))
+            (VarType <$> argTypes)
+            (toType $ makeTuple retTypes)
         traverse_ storeFact $
-          zipWith subType (getTypeHandle <$> names') retTypes
+          zipWith subType (getTypeHandleId <$> names') retTypes
         traverse_ storeFact $
-          zipWith subType argTypes (getTypeHandle <$> actuals')
-        return (NoType, CallStmt names' mConv expr' actuals' mTargets' annots')
+          zipWith subType argTypes (getTypeHandleId <$> actuals')
+        return (emptyTypeHandle, CallStmt names' mConv expr' actuals' mTargets' annots')
       JumpStmt {} -> undefined
       ReturnStmt mConv Nothing actuals
       -- TODO: consult conventions with man
        -> do
         actuals' <- preprocessT actuals
-        let retType = makeTuple (VarType . getTypeHandle <$> actuals')
-        handle <- freshTypeHelper Star
+        let retType = makeTuple (VarType . handleId . getTypeHandle <$> actuals')
+        handle <- handleId <$> freshTypeHelper Star
         storeFact $ handle `typeUnion` retType
-        getCurrentReturn >>= storeFact . (`subType` handle)
-        return (NoType, ReturnStmt mConv Nothing actuals')
+        getCurrentReturn >>= storeFact . (`subType` handle) . handleId
+        return (emptyTypeHandle, ReturnStmt mConv Nothing actuals')
       ReturnStmt {} -> undefined
       label@LabelStmt {} -> do
         handle <- lookupVar (getName label)
-        storeFact $ addressKind `minKindConstraint` handle -- TODO: maybe add the constexpr constraint
-        storeFact $ handle `typeConstraint` LabelType
-        purePreprocess NoType label
+        storeFact $ addressKind `minKindConstraint` handleId handle -- TODO: maybe add the constexpr constraint
+        storeFact $ handleId handle `typeConstraint` ComplType LabelType
+        purePreprocess handle label
       ContStmt {} -> undefined
       GotoStmt expr mTargets -- TODO: check if cosher
        -> do
         expr' <- preprocess expr
-        let exprType = getTypeHandle expr'
+        let exprType = handleId $ getTypeHandle expr'
         storeFact $ addressKind `minKindConstraint` exprType
-        storeFact $ exprType `typeConstraint` LabelType
-        (NoType, ) . GotoStmt expr' <$> preprocessT mTargets
+        storeFact $ exprType `typeConstraint` ComplType LabelType
+        (emptyTypeHandle, ) . GotoStmt expr' <$> preprocessT mTargets
       CutToStmt {} -> undefined
 
 -- TODO: this seems wrong
@@ -481,7 +485,7 @@ instance Preprocess KindName a b where
   preprocessImpl (KindName mKind name) = do
     handle <- freshTypeHelper Star
     traverse_
-      (storeFact . (`minKindConstraint` handle) . getDataKind . getName)
+      (storeFact . (`minKindConstraint` handleId handle) . getDataKind . getName)
       mKind
     return (handle, KindName mKind (preprocessTrivial name))
 
@@ -495,10 +499,10 @@ instance Preprocess Lit a b where
   preprocessImpl lit = do
     handle <- freshTypeHelper Star
     case lit of
-      LitInt {} -> storeFact $ integerKind `minKindConstraint` handle
-      LitFloat {} -> storeFact $ floatKind `minKindConstraint` handle
-      LitChar {} -> storeFact $ integerKind `minKindConstraint` handle -- TODO: check this one? but probably correctus
-    storeFact $ constExprConstraint handle
+      LitInt {} -> storeFact $ integerKind `minKindConstraint` handleId handle
+      LitFloat {} -> storeFact $ floatKind `minKindConstraint` handleId handle
+      LitChar {} -> storeFact $ integerKind `minKindConstraint` handleId handle -- TODO: check this one? but probably correctus
+    storeFact $ constExprConstraint $ handleId handle
     purePreprocess handle lit
 
 instance Preprocess Actual a b where
@@ -506,7 +510,7 @@ instance Preprocess Actual a b where
     expr' <- preprocess expr
     let exprType = getTypeHandle expr'
     for_ mKind $ \kind ->
-      storeFact $ (getDataKind . getName) kind `minKindConstraint` exprType
+      storeFact $ (getDataKind . getName) kind `minKindConstraint` handleId exprType
     return (exprType, Actual mKind expr')
 
 instance Preprocess Init a b where
@@ -515,16 +519,16 @@ instance Preprocess Init a b where
       ExprInit exprs -> do
         exprs' <- preprocessT exprs
         handle <- freshTypeHelper Star
-        let exprTypes = getTypeHandle <$> exprs'
+        let exprTypes = getTypeHandleId <$> exprs'
         traverse_ (storeFact . constExprConstraint) exprTypes
-        traverse_ (storeFact . subType handle) exprTypes
+        traverse_ (storeFact . (`subType` handleId handle)) exprTypes
         return (handle, ExprInit exprs')
       strInit@StrInit {} -> strInitCommon StringType strInit
       strInit@Str16Init {} -> strInitCommon String16Type strInit
     where
       strInitCommon c strInit = do
         handle <- freshTypeHelper Star
-        storeFact $ handle `typeConstraint` c
+        storeFact $ handleId handle `typeConstraint` ComplType c
         purePreprocess handle strInit
 
 instance Preprocess Datum a b where
@@ -532,24 +536,24 @@ instance Preprocess Datum a b where
     \case
       datum@(DatumLabel name) -> do
         handle <- lookupVar (getName name)
-        storeFact $ addressKind `minKindConstraint` handle
-        storeFact $ handle `typeConstraint` AddrType (VarType NoType)
+        storeFact $ addressKind `minKindConstraint` handleId handle
+        storeFact $ handleId handle `typeConstraint` toType (AddrType $ VarType NoType)
         purePreprocess handle datum
       datum@(DatumAlign _) -> do
-        purePreprocess NoType datum
+        purePreprocess emptyTypeHandle datum
       Datum type' mSize mInit -> do
         handle <- freshTypeHelper Star
         type'' <- preprocess type'
-        let typeType = getTypeHandle type''
+        let typeType = handleId $ getTypeHandle type''
         mSize' <- traverse preprocess mSize
         mInit' <-
           for mInit $ \init -> do
             init' <- preprocess init
-            let initType = getTypeHandle init'
-            storeFact $ typeType `subType` initType
+            let initType = handleId $ getTypeHandle init'
+            storeFact $ typeType `subType`  initType
             storeFact $ linkExprConstraint initType
-            storeFact $ addressKind `minKindConstraint` handle
-            storeFact $ handle `typeConstraint` AddrType (VarType typeType)
+            storeFact $ addressKind `minKindConstraint` handleId handle
+            storeFact $ handleId handle `typeConstraint` AddrType (VarType typeType)
             return init'
         return (handle, Datum type'' mSize' mInit')
 
@@ -559,26 +563,26 @@ instance Preprocess Size a b where
       Size (Just expr) -> do
         expr' <- preprocess expr
         let exprType = getTypeHandle expr'
-        storeFact $ constExprConstraint exprType
+        storeFact $ constExprConstraint $ handleId exprType
         return (exprType, Size $ Just expr')
-      size -> purePreprocess NoType size
+      size -> purePreprocess emptyTypeHandle size
 
 instance Preprocess LValue a b where
   preprocessImpl =
     \case
       lvName@LVName {} -> do
-        lookupFVar (getName lvName) >>= \case
+        lookupFVar (getName lvName) <&> handleId >>= \case
           NoType -> lookupVar (getName lvName) >>= (`purePreprocess` lvName)
           scheme -> do
             handle <- freshTypeHelper Star
-            storeFact $ scheme `instType` handle
+            storeFact $ scheme `instType` handleId handle
             purePreprocess handle lvName
     -- TODO: is there a constraint on expr? probably yes -> consult with the man
       LVRef type' expr mAsserts -> do
         type'' <- preprocess type'
         expr' <- preprocess expr
-        let mAsserts' = (withTypeHandle NoType <$>) <$> mAsserts
-        storeFact $ addressKind `minKindConstraint` getTypeHandle expr'
+        let mAsserts' = (withTypeHandle emptyTypeHandle <$>) <$> mAsserts
+        storeFact $ addressKind `minKindConstraint` getTypeHandleId expr'
         return (getTypeHandle type'', LVRef type'' expr' mAsserts')
 
 instance Preprocess Expr a b where
@@ -589,21 +593,21 @@ instance Preprocess Expr a b where
       BinOpExpr op left right -- TODO: implement correctly, this is just a placeholder
        -> do
         handle <- freshTypeHelper Star
+        operator <- freshTypeHelper Star
         left' <- preprocess left
-        let leftType = getTypeHandle left'
+        let leftType = handleId $ getTypeHandle left'
         right' <- preprocess right
-        let rightType = getTypeHandle right'
-        storeFact $ SubKind leftType rightType
-        storeFact $ SubKind rightType leftType
+        let rightType = handleId $ getTypeHandle right'
+        storeFact $ handleId operator `typeUnion` makeFunction [leftType, rightType] (handleId handle)
         if op `elem` [EqOp, NeqOp, GtOp, LtOp, GeOp, LeOp]
           then do
-            storeFact $ Typing leftType (VarType rightType)
-            storeFact $ SubConst handle leftType
-            storeFact $ SubConst handle rightType
-            storeFact $ Typing handle BoolType
+            storeFact $ leftType `typeConstraint` rightType
+            storeFact $ handleId handle `subConst` leftType
+            storeFact $ handleId handle `subConst` rightType
+            storeFact $ handleId handle `typeConstraint` ComplType BoolType
           else do
-            storeFact $ SubType handle leftType
-            storeFact $ SubType handle rightType
+            storeFact $ handleId handle `subType` leftType
+            storeFact $ handleId handle `subType` rightType
       -- TODO: add constraint dependent on the operator
         return (handle, BinOpExpr op left' right')
       NegExpr expr -> NegExpr `preprocessInherit` expr -- TODO: add constraint dependent on the operator
@@ -614,12 +618,12 @@ instance Preprocess Expr a b where
         mType' <-
           for mType $ \type' -> do
             type'' <- preprocess type'
-            let typeType = getTypeHandle type''
-            storeFact $ typeType `subType` litType
-            storeFact $ constExprConstraint litType
+            let typeType = getTypeHandleId type''
+            storeFact $ typeType `subType` handleId litType
+            storeFact $ constExprConstraint $ handleId litType
             return type''
         return (litType, LitExpr lit' mType')
-      PrefixExpr name actuals -> do
+      PrefixExpr name actuals -> do -- TODO: fix this
         handle <- freshTypeHelper Star
         tupleType <- freshTypeHelper Star
         argType <- freshTypeHelper Star
@@ -628,13 +632,13 @@ instance Preprocess Expr a b where
         opScheme <- freshTypeHelper Star
         actuals' <- preprocessT actuals
         storeFact $
-          tupleType `typeUnion` makeTuple (VarType . getTypeHandle <$> actuals')
+          handleId tupleType `typeUnion` makeTuple (handleId . getTypeHandle <$> actuals')
         storeFact $
-          fType `typeUnion` makeFunction (VarType argType) (VarType retType)
-        storeFact $ opScheme `typeUnion` getNamedOperator (getName name)
-        storeFact $ opScheme `instType` fType
-        storeFact $ argType `subType` tupleType
-        storeFact $ handle `subType` retType
+          handleId fType `typeUnion` makeFunction [handleId argType] (handleId retType)
+        storeFact $ handleId opScheme `typeUnion` getNamedOperator (getName name)
+        storeFact $ handleId opScheme `instType` handleId fType
+        storeFact $ handleId argType `subType` handleId tupleType
+        storeFact $ handleId handle `subType` handleId retType
         return (handle, PrefixExpr (preprocessTrivial name) actuals')
       InfixExpr name left right -> do
         handle <- freshTypeHelper Star
@@ -645,15 +649,15 @@ instance Preprocess Expr a b where
         opScheme <- freshTypeHelper Star
         left' <- preprocess left
         right' <- preprocess right
-        let leftType = VarType $ getTypeHandle left'
-            rightType = VarType $ getTypeHandle left'
-        storeFact $ tupleType `typeUnion` makeTuple [leftType, rightType]
+        let leftType = handleId $ getTypeHandle left'
+            rightType = handleId $ getTypeHandle left'
+        storeFact $ handleId tupleType `typeUnion` makeTuple [leftType, rightType]
         storeFact $
-          fType `typeUnion` makeFunction (VarType argType) (VarType retType)
-        storeFact $ opScheme `typeUnion` getNamedOperator (getName name)
-        storeFact $ opScheme `instType` fType
-        storeFact $ argType `subType` tupleType
-        storeFact $ handle `subType` retType
+          handleId fType `typeUnion` makeFunction [handleId argType] (handleId retType)
+        storeFact $ handleId opScheme `typeUnion` getNamedOperator (getName name)
+        storeFact $ handleId opScheme `instType` handleId fType
+        storeFact $ handleId argType `subType` handleId tupleType
+        storeFact $ handleId handle `subType` handleId retType
         return (handle, InfixExpr (preprocessTrivial name) left' right')
     where
       preprocessInherit c n = do

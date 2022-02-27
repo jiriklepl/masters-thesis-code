@@ -10,10 +10,12 @@
 
 module CMM.Inference.Preprocess.State where
 
+-- TODO: reduce the number of "_2 %~ handleId"
+
 import safe Control.Applicative (Alternative((<|>)))
 import safe Control.Lens.Getter (use, uses, (^.))
 import safe Control.Lens.Tuple
-import safe Control.Lens.Setter ((%=), (+=), (.=), (<~))
+import safe Control.Lens.Setter ((%=), (+=), (.=), (<~), (%~))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Function ((&))
@@ -30,11 +32,15 @@ import safe CMM.Lens (exchange)
 import safe CMM.Parser.HasPos
 import safe qualified CMM.Parser.HasPos as AST
 import CMM.Data.Tuple (complThd3)
+import CMM.Inference.TypeHandle hiding (annot)
 
 class HasTypeHandle a where
-  getTypeHandle :: a -> TypeVar
+  getTypeHandle :: a -> TypeHandle
 
-instance HasTypeHandle (AST.SourcePos, TypeVar) where
+getTypeHandleId :: HasTypeHandle a => a -> TypeVar
+getTypeHandleId = handleId . getTypeHandle
+
+instance HasTypeHandle (AST.SourcePos, TypeHandle) where
   getTypeHandle = snd
 
 instance HasTypeHandle a => HasTypeHandle (AST.Annot n a) where
@@ -45,27 +51,27 @@ class HasTypeHandle b =>
   | a -> b
   , b -> a
   where
-  withTypeHandle :: TypeVar -> a -> b
+  withTypeHandle :: TypeHandle -> a -> b
 
-instance WithTypeHandle AST.SourcePos (AST.SourcePos, TypeVar) where
+instance WithTypeHandle AST.SourcePos (AST.SourcePos, TypeHandle) where
   withTypeHandle = flip (,)
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
 
 data InferPreprocessor =
   InferPreprocessor
-    { _variables :: [Map Text TypeVar]
-    , _funcVariables :: Map Text TypeVar
-    , _funcInstVariables :: Map Text TypeVar
-    , _typeConstants :: [Map Text TypeVar]
-    , _typeVariables :: [Map Text TypeVar]
+    { _variables :: [Map Text TypeHandle]
+    , _funcVariables :: Map Text TypeHandle
+    , _funcInstVariables :: Map Text TypeHandle
+    , _typeConstants :: [Map Text TypeHandle]
+    , _typeVariables :: [Map Text TypeHandle]
     , _typeClasses :: Map Text ClassData
-    , _structMembers :: Map Text TypeVar
+    , _structMembers :: Map Text TypeHandle
     , _facts :: [Facts]
     , _cSymbols :: [Text]
     , _currentContext :: [Context]
     , _handleCounter :: Int
-    , _currentReturn :: TypeVar
+    , _currentReturn :: TypeHandle
     }
 
 initInferPreprocessor :: InferPreprocessor
@@ -87,25 +93,25 @@ initInferPreprocessor =
 
 data Context
   = GlobalCtx
-  | ClassCtx (Text, TypeVar) [(Text, TypeVar)] -- className, classHandle, superClassHandles
-  | InstanceCtx (Text, TypeVar) [(Text, TypeVar)] -- className, classHandle, superClassHandles
+  | ClassCtx (Text, TypeHandle) [(Text, TypeHandle)] -- className, classHandle, superClassHandles
+  | InstanceCtx (Text, TypeHandle) [(Text, TypeHandle)] -- className, classHandle, superClassHandles
   -- | SectionCtx Text
 
 data ClassData =
   ClassData
-  { _classHandle :: TypeVar
+  { _classHandle :: TypeHandle
   , _methodDecls :: Set Text
   }
 
-initClassData :: TypeVar -> Set Text -> ClassData
+initClassData :: TypeHandle -> Set Text -> ClassData
 initClassData handle decls =
   ClassData
   { _classHandle = handle
   , _methodDecls = decls
   }
 
-noCurrentReturn :: TypeVar
-noCurrentReturn = NoType
+noCurrentReturn :: TypeHandle
+noCurrentReturn = emptyTypeHandle
 
 makeLenses ''InferPreprocessor
 makeLenses ''ClassData
@@ -129,30 +135,30 @@ beginUnit vars fVars fIVars tCons tClasses sMems = do
   structMembers <~ declVars sMems
 
 -- | returns `NoType` on failure
-lookupVar :: MonadInferPreprocessor m => Text -> m TypeVar
+lookupVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupVar name = lookupVarImpl name <$> use variables
 
-lookupFVar :: MonadInferPreprocessor m => Text -> m TypeVar
+lookupFVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupFVar name = lookupVarImpl name <$> uses funcVariables pure
 
-lookupFIVar :: MonadInferPreprocessor m => Text -> m TypeVar
+lookupFIVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupFIVar name = lookupVarImpl name <$> uses funcInstVariables pure
 
-lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeVar)
+lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeHandle)
 lookupProc = uses variables . (. last) . Map.lookup
 
-lookupTCon :: MonadInferPreprocessor m => Text -> m TypeVar
+lookupTCon :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupTCon name = lookupVarImpl name <$> use typeConstants
 
-lookupTVar :: MonadInferPreprocessor m => Text -> m TypeVar
+lookupTVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupTVar name = lookupVarImpl name <$> use typeVariables
 
-lookupClass :: MonadInferPreprocessor m => Text -> m TypeVar
-lookupClass name = uses typeClasses $ maybe NoType (^. classHandle) . (name `Map.lookup`)
+lookupClass :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupClass name = uses typeClasses $ maybe emptyTypeHandle (^. classHandle) . (name `Map.lookup`)
 
-lookupVarImpl :: Ord k => k -> [Map k TypeVar] -> TypeVar
+lookupVarImpl :: Ord k => k -> [Map k TypeHandle] -> TypeHandle
 lookupVarImpl name vars =
-  fromMaybe NoType . foldr (<|>) Nothing $ (name `Map.lookup`) <$> vars
+  fromMaybe emptyTypeHandle . foldr (<|>) Nothing $ (name `Map.lookup`) <$> vars
 
 storeVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeVar name handle = do
@@ -178,11 +184,11 @@ beginProc vars tCons tVars = do
 declVars ::
      MonadInferPreprocessor m
   => Map Text (SourcePos, TypeKind)
-  -> m (Map Text TypeVar)
+  -> m (Map Text TypeHandle)
 declVars =
-  Map.traverseWithKey (\name (pos, kind) -> freshTypeHandle kind name pos)
+  Map.traverseWithKey (\name (pos, kind) -> freshASTTypeHandle name pos kind)
 
-endProc :: MonadInferPreprocessor m => m (Facts, TypeVar)
+endProc :: MonadInferPreprocessor m => m (Facts, TypeHandle)
 endProc = do
   variables %= tail
   typeConstants %= tail
@@ -191,30 +197,31 @@ endProc = do
   facts .= t
   (h, ) <$> exchange currentReturn noCurrentReturn
 
-storeProc :: MonadInferPreprocessor m => Text -> Facts -> Type -> m ()
-storeProc name fs t = do
+storeProc :: ToType a => MonadInferPreprocessor m => Text -> Facts -> a -> m ()
+storeProc name fs x = do
+  let t = toType x
   tVars <- collectTVars
   uses currentContext head >>= \case
     GlobalCtx -> do
       handle <- lookupFVar name
-      storeFact $ forall tVars fs (handle `typeUnion` t)
+      storeFact $ forall tVars fs (handleId handle `typeUnion` t)
     ClassCtx classHandle' _ -> do
       handle <- lookupFVar name
       iHandle <- lookupFIVar name
       iHandle' <- freshTypeHelper Star
-      let fICall = iHandle `InstType` iHandle'
-      let fIFact = iHandle' `typeUnion` makeFunction (VarType $ snd classHandle') t
-      let fs' = fICall : fIFact : uncurry ClassConstraint classHandle' : fs
-      storeFact $ forall tVars fs' (handle `classUnion` t)
+      let fICall = handleId iHandle `instType` handleId iHandle'
+      let fIFact = handleId iHandle' `typeUnion` makeFunction [VarType . handleId $ snd classHandle'] t
+      let fs' = fICall : fIFact : uncurry classConstraint (classHandle' & _2 %~ handleId) : fs
+      storeFact $ forall tVars fs' (handleId handle `classUnion` t)
     InstanceCtx classHandle' superHandles -> do
       handle <- lookupFIVar name
-      let t' = makeFunction (VarType $ snd classHandle') t
+      let t' = makeFunction [VarType . handleId $ snd classHandle'] t
       let fs' = {- TODO: maybe there has to be: (uncurry ClassConstraint <$> superHandles) <> -} fs
-      let fs'' = (uncurry ClassFact <$> superHandles) <> fs
-      storeFact $ forall tVars fs' (handle `classUnion` t')
-      storeFact $ forall tVars fs'' (handle `instanceUnion` t')
+      let fs'' = (uncurry classFact . (_2 %~ handleId) <$> superHandles) <> fs
+      storeFact $ forall tVars fs' (handleId handle `classUnion` t')
+      storeFact $ forall tVars fs'' (handleId handle `instanceUnion` t')
 
-getCurrentReturn :: MonadInferPreprocessor m => m TypeVar
+getCurrentReturn :: MonadInferPreprocessor m => m TypeHandle
 getCurrentReturn = use currentReturn
 
 pushFacts :: MonadInferPreprocessor m => m ()
@@ -231,28 +238,28 @@ pullTypeVariables = do
   typeVariables %= init
 
 collectTVars :: MonadInferPreprocessor m => m (Set TypeVar)
-collectTVars = uses typeVariables (Set.fromList . Map.elems . Map.unions)
+collectTVars = uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
 
 pushClass ::
      MonadInferPreprocessor m
-  => (Text, TypeVar)
-  -> [(Text, TypeVar)]
+  => (Text, TypeHandle)
+  -> [(Text, TypeHandle)]
   -> m ()
 pushClass handle supHandles = do -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
   tVars <- collectTVars
-  storeFact $ forall tVars (uncurry ClassConstraint <$> supHandles) (uncurry ClassFact handle)
+  storeFact $ forall tVars (uncurry classConstraint . (_2 %~ handleId) <$> supHandles) (uncurry classFact $ handle & _2 %~ handleId)
   currentContext %= (ClassCtx handle supHandles :)
 
 pushInstance ::
      MonadInferPreprocessor m
-  => (Text, TypeVar)
-  -> [(Text, TypeVar)]
+  => (Text, TypeHandle)
+  -> [(Text, TypeHandle)]
   -> m ()
 pushInstance handle supHandles = do -- TODO: solve type variables not in scope in superclasses
   ~(fs:facts') <- use facts
   facts .= facts'
   tVars <- collectTVars
-  storeFact $ forall tVars ((uncurry ClassFact <$> supHandles) <> fs) (uncurry ClassConstraint handle)
+  storeFact $ forall tVars ((uncurry classFact . (_2 %~ handleId) <$> supHandles) <> fs) (uncurry classConstraint $ handle & _2 %~ handleId)
   currentContext %= (InstanceCtx handle supHandles :)
 
 pullContext :: MonadInferPreprocessor m => m ()
@@ -260,21 +267,21 @@ pullContext = do
   currentContext %= tail
 
 -- | Stores the given type variable `handle` under the given `name` to the state monad
-storeTCon :: MonadInferPreprocessor m => Text -> Type -> m ()
+storeTCon :: (MonadInferPreprocessor m, ToType a) => Text -> a -> m ()
 storeTCon name handle = do
   vars <- use typeConstants
   storeVarImpl name handle vars
 
 -- | Stores the given type variable `handle` under the given `name` to the state monad
-storeTVar :: MonadInferPreprocessor m => Text -> Type -> m ()
+storeTVar :: (MonadInferPreprocessor m, ToType a) => Text -> a -> m ()
 storeTVar name handle = do
   vars <- use typeVariables
   storeVarImpl name handle vars
 
 storeVarImpl ::
-     (Ord k, MonadInferPreprocessor m) => k -> Type -> [Map k TypeVar] -> m ()
+     (ToType a, Ord k, MonadInferPreprocessor m) => k -> a -> [Map k TypeHandle] -> m ()
 storeVarImpl name handle vars =
-  storeFact $ lookupVarImpl name vars `typeUnion` handle
+  storeFact $ handleId (lookupVarImpl name vars) `typeUnion` handle
 
 -- | Stores the given `fact` to the state monad
 storeFact :: MonadInferPreprocessor m => Fact -> m ()
@@ -283,16 +290,18 @@ storeFact fact = do
   facts .= (fact : h) : t
 
 -- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
-freshTypeHandle ::
-     (MonadInferPreprocessor m, HasPos n) => TypeKind -> Text -> n -> m TypeVar
-freshTypeHandle tKind name node = do
-  handleCounter += 1
-  (TVarAST name (getPos node) &) . (tKind &) . TypeVar <$> use handleCounter
+freshASTTypeHandle ::
+     (MonadInferPreprocessor m, HasPos n) => Text -> n -> TypeKind -> m TypeHandle
+freshASTTypeHandle name node =
+  freshTypeHandle (TypeAST name (getPos node))
 
-freshTypeHelper :: MonadInferPreprocessor m => TypeKind -> m TypeVar
-freshTypeHelper tKind = do
+freshTypeHelper :: MonadInferPreprocessor m => TypeKind -> m TypeHandle
+freshTypeHelper = freshTypeHandle NoTypeAnnot
+
+freshTypeHandle :: MonadInferPreprocessor m => TypeAnnot -> TypeKind -> m TypeHandle
+freshTypeHandle annot tKind = do
   handleCounter += 1
-  (NoTVarAnnot &) . (tKind &) . TypeVar <$> use handleCounter
+  initTypeHandle annot <$> uses handleCounter (`TypeVar` tKind)
 
 storeCSymbol :: MonadInferPreprocessor m => Text -> m ()
 storeCSymbol = (cSymbols %=) . (:)

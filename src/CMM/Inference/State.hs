@@ -12,6 +12,8 @@ import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Function ((&))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Bimap (Bimap)
+import safe qualified Data.Bimap as Bimap
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
@@ -20,29 +22,33 @@ import safe CMM.Data.Bounds
 import safe CMM.Data.Lattice
 import safe CMM.Inference.BuiltIn
 import safe CMM.Inference.Type
+import safe CMM.Inference.TypeHandle
 
-type Subst = Map TypeVar Type
+type Subst = Map TypeVar
 
 data Inferencer =
   Inferencer
     {
-    -- | Contains types of type variables
-    _typing :: Subst
-    ,
-    -- | Contains kind limits of type variables
-    _kinding :: Map TypeVar (Bounds DataKind Lattice)
-    ,
     -- | Maps variables to their respective superKinding variables (forms a graph)
     _subKinding :: Map TypeVar (Set TypeVar)
     ,
-    -- | Contains constness limits of type variables
-    _consting :: Map TypeVar (Bounds Constness Ord)
-    ,
-    -- |
-    _unifying :: Map TypeVar (Set Type)
+    -- | Maps variables to their respective superKinding variables (forms a graph)
+    _kindingBounds :: Map TypeVar (Bounds DataKind)
     ,
     -- | Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
     _subConsting :: Map TypeVar (Set TypeVar)
+    ,
+    -- | Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
+    _constingBounds :: Map TypeVar (Bounds Constness)
+    ,
+    -- | TODO: Unifs
+    _unifs :: Map TypeVar TypeVar
+    ,
+    -- | TODO: Typize
+    _typize :: Bimap TypeVar PrimType
+    ,
+    -- | TODO: Handlize
+    _handlize :: Bimap TypeVar TypeHandle
     ,
     -- | TODO
     _handleCounter :: Int
@@ -60,12 +66,6 @@ data Inferencer =
     _facts :: Facts
     ,
     -- | TODO
-    _assumps :: Facts
-    ,
-    -- | TODO
-    _context :: Facts
-    ,
-    -- | TODO
     _schemes :: Map TypeVar (Set (Scheme Type))
     }
   deriving (Show)
@@ -73,19 +73,18 @@ data Inferencer =
 initInferencer :: Int -> Inferencer
 initInferencer handleCounter =
   Inferencer
-    { _typing = mempty
-    , _kinding = mempty
-    , _subKinding = mempty
-    , _consting = mempty
-    , _unifying = mempty
+    { _subKinding = mempty
+    , _kindingBounds = mempty
     , _subConsting = mempty
+    , _constingBounds = mempty
+    , _unifs = mempty
+    , _typize = Bimap.empty
+    , _handlize = Bimap.empty
     , _handleCounter = handleCounter
     , _classSchemes = mempty
     , _instanceSchemes = mempty
     , _facts = mempty
-    , _assumps = mempty
     , _errors = mempty
-    , _context = builtInContext
     , _schemes = mempty
     }
 
@@ -111,7 +110,7 @@ makeLenses ''Inferencer
 freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHelper tKind = do
   handleCounter += 1
-  (NoTVarAnnot &) . (tKind &) . TypeVar <$> use handleCounter
-
--- addClassFact :: MonadInferencer m => Text -> TypeVar  -> m ()
--- addClassFact name handle = classFacts %= Map.insertWith Set.union name (Set.singleton handle)
+  counter <- use handleCounter
+  let tVar = TypeVar counter tKind
+  handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
+  return tVar
