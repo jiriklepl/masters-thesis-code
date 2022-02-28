@@ -1,7 +1,7 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveTraversable #-}
 
 module CMM.AST.Annot where
 
@@ -10,7 +10,7 @@ import safe Data.Functor (void)
 
 data Annotation node annot =
   Annot (node annot) annot
-  deriving (Show, Functor, Data)
+  deriving (Show, Foldable, Traversable, Functor, Data)
 
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
 

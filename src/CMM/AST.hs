@@ -1,10 +1,10 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveTraversable #-}
 
 module CMM.AST where
 
@@ -22,7 +22,7 @@ instance ASTNode n => AST (Annot n)
 
 newtype Unit a =
   Unit [Annot TopLevel a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Unit ())
 
@@ -33,7 +33,7 @@ data TopLevel a
   | TopClass (Annot Class a)
   | TopInstance (Annot Instance a)
   | TopStruct (Annot Struct a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (TopLevel ())
 
@@ -42,7 +42,7 @@ data Section a
   | SecProcedure (Annot Procedure a)
   | SecDatum (Annot Datum a)
   | SecSpan (Annot Expr a) (Annot Expr a) [Annot Section a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Section ())
 
@@ -54,31 +54,31 @@ data Decl a
   | RegDecl Bool (Annot Registers a)
   | PragmaDecl (Name a) (Annot Pragma a)
   | TargetDecl [Annot TargetDirective a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Decl ())
 
 data Class a
   = Class [Annot (ParaName Type) a] (Annot (ParaName Name) a) [Annot ProcedureDecl a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Class ())
 
 data Instance a
   = Instance [Annot (ParaName Type) a] (Annot (ParaName Type) a) [Annot Procedure a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Instance ())
 
 data Struct a
   = Struct (Annot (ParaName Name) a) [Annot Datum a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Struct ())
 
 data ParaName param a
   = ParaName (Name a) [Annot param a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (param ()) => Eq (ParaName param ())
 
@@ -87,15 +87,15 @@ data TargetDirective a
   | ByteOrder Endian
   | PointerSize Int
   | WordSize Int
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Import a =
   Import (Maybe StrLit) (Name a)
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Export a =
   Export (Name a) (Maybe StrLit)
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Endian
   = Little
@@ -106,7 +106,7 @@ data Datum a
   = DatumLabel (Name a)
   | DatumAlign Int
   | Datum (Annot Type a) (Maybe (Annot Size a)) (Maybe (Annot Init a))
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Datum ())
 
@@ -114,25 +114,25 @@ data Init a
   = ExprInit [Annot Expr a]
   | StrInit StrLit
   | Str16Init StrLit
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Init ())
 
 data Registers a =
   Registers (Maybe Kind) (Annot Type a) [(Annot Name a, Maybe StrLit)] -- at least one
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Registers ())
 
 newtype Size a =
   Size (Maybe (Annot Expr a))
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Size ())
 
 newtype Body a =
   Body [Annot BodyItem a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Body ())
 
@@ -140,37 +140,37 @@ data BodyItem a
   = BodyDecl (Annot Decl a)
   | BodyStackDecl (Annot StackDecl a)
   | BodyStmt (Annot Stmt a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (BodyItem ())
 
 data Procedure a =
   Procedure (Annot ProcedureHeader a) (Annot Body a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Procedure ())
 
 newtype ProcedureDecl a =
   ProcedureDecl (Annot ProcedureHeader a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (ProcedureDecl ())
 
 data ProcedureHeader a =
   ProcedureHeader (Maybe Conv) (Name a) [Annot Formal a] (Maybe (Annot Type a))
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (ProcedureHeader ())
 
 data Formal a =
   Formal (Maybe Kind) Bool (Annot Type a) (Name a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Formal ())
 
 data Actual a =
   Actual (Maybe Kind) (Annot Expr a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Actual ())
 
@@ -180,7 +180,7 @@ newtype Kind =
 
 newtype StackDecl a =
   StackDecl [Annot Datum a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (StackDecl ())
 
@@ -211,30 +211,30 @@ data Stmt a
   | ContStmt (Name a) [Annot KindName a]
   | GotoStmt (Annot Expr a) (Maybe (Annot Targets a))
   | CutToStmt (Annot Expr a) [Annot Actual a] [Annot Flow a]
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Stmt ())
 
 data KindName a =
   KindName (Maybe Kind) (Name a)
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Arm a =
   Arm [Annot Range a] (Annot Body a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Arm ())
 
 data Range a =
   Range (Annot Expr a) (Maybe (Annot Expr a))
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Range ())
 
 data LValue a
   = LVName (Name a)
   | LVRef (Annot Type a) (Annot Expr a) (Maybe (Annot Asserts a))
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (LValue ())
 
@@ -244,23 +244,23 @@ data Flow a
   | AlsoReturnsTo [Annot Name a] -- at least one
   | AlsoAborts
   | NeverReturns
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Alias a
   = Reads [Annot Name a]
   | Writes [Annot Name a]
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data CallAnnot a
   = FlowAnnot (Annot Flow a)
   | AliasAnnot (Annot Alias a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (CallAnnot ())
 
 newtype Targets a =
   Targets [Annot Name a]
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Expr a
   = LitExpr (Annot Lit a) (Maybe (Annot Type a))
@@ -272,7 +272,7 @@ data Expr a
   | InfixExpr (Name a) (Annot Expr a) (Annot Expr a)
   | PrefixExpr (Name a) [Annot Actual a]
   | MemberExpr (Annot Expr a) (Annot Name a)
-  deriving (Show, Functor, Data, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Expr ())
 
@@ -280,18 +280,18 @@ data Lit a
   = LitInt Int
   | LitFloat Float
   | LitChar Char
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Type a
   = TBits Int
   | TName (Name a)
   | TAuto (Maybe (Name a))
   | TPar (Annot ParaType a)
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data ParaType a
   = ParaType (Annot Type a) [Annot Type a]
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 newtype Conv =
   Foreign StrLit
@@ -300,7 +300,7 @@ newtype Conv =
 data Asserts a
   = AlignAssert Int [Annot Name a]
   | InAssert [Annot Name a] (Maybe Int) -- at least one (Name a)
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 data Op
   = AddOp
@@ -323,14 +323,14 @@ data Op
 
 newtype Name a =
   Name Text
-  deriving (Show, Functor, Data, Eq, ASTNode, AST)
+  deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 newtype StrLit =
   StrLit Text
   deriving (Show, Data, Eq)
 
 data Pragma a
-  deriving (Functor, Data, ASTNode, AST) -- FIXME: the manual does not specify at all
+  deriving (Functor, Foldable, Traversable, Data, ASTNode, AST) -- FIXME: the manual does not specify at all
 
 instance Show (Pragma a) where
   show = error "pragmas are not implemented"
