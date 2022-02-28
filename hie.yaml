@@ -12,7 +12,10 @@ cradle:
     - path: "src/CMM/Data/Bounds.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Data/Orderable.hs"
+    - path: "src/CMM/Data/Ordered.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/OrderedBounds.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Data/Lattice.hs"

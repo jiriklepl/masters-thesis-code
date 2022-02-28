@@ -43,11 +43,12 @@ import safe CMM.Data.OrderedBounds()
 import safe CMM.Inference.State
 import safe CMM.Inference.Type
 import qualified Data.Bimap as Bimap
-import CMM.Inference.TypeHandle (initTypeHandle, TypeHandle, kinding, consting, typing)
+import CMM.Inference.TypeHandle (initTypeHandle, TypeHandle, kinding, consting, typing, handleId)
 import Data.Tuple (swap)
 import Control.Lens (Lens')
 import CMM.Data.Lattice
 import Data.PartialOrd (PartialOrd)
+import CMM.Inference.Preprocess.State (HasTypeHandle (getTypeHandle))
 
 class Unify a b | a -> b where
   unify :: a -> a -> Either [UnificationError] (Subst b, a)
@@ -467,6 +468,20 @@ pushTyping handle handle' = do
             False -> fixSubs
       safeHandlizeUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
 
+mineAST :: (MonadInferencer m, HasTypeHandle a, Foldable n) => n a -> m ()
+mineAST = traverse_ (addHandle . getTypeHandle)
+  where
+    addHandle handle = handlize %= Bimap.insert (handleId handle) handle
+
+normalizeFacts :: Facts -> Facts
+normalizeFacts [] = []
+normalizeFacts (fact@Fact{} : others) = fact : normalizeFacts others
+normalizeFacts (NestedFact (tVars :. from :=> facts) : others) =
+  makeFacts (Set.toList tVars) ++ NestedFact (Set.fromList [] :. from :=> normalizeFacts facts) : normalizeFacts others
+  where
+    makeFacts [] = []
+    makeFacts (tVar':rest) = Fact (tVar' `typeUnion` ComplType (toLam tVar')) : makeFacts rest
+
 fixAll :: MonadInferencer m => m ()
 fixAll = do
   results <- sequence [fixTypize, fixHandlize, fixSubs]
@@ -717,12 +732,10 @@ floatFacts [] _ = (False, [])
 floatFacts (fact:facts) counts = go $ floatFacts facts counts
   where
     go = case fact of
-      NestedFact (tVars :. [Union (VarType tVar) t] :=> fs)
+      NestedFact (_ :. [Union (VarType tVar) t] :=> fs)
         | counts Map.! tVar == 1 -> (_1 .~ True) . (_2 %~ (newFacts <>))
         where
-          newFacts = Fact (Union (VarType tVar) t) : fs <> makeFacts (Set.toList tVars)
-          makeFacts [] = []
-          makeFacts (tVar':rest) = Fact (tVar' `typeUnion` ComplType (toLam tVar')) : makeFacts rest
+          newFacts = Fact (Union (VarType tVar) t) : fs
       _ -> _2 %~ (fact:)
 
 collectCounts :: Facts -> Subst Int -> Subst Int
