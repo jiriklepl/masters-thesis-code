@@ -33,7 +33,7 @@ data CollectedVariables =
     , _funcInstVariables :: Map Text (SourcePos, TypeKind)
     , _typeConstants :: Map Text (SourcePos, TypeKind)
     , _typeVariables :: Map Text (SourcePos, TypeKind)
-    , _typeClasses :: Map Text (SourcePos, TypeKind, Set Text {- method decls -})
+    , _typeClasses :: Map Text (SourcePos, TypeKind, Set Text) {- method decls -}
     , _structMembers :: Map Text (SourcePos, TypeKind)
     , _errors :: Int
     , _warnings :: Int
@@ -112,8 +112,8 @@ addTVar ::
   -> TypeKind
   -> m ()
 addTVar node tVar tKind = do
-    uses typeVariables (tVar `Map.member`) >>= flip unless
-      (typeVariables %= Map.insert tVar (getPos node, tKind))
+  uses typeVariables (tVar `Map.member`) >>=
+    flip unless (typeVariables %= Map.insert tVar (getPos node, tKind))
 
 addTVarTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
@@ -166,8 +166,8 @@ addTClass ::
   -> Set Text
   -> m ()
 addTClass node tVar tKind methods = do
-    uses typeClasses (tVar `Map.member`) >>= flip unless
-      (typeClasses %= Map.insert tVar (getPos node, tKind, methods))
+  uses typeClasses (tVar `Map.member`) >>=
+    flip unless (typeClasses %= Map.insert tVar (getPos node, tKind, methods))
 
 addTClassTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
@@ -184,8 +184,8 @@ addSMem ::
   -> TypeKind
   -> m ()
 addSMem node tVar tKind = do
-    uses structMembers (tVar `Map.member`) >>= flip unless
-      (structMembers %= Map.insert tVar (getPos node, tKind))
+  uses structMembers (tVar `Map.member`) >>=
+    flip unless (structMembers %= Map.insert tVar (getPos node, tKind))
 
 addSMemTrivial ::
      (HasPos n, Pretty n, HasName n, MonadCollectVariables m)

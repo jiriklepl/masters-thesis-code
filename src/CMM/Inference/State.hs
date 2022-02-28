@@ -6,12 +6,12 @@
 module CMM.Inference.State where
 
 import safe Control.Lens.Getter (use)
-import safe Control.Lens.Setter ((+=), (%=))
+import safe Control.Lens.Setter ((%=), (+=))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
-import safe Data.Map (Map)
 import safe Data.Bimap (Bimap)
 import safe qualified Data.Bimap as Bimap
+import safe Data.Map (Map)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 
@@ -23,42 +23,30 @@ type Subst = Map TypeVar
 
 data Inferencer =
   Inferencer
-    {
     -- | Maps variables to their respective superKinding variables (forms a graph)
-    _subKinding :: Map TypeVar (Set TypeVar)
-    ,
+    { _subKinding :: Map TypeVar (Set TypeVar)
     -- | Maps variables to their respective superKinding variables (forms a graph)
-    _kindingBounds :: Map TypeVar (Bounds DataKind)
-    ,
+    , _kindingBounds :: Map TypeVar (Bounds DataKind)
     -- | Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
-    _subConsting :: Map TypeVar (Set TypeVar)
-    ,
+    , _subConsting :: Map TypeVar (Set TypeVar)
     -- | Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
-    _constingBounds :: Map TypeVar (Bounds Constness)
-    ,
+    , _constingBounds :: Map TypeVar (Bounds Constness)
     -- | TODO: Unifs
-    _unifs :: Map TypeVar TypeVar
-    ,
+    , _unifs :: Map TypeVar TypeVar
     -- | TODO: Typize
-    _typize :: Bimap TypeVar PrimType
-    ,
+    , _typize :: Bimap TypeVar PrimType
     -- | TODO: Handlize
-    _handlize :: Bimap TypeVar TypeHandle
-    ,
+    , _handlize :: Bimap TypeVar TypeHandle
     -- | TODO
-    _handleCounter :: Int
-    ,
+    , _handleCounter :: Int
     -- | TODO
-    _errors :: [UnificationError]
-    ,
+    , _errors :: [UnificationError]
     -- | TODO
-    _classSchemes :: Map Text (Scheme TypeVar)
-    ,
+    , _classSchemes :: Map Text (Scheme TypeVar)
     -- | TODO
-    _instanceSchemes :: Map Text (Set (Scheme TypeVar))
-    ,
+    , _instanceSchemes :: Map Text (Set (Scheme TypeVar))
     -- | TODO
-    _schemes :: Map TypeVar (Set (Scheme Type))
+    , _schemes :: Map TypeVar (Set (Scheme Type))
     }
   deriving (Show)
 

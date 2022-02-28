@@ -34,6 +34,7 @@ import safe CMM.AST
   , Body(..)
   , BodyItem(..)
   , CallAnnot(..)
+  , Class(..)
   , Conv(..)
   , Datum(..)
   , Decl(..)
@@ -44,13 +45,18 @@ import safe CMM.AST
   , Formal(..)
   , Import(..)
   , Init(..)
+  , Instance(..)
   , Kind(..)
   , KindName(..)
   , LValue(..)
   , Lit(..)
   , Name(..)
   , Op(..)
+  , ParaName(..)
+  , ParaType(..)
   , Procedure(..)
+  , ProcedureDecl(..)
+  , ProcedureHeader(..)
   , Range(..)
   , Registers(..)
   , Section(..)
@@ -58,11 +64,12 @@ import safe CMM.AST
   , StackDecl(..)
   , Stmt(..)
   , StrLit(..)
+  , Struct(..)
   , TargetDirective(..)
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), Class (..), Instance (..), ParaName (..), Struct (..), ParaType (..), ProcedureHeader (..), ProcedureDecl (..)
+  , Unit(..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
@@ -180,37 +187,53 @@ unit = withSourcePos $ Unit <$> many topLevel
 topLevel :: SourceParser TopLevel
 topLevel =
   withSourcePos $
-  choice [sectionTopLevel, classTopLevel, instanceTopLevel, structTopLevel, TopDecl <$> decl, TopProcedure <$> try procedure]
+  choice
+    [ sectionTopLevel
+    , classTopLevel
+    , instanceTopLevel
+    , structTopLevel
+    , TopDecl <$> decl
+    , TopProcedure <$> try procedure
+    ]
 
 sectionTopLevel :: ULocParser TopLevel
 sectionTopLevel =
   keyword L.Section *> liftA2 TopSection stringLiteral (braces $ many section)
 
 classTopLevel :: ULocParser TopLevel
-classTopLevel =
-  keyword L.Class *> (TopClass <$> class')
+classTopLevel = keyword L.Class *> (TopClass <$> class')
 
 class' :: SourceParser Class
-class' = withSourcePos $ choice
-  [ try $ liftA3 Class (sepBy1 paraName comma <* symbol L.DArr) paraName classBody
-  , liftA2 (Class []) paraName classBody
-  ]
+class' =
+  withSourcePos $
+  choice
+    [ try $
+      liftA3 Class (sepBy1 paraName comma <* symbol L.DArr) paraName classBody
+    , liftA2 (Class []) paraName classBody
+    ]
   where
-    classBody = braces $ many (withSourcePos $ ProcedureDecl <$> procedureHeader <* semicolon)
+    classBody =
+      braces $
+      many (withSourcePos $ ProcedureDecl <$> procedureHeader <* semicolon)
 
 instanceTopLevel :: ULocParser TopLevel
-instanceTopLevel =
-  keyword L.Instance *> (TopInstance <$> instance')
+instanceTopLevel = keyword L.Instance *> (TopInstance <$> instance')
 
 instance' :: SourceParser Instance
-instance' = withSourcePos $ choice
-  [ try $ liftA3 Instance (sepBy1 paraName comma <* symbol L.DArr) paraName (braces $ many procedure)
-  , liftA2 (Instance []) paraName (braces $ many procedure)
-  ]
+instance' =
+  withSourcePos $
+  choice
+    [ try $
+      liftA3
+        Instance
+        (sepBy1 paraName comma <* symbol L.DArr)
+        paraName
+        (braces $ many procedure)
+    , liftA2 (Instance []) paraName (braces $ many procedure)
+    ]
 
 structTopLevel :: ULocParser TopLevel
-structTopLevel =
-  keyword L.Struct *> (TopStruct <$> struct)
+structTopLevel = keyword L.Struct *> (TopStruct <$> struct)
 
 struct :: SourceParser Struct
 struct = withSourcePos $ liftA2 Struct paraName (braces $ many datum)
@@ -222,7 +245,8 @@ instance ParaName' Type where
   paraName = withSourcePos $ liftA2 ParaName identifier (many type')
 
 instance ParaName' Name where
-  paraName = withSourcePos $ liftA2 ParaName identifier (many $ withSourcePos identifier)
+  paraName =
+    withSourcePos $ liftA2 ParaName identifier (many $ withSourcePos identifier)
 
 section :: SourceParser Section
 section =
@@ -258,8 +282,7 @@ constDecl =
   keyword L.Const *>
   liftA2
     (uncurry ConstDecl)
-    (try (liftA2 (,) (optional type') identifier) <|>
-     (Nothing, ) <$> identifier)
+    (try (liftA2 (,) (optional type') identifier) <|> (Nothing, ) <$> identifier)
     (symbol L.EqSign *> expr) <*
   semicolon
 
@@ -304,11 +327,16 @@ wordSizeDirective = keyword L.Wordsize *> (WordSize . fst <$> intLit)
 
 procedureHeader :: SourceParser ProcedureHeader
 procedureHeader =
-  withSourcePos $ liftA4 ProcedureHeader (optional convention) identifier formals (optional type')
+  withSourcePos $
+  liftA4
+    ProcedureHeader
+    (optional convention)
+    identifier
+    formals
+    (optional type')
 
 procedure :: SourceParser Procedure
-procedure =
-  withSourcePos $ liftA2 Procedure procedureHeader body
+procedure = withSourcePos $ liftA2 Procedure procedureHeader body
 
 formal :: SourceParser Formal
 formal = withSourcePos $ liftA4 Formal mKind invariant type' identifier
@@ -672,7 +700,8 @@ memberExpr :: SourceParser Expr
 memberExpr = do
   expr' <- simpleExpr
   choice
-    [ symbol L.Arr *> withSourcePos (MemberExpr expr' <$> withSourcePos identifier)
+    [ symbol L.Arr *>
+      withSourcePos (MemberExpr expr' <$> withSourcePos identifier)
     , return expr'
     ]
 

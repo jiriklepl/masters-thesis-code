@@ -10,7 +10,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TypeFamilies #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module CMM.AST.Blockifier where
@@ -44,11 +43,12 @@ import safe CMM.AST
   , LValue(..)
   , Name
   , Procedure(..)
+  , ProcedureHeader(ProcedureHeader)
   , Range(..)
   , Registers(..)
   , StackDecl(..)
   , Stmt(..)
-  , Targets(..), ProcedureHeader (ProcedureHeader)
+  , Targets(..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot)
 import safe CMM.AST.BlockAnnot
@@ -346,6 +346,7 @@ instance GetMetadata ReadsVars (Expr a) where
     getMetadata t left <> getMetadata t right
   getMetadata t (ComExpr expr) = getMetadata t expr
   getMetadata t (NegExpr expr) = getMetadata t expr
+  getMetadata t (MemberExpr expr _) = getMetadata t expr -- TODO: check whether this is correctus
   getMetadata t (InfixExpr _ left right) =
     getMetadata t left <> getMetadata t right
   getMetadata t (PrefixExpr _ actuals) = getMetadata t actuals
@@ -394,21 +395,26 @@ instance Blockify (Annot Datum) a b where
     storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
   blockify datum@(Annot _ _) = return $ noBlockAnnots datum
 
-blockifyProcedureHeader :: (MonadBlockify m, HasPos a, WithBlockAnnot a b) =>
-  Annotation ProcedureHeader a
+blockifyProcedureHeader ::
+     (MonadBlockify m, HasPos a, WithBlockAnnot a b)
+  => Annotation ProcedureHeader a
   -> m (Annot ProcedureHeader b)
 blockifyProcedureHeader (Annot (ProcedureHeader mConv name formals mType) a) = do
   formals' <- traverse blockify formals
   traverse_ registerWrites formals
-  return . withNoBlockAnnot a $ ProcedureHeader mConv (noBlockAnnots name) formals' (noBlockAnnots <$> mType)
+  return . withNoBlockAnnot a $
+    ProcedureHeader
+      mConv
+      (noBlockAnnots name)
+      formals'
+      (noBlockAnnots <$> mType)
 
 instance Blockify (Annot Procedure) a b where
   blockify procedure@(Annot (Procedure header body) a) = do
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
     header' <- blockifyProcedureHeader header
-    (withAnnot (Begins index `withBlockAnnot` a) .
-     Procedure header' <$>
+    (withAnnot (Begins index `withBlockAnnot` a) . Procedure header' <$>
      blockify body) <*
       unsetBlock <*
       analyzeFlow procedure <*

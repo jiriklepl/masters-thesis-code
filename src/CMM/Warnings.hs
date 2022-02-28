@@ -3,15 +3,15 @@
 
 module CMM.Warnings where
 
-import safe Control.Monad.IO.Class
+import safe Control.Monad.IO.Class (MonadIO(..))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe qualified Data.Text.IO as T
-import safe Prettyprinter
+import safe Prettyprinter (Pretty(pretty))
 import safe Text.Megaparsec.Pos (sourcePosPretty)
 
 import safe CMM.AST.Utils ()
-import safe CMM.Parser.HasPos
+import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 
 -- | Creates a warning text from a `SourcePos` object, which gets printed out as the header for the warning, and from the message itself
 mkWarning :: SourcePos -> Text -> Text

@@ -22,6 +22,7 @@ import safe CMM.AST
   , Body(..)
   , BodyItem(..)
   , CallAnnot(..)
+  , Class(..)
   , Datum(..)
   , Decl(..)
   , Export
@@ -30,23 +31,29 @@ import safe CMM.AST
   , Formal(..)
   , Import
   , Init(..)
+  , Instance(..)
   , KindName(..)
   , LValue(..)
   , Lit
   , Name
+  , ParaName(ParaName)
+  , ParaType(..)
   , Pragma
   , Procedure(..)
+  , ProcedureDecl(..)
+  , ProcedureHeader(..)
   , Range(..)
   , Registers(..)
   , Section(..)
   , Size(..)
   , StackDecl(..)
   , Stmt(..)
+  , Struct(..)
   , TargetDirective
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), ProcedureHeader (..), ProcedureDecl (..), ParaName (ParaName), Class (..), Instance (..), Struct (..), ParaType (..)
+  , Unit(..)
   )
 import safe CMM.AST.Annot (Annot)
 import safe CMM.Control.Applicative (liftA4, liftA6)
@@ -149,7 +156,8 @@ instance ASTmapCTX3 hint a b (ParaName Name) (ParaName Type) ProcedureDecl =>
 
 instance ASTmapCTX2 hint a b (ParaName Type) Procedure =>
          ASTmap hint Instance a b where
-  astMapM _ f (Instance a b c) = liftA3 Instance (traverse f a) (f b) (traverse f c)
+  astMapM _ f (Instance a b c) =
+    liftA3 Instance (traverse f a) (f b) (traverse f c)
 
 instance ASTmapCTX2 hint a b (ParaName Name) Datum =>
          ASTmap hint Struct a b where
@@ -223,7 +231,8 @@ instance (ASTmapCTX2 hint a b Formal Type, Space hint a b Name) =>
          ASTmap hint ProcedureHeader a b where
   astMapM _ f =
     \case
-      ProcedureHeader a b c d -> liftA3 (ProcedureHeader a) (f b) (traverse f c) (traverse f d)
+      ProcedureHeader a b c d ->
+        liftA3 (ProcedureHeader a) (f b) (traverse f c) (traverse f d)
 
 instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
          ASTmap hint Formal a b where
@@ -322,7 +331,9 @@ instance ASTmapCTX1 hint a b Name => ASTmap hint Targets a b where
     \case
       Targets a -> Targets <$> traverse f a
 
-instance (ASTmapCTX5 hint a b Actual Expr Lit LValue Type, Space hint a b Name) =>
+instance ( ASTmapCTX6 hint a b Actual Expr Lit LValue Name Type
+         , Space hint a b Name
+         ) =>
          ASTmap hint Expr a b where
   astMapM _ f =
     \case
@@ -330,6 +341,7 @@ instance (ASTmapCTX5 hint a b Actual Expr Lit LValue Type, Space hint a b Name) 
       LVExpr a -> LVExpr <$> f a
       ParExpr a -> ParExpr <$> f a
       BinOpExpr a b c -> liftA2 (BinOpExpr a) (f b) (f c)
+      MemberExpr a b -> liftA2 MemberExpr (f a) (f b)
       ComExpr a -> ComExpr <$> f a
       NegExpr a -> NegExpr <$> f a
       InfixExpr a b c -> liftA3 InfixExpr (f a) (f b) (f c)
@@ -338,7 +350,8 @@ instance (ASTmapCTX5 hint a b Actual Expr Lit LValue Type, Space hint a b Name) 
 instance ASTmap hint Lit a b where
   astMapM _ _ = trivial
 
-instance (ASTmapCTX1 hint a b ParaType, Space hint a b Name) => ASTmap hint Type a b where
+instance (ASTmapCTX1 hint a b ParaType, Space hint a b Name) =>
+         ASTmap hint Type a b where
   astMapM _ f =
     \case
       TBits a -> pure $ TBits a

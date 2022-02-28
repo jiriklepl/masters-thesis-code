@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
-
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module CMM.Pretty
@@ -40,6 +39,7 @@ import safe CMM.AST
   , Body(..)
   , BodyItem(..)
   , CallAnnot(..)
+  , Class(Class)
   , Conv(..)
   , Datum(..)
   , Decl(..)
@@ -50,14 +50,19 @@ import safe CMM.AST
   , Formal(..)
   , Import(..)
   , Init(..)
+  , Instance(Instance)
   , Kind(..)
   , KindName(..)
   , LValue(..)
   , Lit(..)
   , Name(..)
   , Op(..)
+  , ParaName(ParaName)
+  , ParaType(ParaType)
   , Pragma
   , Procedure(..)
+  , ProcedureDecl(ProcedureDecl)
+  , ProcedureHeader(ProcedureHeader)
   , Range(..)
   , Registers(..)
   , Section(..)
@@ -65,11 +70,12 @@ import safe CMM.AST
   , StackDecl(..)
   , Stmt(..)
   , StrLit(..)
+  , Struct(Struct)
   , TargetDirective(..)
   , Targets(..)
   , TopLevel(..)
   , Type(..)
-  , Unit(..), Class (Class), Instance (Instance), Struct (Struct), ParaName (ParaName), ParaType (ParaType), ProcedureHeader (ProcedureHeader), ProcedureDecl (ProcedureDecl)
+  , Unit(..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -137,23 +143,25 @@ instance Pretty (Class a) where
   pretty (Class [] paraName methods) =
     "class" <+> pretty paraName <+> bracesBlock methods
   pretty (Class paraNames paraName methods) =
-    "class" <+> commaSep (pretty <$> paraNames) <+> darrow <+> pretty paraName <+> bracesBlock methods
+    "class" <+>
+    commaSep (pretty <$> paraNames) <+>
+    darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Instance a) where
   pretty (Instance [] paraName methods) =
     "instance" <+> pretty paraName <+> bracesBlock methods
   pretty (Instance paraNames paraName methods) =
-    "instance" <+> commaSep (pretty <$> paraNames) <+> darrow <+> pretty paraName <+> bracesBlock methods
+    "instance" <+>
+    commaSep (pretty <$> paraNames) <+>
+    darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Struct a) where
   pretty (Struct paraName datums) =
     "struct" <+> pretty paraName <+> bracesBlock datums
 
 instance Pretty (param a) => Pretty (ParaName param a) where
-  pretty (ParaName name []) =
-    pretty name
-  pretty (ParaName name types) =
-    pretty name <+> hsep (pretty <$> types)
+  pretty (ParaName name []) = pretty name
+  pretty (ParaName name types) = pretty name <+> hsep (pretty <$> types)
 
 instance Pretty (TargetDirective a) where
   pretty (MemSize int) = "memsize" <+> pretty int
@@ -210,18 +218,17 @@ instance Pretty (BodyItem a) where
   pretty (BodyStmt stmt) = pretty stmt
 
 instance Pretty (Procedure a) where
-  pretty (Procedure header body) =
-    pretty header <+> pretty body
+  pretty (Procedure header body) = pretty header <+> pretty body
 
 instance Pretty (ProcedureDecl a) where
-  pretty (ProcedureDecl header) =
-    pretty header <> semi
+  pretty (ProcedureDecl header) = pretty header <> semi
 
 instance Pretty (ProcedureHeader a) where
   pretty (ProcedureHeader mConv name formals Nothing) =
     maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals)
   pretty (ProcedureHeader mConv name formals (Just type')) =
-    maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals) <+> pretty type'
+    maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals) <+>
+    pretty type'
 
 instance Pretty (Formal a) where
   pretty (Formal mKind invar type_ name) =
@@ -354,8 +361,7 @@ instance Pretty (Expr a) where
     pretty left <+> "`" <> pretty name <> "`" <+> pretty right
   pretty (PrefixExpr name actuals) =
     "%" <> pretty name <> parens (commaSep $ pretty <$> actuals)
-  pretty (MemberExpr expr field) =
-    pretty expr <> "->" <> pretty field
+  pretty (MemberExpr expr field) = pretty expr <> "->" <> pretty field
 
 instance Pretty (Lit a) where
   pretty (LitInt int) = pretty int
@@ -369,7 +375,7 @@ instance Pretty (Type a) where
   pretty (TPar paraType) = parens $ pretty paraType
 
 instance Pretty (ParaType a) where
-  pretty (ParaType type' types) = hsep $ pretty <$> (type':types)
+  pretty (ParaType type' types) = hsep $ pretty <$> (type' : types)
 
 instance Pretty Conv where
   pretty (Foreign string) = "foreign" <+> pretty string

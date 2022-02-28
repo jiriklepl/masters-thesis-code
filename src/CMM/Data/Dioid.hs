@@ -4,10 +4,9 @@
 
 module CMM.Data.Dioid where
 
-import safe Data.Monoid
-
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
+import safe Data.Monoid (All(All), Any(Any))
 import safe qualified Data.Set as Set
 import safe Data.Set (Set)
 

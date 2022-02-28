@@ -64,7 +64,6 @@ instance Lattice DataKind where
   Unstorable /\ _ = Unstorable
   DataKind rs /\ DataKind rs' = makeDataKind $ rs `Set.intersection` rs'
   a /\ b = b /\ a
-
   GenericData \/ _ = GenericData
   Unstorable \/ a = a
   DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
@@ -83,8 +82,7 @@ instance Dioid DataKind where
 instance Ord (Ordered DataKind) where
   Ordered GenericData `compare` Ordered GenericData = EQ
   Ordered Unstorable `compare` Ordered Unstorable = EQ
-  Ordered (DataKind set) `compare` Ordered (DataKind set') =
-    set `compare` set'
+  Ordered (DataKind set) `compare` Ordered (DataKind set') = set `compare` set'
   Ordered GenericData `compare` _ = LT
   _ `compare` Ordered GenericData = GT
   Ordered Unstorable `compare` _ = LT
@@ -134,10 +132,8 @@ instance Eq TypeKind where
   Star == Star = True
   Constraint == Constraint = True
   GenericType == GenericType = True
-
   ErrorKind _ == _ = False
   _ == ErrorKind _ = False
-
   (l :-> r) == (l' :-> r') = l == l' && r == r'
   _ == _ = False
 
@@ -145,19 +141,15 @@ instance Ord TypeKind where
   Star `compare` Star = EQ
   Star `compare` _ = LT
   _ `compare` Star = GT
-
   Constraint `compare` Constraint = EQ
   Constraint `compare` _ = LT
   _ `compare` Constraint = GT
-
   GenericType `compare` GenericType = EQ
   GenericType `compare` _ = LT
   _ `compare` GenericType = GT
-
   ErrorKind s `compare` ErrorKind s' = s `compare` s'
   ErrorKind _ `compare` _ = LT
   _ `compare` ErrorKind _ = GT
-
   (l :-> r) `compare` (l' :-> r') =
     case l `compare` l' of
       LT -> LT
@@ -205,7 +197,6 @@ instance Eq TypeVar where
 instance Ord TypeVar where
   NoType `compare` NoType = EQ
   TypeVar int _ `compare` TypeVar int' _ = int `compare` int'
-
   NoType `compare` _ = LT
   _ `compare` NoType = GT
 
@@ -238,10 +229,11 @@ data TypeCompl a
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data, IsTyped)
 
 instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
-  getTypeKind (AppType t _) = case getTypeKind t of
-    _ :-> k -> k
-    GenericType -> GenericType
-    _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
+  getTypeKind (AppType t _) =
+    case getTypeKind t of
+      _ :-> k -> k
+      GenericType -> GenericType
+      _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
   getTypeKind (LamType _ kind) = kind
   getTypeKind (ConstType _ kind) = kind
   getTypeKind _ = Star
@@ -259,7 +251,7 @@ instance Fallbackable Type where
 instance HasTypeKind Type where
   getTypeKind ErrorType {} = GenericType
   getTypeKind (VarType t) = getTypeKind t
-  getTypeKind (ComplType t)  = getTypeKind t
+  getTypeKind (ComplType t) = getTypeKind t
 
 class ToType a where
   toType :: a -> Type
@@ -322,7 +314,9 @@ data NestedFact a
   deriving (Show, Eq, Ord, Data, IsTyped)
 
 type FlatFacts = [FlatFact Type]
+
 type Fact = NestedFact Type
+
 type Facts = [Fact]
 
 class HasTypeKind a where
@@ -340,7 +334,8 @@ class Data a =>
         \case
           Fact (InstType _ t') -> freeTypeVars t'
           NestedFact (tVars :. flatFacts :=> nestedFacts) ->
-            (freeTypeVars flatFacts <> freeTypeVars nestedFacts) `Set.difference` tVars
+            (freeTypeVars flatFacts <> freeTypeVars nestedFacts) `Set.difference`
+            tVars
           (fact :: Fact) -> Set.unions $ gmapQ go fact
       leaf tVar@TypeVar {} = Set.singleton tVar
       leaf _ = mempty
@@ -361,13 +356,12 @@ forall s fs f
 forall s fs f = NestedFact $ s :. fs :=> f
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
-
 typeUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
 typeUnion t t' = toType t `Union` toType t'
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
 classUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
-classUnion t t' =  toType t `ClassUnion` toType t'
+classUnion t t' = toType t `ClassUnion` toType t'
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
 instanceUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type

@@ -4,19 +4,19 @@
 module Main where
 
 import Control.Monad.State as State
+
 -- import qualified Data.Map as Map
-
 -- import Control.Lens
-
 -- import Data.Text as T
 import Data.Text.IO as TS
+
 -- import Data.Tuple
 import Text.Megaparsec hiding (parse)
 
 import Data.Text.Lazy as T
 import Data.Text.Lazy.IO as T
--- import LLVM.Pretty -- from the llvm-hs-pretty package
 
+-- import LLVM.Pretty -- from the llvm-hs-pretty package
 -- import LLVM.IRBuilder.Module
 -- import LLVM.IRBuilder.Monad
 import Prettyprinter
@@ -34,10 +34,10 @@ import CMM.Inference.State as InferState
 import CMM.Inference.Type as Infer
 import CMM.Lexer
 import CMM.Parser
+
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
 -- import Data.Foldable (traverse_)
-
 main :: IO ()
 main = do
   contents <- TS.getContents
@@ -45,7 +45,7 @@ main = do
   let ast = either undefined id $ parse unit tokens'
   let flattened = flatten ast
   (mined, miner) <- runStateT (preprocess ast) initInferPreprocessor
-  (blockified, _ {- blockifier -}) <- runStateT (blockify flattened) B.initBlockifier
+  (blockified, _) <- runStateT (blockify flattened) B.initBlockifier
   T.putStr . T.pack . show $ pretty blockified
   -- let translated =
   --       ppllvm $
@@ -69,9 +69,7 @@ main = do
   print
     (freeTypeVars
        (TupleType
-          [ VarType (TypeVar 20 Infer.Star)
-          , VarType (TypeVar 30 Infer.Star)
-          ]))
+          [VarType (TypeVar 20 Infer.Star), VarType (TypeVar 30 Infer.Star)]))
   print $ CMM.Inference.Preprocess.State._facts miner
   execStateT
     (do let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner

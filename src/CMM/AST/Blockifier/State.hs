@@ -6,7 +6,7 @@
 module CMM.AST.Blockifier.State where
 
 import safe Control.Lens.Setter ((+=), (.=))
-import Control.Lens.TH (makeLenses)
+import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Map (Map)
 import safe Data.Set (Set)

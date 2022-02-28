@@ -58,26 +58,32 @@ data Decl a
 
 deriving instance Eq (Decl ())
 
-data Class a
-  = Class [Annot (ParaName Type) a] (Annot (ParaName Name) a) [Annot ProcedureDecl a]
+data Class a =
+  Class
+    [Annot (ParaName Type) a]
+    (Annot (ParaName Name) a)
+    [Annot ProcedureDecl a]
   deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Class ())
 
-data Instance a
-  = Instance [Annot (ParaName Type) a] (Annot (ParaName Type) a) [Annot Procedure a]
+data Instance a =
+  Instance
+    [Annot (ParaName Type) a]
+    (Annot (ParaName Type) a)
+    [Annot Procedure a]
   deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Instance ())
 
-data Struct a
-  = Struct (Annot (ParaName Name) a) [Annot Datum a]
+data Struct a =
+  Struct (Annot (ParaName Name) a) [Annot Datum a]
   deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (Struct ())
 
-data ParaName param a
-  = ParaName (Name a) [Annot param a]
+data ParaName param a =
+  ParaName (Name a) [Annot param a]
   deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (param ()) => Eq (ParaName param ())
@@ -289,8 +295,8 @@ data Type a
   | TPar (Annot ParaType a)
   deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
-data ParaType a
-  = ParaType (Annot Type a) [Annot Type a]
+data ParaType a =
+  ParaType (Annot Type a) [Annot Type a]
   deriving (Show, Functor, Foldable, Traversable, Data, Eq, ASTNode, AST)
 
 newtype Conv =

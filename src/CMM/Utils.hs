@@ -2,8 +2,8 @@
 
 module CMM.Utils where
 
-import safe Control.Monad
-import safe Data.Maybe
+import safe Control.Monad (unless, when)
+import safe Data.Maybe (isJust)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
 

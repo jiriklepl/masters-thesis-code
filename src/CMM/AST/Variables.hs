@@ -7,54 +7,68 @@
 module CMM.AST.Variables where
 
 import safe Control.Lens.Getter ((^.))
+import safe Control.Monad (zipWithM_)
 import safe Control.Monad.State (MonadIO, StateT, execStateT)
 import safe Data.Data (Data(gmapM), Typeable)
 import safe Data.Foldable (traverse_)
 import safe Data.Generics.Aliases (extM)
 import safe Data.Map (Map)
-import safe qualified  Data.Set as Set
+import safe qualified Data.Set as Set
+import safe Data.Set (Set)
 import safe Data.Text (Text)
-import Control.Monad (zipWithM_)
-import Data.Set (Set)
 
 import safe CMM.AST
-  ( Datum(DatumLabel)
+  ( Class(Class)
+  , Datum(DatumLabel)
   , Decl(ConstDecl, TypedefDecl)
   , Formal
   , Import
+  , Instance
+  , ParaName(ParaName)
   , Procedure
+  , ProcedureDecl
   , Registers(Registers)
   , Section
   , Stmt(LabelStmt)
-  , Unit, Struct (Struct), ParaName (ParaName), Class (Class), Instance, Type (TAuto), ProcedureDecl
+  , Struct(Struct)
+  , Type(TAuto)
+  , Unit
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.AST.Variables.State
   ( CollectedVariables
   , MonadCollectVariables
+  , addFIVar
+  , addFVar
   , addFVarTrivial
+  , addSMemTrivial
+  , addTClass
   , addTCon
   , addTVar
+  , addTVarTrivial
   , addVar
   , addVarTrivial
+  , funcInstVariables
   , funcVariables
   , initCollectedVariables
+  , structMembers
+  , typeClasses
+  , typeConstants
   , typeVariables
-  , variables, typeConstants, addTClass, addSMemTrivial, structMembers, typeClasses, addFVar, addFIVar, funcInstVariables, addTVarTrivial
+  , variables
   )
-import safe CMM.Inference.Type (TypeKind(GenericType, Star, (:->), Constraint))
+import safe CMM.Inference.Type (TypeKind((:->), Constraint, GenericType, Star))
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 
-type VariablePack =
-        ( Map Text (SourcePos, TypeKind)
-        , Map Text (SourcePos, TypeKind)
-        , Map Text (SourcePos, TypeKind)
-        , Map Text (SourcePos, TypeKind)
-        , Map Text (SourcePos, TypeKind)
-        , Map Text (SourcePos, TypeKind, Set Text)
-        , Map Text (SourcePos, TypeKind)
-        )
+type VariablePack
+   = ( Map Text (SourcePos, TypeKind)
+     , Map Text (SourcePos, TypeKind)
+     , Map Text (SourcePos, TypeKind)
+     , Map Text (SourcePos, TypeKind)
+     , Map Text (SourcePos, TypeKind)
+     , Map Text (SourcePos, TypeKind, Set Text)
+     , Map Text (SourcePos, TypeKind))
 
 localVariables ::
      (MonadIO m, Data (n SourcePos), Functor n, HasPos a)
@@ -65,42 +79,38 @@ localVariables n = variablesCommon . go $ getPos <$> n
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addTAutoCases $ addCommonCases $ gmapM go
 
-globalVariables ::
-     (MonadIO m, HasPos a)
-  => Unit a
-  -> m VariablePack
+globalVariables :: (MonadIO m, HasPos a) => Unit a -> m VariablePack
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
-classVariables ::
-     (MonadIO m, HasPos a)
-  => Class a
-  -> m VariablePack
-classVariables class'@(Class _ (Annot (ParaName _ params) _) _) = variablesCommon $ do
-  traverse_ (`addTVarTrivial` GenericType) params
-  gmapM go $ getPos <$> class'
+classVariables :: (MonadIO m, HasPos a) => Class a -> m VariablePack
+classVariables class'@(Class _ (Annot (ParaName _ params) _) _) =
+  variablesCommon $ do
+    traverse_ (`addTVarTrivial` GenericType) params
+    gmapM go $ getPos <$> class'
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addProcedureDeclCases $ gmapM go
 
-instanceVariables ::
-     (MonadIO m, HasPos a)
-  => Instance a
-  -> m VariablePack
+instanceVariables :: (MonadIO m, HasPos a) => Instance a -> m VariablePack
 instanceVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addTAutoCases $ addProcedureCases $ gmapM go
 
-variablesCommon ::
-     MonadIO m
-  => StateT CollectedVariables m a
-  -> m VariablePack
+variablesCommon :: MonadIO m => StateT CollectedVariables m a -> m VariablePack
 variablesCommon go = do
   result <- execStateT go initCollectedVariables
-  return (result ^. variables, result ^. funcVariables, result ^. funcInstVariables, result ^. typeConstants, result ^. typeVariables, result ^. typeClasses, result ^. structMembers)
+  return
+    ( result ^. variables
+    , result ^. funcVariables
+    , result ^. funcInstVariables
+    , result ^. typeConstants
+    , result ^. typeVariables
+    , result ^. typeClasses
+    , result ^. structMembers)
 
 infixr 3 *|*
 
@@ -109,12 +119,10 @@ infixr 3 *|*
      (Monad m, Typeable a, Typeable b) => (b -> m b) -> (a -> m a) -> a -> m a
 (*|*) = flip extM
 
-type CasesAdder m a =
-     (Data a, MonadCollectVariables m)
-  => (forall d. Data d =>
-                  d -> m d)
-  -> a
-  -> m a
+type CasesAdder m a
+   = (Data a, MonadCollectVariables m) =>
+       (forall d. Data d =>
+                    d -> m d) -> a -> m a
 
 addCommonCases :: CasesAdder m a
 addCommonCases go =
@@ -122,7 +130,8 @@ addCommonCases go =
   where
     goFormal =
       \case
-        (formal :: Annot Formal SourcePos) -> gmapM go formal *> addVarTrivial formal Star
+        (formal :: Annot Formal SourcePos) ->
+          gmapM go formal *> addVarTrivial formal Star
     goDecl =
       \case
         decl@(Annot ConstDecl {} (_ :: SourcePos)) -> addVarTrivial decl Star
@@ -150,13 +159,19 @@ addCommonCases go =
         stmt -> gmapM go stmt
 
 addGlobalCases :: CasesAdder m a
-addGlobalCases go = goClass *|* goInstance *|* goStruct *|* goSection *|* goProcedure *|* go
+addGlobalCases go =
+  goClass *|* goInstance *|* goStruct *|* goSection *|* goProcedure *|* go
   where
     goClass =
       \case
         class'@(Annot (Class _ (Annot (ParaName _ args) _) methods) (_ :: SourcePos)) -> do
           zipWithM_ addMethod methods (getName <$> methods)
-          class' <$ addTClass class' (getName class') (foldr (:->) Constraint (Star <$ args)) (Set.fromList $ getName <$> methods) -- TODO: add less trivial kind analysis (should be a simple bunch of unifs)
+          class' <$
+            addTClass
+              class'
+              (getName class')
+              (foldr (:->) Constraint (Star <$ args))
+              (Set.fromList $ getName <$> methods) -- TODO: add less trivial kind analysis (should be a simple bunch of unifs)
       where
         addMethod node name = do
           addFVar node name Star
@@ -168,7 +183,10 @@ addGlobalCases go = goClass *|* goInstance *|* goStruct *|* goSection *|* goProc
       \case
         struct@(Annot (Struct (Annot (ParaName _ args) _) decls) (_ :: SourcePos)) -> do
           addTCon struct (getName struct) (foldr (:->) Star (Star <$ args)) -- TODO: add less trivial kind analysis
-          zipWithM_ addSMemTrivial [label | label@(Annot DatumLabel {} _) <- decls] (repeat Star)
+          zipWithM_
+            addSMemTrivial
+            [label | label@(Annot DatumLabel {} _) <- decls]
+            (repeat Star)
           return struct
     goSection =
       \case
@@ -224,5 +242,6 @@ addTAutoCases go = goTAuto *|* go
     goTAuto =
       \case
         tAuto@(Annot (TAuto Nothing) (_ :: SourcePos)) -> return tAuto
-        tAuto@(Annot (TAuto (Just n)) (_ :: SourcePos)) -> tAuto <$ addTVar tAuto (getName n) GenericType
+        tAuto@(Annot (TAuto (Just n)) (_ :: SourcePos)) ->
+          tAuto <$ addTVar tAuto (getName n) GenericType
         type' -> gmapM go type'

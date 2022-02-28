@@ -7,12 +7,13 @@
 
 module CMM.Data.Bounds where
 
+import safe Control.Lens.TH (makeLenses)
+import safe Data.Data (Data)
+import safe Data.PartialOrd (PartialOrd((<=), (>), (>=)))
 import safe Prelude hiding (Ord(..))
 import safe Prelude (Ord)
-import safe Data.Data (Data)
+
 import safe CMM.Data.Lattice (Lattice(..), join, meet)
-import safe Data.PartialOrd ( PartialOrd((<=), (>=), (>)) )
-import safe Control.Lens.TH (makeLenses)
 
 data Bounds a =
   Bounds
@@ -39,6 +40,7 @@ isAbsurd :: PartialOrd a => Bounds a -> Bool
 isAbsurd (Bounds low high) = low > high
 
 normalizeAbsurd :: (PartialOrd a, Bounded a) => Bounds a -> Bounds a
-normalizeAbsurd bounds@(Bounds low high) = if low <= high
-  then bounds
-  else absurdBounds
+normalizeAbsurd bounds@(Bounds low high) =
+  if low <= high
+    then bounds
+    else absurdBounds

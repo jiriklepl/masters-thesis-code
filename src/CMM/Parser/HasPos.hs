@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 -- TODO: rename to GetPos?
-
 module CMM.Parser.HasPos
   ( HasPos(..)
   , SourcePos
@@ -12,8 +11,9 @@ import safe Text.Megaparsec.Pos (SourcePos)
 
 import safe CMM.AST.Annot (Annot, takeAnnot)
 
-class HasPos n where
+class HasPos n
   -- | Retrieves a SourcePos annotation from the given variable
+  where
   getPos :: n -> SourcePos
 
 instance HasPos SourcePos where

@@ -14,7 +14,7 @@ import safe Data.Text (Text)
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Ordered
 import safe CMM.Inference.Type as Infer
-  ( DataKind(DataKind, Unstorable, GenericData)
+  ( DataKind(DataKind, GenericData, Unstorable)
   , Facts
   , Type
   )

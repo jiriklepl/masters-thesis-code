@@ -19,27 +19,34 @@ import safe CMM.AST
   , Body(..)
   , BodyItem(..)
   , CallAnnot
+  , Class(Class)
   , Export
   , Expr(..)
   , Flow
   , Formal
   , Import
   , Init
+  , Instance(Instance)
   , KindName
   , LValue(..)
   , Lit
   , Name(..)
+  , ParaType
   , Pragma
   , Procedure(..)
+  , ProcedureDecl(ProcedureDecl)
+  , ProcedureHeader(ProcedureHeader)
   , Range
   , Registers
   , Section(..)
   , Size
   , Stmt(..)
+  , Struct
   , TargetDirective
   , Targets
   , TopLevel(..)
-  , Unit(..), Class (Class), Instance (Instance), Struct, ProcedureDecl (ProcedureDecl), ProcedureHeader (ProcedureHeader), ParaType, Type
+  , Type
+  , Unit(..)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Utils (addPrefix)
@@ -212,16 +219,18 @@ instance FlattenStmt (Annot Stmt) where
   flattenStmt stmt = pure [toBodyStmt stmt]
 
 instance Flatten Procedure where
-  flatten (Procedure header body) =
-    Procedure (flatten header) (flatten body)
+  flatten (Procedure header body) = Procedure (flatten header) (flatten body)
 
 instance Flatten ProcedureDecl where
-  flatten (ProcedureDecl header) =
-    ProcedureDecl $ flatten header
+  flatten (ProcedureDecl header) = ProcedureDecl $ flatten header
 
 instance Flatten ProcedureHeader where
   flatten (ProcedureHeader mConv name formals mType) =
-    ProcedureHeader mConv (flatten name) (flatten <$> formals) (flatten <$> mType)
+    ProcedureHeader
+      mConv
+      (flatten name)
+      (flatten <$> formals)
+      (flatten <$> mType)
 
 instance FlattenTrivial Formal
 
