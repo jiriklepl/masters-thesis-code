@@ -31,8 +31,10 @@ import safe qualified Data.PartialOrd as PartialOrd
 -- | DataKind specifies the semantics and register allocability of the types that map onto it via kinding
 data DataKind
   = GenericData -- | The most generic data kind
-  | DataKind (Set Int) -- | The regular case for data kinds
   | Unstorable -- | The empty data kind
+  | DataKind (Set Int) -- | The regular case for data kinds
+  | FunctionKind Int
+  | TupleKind Int
   deriving (Show, Eq, Data)
 
 instance PartialOrd DataKind where
@@ -41,6 +43,9 @@ instance PartialOrd DataKind where
   Unstorable <= _ = True
   _ <= Unstorable = False
   DataKind rs <= DataKind rs' = rs PartialOrd.<= rs'
+  FunctionKind int <= FunctionKind int' = int PartialOrd.<= int'
+  TupleKind int <= TupleKind int' = int PartialOrd.<= int'
+  _ <= _ = False
 
 instance Fallbackable DataKind where
   Unstorable ?? a = a
@@ -63,10 +68,18 @@ instance Lattice DataKind where
   GenericData /\ a = a
   Unstorable /\ _ = Unstorable
   DataKind rs /\ DataKind rs' = makeDataKind $ rs `Set.intersection` rs'
+  FunctionKind int /\ FunctionKind int' = FunctionKind $ min int int'
+  TupleKind int /\ TupleKind int' = TupleKind $ min int int'
+  FunctionKind{} /\ _ = Unstorable
+  TupleKind{} /\ _ = Unstorable
   a /\ b = b /\ a
   GenericData \/ _ = GenericData
   Unstorable \/ a = a
   DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
+  FunctionKind int \/ FunctionKind int' = FunctionKind $ max int int'
+  TupleKind int \/ TupleKind int' = TupleKind $ max int int'
+  FunctionKind{} \/ _ = GenericData
+  TupleKind{} \/ _ = GenericData
   a \/ b = b \/ a
 
 instance Semigroup DataKind where
@@ -83,10 +96,16 @@ instance Ord (Ordered DataKind) where
   Ordered GenericData `compare` Ordered GenericData = EQ
   Ordered Unstorable `compare` Ordered Unstorable = EQ
   Ordered (DataKind set) `compare` Ordered (DataKind set') = set `compare` set'
+  Ordered (FunctionKind int) `compare` Ordered (FunctionKind int') = int `compare` int'
+  Ordered (TupleKind int) `compare` Ordered (TupleKind int') = int `compare` int'
   Ordered GenericData `compare` _ = LT
   _ `compare` Ordered GenericData = GT
   Ordered Unstorable `compare` _ = LT
   _ `compare` (Ordered Unstorable) = GT
+  Ordered DataKind{} `compare` _ = LT
+  _ `compare` (Ordered DataKind{}) = GT
+  Ordered FunctionKind{} `compare` _ = LT
+  _ `compare` (Ordered FunctionKind{}) = GT
 
 instance Bounded (Ordered DataKind) where
   minBound = Ordered minBound
@@ -166,7 +185,8 @@ instance Nullable TypeKind where
 data TypeAnnot
   = NoTypeAnnot
   | TypeInst TypeVar
-  | TypeAST Text SourcePos
+  | TypeAST SourcePos
+  | TypeNamedAST Text SourcePos
   | TypeBuiltIn Text
   deriving (Show, Data)
 
@@ -179,24 +199,24 @@ instance Nullable TypeAnnot where
 
 data TypeVar
   = NoType
-  | TypeVar Int TypeKind
+  | TypeVar { tVarId :: Int, tVarKind :: TypeKind, tVarParent :: TypeVar }
   deriving (Show, Data, IsTyped)
 
-varId :: TypeVar -> Int
-varId NoType = undefined
-varId (TypeVar int _) = int
+familyDepth :: TypeVar -> Int
+familyDepth NoType = 0
+familyDepth TypeVar{tVarParent = parent} = familyDepth parent + 1
 
 toLam :: TypeVar -> TypeCompl a
 toLam NoType = undefined
-toLam (TypeVar int kind) = LamType int kind
+toLam (TypeVar int kind parent) = LamType int kind parent
 
 instance Eq TypeVar where
-  TypeVar int _ == TypeVar int' _ = int == int'
+  TypeVar int _ _ == TypeVar int' _ _ = int == int'
   _ == _ = False
 
 instance Ord TypeVar where
   NoType `compare` NoType = EQ
-  TypeVar int _ `compare` TypeVar int' _ = int `compare` int'
+  TypeVar int _ _ `compare` TypeVar int' _ _ = int `compare` int'
   NoType `compare` _ = LT
   _ `compare` NoType = GT
 
@@ -209,7 +229,7 @@ instance Nullable TypeVar where
 
 instance HasTypeKind TypeVar where
   getTypeKind NoType {} = GenericType
-  getTypeKind (TypeVar _ kind) = kind
+  getTypeKind (TypeVar _ kind _) = kind
 
 type PrimType = TypeCompl TypeVar
 
@@ -218,8 +238,8 @@ data TypeCompl a
   | FunctionType [a] a
   | AppType a a
   | AddrType a
-  | LamType Int TypeKind
-  | ConstType Int TypeKind
+  | LamType Int TypeKind TypeVar
+  | ConstType Int TypeKind TypeVar
   | StringType
   | String16Type
   | LabelType
@@ -234,8 +254,8 @@ instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
       _ :-> k -> k
       GenericType -> GenericType
       _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
-  getTypeKind (LamType _ kind) = kind
-  getTypeKind (ConstType _ kind) = kind
+  getTypeKind (LamType _ kind _) = kind
+  getTypeKind (ConstType _ kind _) = kind
   getTypeKind _ = Star
 
 data Type
@@ -411,6 +431,15 @@ regularExprConstraint = (. toType) . ConstnessBounds $ Bounds Regular Regular
 -- | States that the given `TypeVar` type variables is to be allocated to the register given by the given `Text` (this is a stronger version of `minKindConstraint`)
 registerConstraint :: ToType a => Text -> a -> FlatFact Type
 registerConstraint = (. toType) . OnRegister
+
+kindConstraint :: ToType a => DataKind -> a -> FlatFact Type
+kindConstraint kind = KindBounds (Ordered kind `Bounds` Ordered kind) . toType
+
+functionKind :: ToType a => Int -> a -> FlatFact Type
+functionKind = kindConstraint . FunctionKind
+
+tupleKind :: ToType a => Int -> a -> FlatFact Type
+tupleKind = kindConstraint . TupleKind
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
 classConstraint :: ToType a => Text -> a -> FlatFact Type

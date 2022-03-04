@@ -5,7 +5,7 @@
 
 module CMM.Inference.State where
 
-import safe Control.Lens.Getter (use)
+import safe Control.Lens.Getter (use, uses)
 import safe Control.Lens.Setter ((%=), (+=))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
@@ -47,6 +47,8 @@ data Inferencer =
     , _instanceSchemes :: Map Text (Set (Scheme TypeVar))
     -- | TODO
     , _schemes :: Map TypeVar (Set (Scheme Type))
+    -- | TODO
+    , _currentParent :: [TypeVar]
     }
   deriving (Show)
 
@@ -65,6 +67,7 @@ initInferencer handleCounter =
     , _instanceSchemes = mempty
     , _errors = mempty
     , _schemes = mempty
+    , _currentParent = [globalTVar]
     }
 
 data UnificationError
@@ -84,12 +87,31 @@ data UnificationError
 
 type MonadInferencer m = (MonadState Inferencer m, MonadIO m)
 
+globalTVar :: TypeVar
+globalTVar = NoType
+
 makeLenses ''Inferencer
 
+getHandleCounter :: MonadInferencer m => m Int
+getHandleCounter = use handleCounter
+
+nextHandleCounter :: MonadInferencer m => m Int
+nextHandleCounter = handleCounter += 1 >> use handleCounter
+
+pushParent :: MonadInferencer m => TypeVar -> m ()
+pushParent parent = currentParent %= (parent:)
+
+getParent :: MonadInferencer m => m TypeVar
+getParent = uses currentParent head
+
+popParent :: MonadInferencer m => m ()
+popParent = currentParent %= tail
+
 freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
-freshTypeHelper tKind = do
-  handleCounter += 1
-  counter <- use handleCounter
-  let tVar = TypeVar counter tKind
+freshTypeHelper tKind = getParent >>= freshTypeHelperWithParent tKind
+
+freshTypeHelperWithParent :: MonadInferencer m => TypeKind -> TypeVar -> m TypeVar
+freshTypeHelperWithParent tKind parent = do
+  tVar <- (\counter -> TypeVar counter tKind parent) <$> nextHandleCounter
   handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
   return tVar

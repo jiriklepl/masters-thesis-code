@@ -29,10 +29,11 @@ builtInKinds :: Bimap Text (Ordered DataKind)
 builtInKinds =
   Bimap.fromList $
   (_2 %~ Ordered) <$>
-  [ ("!false", Unstorable)
+  [ ("!unstorable", Unstorable)
   , ("!generic", GenericData)
   , ("address", addressKind)
   , ("float", floatKind)
+  , ("bool", boolKind)
   , ("", integerKind)
   ]
 
@@ -71,6 +72,12 @@ integerKind = DataKind integerRegisters
 
 integerRegisters :: Set Int
 integerRegisters = Set.fromList [0, 2] -- TODO: just a placeholder
+
+boolKind :: DataKind
+boolKind = DataKind boolRegisters
+
+boolRegisters :: Set Int
+boolRegisters = Set.fromList [3] -- TODO: just a placeholder
 
 builtInContext :: Facts
 builtInContext = [] -- undefined
