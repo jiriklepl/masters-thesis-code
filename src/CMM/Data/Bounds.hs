@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module CMM.Data.Bounds where
@@ -20,7 +21,7 @@ data Bounds a =
     { _lowerBound :: a
     , _upperBound :: a
     }
-  deriving (Show, Eq, Ord, Data)
+  deriving (Show, Eq, Ord, Functor, Data)
 
 makeLenses ''Bounds
 

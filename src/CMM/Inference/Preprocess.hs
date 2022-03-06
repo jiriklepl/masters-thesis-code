@@ -121,7 +121,6 @@ import safe CMM.Inference.Type as Infer
   , linkExprConstraint
   , makeFunction
   , makeTuple
-  , maxKindConstraint
   , minKindConstraint
   , registerConstraint
   , regularExprConstraint
@@ -129,7 +128,7 @@ import safe CMM.Inference.Type as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint, functionKind
+  , unstorableConstraint, functionKind, kindConstraint
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, emptyTypeHandle, handleId)
 import safe CMM.Parser.HasPos (HasPos)
@@ -387,7 +386,7 @@ instance Preprocess Registers a b where
     let typeType = getTypeHandleId type''
         setType handle = do
           storeFact $ typeType `subType` handle
-          for_ mKind $ storeFact . (`maxKindConstraint` handle) . getDataKind .
+          for_ mKind $ storeFact . (`minKindConstraint` handle) . getDataKind .
             getName
         go name mStrLit = do
           handle <- lookupVar (getName name)
@@ -459,7 +458,7 @@ instance Preprocess Formal a b where
     handle <- lookupVar (getName name)
     type'' <- preprocess type'
     storeFact $ getTypeHandleId type'' `subType` handleId handle
-    for_ mKind $ storeFact . (`maxKindConstraint` handleId handle) . getDataKind .
+    for_ mKind $ storeFact . (`minKindConstraint` handleId handle) . getDataKind .
       getName
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
@@ -470,7 +469,7 @@ instance Preprocess Stmt a b where
       IfStmt cond thenBody mElseBody -> do
         cond' <- preprocess cond
         storeFact $ getTypeHandleId cond' `typeConstraint` ComplType BoolType
-        storeFact $ boolKind `maxKindConstraint` getTypeHandleId cond'
+        storeFact $ boolKind `minKindConstraint` getTypeHandleId cond'
         (emptyTypeHandle, ) <$>
           liftA2 (IfStmt cond') (preprocess thenBody) (preprocessT mElseBody)
       SwitchStmt scrutinee arms -> do
@@ -536,7 +535,7 @@ instance Preprocess Stmt a b where
       ReturnStmt {} -> undefined
       label@LabelStmt {} -> do
         handle <- lookupVar (getName label)
-        storeFact $ addressKind `maxKindConstraint` handleId handle
+        storeFact $ addressKind `kindConstraint` handleId handle
         storeFact $ handleId handle `typeConstraint` ComplType LabelType
         storeFact $ constExprConstraint $ handleId handle
         purePreprocess handle label
@@ -545,7 +544,7 @@ instance Preprocess Stmt a b where
        -> do
         expr' <- preprocess expr
         let exprType = handleId $ getTypeHandle expr'
-        storeFact $ addressKind `maxKindConstraint` exprType
+        storeFact $ addressKind `minKindConstraint` exprType
         storeFact $ exprType `typeConstraint` ComplType LabelType
         (emptyTypeHandle, ) . GotoStmt expr' <$> preprocessT mTargets
       CutToStmt {} -> undefined
@@ -555,7 +554,7 @@ instance Preprocess KindName a b where
   preprocessImpl annot (KindName mKind name) = do
     handle <- freshNamedTypeHandle (getName name) annot Star
     traverse_
-      (storeFact . (`maxKindConstraint` handleId handle) . getDataKind . getName)
+      (storeFact . (`minKindConstraint` handleId handle) . getDataKind . getName)
       mKind
     return (handle, KindName mKind (preprocessTrivial name))
 
@@ -569,9 +568,9 @@ instance Preprocess Lit a b where
   preprocessImpl annot lit = do
     handle <- freshASTTypeHandle annot Star
     case lit of
-      LitInt {} -> storeFact $ integerKind `maxKindConstraint` handleId handle
-      LitFloat {} -> storeFact $ floatKind `maxKindConstraint` handleId handle
-      LitChar {} -> storeFact $ integerKind `maxKindConstraint` handleId handle -- TODO: check this one? but probably correctus
+      LitInt {} -> storeFact $ integerKind `minKindConstraint` handleId handle
+      LitFloat {} -> storeFact $ floatKind `minKindConstraint` handleId handle
+      LitChar {} -> storeFact $ integerKind `minKindConstraint` handleId handle -- TODO: check this one? but probably correctus
     storeFact $ constExprConstraint $ handleId handle
     purePreprocess handle lit
 
@@ -580,7 +579,7 @@ instance Preprocess Actual a b where
     expr' <- preprocess expr
     let exprType = getTypeHandle expr'
     for_ mKind $ \kind ->
-      storeFact $ (getDataKind . getName) kind `maxKindConstraint`
+      storeFact $ (getDataKind . getName) kind `minKindConstraint`
       handleId exprType
     return (exprType, Actual mKind expr')
 
@@ -607,7 +606,7 @@ instance Preprocess Datum a b where
     \case
       datum@(DatumLabel name) -> do
         handle <- lookupVar (getName name)
-        storeFact $ addressKind `maxKindConstraint` handleId handle
+        storeFact $ addressKind `kindConstraint` handleId handle
         storeFact $ handleId handle `typeConstraint`
           toType (AddrType $ VarType NoType)
         purePreprocess handle datum
@@ -624,7 +623,7 @@ instance Preprocess Datum a b where
             let initType = handleId $ getTypeHandle init'
             storeFact $ typeType `subType` initType
             storeFact $ linkExprConstraint initType
-            storeFact $ addressKind `maxKindConstraint` handleId handle
+            storeFact $ addressKind `kindConstraint` handleId handle
             storeFact $ handleId handle `typeConstraint`
               AddrType (VarType typeType)
             return init'
@@ -653,15 +652,14 @@ instance Preprocess LValue a b where
             storeFact $ scheme `instType` inst
             storeFact $ var `typeUnion` AddrType inst
             storeFact $ constExprConstraint var
-            storeFact $ addressKind `maxKindConstraint` var
-            storeFact $ addressKind `minKindConstraint` var
+            storeFact $ addressKind `kindConstraint` var
             purePreprocess handle lvName
     -- TODO: is there a constraint on expr? probably yes -> consult with the man
       LVRef type' expr mAsserts -> do
         type'' <- preprocess type'
         expr' <- preprocess expr
         let mAsserts' = (withTypeHandle emptyTypeHandle <$>) <$> mAsserts
-        storeFact $ addressKind `maxKindConstraint` getTypeHandleId expr'
+        storeFact $ addressKind `minKindConstraint` getTypeHandleId expr'
         return (getTypeHandle type'', LVRef type'' expr' mAsserts')
 
 instance Preprocess Expr a b where
@@ -679,14 +677,14 @@ instance Preprocess Expr a b where
         let rightType = handleId $ getTypeHandle right'
         storeFact $ handleId operator `typeUnion`
           makeFunction [leftType, rightType] (handleId handle)
-        storeFact $ addressKind `maxKindConstraint` handleId operator
+        storeFact $ tVarId (handleId operator) `functionKind` handleId operator
         if op `elem` [EqOp, NeqOp, GtOp, LtOp, GeOp, LeOp]
           then do
             storeFact $ leftType `typeConstraint` rightType
             storeFact $ handleId handle `subConst` leftType
             storeFact $ handleId handle `subConst` rightType
             storeFact $ handleId handle `typeConstraint` ComplType BoolType
-            storeFact $ boolKind `maxKindConstraint` handleId handle
+            storeFact $ boolKind `kindConstraint` handleId handle
           else do
             storeFact $ handleId handle `subType` leftType
             storeFact $ handleId handle `subType` rightType

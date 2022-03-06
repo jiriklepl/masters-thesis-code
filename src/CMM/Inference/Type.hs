@@ -76,8 +76,8 @@ instance Lattice DataKind where
   GenericData \/ _ = GenericData
   Unstorable \/ a = a
   DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
-  FunctionKind int \/ FunctionKind int' = FunctionKind $ max int int'
-  TupleKind int \/ TupleKind int' = TupleKind $ max int int'
+  FunctionKind int \/ FunctionKind int' = FunctionKind $ min int int'
+  TupleKind int \/ TupleKind int' = TupleKind $ min int int'
   FunctionKind{} \/ _ = GenericData
   TupleKind{} \/ _ = GenericData
   a \/ b = b \/ a
@@ -205,6 +205,13 @@ data TypeVar
 familyDepth :: TypeVar -> Int
 familyDepth NoType = 0
 familyDepth TypeVar{tVarParent = parent} = familyDepth parent + 1
+
+predecessor :: TypeVar -> TypeVar -> Bool
+predecessor NoType NoType = True
+predecessor NoType _ = False
+predecessor whose@TypeVar{tVarParent = parent} who
+  | whose == who = True
+  | otherwise = predecessor parent who
 
 toLam :: TypeVar -> TypeCompl a
 toLam NoType = undefined
