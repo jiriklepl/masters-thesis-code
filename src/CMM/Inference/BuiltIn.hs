@@ -16,7 +16,7 @@ import safe CMM.Data.Ordered
 import safe CMM.Inference.Type as Infer
   ( DataKind(DataKind, GenericData, Unstorable)
   , Facts
-  , Type
+  , Type, kindConstraint, TypeCompl (LabelType, TBitsType, StringType, String16Type, BoolType, VoidType), NestedFact (Fact), PrimType, regularExprConstraint, FlatFacts
   )
 
 getNamedOperator :: Text -> Infer.Type
@@ -81,3 +81,10 @@ boolRegisters = Set.fromList [3] -- TODO: just a placeholder
 
 builtInContext :: Facts
 builtInContext = [] -- undefined
+
+builtInTypeFacts :: FlatFacts
+builtInTypeFacts = (kindFact <$> types) <> (constFact <$> types)
+  where
+    types = [LabelType, StringType, String16Type, BoolType, LabelType, VoidType, TBitsType 8, TBitsType 16, TBitsType 32, TBitsType 64]
+    kindFact primType = GenericData `kindConstraint` (primType :: PrimType)
+    constFact primType = regularExprConstraint (primType :: PrimType)

@@ -36,7 +36,7 @@ import safe CMM.Inference.Type
   , Type(VarType)
   , TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
   , TypeKind(Star)
-  , TypeVar(TypeVar)
+  , TypeVar(TypeVar, tVarId)
   , classConstraint
   , classFact
   , classUnion
@@ -44,7 +44,7 @@ import safe CMM.Inference.Type
   , instType
   , instanceUnion
   , makeFunction
-  , typeUnion
+  , typeUnion, tupleKind, constExprConstraint
   )
 import CMM.Inference.TypeHandle
   ( TypeHandle
@@ -215,6 +215,9 @@ beginProc name vars tCons tVars = do
   typeVariables %= reverse . (tVars' :) . reverse
   pushFacts
   currentReturn <- freshTypeHelper Star
+  let returnId = handleId currentReturn
+  storeFact $ constExprConstraint returnId
+  storeFact $ tVarId returnId `tupleKind` returnId
   handle <- lookupCtxFVar name
   currentContext %= (FunctionCtx (name, handle) currentReturn :)
 
@@ -290,6 +293,7 @@ storeProc name fs x = do
             (Fact . uncurry classFact . (_2 %~ handleId) <$> superHandles) <> fs
       storeFact $ forall tVars [handleId handle `classUnion` t'] fs'
       storeFact $ forall tVars [handleId handle `instanceUnion` t'] fs''
+    FunctionCtx {} -> undefined -- error
 
 pushFacts :: MonadInferPreprocessor m => m ()
 pushFacts = do

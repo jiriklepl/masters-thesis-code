@@ -78,7 +78,7 @@ import safe CMM.Inference.BuiltIn as Infer
   , floatKind
   , getDataKind
   , getNamedOperator
-  , integerKind, boolKind
+  , integerKind, boolKind, builtInTypeFacts
   )
 import safe CMM.Inference.Preprocess.State as Infer
   ( HasTypeHandle(getTypeHandle)
@@ -128,10 +128,11 @@ import safe CMM.Inference.Type as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint, functionKind, kindConstraint
+  , unstorableConstraint, functionKind, kindConstraint, NestedFact (Fact)
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, emptyTypeHandle, handleId)
 import safe CMM.Parser.HasPos (HasPos)
+import Data.Maybe (fromJust)
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -216,10 +217,14 @@ purePreprocess ::
   -> m (TypeHandle, n b)
 purePreprocess handle = return . (handle, ) . (withTypeHandle handle <$>)
 
+handleVars :: (Functor f, HasTypeHandle a) => f a -> f TypeVar
+handleVars types = handleId . getTypeHandle <$> types
+
 instance Preprocess Unit a b where
   preprocessImpl _ unit@(Unit topLevels) = do
     (vars, fVars, fIVars, tCons, _, tClasses, sMems) <- globalVariables unit
     beginUnit vars fVars fIVars tCons tClasses sMems
+    traverse_ (storeFact . Fact) builtInTypeFacts
     let storeFacts var = do
           storeFact $ constExprConstraint var
           storeFact $ functionKind (tVarId var) var -- TODO: think this through
@@ -404,9 +409,9 @@ preprocessProcedureHeader ::
      (WithTypeHandle a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
   => ProcedureHeader a
   -> m (TypeHandle, ProcedureHeader b)
-preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
+preprocessProcedureHeader (ProcedureHeader mConv name formals mTypes) = do
   formals' <- preprocessT formals
-  mType' <- preprocessT mType
+  mTypes' <- traverse (traverse preprocess) mTypes
   let formalTypes = getTypeHandleId <$> formals'
   case mConv of
     Just (Foreign (StrLit conv))
@@ -417,9 +422,12 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
         storeCSymbol $ getName name
       | otherwise -> undefined
     Nothing -> return ()
-  for_ mType' $ \type' -> do
-    retType <- getCurrentReturn
-    storeFact $ getTypeHandleId type' `subType` handleId retType
+  mTypes' `for_` \types -> do
+    retHandle <- getCurrentReturn
+    retType'@(~(TupleType retVars)) <-
+      makeTuple <$> traverse (fmap handleId . (`freshASTTypeHandle` Star)) (fromJust mTypes)
+    storeFact $ handleId retHandle `typeUnion` retType'
+    zipWithM_ ((storeFact .) . subType) (handleVars types) retVars
   (fs, retType) <- (_2 %~ VarType . handleId) <$> endProc
   let argumentsType = VarType <$> formalTypes
   let procedureType = makeFunction argumentsType retType
@@ -429,7 +437,7 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mType) = do
   storeProc (getName name) fs procedureType
   return
     ( emptyTypeHandle
-    , ProcedureHeader mConv (preprocessTrivial name) formals' mType')
+    , ProcedureHeader mConv (preprocessTrivial name) formals' mTypes')
 
 -- TODO: consult conventions with the man
 -- TODO: add handle (dependent on the context) to the node
@@ -463,7 +471,7 @@ instance Preprocess Formal a b where
     return (handle, Formal mKind invar type'' (preprocessTrivial name))
 
 instance Preprocess Stmt a b where
-  preprocessImpl annot =
+  preprocessImpl _ =
     \case
       EmptyStmt -> purePreprocess emptyTypeHandle EmptyStmt
       IfStmt cond thenBody mElseBody -> do
@@ -524,12 +532,9 @@ instance Preprocess Stmt a b where
       -- TODO: consult conventions with man
        -> do
         actuals' <- preprocessT actuals
-        let handleVars = VarType . handleId . getTypeHandle <$> actuals'
         retType@(~(TupleType retVars)) <-
           makeTuple <$> traverse ((handleId <$>) . (`freshASTTypeHandle` Star)) actuals
-        storeFact $ unstorableConstraint retType
-        traverse_ (storeFact . (`subConst` retType)) handleVars
-        zipWithM_ ((storeFact .) . subType) retVars handleVars
+        zipWithM_ ((storeFact .) . subType) retVars (handleVars actuals')
         getCurrentReturn >>= storeFact . (`typeUnion` retType) . handleId
         return (emptyTypeHandle, ReturnStmt mConv Nothing actuals')
       ReturnStmt {} -> undefined

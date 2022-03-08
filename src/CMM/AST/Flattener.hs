@@ -230,7 +230,7 @@ instance Flatten ProcedureHeader where
       mConv
       (flatten name)
       (flatten <$> formals)
-      (flatten <$> mType)
+      (fmap flatten <$> mType)
 
 instance FlattenTrivial Formal
 

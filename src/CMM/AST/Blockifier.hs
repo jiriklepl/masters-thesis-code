@@ -407,7 +407,7 @@ blockifyProcedureHeader (Annot (ProcedureHeader mConv name formals mType) a) = d
       mConv
       (noBlockAnnots name)
       formals'
-      (noBlockAnnots <$> mType)
+      (fmap noBlockAnnots <$> mType)
 
 instance Blockify (Annot Procedure) a b where
   blockify procedure@(Annot (Procedure header body) a) = do

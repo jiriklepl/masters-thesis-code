@@ -333,7 +333,7 @@ procedureHeader =
     (optional convention)
     identifier
     formals
-    (optional type')
+    (optional $ symbol L.Arr *> sepEndBy type' comma)
 
 procedure :: SourceParser Procedure
 procedure = withSourcePos $ liftA2 Procedure procedureHeader body

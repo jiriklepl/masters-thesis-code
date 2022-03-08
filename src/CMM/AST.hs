@@ -163,7 +163,7 @@ newtype ProcedureDecl a =
 deriving instance Eq (ProcedureDecl ())
 
 data ProcedureHeader a =
-  ProcedureHeader (Maybe Conv) (Name a) [Annot Formal a] (Maybe (Annot Type a))
+  ProcedureHeader (Maybe Conv) (Name a) [Annot Formal a] (Maybe [Annot Type a])
   deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 
 deriving instance Eq (ProcedureHeader ())

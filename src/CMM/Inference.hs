@@ -7,6 +7,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE CPP #-}
 
 -- TODO: add the overlap check for instances
 -- TODO: add the overload resolution for instances to monomorphization
@@ -79,7 +80,7 @@ import safe CMM.Inference.Type
   , ToType(..)
   , Type(..)
   , TypeAnnot(NoTypeAnnot)
-  , TypeCompl(AddrType, AppType, FunctionType, TupleType, LamType)
+  , TypeCompl(AddrType, AppType, FunctionType, TupleType)
   , TypeKind(..)
   , TypeVar(TypeVar, tVarParent, NoType)
   , subConst
@@ -296,8 +297,8 @@ freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar
 elaborate :: MonadInferencer m => PrimType -> m (TypeCompl Type)
 elaborate primType = do
   handles <- use handlize
-  let getTyping t = maybe (VarType t) (^. typing) (t `Bimap.lookup` handles)
-  return $ getTyping <$> primType
+  let oneLevels t = maybe (VarType t) (view typing) (t `Bimap.lookup` handles)
+  return $ oneLevels <$> primType
 
 simplify :: MonadInferencer m => Type -> m TypeVar
 simplify =
@@ -377,10 +378,12 @@ normalizeFacts = fmap transform
     transform fact = fact
     makeFact tVar = Fact $ tVar `typeUnion` ComplType (toLam tVar)
 
-fixAll :: MonadInferencer m => m ()
+fixAll :: MonadInferencer m => m Bool
 fixAll = do
   results <- sequence [fixTypize, fixHandlize, fixSubs]
-  when (or results) fixAll
+  if or results
+    then True <$ fixAll
+    else return False
 
 mapFold :: (Ord a, Semigroup b) => [(a, b)] -> Map a b
 mapFold = foldl (flip . uncurry $ Map.insertWith (<>)) Map.empty
@@ -596,7 +599,7 @@ reduceOne (fact:facts) =
       case tVar `unify` tVar' of
         Left errs -> errors <>= errs
         Right (subst, _) -> unifs %= (subst `apply`)
-      fixAll
+      _ <- fixAll
       (_1 .~ True) <$> (fixFacts facts >>= reduceOne)
     Fact (ConstnessBounds bounds t) -> do
       handle <- simplify t >>= getHandle
@@ -655,14 +658,29 @@ readLowerBound = (view lowerBound .) . readBounds
 readUpperBound :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> a
 readUpperBound = (view upperBound .) . readBounds
 
+getConsting :: MonadInferencer m => TypeVar -> m TypeVar
+getConsting tVar = view consting <$> getHandle tVar
+
+getKinding :: MonadInferencer m => TypeVar -> m TypeVar
+getKinding tVar = view kinding <$> getHandle tVar
+
+getTyping :: MonadInferencer m => TypeVar -> m Type
+getTyping tVar = view typing <$> getHandle tVar
+
 collectPrimeTVars :: MonadState Inferencer m => TypeVar -> m (Set TypeVar)
 collectPrimeTVars tVar =
   uses typize (Bimap.lookup tVar) >>= \case
     Just primType -> fold <$> traverse collectPrimeTVars primType
     Nothing -> return $ Set.singleton tVar
 
-foo :: MonadInferencer m => TypeVar -> m Bool
-foo parent = do
+reconstruct :: MonadState Inferencer m => TypeVar -> m Type
+reconstruct tVar =
+  uses typize (Bimap.lookup tVar) >>= \case
+    Just primType -> ComplType <$> traverse reconstruct primType
+    Nothing -> return $ VarType tVar
+
+minimizeSubs :: MonadInferencer m => TypeVar -> m ()
+minimizeSubs parent = do
   constings <- uses subConsting transformMap
   constBounds <- use constingBounds
   kindings <- uses subKinding transformMap
@@ -677,12 +695,16 @@ foo parent = do
   fixSubGraph subKinding kSubst
   fixBounds kindingBounds kSubst
   cRest `for_` \case
-    Just ((_, limits), tVar) -> subConsting %= Map.insert tVar limits
+    Just ((_, limits), tVar)
+      | null limits -> minimizeBounds constingBounds tVar
+      | otherwise -> subConsting %= Map.insert tVar limits
     Nothing -> return ()
   kRest `for_` \case
-    Just ((_, limits), tVar) -> subKinding %= Map.insert tVar limits
+    Just ((_, limits), tVar)
+      | null limits -> minimizeBounds kindingBounds tVar
+      | otherwise -> subKinding %= Map.insert tVar limits
     Nothing -> return ()
-  True <$ safeHandlizeUpdate ((_2 . consting %~ apply cSubst) . (_2 . kinding %~ apply kSubst))
+  void $ safeHandlizeUpdate ((_2 . consting %~ apply cSubst) . (_2 . kinding %~ apply kSubst))
   where
     laundry boundsMap subGraph = let
         scc = Graph.stronglyConnCompR $ (\(from, to) -> (from `readBounds` boundsMap, from, Set.toList to)) <$> subGraph
@@ -690,7 +712,7 @@ foo parent = do
         clusters = Map.toList . Map.fromListWith mappend . fmap (\(a, (b, c)) -> ((Ordered <$> b, c), Set.singleton a)) $ Map.toList depends
       in unzip $ fromClusters boundsMap <$> clusters
     fromClusters boundsMap ((Ordered lower `Bounds` _, limits), tVars)
-      | null limits = undefined
+      | null limits = def
       | Set.size limits == 1 = let
           tVar' = Set.findMin limits
         in if readLowerBound tVar' boundsMap == lower
@@ -708,7 +730,7 @@ foo parent = do
       | otherwise = getDepends boundsMap others acc
       where
         getLimits tVar'
-          | tVarParent tVar' == parent = Set.filter relevant . view _2 . fromJust $ tVar' `Map.lookup` acc
+          | tVarParent tVar' == parent = Set.filter relevant . view _2 . fromMaybe (mempty, mempty) $ tVar' `Map.lookup` acc
           | parent `predecessor` tVarParent tVar' = if relevant tVar'
             then Set.singleton tVar'
             else mempty
@@ -741,8 +763,8 @@ freeParented parent = do
     isFreeParented _ NoType = False
     mineSubs handle = (handle ^. consting, handle ^. kinding)
 
-goo :: MonadInferencer m => TypeVar -> m ()
-goo parent = do
+minimizeFree :: MonadInferencer m => TypeVar -> m ()
+minimizeFree parent = do
   (consts, kinds) <- freeParented parent
   minimizeBounds constingBounds `traverse_` consts
   minimizeBounds kindingBounds `traverse_` kinds
@@ -771,6 +793,8 @@ floatSubs parent = do
 
 -- TODO: remove newParent (implicit)
 reParent :: Data d => TypeVar -> Set TypeVar -> d -> d
+reParent newParent oldParents
+  | oldParents == Set.singleton newParent = id
 reParent newParent oldParents = go
   where
     go :: Data d => d -> d
@@ -797,85 +821,83 @@ unSchematize (Fact (InstType (VarType scheme) inst) : others) = do
     Nothing -> (Fact (VarType scheme `Union` inst) :) <$> unSchematize others
 unSchematize (fact:others) = (fact :) <$> unSchematize others
 
+fOr :: (a -> Bool) -> (a -> Bool) -> a -> Bool
+fOr f g x = f x || g x
 
+fAnd :: (a -> Bool) -> (a -> Bool) -> a -> Bool
+fAnd f g x = f x && g x
+
+registerScheme :: MonadInferencer m => TypeVar -> Scheme Type -> m ()
+registerScheme tVar scheme =
+  schemes %= Map.insert tVar (Set.singleton scheme)
 
 -- TODO: check whether all typings are set (otherwise error)
 schematize :: MonadInferencer m => Set TypeVar -> m ()
 schematize tVars = do
   parent <- getParent
-  subKinds <- use subKinding
-  constBounds <- use constingBounds
-  subConsts <- uses subConsting $ parentedBy parent
 
-  typings <- use typize
+  x <- Set.toList . Set.unions <$> traverse collectPrimeTVars (Set.toList tVars)
+  constings <- Set.fromList <$> traverse getConsting x
+  kindings <- Set.fromList <$> traverse getKinding x
+  -- TODO: leave out trivial
+  typings <- zip x <$> traverse getTyping x
 
-  undefined -- TODO: continue from here
+  subConsts <- uses subConsting $ filter (parentedBy parent `fOr` presentIn constings) . Map.toList
+  subKinds <- uses subKinding $ filter (parentedBy parent `fOr` presentIn kindings) . Map.toList
+
+  constFacts <- translateSubs constingBounds SubConst ConstnessBounds subConsts
+  kindFacts <- translateSubs kindingBounds SubKind (KindBounds . fmap Ordered) subKinds
+  let
+    typingFacts = uncurry typeConstraint <$> typings
+    facts = typingFacts <> constFacts <> kindFacts
+  tVars `for_` \tVar -> do
+    t <- reconstruct tVar
+    let scheme = freeTypeVars facts :. facts :=> t
+    registerScheme tVar scheme
   where
     translateSubs _ _ _ [] = return []
     translateSubs bounds subConstr boundsConstr ((tVar, limits) : others) = do
-      let facts = (\tVar' -> toType tVar `subConstr` toType tVar') <$> Set.toList limits
-      let translateOthers = (facts <>) <$> translateSubs bounds subConstr boundsConstr others
+      let
+        facts = (\tVar' -> toType tVar `subConstr` toType tVar') <$> Set.toList limits
+        translateOthers = (facts <>) <$> translateSubs bounds subConstr boundsConstr others
       uses bounds (tVar `Map.lookup`) >>= \case
         Nothing -> translateOthers
         Just bounds' -> (boundsConstr bounds' (toType tVar) :) <$> translateOthers
-    parentedBy parent = filter (\(key, _) -> tVarParent key == parent) . Map.toList -- TODO: add the parameters
+    parentedBy parent (key, _) = tVarParent key == parent
+    presentIn where' (key, _) = key `Set.member` where'
 
 closeSCCs :: MonadInferencer m => Facts -> [SCC (Fact, TypeVar, [TypeVar])] -> m (Bool, Facts)
+closeSCCs facts [] = return (False, facts)
 closeSCCs facts (scc:others) =
   case scc of
-    AcyclicSCC (NestedFact (_ :. [fact] :=> fs) , tVar, tVars) -> do
-      pushParent tVar
-      fs' <- unSchematize fs
-      (change, facts') <- reduceMany $ Fact fact : fs' <> facts
-      foo tVar
-      goo tVar
-      fixAll
-      floatSubs tVar
-      fixAll
-      (change', facts'') <- fixFacts facts' >>= reduceMany
-      (change || change', facts'') <$ popParent
-    CyclicSCC trios -> do
-      undefined
-      where
-        transform fact = case fact of
-          Fact (InstType (VarType scheme) t)
-            | scheme `elem` (view _2 <$> trios) -> return . pure . Fact $ VarType scheme `Union` t
-            | otherwise -> instantiate scheme t
-          _ -> return $ pure fact
-
-instantiate :: MonadInferencer m => TypeVar -> Type -> m Facts
-instantiate tVar t = do
-  uses handlize (tVar `Bimap.lookup`) >>= \case
-    Just handle -> do
-      (nTyping, laMap) <- freshTyping (view typing handle) mempty
-      undefined
-      where
-        freshTyping (ComplType lam@LamType {}) laMap = case lam `Map.lookup` laMap of
-          Just var -> return (VarType var, laMap)
-          Nothing -> do
-            var <- freshTypeHelperWithHandle $ getTypeKind lam
-            return (VarType var, Map.insert lam var laMap)
-        freshTyping (ComplType (TupleType ts)) laMap =
-          (_1 %~ ComplType . TupleType) <$> freshTypings ts laMap
-        freshTyping (ComplType (FunctionType ts t)) laMap = do
-          (ts', laMap') <- freshTypings ts laMap
-          (t', laMap'') <- freshTyping t laMap'
-          return (ComplType $ FunctionType ts' t', laMap'')
-        freshTyping (ComplType (AppType app arg)) laMap = do
-          (app', laMap') <- freshTyping app laMap
-          (arg', laMap'') <- freshTyping arg laMap'
-          return (ComplType $ AppType app' arg', laMap'')
-        freshTyping (ComplType (AddrType t)) laMap =
-          (_1 %~ ComplType . AddrType) <$> freshTyping t laMap
-        freshTyping (ComplType t) laMap =
-          (,laMap) . ComplType <$> traverse undefined t
-        freshTyping t laMap = return (t, laMap)
-        freshTypings [] laMap = return ([], laMap)
-        freshTypings (t:ts) laMap = do
-          (t', laMap') <- freshTyping t laMap
-          (_1 %~ (t':)) <$> freshTypings ts laMap'
-    Nothing -> undefined
-  undefined
+    AcyclicSCC trio -> followUp $ pure trio
+    CyclicSCC trios -> followUp trios
+    where
+      followUp trios  = do
+        let
+          parents = getParents trios
+          parent = head parents
+          rePar = reParent parent (Set.fromList parents)
+        pushParent parent
+        (_, facts') <- traverse transformFact trios >>= fmap rePar . reduceMany . (<> facts) . concat
+        minimizeSubs parent
+        minimizeFree parent
+        _ <- fixAll
+        parent' <- uses unifs (`apply` parent)
+        popParent *> pushParent parent'
+        floatSubs parent'
+        _ <- fixAll
+        parent'' <- uses unifs (`apply` parent)
+        popParent *> pushParent parent''
+        (_, facts'') <- fixFacts facts' >>= reduceMany
+        parents' <- uses unifs ((<$> parents) . apply)
+        schematize $ Set.fromList parents'
+        (_1 .~ True) <$> (popParent *> closeSCCs facts'' others)
+      transformFact (NestedFact (_ :. [fact] :=> fs), _, _) =
+        (Fact fact :) <$> unSchematize fs
+      transformFact _ = undefined
+      getParents [] = []
+      getParents ((_, tVar, _) : rest) = tVar : getParents rest
 
 makeCallGraph :: Facts -> (Facts, [SCC (Fact, TypeVar, [TypeVar])])
 makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])

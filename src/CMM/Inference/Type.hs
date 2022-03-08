@@ -218,6 +218,7 @@ toLam NoType = undefined
 toLam (TypeVar int kind parent) = LamType int kind parent
 
 instance Eq TypeVar where
+  NoType == NoType = True
   TypeVar int _ _ == TypeVar int' _ _ = int == int'
   _ == _ = False
 

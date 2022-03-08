@@ -82,6 +82,9 @@ import safe CMM.AST.Annot (Annot, Annotation(Annot))
 commaSep :: [Doc ann] -> Doc ann
 commaSep xs = hsep $ punctuate comma xs
 
+commaPretty :: Pretty a => [a] -> Doc ann
+commaPretty = commaSep . fmap pretty
+
 bracesBlock :: Pretty a => [a] -> Doc ann
 bracesBlock xs = braces . enclose "\n" "\n" . indent 2 . vsep $ pretty <$> xs
 
@@ -124,14 +127,14 @@ instance Pretty (Section a) where
 
 instance Pretty (Decl a) where
   pretty (ImportDecl imports) =
-    "import" <+> commaSep (pretty <$> imports) <> semi
+    "import" <+> commaPretty imports <> semi
   pretty (ExportDecl exports) =
-    "export" <+> commaSep (pretty <$> exports) <> semi
+    "export" <+> commaPretty exports <> semi
   pretty (ConstDecl mType name expr) =
     "const" <+>
     maybeSpacedR mType <> pretty name <+> equals <+> pretty expr <> semi
   pretty (TypedefDecl type_ names) =
-    "typedef" <+> pretty type_ <+> commaSep (pretty <$> names) <> semi
+    "typedef" <+> pretty type_ <+> commaPretty names <> semi
   pretty (RegDecl invar registers) =
     ifTrue invar ("invariant" <> space) <> pretty registers <> semi
   pretty (PragmaDecl name pragma) =
@@ -144,7 +147,7 @@ instance Pretty (Class a) where
     "class" <+> pretty paraName <+> bracesBlock methods
   pretty (Class paraNames paraName methods) =
     "class" <+>
-    commaSep (pretty <$> paraNames) <+>
+    commaPretty paraNames <+>
     darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Instance a) where
@@ -152,7 +155,7 @@ instance Pretty (Instance a) where
     "instance" <+> pretty paraName <+> bracesBlock methods
   pretty (Instance paraNames paraName methods) =
     "instance" <+>
-    commaSep (pretty <$> paraNames) <+>
+    commaPretty paraNames <+>
     darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Struct a) where
@@ -194,7 +197,7 @@ instance Pretty (Datum a) where
     maybe mempty pretty mSize <> maybe mempty pretty mInit <> semi
 
 instance Pretty (Init a) where
-  pretty (ExprInit exprs) = braces $ commaSep (pretty <$> exprs)
+  pretty (ExprInit exprs) = braces $ commaPretty exprs
   pretty (StrInit string) = pretty string
   pretty (Str16Init string) = "unicode" <> parens (dquotes $ pretty string)
 
@@ -224,11 +227,13 @@ instance Pretty (ProcedureDecl a) where
   pretty (ProcedureDecl header) = pretty header <> semi
 
 instance Pretty (ProcedureHeader a) where
-  pretty (ProcedureHeader mConv name formals Nothing) =
-    maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals)
-  pretty (ProcedureHeader mConv name formals (Just type')) =
-    maybeSpacedR mConv <> pretty name <> parens (commaSep $ pretty <$> formals) <+>
-    pretty type'
+  pretty (ProcedureHeader mConv name formals mTypes) =
+    maybeSpacedR mConv <> pretty name <> parens (commaPretty formals) <> ending
+    where
+      ending = case mTypes of
+        Nothing -> mempty
+        Just [] -> mempty <+> "->"
+        Just types -> mempty <+> "->" <+> commaPretty types
 
 instance Pretty (Formal a) where
   pretty (Formal mKind invar type_ name) =
@@ -254,49 +259,49 @@ instance Pretty (Stmt a) where
   pretty (SpanStmt left right body) =
     "span" <+> pretty left <+> pretty right <+> pretty body
   pretty (AssignStmt lvalues exprs) =
-    commaSep (pretty <$> lvalues) <+>
-    equals <+> commaSep (pretty <$> exprs) <> semi
+    commaPretty lvalues <+>
+    equals <+> commaPretty exprs <> semi
   pretty (PrimOpStmt left opName actuals flows) =
     pretty left <+>
     equals <+>
     "%%" <>
     pretty opName <>
-    parens (commaSep $ pretty <$> actuals) <> hsep (pretty <$> flows) <> semi
+    parens (commaPretty actuals) <> hsep (pretty <$> flows) <> semi
   pretty callStmt@(CallStmt [] mConv _ _ _ _) =
     maybeSpacedR mConv <> prettyCallStmtRest callStmt
   pretty callStmt@(CallStmt kindedNames mConv _ _ _ _) =
-    commaSep (pretty <$> kindedNames) <+>
+    commaPretty kindedNames <+>
     equals <> maybeSpacedL mConv <+> prettyCallStmtRest callStmt
   pretty (JumpStmt mConv expr actuals mTargets) =
     "jump" <+>
     maybeSpacedR mConv <>
     pretty expr <>
-    parens (commaSep $ pretty <$> actuals) <> maybeSpacedL mTargets <> semi
+    parens (commaPretty actuals) <> maybeSpacedL mTargets <> semi
   pretty (ReturnStmt mConv mChoices actuals) =
     maybeSpacedR mConv <> "return" <+>
     maybe
       mempty
       (\(left, right) -> angles $ pretty left <> slash <> pretty right)
       mChoices <>
-    parens (commaSep $ pretty <$> actuals) <> semi
+    parens (commaPretty actuals) <> semi
   pretty (LabelStmt name) = pretty name <> colon
   pretty (ContStmt name kindedNames) =
     "continuation" <+>
-    pretty name <> parens (commaSep $ pretty <$> kindedNames) <> colon
+    pretty name <> parens (commaPretty kindedNames) <> colon
   pretty (GotoStmt expr mTargets) =
     "goto" <+> pretty expr <> maybeSpacedL mTargets <> semi
   pretty (CutToStmt expr actuals flows) =
     "cut" <+>
     "to" <+>
     pretty expr <>
-    parens (commaSep $ pretty <$> actuals) <> hsep (pretty <$> flows) <> semi
+    parens (commaPretty actuals) <> hsep (pretty <$> flows) <> semi
 
 instance Pretty (KindName a) where
   pretty (KindName mKind name) = maybeSpacedR mKind <> pretty name
 
 instance Pretty (Arm a) where
   pretty (Arm ranges body) =
-    "case" <+> commaSep (pretty <$> ranges) <> colon <+> pretty body
+    "case" <+> commaPretty ranges <> colon <+> pretty body
 
 instance Pretty (Range a) where
   pretty (Range left Nothing) = pretty left
@@ -312,24 +317,24 @@ instance Pretty (LValue a) where
 
 instance Pretty (Flow a) where
   pretty (AlsoCutsTo names) =
-    "also" <+> "cuts" <+> "to" <+> commaSep (pretty <$> names)
+    "also" <+> "cuts" <+> "to" <+> commaPretty names
   pretty (AlsoUnwindsTo names) =
-    "also" <+> "unwinds" <+> "to" <+> commaSep (pretty <$> names)
+    "also" <+> "unwinds" <+> "to" <+> commaPretty names
   pretty (AlsoReturnsTo names) =
-    "also" <+> "returns" <+> "to" <+> commaSep (pretty <$> names)
+    "also" <+> "returns" <+> "to" <+> commaPretty names
   pretty AlsoAborts = "also" <+> "aborts"
   pretty NeverReturns = "never" <+> "returns"
 
 instance Pretty (Alias a) where
-  pretty (Reads names) = "reads" <+> commaSep (pretty <$> names)
-  pretty (Writes names) = "writes" <+> commaSep (pretty <$> names)
+  pretty (Reads names) = "reads" <+> commaPretty names
+  pretty (Writes names) = "writes" <+> commaPretty names
 
 instance Pretty (CallAnnot a) where
   pretty (AliasAnnot alias) = pretty alias
   pretty (FlowAnnot flow) = pretty flow
 
 instance Pretty (Targets a) where
-  pretty (Targets names) = "targets" <+> commaSep (pretty <$> names)
+  pretty (Targets names) = "targets" <+> commaPretty names
 
 instance Pretty (Expr a) where
   pretty (LitExpr lit mType) =
@@ -360,7 +365,7 @@ instance Pretty (Expr a) where
   pretty (InfixExpr name left right) =
     pretty left <+> "`" <> pretty name <> "`" <+> pretty right
   pretty (PrefixExpr name actuals) =
-    "%" <> pretty name <> parens (commaSep $ pretty <$> actuals)
+    "%" <> pretty name <> parens (commaPretty actuals)
   pretty (MemberExpr expr field) = pretty expr <> "->" <> pretty field
 
 instance Pretty (Lit a) where
@@ -383,9 +388,9 @@ instance Pretty Conv where
 instance Pretty (Asserts a) where
   pretty (AlignAssert int []) = "aligned" <+> pretty int
   pretty (AlignAssert int names) =
-    "aligned" <+> pretty int <+> "in" <+> commaSep (pretty <$> names)
+    "aligned" <+> pretty int <+> "in" <+> commaPretty names
   pretty (InAssert names mInt) =
-    "in" <+> commaSep (pretty <$> names) <> maybeSpacedL mInt
+    "in" <+> commaPretty names <> maybeSpacedL mInt
 
 instance Pretty (Pragma a) where
   pretty _ = error "`Pragma`s are not specified" -- FIXME: pragmas are not specified
@@ -398,7 +403,7 @@ instance Pretty StrLit where
 
 prettyCallStmtRest :: Stmt a -> Doc ann
 prettyCallStmtRest (CallStmt _ _ expr actuals mTargets flowOrAliases) =
-  pretty expr <> parens (commaSep $ pretty <$> actuals) <+>
+  pretty expr <> parens (commaPretty actuals) <+>
   maybeSpacedR mTargets <> hsep (pretty <$> flowOrAliases) <> semi
 prettyCallStmtRest _ =
   error "`prettyCallStmtRest` is implemented only for call statements"
