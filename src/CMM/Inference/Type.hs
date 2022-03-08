@@ -70,16 +70,16 @@ instance Lattice DataKind where
   DataKind rs /\ DataKind rs' = makeDataKind $ rs `Set.intersection` rs'
   FunctionKind int /\ FunctionKind int' = FunctionKind $ min int int'
   TupleKind int /\ TupleKind int' = TupleKind $ min int int'
-  FunctionKind{} /\ _ = Unstorable
-  TupleKind{} /\ _ = Unstorable
+  FunctionKind {} /\ _ = Unstorable
+  TupleKind {} /\ _ = Unstorable
   a /\ b = b /\ a
   GenericData \/ _ = GenericData
   Unstorable \/ a = a
   DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
   FunctionKind int \/ FunctionKind int' = FunctionKind $ min int int'
   TupleKind int \/ TupleKind int' = TupleKind $ min int int'
-  FunctionKind{} \/ _ = GenericData
-  TupleKind{} \/ _ = GenericData
+  FunctionKind {} \/ _ = GenericData
+  TupleKind {} \/ _ = GenericData
   a \/ b = b \/ a
 
 instance Semigroup DataKind where
@@ -96,16 +96,18 @@ instance Ord (Ordered DataKind) where
   Ordered GenericData `compare` Ordered GenericData = EQ
   Ordered Unstorable `compare` Ordered Unstorable = EQ
   Ordered (DataKind set) `compare` Ordered (DataKind set') = set `compare` set'
-  Ordered (FunctionKind int) `compare` Ordered (FunctionKind int') = int `compare` int'
-  Ordered (TupleKind int) `compare` Ordered (TupleKind int') = int `compare` int'
+  Ordered (FunctionKind int) `compare` Ordered (FunctionKind int') =
+    int `compare` int'
+  Ordered (TupleKind int) `compare` Ordered (TupleKind int') =
+    int `compare` int'
   Ordered GenericData `compare` _ = LT
   _ `compare` Ordered GenericData = GT
   Ordered Unstorable `compare` _ = LT
   _ `compare` (Ordered Unstorable) = GT
-  Ordered DataKind{} `compare` _ = LT
-  _ `compare` (Ordered DataKind{}) = GT
-  Ordered FunctionKind{} `compare` _ = LT
-  _ `compare` (Ordered FunctionKind{}) = GT
+  Ordered DataKind {} `compare` _ = LT
+  _ `compare` (Ordered DataKind {}) = GT
+  Ordered FunctionKind {} `compare` _ = LT
+  _ `compare` (Ordered FunctionKind {}) = GT
 
 instance Bounded (Ordered DataKind) where
   minBound = Ordered minBound
@@ -199,17 +201,21 @@ instance Nullable TypeAnnot where
 
 data TypeVar
   = NoType
-  | TypeVar { tVarId :: Int, tVarKind :: TypeKind, tVarParent :: TypeVar }
+  | TypeVar
+      { tVarId :: Int
+      , tVarKind :: TypeKind
+      , tVarParent :: TypeVar
+      }
   deriving (Show, Data, IsTyped)
 
 familyDepth :: TypeVar -> Int
 familyDepth NoType = 0
-familyDepth TypeVar{tVarParent = parent} = familyDepth parent + 1
+familyDepth TypeVar {tVarParent = parent} = familyDepth parent + 1
 
 predecessor :: TypeVar -> TypeVar -> Bool
 predecessor NoType NoType = True
 predecessor NoType _ = False
-predecessor whose@TypeVar{tVarParent = parent} who
+predecessor whose@TypeVar {tVarParent = parent} who
   | whose == who = True
   | otherwise = predecessor parent who
 

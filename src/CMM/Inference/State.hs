@@ -99,7 +99,7 @@ nextHandleCounter :: MonadInferencer m => m Int
 nextHandleCounter = handleCounter += 1 >> use handleCounter
 
 pushParent :: MonadInferencer m => TypeVar -> m ()
-pushParent parent = currentParent %= (parent:)
+pushParent parent = currentParent %= (parent :)
 
 getParent :: MonadInferencer m => m TypeVar
 getParent = uses currentParent head
@@ -110,7 +110,8 @@ popParent = currentParent %= tail
 freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHelper tKind = getParent >>= freshTypeHelperWithParent tKind
 
-freshTypeHelperWithParent :: MonadInferencer m => TypeKind -> TypeVar -> m TypeVar
+freshTypeHelperWithParent ::
+     MonadInferencer m => TypeKind -> TypeVar -> m TypeVar
 freshTypeHelperWithParent tKind parent = do
   tVar <- (\counter -> TypeVar counter tKind parent) <$> nextHandleCounter
   handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)

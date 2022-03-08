@@ -232,7 +232,11 @@ instance (ASTmapCTX2 hint a b Formal Type, Space hint a b Name) =>
   astMapM _ f =
     \case
       ProcedureHeader a b c d ->
-        liftA3 (ProcedureHeader a) (f b) (traverse f c) (traverse (traverse f) d)
+        liftA3
+          (ProcedureHeader a)
+          (f b)
+          (traverse f c)
+          (traverse (traverse f) d)
 
 instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
          ASTmap hint Formal a b where

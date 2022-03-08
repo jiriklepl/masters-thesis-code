@@ -126,10 +126,8 @@ instance Pretty (Section a) where
     pretty left <+> pretty right <+> bracesBlock sections
 
 instance Pretty (Decl a) where
-  pretty (ImportDecl imports) =
-    "import" <+> commaPretty imports <> semi
-  pretty (ExportDecl exports) =
-    "export" <+> commaPretty exports <> semi
+  pretty (ImportDecl imports) = "import" <+> commaPretty imports <> semi
+  pretty (ExportDecl exports) = "export" <+> commaPretty exports <> semi
   pretty (ConstDecl mType name expr) =
     "const" <+>
     maybeSpacedR mType <> pretty name <+> equals <+> pretty expr <> semi
@@ -147,16 +145,14 @@ instance Pretty (Class a) where
     "class" <+> pretty paraName <+> bracesBlock methods
   pretty (Class paraNames paraName methods) =
     "class" <+>
-    commaPretty paraNames <+>
-    darrow <+> pretty paraName <+> bracesBlock methods
+    commaPretty paraNames <+> darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Instance a) where
   pretty (Instance [] paraName methods) =
     "instance" <+> pretty paraName <+> bracesBlock methods
   pretty (Instance paraNames paraName methods) =
     "instance" <+>
-    commaPretty paraNames <+>
-    darrow <+> pretty paraName <+> bracesBlock methods
+    commaPretty paraNames <+> darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Struct a) where
   pretty (Struct paraName datums) =
@@ -230,10 +226,11 @@ instance Pretty (ProcedureHeader a) where
   pretty (ProcedureHeader mConv name formals mTypes) =
     maybeSpacedR mConv <> pretty name <> parens (commaPretty formals) <> ending
     where
-      ending = case mTypes of
-        Nothing -> mempty
-        Just [] -> mempty <+> "->"
-        Just types -> mempty <+> "->" <+> commaPretty types
+      ending =
+        case mTypes of
+          Nothing -> mempty
+          Just [] -> mempty <+> "->"
+          Just types -> mempty <+> "->" <+> commaPretty types
 
 instance Pretty (Formal a) where
   pretty (Formal mKind invar type_ name) =
@@ -259,8 +256,7 @@ instance Pretty (Stmt a) where
   pretty (SpanStmt left right body) =
     "span" <+> pretty left <+> pretty right <+> pretty body
   pretty (AssignStmt lvalues exprs) =
-    commaPretty lvalues <+>
-    equals <+> commaPretty exprs <> semi
+    commaPretty lvalues <+> equals <+> commaPretty exprs <> semi
   pretty (PrimOpStmt left opName actuals flows) =
     pretty left <+>
     equals <+>
@@ -275,8 +271,7 @@ instance Pretty (Stmt a) where
   pretty (JumpStmt mConv expr actuals mTargets) =
     "jump" <+>
     maybeSpacedR mConv <>
-    pretty expr <>
-    parens (commaPretty actuals) <> maybeSpacedL mTargets <> semi
+    pretty expr <> parens (commaPretty actuals) <> maybeSpacedL mTargets <> semi
   pretty (ReturnStmt mConv mChoices actuals) =
     maybeSpacedR mConv <> "return" <+>
     maybe
@@ -286,8 +281,7 @@ instance Pretty (Stmt a) where
     parens (commaPretty actuals) <> semi
   pretty (LabelStmt name) = pretty name <> colon
   pretty (ContStmt name kindedNames) =
-    "continuation" <+>
-    pretty name <> parens (commaPretty kindedNames) <> colon
+    "continuation" <+> pretty name <> parens (commaPretty kindedNames) <> colon
   pretty (GotoStmt expr mTargets) =
     "goto" <+> pretty expr <> maybeSpacedL mTargets <> semi
   pretty (CutToStmt expr actuals flows) =
@@ -316,8 +310,7 @@ instance Pretty (LValue a) where
        maybe mempty (\asserts -> space <> pretty asserts) mAsserts)
 
 instance Pretty (Flow a) where
-  pretty (AlsoCutsTo names) =
-    "also" <+> "cuts" <+> "to" <+> commaPretty names
+  pretty (AlsoCutsTo names) = "also" <+> "cuts" <+> "to" <+> commaPretty names
   pretty (AlsoUnwindsTo names) =
     "also" <+> "unwinds" <+> "to" <+> commaPretty names
   pretty (AlsoReturnsTo names) =
@@ -389,8 +382,7 @@ instance Pretty (Asserts a) where
   pretty (AlignAssert int []) = "aligned" <+> pretty int
   pretty (AlignAssert int names) =
     "aligned" <+> pretty int <+> "in" <+> commaPretty names
-  pretty (InAssert names mInt) =
-    "in" <+> commaPretty names <> maybeSpacedL mInt
+  pretty (InAssert names mInt) = "in" <+> commaPretty names <> maybeSpacedL mInt
 
 instance Pretty (Pragma a) where
   pretty _ = error "`Pragma`s are not specified" -- FIXME: pragmas are not specified

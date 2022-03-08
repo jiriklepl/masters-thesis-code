@@ -21,6 +21,7 @@ import safe Control.Monad.State.Lazy (MonadIO, zipWithM_)
 import safe Data.Foldable (for_, traverse_)
 import safe Data.Functor ((<&>))
 import safe qualified Data.Map as Map
+import safe Data.Maybe (fromJust)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe Data.Traversable (for)
@@ -75,10 +76,12 @@ import safe CMM.AST.Variables as AST
   )
 import safe CMM.Inference.BuiltIn as Infer
   ( addressKind
+  , boolKind
+  , builtInTypeFacts
   , floatKind
   , getDataKind
   , getNamedOperator
-  , integerKind, boolKind, builtInTypeFacts
+  , integerKind
   )
 import safe CMM.Inference.Preprocess.State as Infer
   ( HasTypeHandle(getTypeHandle)
@@ -88,6 +91,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   , beginUnit
   , endProc
   , freshASTTypeHandle
+  , freshNamedTypeHandle
   , freshTypeHelper
   , getCurrentReturn
   , getTypeHandleId
@@ -97,6 +101,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   , lookupTCon
   , lookupTVar
   , lookupVar
+  , nextHandleCounter
   , popContext
   , popTypeVariables
   , pushClass
@@ -107,17 +112,20 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFact
   , storeProc
   , storeTCon
-  , storeVar, freshNamedTypeHandle, nextHandleCounter
+  , storeVar
   )
 import safe CMM.Inference.Type as Infer
-  ( ToType(toType)
+  ( NestedFact(Fact)
+  , ToType(toType)
   , Type(ComplType, VarType)
   , TypeCompl(AddrType, AppType, BoolType, LabelType, String16Type,
           StringType, TBitsType, TupleType)
   , TypeKind(Constraint, GenericType, Star)
   , TypeVar(NoType, tVarId)
   , constExprConstraint
+  , functionKind
   , instType
+  , kindConstraint
   , linkExprConstraint
   , makeFunction
   , makeTuple
@@ -128,11 +136,10 @@ import safe CMM.Inference.Type as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint, functionKind, kindConstraint, NestedFact (Fact)
+  , unstorableConstraint
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, emptyTypeHandle, handleId)
 import safe CMM.Parser.HasPos (HasPos)
-import Data.Maybe (fromJust)
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -425,7 +432,8 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mTypes) = do
   mTypes' `for_` \types -> do
     retHandle <- getCurrentReturn
     retType'@(~(TupleType retVars)) <-
-      makeTuple <$> traverse (fmap handleId . (`freshASTTypeHandle` Star)) (fromJust mTypes)
+      makeTuple <$>
+      traverse (fmap handleId . (`freshASTTypeHandle` Star)) (fromJust mTypes)
     storeFact $ handleId retHandle `typeUnion` retType'
     zipWithM_ ((storeFact .) . subType) (handleVars types) retVars
   (fs, retType) <- (_2 %~ VarType . handleId) <$> endProc
@@ -506,7 +514,9 @@ instance Preprocess Stmt a b where
        -> do
         retTypes <-
           (handleId <$>) <$>
-          traverse (\name -> freshNamedTypeHandle (getName name) name Star) names
+          traverse
+            (\name -> freshNamedTypeHandle (getName name) name Star)
+            names
         argTypes <-
           (handleId <$>) <$>
           traverse
@@ -533,7 +543,8 @@ instance Preprocess Stmt a b where
        -> do
         actuals' <- preprocessT actuals
         retType@(~(TupleType retVars)) <-
-          makeTuple <$> traverse ((handleId <$>) . (`freshASTTypeHandle` Star)) actuals
+          makeTuple <$>
+          traverse ((handleId <$>) . (`freshASTTypeHandle` Star)) actuals
         zipWithM_ ((storeFact .) . subType) retVars (handleVars actuals')
         getCurrentReturn >>= storeFact . (`typeUnion` retType) . handleId
         return (emptyTypeHandle, ReturnStmt mConv Nothing actuals')
@@ -651,7 +662,8 @@ instance Preprocess LValue a b where
         lookupFVar (getName lvName) <&> handleId >>= \case
           NoType -> lookupVar (getName lvName) >>= (`purePreprocess` lvName)
           scheme -> do
-            inst <- handleId <$> freshNamedTypeHandle (getName lvName) annot Star
+            inst <-
+              handleId <$> freshNamedTypeHandle (getName lvName) annot Star
             handle <- freshNamedTypeHandle (getName lvName) annot Star
             let var = handleId handle
             storeFact $ scheme `instType` inst
@@ -668,7 +680,8 @@ instance Preprocess LValue a b where
         return (getTypeHandle type'', LVRef type'' expr' mAsserts')
 
 instance Preprocess Expr a b where
-  preprocessImpl _ = -- TODO: this is just ugly
+  preprocessImpl _ -- TODO: this is just ugly
+   =
     \case
       ParExpr expr -> ParExpr `preprocessInherit` expr
       LVExpr lvalue -> LVExpr `preprocessInherit` lvalue

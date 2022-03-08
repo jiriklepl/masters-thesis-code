@@ -16,7 +16,13 @@ import safe CMM.Data.Ordered
 import safe CMM.Inference.Type as Infer
   ( DataKind(DataKind, GenericData, Unstorable)
   , Facts
-  , Type, kindConstraint, TypeCompl (LabelType, TBitsType, StringType, String16Type, BoolType, VoidType), NestedFact (Fact), PrimType, regularExprConstraint, FlatFacts
+  , FlatFacts
+  , PrimType
+  , Type
+  , TypeCompl(BoolType, LabelType, String16Type, StringType, TBitsType,
+          VoidType)
+  , kindConstraint
+  , regularExprConstraint
   )
 
 getNamedOperator :: Text -> Infer.Type
@@ -85,6 +91,17 @@ builtInContext = [] -- undefined
 builtInTypeFacts :: FlatFacts
 builtInTypeFacts = (kindFact <$> types) <> (constFact <$> types)
   where
-    types = [LabelType, StringType, String16Type, BoolType, LabelType, VoidType, TBitsType 8, TBitsType 16, TBitsType 32, TBitsType 64]
+    types =
+      [ LabelType
+      , StringType
+      , String16Type
+      , BoolType
+      , LabelType
+      , VoidType
+      , TBitsType 8
+      , TBitsType 16
+      , TBitsType 32
+      , TBitsType 64
+      ]
     kindFact primType = GenericData `kindConstraint` (primType :: PrimType)
     constFact primType = regularExprConstraint (primType :: PrimType)

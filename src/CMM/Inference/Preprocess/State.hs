@@ -26,7 +26,8 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe qualified CMM.AST.Annot as AST
-import CMM.Data.Tuple (complThd3)
+import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.Data.Tuple (complThd3)
 import safe CMM.Inference.Type
   ( Fact
   , Facts
@@ -40,11 +41,13 @@ import safe CMM.Inference.Type
   , classConstraint
   , classFact
   , classUnion
+  , constExprConstraint
   , forall
   , instType
   , instanceUnion
   , makeFunction
-  , typeUnion, tupleKind, constExprConstraint
+  , tupleKind
+  , typeUnion
   )
 import CMM.Inference.TypeHandle
   ( TypeHandle
@@ -54,7 +57,6 @@ import CMM.Inference.TypeHandle
   )
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 import safe qualified CMM.Parser.HasPos as AST
-import CMM.AST.HasName (HasName (getName))
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle
@@ -242,8 +244,8 @@ lookupCtxFVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupCtxFVar name =
   uses currentContext head >>= \case
     GlobalCtx -> lookupFVar name
-    ClassCtx{} -> lookupFVar name
-    InstanceCtx{} -> lookupFIVar name
+    ClassCtx {} -> lookupFVar name
+    InstanceCtx {} -> lookupFIVar name
     FunctionCtx (name', handle) _
       | name == name' -> return handle
       | otherwise -> undefined -- error
@@ -251,9 +253,8 @@ lookupCtxFVar name =
 getCurrentReturn :: MonadInferPreprocessor m => m TypeHandle
 getCurrentReturn = uses currentContext (go . head)
   where
-    go = \case
-      FunctionCtx _ handle -> handle
-      _ -> noCurrentReturn
+    go (FunctionCtx _ handle) = handle
+    go _ = noCurrentReturn
 
 getCtxName :: MonadInferPreprocessor m => m Text
 getCtxName = uses currentContext (getName . head)
@@ -391,13 +392,11 @@ freshNamedTypeHandle ::
   -> n
   -> TypeKind
   -> m TypeHandle
-freshNamedTypeHandle name node = freshTypeHandle . TypeNamedAST name $ getPos node
+freshNamedTypeHandle name node =
+  freshTypeHandle . TypeNamedAST name $ getPos node
 
 freshASTTypeHandle ::
-     (MonadInferPreprocessor m, HasPos n)
-  => n
-  -> TypeKind
-  -> m TypeHandle
+     (MonadInferPreprocessor m, HasPos n) => n -> TypeKind -> m TypeHandle
 freshASTTypeHandle node = freshTypeHandle . TypeAST $ getPos node
 
 freshTypeHelper :: MonadInferPreprocessor m => TypeKind -> m TypeHandle
@@ -413,7 +412,8 @@ freshTypeHandle ::
      MonadInferPreprocessor m => TypeAnnot -> TypeKind -> m TypeHandle
 freshTypeHandle annot tKind = do
   parent <- handleId <$> getCtxHandle
-  initTypeHandle annot . (\int -> TypeVar int tKind parent) <$> nextHandleCounter
+  initTypeHandle annot . (\int -> TypeVar int tKind parent) <$>
+    nextHandleCounter
 
 storeCSymbol :: MonadInferPreprocessor m => Text -> m ()
 storeCSymbol = (cSymbols %=) . (:)
