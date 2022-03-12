@@ -7,6 +7,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE Rank2Types #-}
 
 module CMM.Inference.Preprocess.State where
 
@@ -24,6 +25,7 @@ import safe Data.Maybe (fromMaybe)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
+import safe Control.Lens.Type (Lens')
 
 import safe qualified CMM.AST.Annot as AST
 import safe CMM.AST.HasName (HasName(getName))
@@ -34,18 +36,15 @@ import safe CMM.Inference.Type
   , FlatFact
   , NestedFact(Fact)
   , ToType(..)
-  , Type(VarType)
+  , Type
   , TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
   , TypeKind(Star)
   , TypeVar(TypeVar, tVarId)
   , classConstraint
   , classFact
-  , classUnion
   , constExprConstraint
   , forall
   , instType
-  , instanceUnion
-  , makeFunction
   , tupleKind
   , typeUnion
   )
@@ -221,7 +220,22 @@ beginProc name vars tCons tVars = do
   storeFact $ constExprConstraint returnId
   storeFact $ tVarId returnId `tupleKind` returnId
   handle <- lookupCtxFVar name
-  currentContext %= (FunctionCtx (name, handle) currentReturn :)
+  pushContext $ FunctionCtx (name, handle) currentReturn
+
+openProc ::
+     MonadInferPreprocessor m
+  => Map Text (SourcePos, TypeKind)
+  -> Map Text (SourcePos, TypeKind)
+  -> Map Text (SourcePos, TypeKind)
+  -> m ()
+openProc vars tCons tVars = do
+  vars' <- declVars vars
+  modifyHead variables (vars' <>)
+  tCons' <- declVars tCons
+  modifyHead typeConstants (tCons' <>)
+  tVars' <- declVars tVars
+  ~(h : t) <- uses typeVariables reverse
+  typeVariables .= reverse ((tVars' <> h) : t)
 
 declVars ::
      MonadInferPreprocessor m
@@ -275,30 +289,23 @@ storeProc name fs x = do
       storeFact $ forall tVars [handleId handle `typeUnion` t] fs
     ClassCtx classHandle' _ -> do
       handle <- lookupFVar name
-      iHandle <- lookupFIVar name
-      iHandle' <- freshTypeHelper Star
-      let fICall = handleId iHandle `instType` handleId iHandle'
-      let fIFact =
-            handleId iHandle' `typeUnion`
-            makeFunction [VarType . handleId $ snd classHandle'] t
       let fs' =
-            Fact fICall : Fact fIFact :
             (Fact . uncurry classConstraint $ classHandle' & _2 %~ handleId) :
             fs
-      storeFact $ forall tVars [handleId handle `classUnion` t] fs'
+      storeFact $ forall tVars [handleId handle `typeUnion` t] fs'
     InstanceCtx classHandle' superHandles -> do
       handle <- lookupFIVar name
-      let t' = makeFunction [VarType . handleId $ snd classHandle'] t
-      let fs' = fs {- TODO: maybe there has to be: (uncurry ClassConstraint <$> superHandles) <> -}
-      let fs'' =
-            (Fact . uncurry classFact . (_2 %~ handleId) <$> superHandles) <> fs
-      storeFact $ forall tVars [handleId handle `classUnion` t'] fs'
-      storeFact $ forall tVars [handleId handle `instanceUnion` t'] fs''
+      fHandle <- lookupFVar name
+      iHandle <- freshTypeHelper Star
+      let fCall = Fact $ handleId fHandle `instType` handleId iHandle
+          fFact = Fact $ handleId iHandle `typeUnion` t
+          fs' =
+            fCall : fFact : (Fact . uncurry classFact $ classHandle' & _2 %~ handleId) : (Fact . uncurry classFact . (_2 %~ handleId) <$> superHandles) <> fs
+      storeFact $ forall tVars [handleId handle `typeUnion` t] fs'
     FunctionCtx {} -> undefined -- error
 
 pushFacts :: MonadInferPreprocessor m => m ()
-pushFacts = do
-  facts %= ([] :)
+pushFacts = facts %= ([] :)
 
 pushTypeVariables ::
      MonadInferPreprocessor m => Map Text (SourcePos, TypeKind) -> m ()
@@ -325,9 +332,9 @@ pushClass handle supHandles -- TODO: solve type variables not in scope in superc
   storeFact $
     forall
       tVars
-      [uncurry classFact $ handle & _2 %~ handleId]
-      (Fact . uncurry classConstraint . (_2 %~ handleId) <$> supHandles)
-  currentContext %= (ClassCtx handle supHandles :)
+      [uncurry classConstraint $ handle & _2 %~ handleId]
+      (Fact . uncurry classFact . (_2 %~ handleId) <$> supHandles)
+  pushContext $ ClassCtx handle supHandles
 
 pushInstance ::
      MonadInferPreprocessor m
@@ -342,25 +349,32 @@ pushInstance handle supHandles -- TODO: solve type variables not in scope in sup
   storeFact $
     forall
       tVars
-      [uncurry classConstraint $ handle & _2 %~ handleId]
+      [uncurry classFact $ handle & _2 %~ handleId]
       ((Fact . uncurry classFact . (_2 %~ handleId) <$> supHandles) <> fs)
-  currentContext %= (InstanceCtx handle supHandles :)
+  pushContext $ InstanceCtx handle supHandles
 
 popContext :: MonadInferPreprocessor m => m ()
-popContext = do
+popContext =
   currentContext %= tail
+
+pushContext :: MonadInferPreprocessor m => Context -> m ()
+pushContext = (currentContext %=) . (:)
+
+popTopContext :: MonadInferPreprocessor m => m Context
+popTopContext = do
+  ~(h:t) <- use currentContext
+  currentContext .= t
+  return h
 
 -- | Stores the given type variable `handle` under the given `name` to the state monad
 storeTCon :: (MonadInferPreprocessor m, ToType a) => Text -> a -> m ()
-storeTCon name handle = do
-  vars <- use typeConstants
-  storeVarImpl name handle vars
+storeTCon name handle =
+  use typeConstants >>= storeVarImpl name handle
 
 -- | Stores the given type variable `handle` under the given `name` to the state monad
 storeTVar :: (MonadInferPreprocessor m, ToType a) => Text -> a -> m ()
-storeTVar name handle = do
-  vars <- use typeVariables
-  storeVarImpl name handle vars
+storeTVar name handle =
+  use typeVariables >>= storeVarImpl name handle
 
 storeVarImpl ::
      (ToType a, Ord k, MonadInferPreprocessor m)
@@ -376,14 +390,18 @@ class StoreFact a where
   storeFact :: MonadInferPreprocessor m => a -> m ()
 
 instance StoreFact (FlatFact Type) where
-  storeFact fact = do
-    ~(h:t) <- use facts
-    facts .= (Fact fact : h) : t
+  storeFact fact = pushToHead facts $ Fact fact
 
 instance StoreFact Fact where
-  storeFact fact = do
-    ~(h:t) <- use facts
-    facts .= (fact : h) : t
+  storeFact = pushToHead facts
+
+pushToHead :: MonadState s m => Lens' s [[a]] -> a -> m ()
+pushToHead place = modifyHead place . (:)
+
+modifyHead :: MonadState s m => Lens' s [a] -> (a -> a) -> m ()
+modifyHead place action = do
+    ~(h:t) <- use place
+    place .= action h : t
 
 -- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
 freshNamedTypeHandle ::

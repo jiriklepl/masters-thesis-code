@@ -340,6 +340,7 @@ data FlatFact a
   | InstType a a -- polytype; monotype
   | ClassConstraint Text a
   | ClassFact Text a
+  | ClassDetermine Text a
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data, IsTyped)
 
 data NestedFact a
@@ -462,3 +463,7 @@ classConstraint name t = name `ClassConstraint` toType t
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
 classFact :: ToType a => Text -> a -> FlatFact Type
 classFact name t = name `ClassFact` toType t
+
+-- | TODO
+classDetermine :: ToType a => Text -> a -> FlatFact Type
+classDetermine name t = name `ClassDetermine` toType t

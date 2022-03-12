@@ -76,7 +76,7 @@ main = do
   execStateT
     (do let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
         mineAST mined
-        fs' <- reduce $ normalizeFacts fs
+        fs' <- reduce fs
         liftIO . print $ show fs')
     (InferState.initInferencer
        (CMM.Inference.Preprocess.State._handleCounter miner)) >>=

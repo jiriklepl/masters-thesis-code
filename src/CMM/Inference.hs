@@ -68,7 +68,7 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
-  , unifs
+  , unifs, classSchemes, classFacts
   )
 import safe CMM.Inference.Type
   ( Constness
@@ -76,7 +76,7 @@ import safe CMM.Inference.Type
   , Fact
   , Facts
   , FlatFact(ConstnessBounds, InstType, KindBounds, OnRegister,
-         SubConst, SubKind, SubType, Typing, Union)
+         SubConst, SubKind, SubType, Typing, Union, ClassConstraint, ClassFact, ClassDetermine)
   , FlatFacts
   , HasTypeKind(..)
   , IsTyped(freeTypeVars)
@@ -95,7 +95,6 @@ import safe CMM.Inference.Type
   , subConst
   , subKind
   , tVarId
-  , toLam
   , typeConstraint
   , typeUnion
   )
@@ -198,6 +197,7 @@ unifyMismatch = Mismatch "Types are not unifiable"
 instance Unify TypeVar TypeVar where
   unify tVar@TypeVar {} tVar'@TypeVar {}
     | tVar == tVar' = Right (mempty, tVar')
+    | not (matchKind tVar tVar') = Left [BadKind (VarType tVar) (VarType tVar')]
     | familyDepth tVar > familyDepth tVar' =
       Right (Map.singleton tVar tVar', tVar')
     | familyDepth tVar < familyDepth tVar' =
@@ -322,7 +322,7 @@ simplify =
       traverse simplify complType >>= \primType ->
         uses typize (primType `Bimap.lookupR`) >>= \case
           Nothing -> do
-            tVar <- freshTypeHelperWithHandle Star
+            tVar <- freshTypeHelperWithHandle $ getTypeKind primType
             typize %= Bimap.insert tVar primType
             t <- elaborate primType
             handlize %= Bimap.adjust (typing .~ ComplType t) tVar
@@ -379,16 +379,6 @@ mineAST :: (MonadInferencer m, HasTypeHandle a, Foldable n) => n a -> m ()
 mineAST = traverse_ (addHandle . getTypeHandle)
   where
     addHandle handle = handlize %= Bimap.insert (handleId handle) handle
-
-normalizeFacts :: Facts -> Facts
-normalizeFacts = fmap transform
-  where
-    transform (NestedFact (tVars :. preds :=> fs)) =
-      NestedFact
-        (Set.fromList [] :. preds :=>
-         mappend (normalizeFacts fs) (makeFact <$> Set.toList tVars))
-    transform fact = fact
-    makeFact tVar = Fact $ tVar `typeUnion` ComplType (toLam tVar)
 
 fixAll :: MonadInferencer m => m Bool
 fixAll = do
@@ -584,6 +574,18 @@ wrapParent flatFacts wrapped =
     determineParent [VarType tVar `Union` _] = Just tVar
     determineParent _ = undefined
 
+flattenFacts :: [NestedFact Type] -> FlatFacts
+flattenFacts = fmap go
+  where
+    go (Fact fact) = fact
+    go _ = undefined -- TODO: error
+
+reverseFacts :: FlatFacts -> FlatFacts
+reverseFacts = fmap go
+  where
+    go (ClassFact name t) = ClassConstraint name t
+    go _ = undefined -- TODO: error
+
 reduceOne :: MonadInferencer m => Facts -> m (Bool, Facts)
 reduceOne [] = fixAll $> (False, [])
 reduceOne (fact:facts) =
@@ -591,26 +593,25 @@ reduceOne (fact:facts) =
     Fact (SubType t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
-      let facts' =
+      continueWith $
             Fact (tVar `subKind` tVar') : Fact (tVar `typeConstraint` tVar') :
             Fact (tVar `subConst` tVar') :
             facts
-      (_1 .~ True) <$> reduceOne facts'
     Fact (SubKind t t') -> do
       handle <- simplify t >>= getHandle
       handle' <- simplify t' >>= getHandle
       pushSubKind handle handle'
-      (_1 .~ True) <$> reduceOne facts
+      continue
     Fact (SubConst t t') -> do
       handle <- simplify t >>= getHandle
       handle' <- simplify t' >>= getHandle
       pushSubConst handle handle'
-      (_1 .~ True) <$> reduceOne facts
+      continue
     Fact (Typing t t') -> do
       handle <- simplify t >>= getHandle
       handle' <- simplify t' >>= getHandle
       pushTyping handle handle'
-      (_1 .~ True) <$> (fixFacts facts >>= reduceOne)
+      fixFacts facts >>= continueWith
     Fact (Union t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
@@ -618,26 +619,63 @@ reduceOne (fact:facts) =
         Left errs -> errors <>= errs
         Right (subst, _) -> unifs %= (subst `apply`)
       _ <- fixAll
-      (_1 .~ True) <$> (fixFacts facts >>= reduceOne)
+      fixFacts facts >>= continueWith
+    Fact (ClassConstraint name t) ->
+      uses classSchemes (name `Map.lookup`) >>= \case
+        Nothing -> skip
+        Just (tVars :. facts' :=> tVar', _) -> do
+          tVar <- simplify t
+          subst <- refresher tVars
+          continueWith $ (Fact <$> ClassDetermine name (toType tVar) : typeUnion tVar (subst `apply` tVar') : (apply subst <$> facts')) <> facts
+    Fact (ClassFact name t) ->
+      uses classSchemes (name `Map.lookup`) >>= \case
+        Nothing -> skip
+        Just (tVars :. facts' :=> tVar', _) -> do
+          tVar <- simplify t
+          subst <- refresher tVars
+          classFacts %= Map.insertWith mappend name (Set.singleton tVar)
+          continueWith $ (Fact <$> typeUnion tVar (subst `apply` tVar') : (apply subst <$> facts')) <> facts
+    Fact (ClassDetermine name t) ->
+      uses classFacts (name `Map.lookup`) >>= \case
+        Nothing -> skip
+        Just tVars -> do
+          tVar <- simplify t
+          if tVar `Set.member` tVars
+            then continue
+            else skipWith . Fact $ ClassDetermine name (VarType tVar)
     Fact (ConstnessBounds bounds t) -> do
       handle <- simplify t >>= getHandle
       pushConstBounds handle bounds
-      (_1 .~ True) <$> reduceOne facts
+      continue
     Fact (KindBounds (Bounds (Ordered minKind) (Ordered maxKind)) t) -> do
       handle <- simplify t >>= getHandle
       pushKindBounds handle $ minKind `Bounds` maxKind
-      (_1 .~ True) <$> reduceOne facts
+      continue
     Fact (OnRegister reg t) -> do
       handle <- simplify t >>= getHandle
       kind <- registerKind reg
       pushKindBounds handle $ kind `Bounds` kind
-      (_1 .~ True) <$> reduceOne facts
+      continue
+    NestedFact (tVars :. [ClassConstraint name (VarType tVar)] :=> nesteds) -> do
+      classSchemes %= Map.insertWith undefined name (tVars :. flattenFacts nesteds :=> tVar, mempty) -- TODO: error
+      continue
+    NestedFact (tVars :. [ClassFact name (VarType tVar)] :=> nesteds) -> do
+      uses classSchemes (name `Map.lookup`) >>= \case
+        Nothing -> skip
+        Just (scheme@(tVars' :. facts' :=> t'), consts) -> do
+          subst <- refresher tVars'
+          classSchemes %= Map.insert name (scheme, (tVars :. flattenFacts nesteds :=> tVar) : consts)
+          continueWith $ (Fact <$> typeUnion tVar (subst `apply` t') : flattenFacts nesteds <> reverseFacts (apply subst <$> facts')) <> facts
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceOne nesteds
-      (_1 %~ (|| changed)) .
-        (_2 %~ (NestedFact (tVars :. facts' :=> nesteds') :)) <$>
-        reduceOne facts
-    Fact _ -> (_2 %~ (fact :)) <$> reduceOne facts
+      (_1 %~ (|| changed)) <$>
+        skipWith (NestedFact (tVars :. facts' :=> nesteds'))
+    Fact _ -> skip
+  where
+    skip = skipWith fact
+    skipWith fact' = (_2 %~ (fact' :)) <$> reduceOne facts
+    continue = continueWith facts
+    continueWith = ((_1 .~ True) <$>) . reduceOne
 
 reduceMany :: MonadInferencer m => Facts -> m (Bool, Facts)
 reduceMany facts = do
@@ -835,6 +873,11 @@ reParent newParent oldParents = go
       | otherwise = tVar
     tVarCase NoType = NoType
 
+refresher :: (MonadInferencer m, HasTypeKind k) =>
+  Set k -> m (Map k TypeVar)
+refresher tVars =
+  sequence $ Map.fromSet (freshTypeHelper . getTypeKind) tVars
+
 unSchematize :: MonadInferencer m => Facts -> m Facts
 unSchematize [] = return []
 unSchematize (Fact (InstType (VarType scheme) inst):others) = do
@@ -842,8 +885,7 @@ unSchematize (Fact (InstType (VarType scheme) inst):others) = do
     Just scheme'
       | Set.size scheme' == 1 -> do
         let tVars :. facts :=> t = Set.findMin scheme'
-        instSubst <-
-          sequence $ Map.fromSet (freshTypeHelper . getTypeKind) tVars
+        instSubst <- refresher tVars
         let facts' = Fact . apply instSubst <$> facts
             t' = instSubst `apply` t
         ((Fact (inst `Union` t') : facts') <>) <$> unSchematize others
@@ -914,11 +956,18 @@ closeSCCs facts (scc:others) =
     followUp trios = do
       let parents = getParents trios
           parent = head parents
+          rePar :: Data d => d -> d
           rePar = reParent parent (Set.fromList parents)
+      typize %= Bimap.fromList . rePar . Bimap.toList
+      handlize %= Bimap.fromList . rePar . Bimap.toList
+      subConsting %= rePar
+      constingBounds %= rePar
+      subKinding %= rePar
+      kindingBounds %= rePar
+      unifs %= rePar
       pushParent parent
-      (_, facts') <-
-        traverse transformFact trios >>= fmap rePar . reduceMany . (<> facts) .
-        concat
+      (_, facts') <- traverse transformFact (fmap rePar trios) >>= reduceMany .
+        (<> fmap rePar facts) . concat
       minimizeSubs parent
       minimizeFree parent
       _ <- fixAll
@@ -932,8 +981,9 @@ closeSCCs facts (scc:others) =
       parents' <- uses unifs ((<$> parents) . apply)
       schematize $ Set.fromList parents'
       (_1 .~ True) <$> (popParent *> closeSCCs facts'' others)
-    transformFact (NestedFact (_ :. [fact] :=> fs), _, _) =
-      (Fact fact :) <$> unSchematize fs
+    transformFact (NestedFact (_ :. [fact] :=> fs), _, _) = do
+      fact' <- uses unifs (`apply` fact)
+      (Fact fact' :) <$> unSchematize fs
     transformFact _ = undefined
     getParents [] = []
     getParents ((_, tVar, _):rest) = tVar : getParents rest

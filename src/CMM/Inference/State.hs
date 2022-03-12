@@ -42,9 +42,9 @@ data Inferencer =
     -- | TODO
     , _errors :: [UnificationError]
     -- | TODO
-    , _classSchemes :: Map Text (Scheme TypeVar)
+    , _classSchemes :: Map Text (Scheme TypeVar, [Scheme TypeVar])
     -- | TODO
-    , _instanceSchemes :: Map Text (Set (Scheme TypeVar))
+    , _classFacts :: Map Text (Set TypeVar)
     -- | TODO
     , _schemes :: Map TypeVar (Set (Scheme Type))
     -- | TODO
@@ -64,7 +64,7 @@ initInferencer handleCounter =
     , _handlize = Bimap.empty
     , _handleCounter = handleCounter
     , _classSchemes = mempty
-    , _instanceSchemes = mempty
+    , _classFacts = mempty
     , _errors = mempty
     , _schemes = mempty
     , _currentParent = [globalTVar]
