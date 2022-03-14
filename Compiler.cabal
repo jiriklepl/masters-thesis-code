@@ -54,6 +54,7 @@ executable Compiler
                        CMM.Inference.Preprocess,
                        CMM.Inference.Preprocess.State,
                        CMM.FlowAnalysis,
+                       CMM.Monomorphize,
                        CMM.Pretty,
                        CMM.Translator,
                        CMM.Translator.State,

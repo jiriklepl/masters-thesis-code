@@ -99,6 +99,9 @@ cradle:
     - path: "src/CMM/FlowAnalysis.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Monomorphize.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Pretty.hs"
       component: "Compiler:exe:Compiler"
 
