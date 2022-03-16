@@ -14,11 +14,10 @@ module CMM.Inference.Preprocess.State where
 -- TODO: reduce the number of "_2 %~ handleId"
 import safe Control.Applicative (Alternative((<|>)))
 import safe Control.Lens.Getter ((^.), use, uses)
-import safe Control.Lens.Setter ((%=), (%~), (+=), (.=), (<~))
+import safe Control.Lens.Setter ((%=), (+=), (.=), (<~))
 import safe Control.Lens.TH (makeLenses)
-import safe Control.Lens.Tuple (Field2(_2), Field3(_3))
+import safe Control.Lens.Tuple (Field3(_3))
 import safe Control.Monad.State.Lazy (MonadState)
-import safe Data.Function ((&))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (fromMaybe)
@@ -36,8 +35,7 @@ import safe CMM.Inference.Type
   , FlatFact
   , NestedFact(Fact)
   , ToType(..)
-  , Type
-  , TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
+  , Type (ComplType)
   , TypeKind(Star)
   , TypeVar(TypeVar, tVarId)
   , classConstraint
@@ -46,9 +44,9 @@ import safe CMM.Inference.Type
   , forall
   , instType
   , tupleKind
-  , typeUnion
+  , typeUnion, makeFunction, noType, makeApplication
   )
-import CMM.Inference.TypeHandle
+import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , emptyTypeHandle
   , handleId
@@ -56,6 +54,8 @@ import CMM.Inference.TypeHandle
   )
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 import safe qualified CMM.Parser.HasPos as AST
+import safe CMM.Inference.BuiltIn (getConstType)
+import safe CMM.Inference.TypeAnnot (TypeAnnot (NoTypeAnnot, TypeAST, TypeNamedAST))
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle
@@ -85,7 +85,8 @@ data InferPreprocessor =
   InferPreprocessor
     { _variables :: [Map Text TypeHandle]
     , _funcVariables :: Map Text TypeHandle
-    , _funcInstVariables :: Map Text TypeHandle
+    , _funcInstVariables :: Map Text [TypeHandle]
+    , _funcElabVariables :: Map Text TypeHandle
     , _typeConstants :: [Map Text TypeHandle]
     , _typeVariables :: [Map Text TypeHandle]
     , _typeClasses :: Map Text ClassData
@@ -102,6 +103,7 @@ initInferPreprocessor =
     { _variables = [mempty]
     , _funcVariables = mempty
     , _funcInstVariables = mempty
+    , _funcElabVariables = mempty
     , _typeConstants = [mempty]
     , _typeVariables = [mempty]
     , _typeClasses = mempty
@@ -114,22 +116,22 @@ initInferPreprocessor =
 
 data Context
   = GlobalCtx
-  | ClassCtx (Text, TypeHandle) [(Text, TypeHandle)] -- className, classHandle, superClassHandles
-  | InstanceCtx (Text, TypeHandle) [(Text, TypeHandle)] -- className, classHandle, superClassHandles
+  | ClassCtx (Text, TypeHandle) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
+  | InstanceCtx (Text, TypeHandle) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
   | FunctionCtx (Text, TypeHandle) TypeHandle
   -- | SectionCtx Text
 
 instance HasName Context where
   getName GlobalCtx = undefined -- error
-  getName (ClassCtx (name, _) _) = name
-  getName (InstanceCtx (name, _) _) = name
+  getName (ClassCtx (name, _) _ _) = name
+  getName (InstanceCtx (name, _) _ _) = name
   getName (FunctionCtx (name, _) _) = name
 
 instance HasTypeHandle Context where
   getTypeHandle GlobalCtx = emptyTypeHandle
-  getTypeHandle (ClassCtx (_, handle) _) = handle
-  getTypeHandle (InstanceCtx (_, handle) _) = handle
   getTypeHandle (FunctionCtx (_, handle) _) = handle
+  getTypeHandle (ClassCtx (_, handle) _ _) = handle
+  getTypeHandle (InstanceCtx (_, handle) _ _) = handle
 
 data ClassData =
   ClassData
@@ -160,7 +162,7 @@ beginUnit ::
 beginUnit vars fVars fIVars tCons tClasses sMems = do
   variables <~ pure <$> declVars vars
   funcVariables <~ declVars fVars
-  funcInstVariables <~ declVars fIVars
+  funcElabVariables <~ declVars fIVars
   typeConstants <~ pure <$> declVars tCons
   classHandles <- declVars $ complThd3 <$> tClasses
   typeClasses .=
@@ -175,7 +177,13 @@ lookupFVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupFVar name = lookupVarImpl name <$> uses funcVariables pure
 
 lookupFIVar :: MonadInferPreprocessor m => Text -> m TypeHandle
-lookupFIVar name = lookupVarImpl name <$> uses funcInstVariables pure
+lookupFIVar name = do
+  handle <- freshTypeHelper Star
+  funcInstVariables %= Map.adjust (handle:) name
+  return handle
+
+lookupFEVar :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupFEVar name = lookupVarImpl name <$> uses funcElabVariables pure
 
 lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeHandle)
 lookupProc = uses variables . (. last) . Map.lookup
@@ -254,15 +262,20 @@ endProc = do
   currentReturn <- getCurrentReturn
   (h, currentReturn) <$ popContext
 
+poppedGlobalCtxError :: a
+poppedGlobalCtxError = error "(internal) Inconsistent context; probable cause: popped global context."
+
 lookupCtxFVar :: MonadInferPreprocessor m => Text -> m TypeHandle
 lookupCtxFVar name =
-  uses currentContext head >>= \case
-    GlobalCtx -> lookupFVar name
-    ClassCtx {} -> lookupFVar name
-    InstanceCtx {} -> lookupFIVar name
-    FunctionCtx (name', handle) _
-      | name == name' -> return handle
-      | otherwise -> undefined -- error
+  use currentContext >>= go
+  where
+    go (GlobalCtx:_) = lookupFVar name
+    go (ClassCtx {}:_) = lookupFVar name
+    go (InstanceCtx {}:_) = lookupFIVar name
+    go (FunctionCtx (name', handle) _: others)
+      | name == name' = return handle
+      | otherwise = go others
+    go [] = poppedGlobalCtxError
 
 getCurrentReturn :: MonadInferPreprocessor m => m TypeHandle
 getCurrentReturn = uses currentContext (go . head)
@@ -276,33 +289,50 @@ getCtxName = uses currentContext (getName . head)
 getCtxHandle :: MonadInferPreprocessor m => m TypeHandle
 getCtxHandle = uses currentContext (getTypeHandle . head)
 
+getCtxClassConstraint :: MonadInferPreprocessor m => m (Text, Type)
+getCtxClassConstraint =
+  uses currentContext go
+  where
+    go (GlobalCtx:_) = (mempty, noType)
+    go (ClassCtx _ classConstraint' _:_) = classConstraint'
+    go (InstanceCtx _ classConstraint' _: _) = classConstraint'
+    go (FunctionCtx {} : others) = go others
+    go [] = poppedGlobalCtxError
+
 storeProc ::
      ToType a
   => MonadInferPreprocessor m =>
-       Text -> Facts -> a -> m ()
+       Text -> Facts -> a -> m TypeHandle
 storeProc name fs x = do
-  let t = toType x
   tVars <- collectTVars
   uses currentContext head >>= \case
     GlobalCtx -> do
       handle <- lookupFVar name
       storeFact $ forall tVars [handleId handle `typeUnion` t] fs
-    ClassCtx classHandle' _ -> do
-      handle <- lookupFVar name
-      let fs' =
-            (Fact . uncurry classConstraint $ classHandle' & _2 %~ handleId) :
+      return handle
+    ClassCtx _ classConstraint' _ ->
+      storeElaboratedProc tVars $ Fact (uncurry classConstraint classConstraint') :
             fs
-      storeFact $ forall tVars [handleId handle `typeUnion` t] fs'
-    InstanceCtx classHandle' superHandles -> do
-      handle <- lookupFIVar name
-      fHandle <- lookupFVar name
-      iHandle <- freshTypeHelper Star
-      let fCall = Fact $ handleId fHandle `instType` handleId iHandle
-          fFact = Fact $ handleId iHandle `typeUnion` t
-          fs' =
-            fCall : fFact : (Fact . uncurry classFact $ classHandle' & _2 %~ handleId) : (Fact . uncurry classFact . (_2 %~ handleId) <$> superHandles) <> fs
-      storeFact $ forall tVars [handleId handle `typeUnion` t] fs'
-    FunctionCtx {} -> undefined -- error
+    InstanceCtx _ classConstraint' superConstraints ->
+      storeElaboratedProc tVars $ Fact (uncurry classFact classConstraint') : (Fact . uncurry classFact <$> superConstraints) <> fs
+    FunctionCtx {} -> error "(internal) Illegal local function encountered."
+  where
+    t = toType x
+    storeElaboratedProc tVars facts' = do
+      handle <- lookupCtxFVar name
+      eHandle <- handleId <$> lookupFEVar name
+      iHandle <- handleId  <$> freshTypeHelper Star
+      classConstraint' <- getCtxClassConstraint
+      let
+        eType = makeFunction [toType $ ComplType (getConstType "constraintWitness") `makeApplication` snd classConstraint'] t
+        instFact = Fact $ eHandle `instType` iHandle
+        unionFact = Fact $ iHandle `typeUnion` eType
+      uses currentContext head >>= \case
+        ClassCtx {} -> do
+          storeFact $ forall tVars [eHandle `typeUnion` eType] facts'
+          storeFact $ forall tVars [handleId handle `typeUnion` t] [instFact, unionFact]
+        _ -> storeFact . forall tVars [handleId handle `typeUnion` t] $ instFact : unionFact : facts'
+      return handle
 
 pushFacts :: MonadInferPreprocessor m => m ()
 pushFacts = facts %= ([] :)
@@ -324,34 +354,34 @@ collectTVars =
 pushClass ::
      MonadInferPreprocessor m
   => (Text, TypeHandle)
-  -> [(Text, TypeHandle)]
+  -> (Text, Type)
+  -> [(Text, Type)]
   -> m ()
-pushClass handle supHandles -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
+pushClass handle mainHandle supHandles -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
  = do
   tVars <- collectTVars
   storeFact $
     forall
       tVars
-      [uncurry classConstraint $ handle & _2 %~ handleId]
-      (Fact . uncurry classFact . (_2 %~ handleId) <$> supHandles)
-  pushContext $ ClassCtx handle supHandles
+      [uncurry classConstraint mainHandle]
+      (Fact . uncurry classFact <$> supHandles)
+  pushContext $ ClassCtx handle mainHandle supHandles
 
 pushInstance ::
      MonadInferPreprocessor m
   => (Text, TypeHandle)
-  -> [(Text, TypeHandle)]
+  -> (Text, Type)
+  -> [(Text, Type)]
   -> m ()
-pushInstance handle supHandles -- TODO: solve type variables not in scope in superclasses
+pushInstance handle mainHandle supHandles -- TODO: solve type variables not in scope in superclasses
  = do
-  ~(fs:facts') <- use facts
-  facts .= facts'
   tVars <- collectTVars
   storeFact $
     forall
       tVars
-      [uncurry classFact $ handle & _2 %~ handleId]
-      ((Fact . uncurry classFact . (_2 %~ handleId) <$> supHandles) <> fs)
-  pushContext $ InstanceCtx handle supHandles
+      [uncurry classFact mainHandle]
+      (Fact . uncurry classFact <$> supHandles)
+  pushContext $ InstanceCtx handle mainHandle supHandles
 
 popContext :: MonadInferPreprocessor m => m ()
 popContext =

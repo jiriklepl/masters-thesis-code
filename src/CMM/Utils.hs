@@ -1,4 +1,5 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module CMM.Utils where
 
@@ -6,6 +7,7 @@ import safe Control.Monad (unless, when)
 import safe Data.Maybe (isJust)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
+import safe Data.String (IsString)
 
 addPrefix :: Text -> Text -> Text
 addPrefix prefix text = prefix <> T.cons ':' text
@@ -27,3 +29,7 @@ doWhile action = action >>= flip when (doWhile action)
 -- | Implementation of the standard repeat-until loop (condition appended to the repeat-block)
 repeatUntil :: Monad m => m Bool -> m ()
 repeatUntil action = action >>= flip unless (repeatUntil action)
+
+backQuote :: (IsString a, Semigroup a) => a -> a
+backQuote string =
+  "`" <> string <> "`"

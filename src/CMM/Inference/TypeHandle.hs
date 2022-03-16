@@ -9,9 +9,9 @@ import safe Data.Data (Data)
 
 import safe CMM.Inference.Type
   ( Type(VarType)
-  , TypeAnnot(NoTypeAnnot)
   , TypeVar(NoType)
   )
+import safe CMM.Inference.TypeAnnot (TypeAnnot (NoTypeAnnot))
 
 data TypeHandle =
   TypeHandle

@@ -15,9 +15,17 @@ import safe Data.Map (Map)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 
-import safe CMM.Data.Bounds
+import safe CMM.Data.Bounds ( Bounds )
 import safe CMM.Inference.Type
-import safe CMM.Inference.TypeHandle
+    ( TypeKind,
+      Type,
+      TypeVar(NoType, TypeVar),
+      Scheme,
+      PrimType,
+      Constness,
+      DataKind )
+import safe CMM.Inference.TypeHandle ( initTypeHandle, TypeHandle )
+import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 
 type Subst = Map TypeVar
 
@@ -42,7 +50,7 @@ data Inferencer =
     -- | TODO
     , _errors :: [UnificationError]
     -- | TODO
-    , _classSchemes :: Map Text (Scheme TypeVar, [Scheme TypeVar])
+    , _classSchemes :: Map Text (Scheme Type, [Scheme Type])
     -- | TODO
     , _classFacts :: Map Text (Set TypeVar)
     -- | TODO

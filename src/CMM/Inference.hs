@@ -7,7 +7,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE CPP #-}
 
 -- TODO: add the overlap check for instances
 -- TODO: add the overload resolution for instances to monomorphization
@@ -36,6 +35,7 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Tuple (swap)
 import safe Prelude hiding (const)
+import safe Data.List (partition)
 
 import safe CMM.Data.Bounds
   ( Bounds(Bounds)
@@ -45,7 +45,7 @@ import safe CMM.Data.Bounds
   , upperBound
   )
 import safe CMM.Data.Lattice (Lattice)
-import CMM.Data.Nullable (Nullable(nullVal))
+import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.OrderedBounds ()
 import safe CMM.Inference.Preprocess.State (HasTypeHandle(getTypeHandle))
@@ -86,10 +86,9 @@ import safe CMM.Inference.Type
   , Scheme((:.))
   , ToType(..)
   , Type(..)
-  , TypeAnnot(NoTypeAnnot)
   , TypeCompl(AddrType, AppType, FunctionType, TupleType)
   , TypeKind(..)
-  , TypeVar(NoType, TypeVar, tVarParent)
+  , TypeVar(NoType, TypeVar, tVarParent, tVarKind)
   , familyDepth
   , predecessor
   , subConst
@@ -106,6 +105,7 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
+import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 
 class Unify a b | a -> b where
   unify :: a -> a -> Either [UnificationError] (Subst b, a)
@@ -119,8 +119,25 @@ class (ToType b, Typeable b, Data a, TypeCase b) =>
       go :: Data d => d -> d
       go = gmapT go `extT` typeCase subst go
 
+class (ToType b, Typeable b, Data a, TypeCaseShallow b) =>
+      ApplyShallow a b
+  where
+  applyShallow :: Map TypeVar b -> a -> a
+  applyShallow subst = go
+    where
+      go :: Data d => d -> d
+      go = gmapT go `extT` typeCaseShallow subst go
+
 class TypeCase b where
   typeCase ::
+       Subst b
+    -> (forall d. Data d =>
+                    d -> d)
+    -> b
+    -> b
+
+class TypeCaseShallow b where
+  typeCaseShallow ::
        Subst b
     -> (forall d. Data d =>
                     d -> d)
@@ -141,7 +158,17 @@ instance TypeCase TypeVar where
           tVar'@TypeVar {tVarParent = parent} -> tVar' {tVarParent = go parent}
           NoType -> NoType
 
+instance TypeCaseShallow TypeVar where
+  typeCaseShallow subst _ = go
+    where
+      go tVar =
+        case fromMaybe tVar $ tVar `Map.lookup` subst of
+          tVar'@TypeVar {} -> tVar'
+          NoType -> NoType
+
 instance (ToType b, Typeable b, TypeCase b) => Apply TypeVar b
+
+instance (ToType b, Typeable b, TypeCaseShallow b) => ApplyShallow TypeVar b
 
 instance (ToType b, Typeable b, TypeCase b) => Apply Type b
 
@@ -180,6 +207,18 @@ matchKind a b = getTypeKind a `go` getTypeKind b
     (l :-> r) `go` (l' :-> r') = go l l' && go r r'
     _ `go` _ = False
 
+combineTypeKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> TypeKind
+combineTypeKind a b = getTypeKind a `go` getTypeKind b
+  where
+    kind `go` kind'
+      | kind == kind' = kind
+    kind@ErrorKind {} `go` _ = kind
+    _ `go` kind@ErrorKind {} = kind
+    GenericType `go` kind = kind
+    kind `go` GenericType = kind
+    (l :-> r) `go` (l' :-> r') = go l l' :-> go r r'
+    _ `go` _ = undefined -- TODO: logic error
+
 bind :: TypeVar -> Type -> Either [UnificationError] (Subst Type, Type)
 bind tVar@TypeVar {} (VarType tVar') =
   (_1 %~ fmap toType) . (_2 %~ toType) <$> unify tVar tVar'
@@ -195,16 +234,31 @@ unifyMismatch :: Type -> Type -> UnificationError
 unifyMismatch = Mismatch "Types are not unifiable"
 
 instance Unify TypeVar TypeVar where
-  unify tVar@TypeVar {} tVar'@TypeVar {}
-    | tVar == tVar' = Right (mempty, tVar')
+  unify tVar@TypeVar{tVarKind = kind} tVar'@TypeVar{tVarKind = kind'}
     | not (matchKind tVar tVar') = Left [BadKind (VarType tVar) (VarType tVar')]
-    | familyDepth tVar > familyDepth tVar' =
-      Right (Map.singleton tVar tVar', tVar')
-    | familyDepth tVar < familyDepth tVar' =
-      Right (Map.singleton tVar' tVar, tVar)
-    | tVar > tVar' = Right (Map.singleton tVar tVar', tVar')
-    | otherwise = Right (Map.singleton tVar' tVar, tVar)
+    | otherwise = improve <$> tVar `unifyLax` tVar'
+    where
+      kind'' = kind `combineTypeKind` kind'
+      improve pair@(subst, tVar''@TypeVar{tVarKind = kind'''})
+        | kind''' /= kind'' = let
+          tVar''' = tVar''{tVarKind = kind''}
+          in ((setTypeKind kind'' <$> subst) <> Map.singleton tVar'' tVar''' , tVar''')
+        | otherwise = pair
+      improve (_, NoType) = undefined -- TODO: logic error
   unify tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
+
+unifyLax :: TypeVar
+  -> TypeVar
+  -> Either [UnificationError] (Map TypeVar TypeVar, TypeVar)
+unifyLax tVar@TypeVar {} tVar'@TypeVar {}
+  | tVar == tVar' = Right (mempty, tVar')
+  | familyDepth tVar > familyDepth tVar' =
+    Right (Map.singleton tVar tVar', tVar')
+  | familyDepth tVar < familyDepth tVar' =
+    Right (Map.singleton tVar' tVar, tVar)
+  | tVar > tVar' = Right (Map.singleton tVar tVar', tVar')
+  | otherwise = Right (Map.singleton tVar' tVar, tVar)
+unifyLax tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
 unifyMany ::
      (Unify a b1, Apply a b2, Apply (Map TypeVar b2) b1)
@@ -380,11 +434,18 @@ mineAST = traverse_ (addHandle . getTypeHandle)
   where
     addHandle handle = handlize %= Bimap.insert (handleId handle) handle
 
+fixClasses :: MonadInferencer m => m ()
+fixClasses = do
+  unifs' <- use unifs
+  classFacts %= fmap (Set.map $ apply unifs')
+
 fixAll :: MonadInferencer m => m Bool
 fixAll = do
   results <- sequence [fixTypize, fixHandlize, fixSubs]
   if or results
-    then True <$ fixAll
+    then do
+      fixClasses
+      True <$ fixAll
     else return False
 
 mapFold :: (Ord a, Semigroup b) => [(a, b)] -> Map a b
@@ -392,24 +453,26 @@ mapFold = foldl (flip . uncurry $ Map.insertWith (<>)) Map.empty
 
 fixSubGraph ::
      MonadInferencer m
-  => Lens' Inferencer (Map TypeVar (Set TypeVar))
+  => Bool
+  -> Lens' Inferencer (Map TypeVar (Set TypeVar))
   -> Subst TypeVar
   -> m ()
-fixSubGraph which subst = do
+fixSubGraph isShallow which subst = do
   let applyUnifs =
-        (_1 %~ apply subst) .
-        (_2 %~ Set.fromList . (apply subst <$>) . Set.toList)
+        (_1 %~ (if isShallow then applyShallow else apply) subst) .
+        (_2 %~ Set.fromList . ((if isShallow then applyShallow else apply) subst <$>) . Set.toList)
   whichList <- uses which $ (applyUnifs <$>) . Map.toList
   let which' = mapFold whichList
   which .= Map.filter (not . null) (Map.mapWithKey Set.delete which')
 
 fixBounds ::
      (MonadInferencer m, Lattice a)
-  => Lens' Inferencer (Map TypeVar (Bounds a))
+  => Bool
+  -> Lens' Inferencer (Map TypeVar (Bounds a))
   -> Subst TypeVar
   -> m ()
-fixBounds which subst = do
-  whichList <- uses which $ ((_1 %~ apply subst) <$>) . Map.toList
+fixBounds isShallow which subst = do
+  whichList <- uses which $ ((_1 %~ (if isShallow then applyShallow else apply) subst) <$>) . Map.toList
   which .= mapFold whichList
 
 fixSubs :: MonadInferencer m => m Bool
@@ -421,10 +484,11 @@ fixSubs = do
         -> Lens' Inferencer (Map TypeVar (Bounds a))
         -> m (Subst TypeVar)
       fixBoth sub bounds = do
-        fixSubGraph sub unifs'
+        fixSubGraph False sub unifs'
+        fixBounds False bounds unifs'
         subst <- subUnifs
-        fixSubGraph sub subst
-        fixBounds bounds $ subst `apply` unifs'
+        fixSubGraph True sub subst
+        fixBounds True bounds $ subst `apply` unifs'
         propagateBounds bounds sub
         boundsUnifs bounds >>= go subst
         where
@@ -432,11 +496,11 @@ fixSubs = do
           go accum subst
             | null subst = return accum
             | otherwise = do
-              fixSubGraph sub subst
+              fixSubGraph True sub subst
               subst' <- subUnifs
-              fixSubGraph sub subst'
+              fixSubGraph True sub subst'
               let subst'' = subst' `apply` subst
-              fixBounds bounds subst''
+              fixBounds True bounds subst''
               propagateBounds bounds sub
               boundsUnifs bounds >>= go (subst'' `apply` accum)
   subst <- fixBoth subKinding kindingBounds
@@ -467,22 +531,22 @@ safeHandlizeUpdate change = do
   handles' <- uses handlize ((change <$>) . Bimap.toList)
   let handlize' = Bimap.fromList handles'
       forgottenKeys =
-        Map.fromList handles' `Map.withoutKeys`
+        mapCollect handles' `Map.withoutKeys`
         Set.fromList (Bimap.keys handlize')
       forgottenValues =
-        Map.fromList (swap <$> handles') `Map.withoutKeys`
+        mapCollect (swap <$> handles') `Map.withoutKeys`
         Set.fromList (Bimap.elems handlize')
       goValues [] tSubst cSubst kSubst = return (tSubst, cSubst, kSubst)
-      goValues ((handle, tVar):others) tSubst cSubst kSubst = do
-        let handle' = handlize' Bimap.! tVar
+      goValues ((handle, tVars):others) tSubst cSubst kSubst = do
+        let handle' = fromJust $ onCandidates (Set.toList tVars) Bimap.lookup handlize'
         (tSubst', _) <-
           apply tSubst (handle ^. typing) `unify`
           apply tSubst (handle' ^. typing)
         (cSubst', _) <-
-          apply cSubst (handle ^. consting) `unify`
+          apply cSubst (handle ^. consting) `unifyLax`
           apply cSubst (handle' ^. consting)
         (kSubst', _) <-
-          apply kSubst (handle ^. kinding) `unify`
+          apply kSubst (handle ^. kinding) `unifyLax`
           apply kSubst (handle' ^. kinding)
         goValues
           others
@@ -490,8 +554,8 @@ safeHandlizeUpdate change = do
           (cSubst' `apply` cSubst)
           (kSubst' `apply` kSubst)
       goKeys [] subst = return subst
-      goKeys ((tVar, handle):others) subst = do
-        let tVar' = handlize' Bimap.!> handle
+      goKeys ((tVar, handles):others) subst = do
+        let tVar' = fromJust $ onCandidates (Set.toList handles) Bimap.lookupR handlize'
         (subst', _) <- apply subst tVar `unify` apply subst tVar'
         goKeys others $ subst' `apply` subst
   handlize .= handlize'
@@ -514,39 +578,50 @@ safeHandlizeUpdate change = do
           return False -- TODO: error
         Right (tSubst, cSubst, kSubst, subst) -> do
           unifs %= apply subst
-          fixSubGraph subConsting cSubst
-          fixSubGraph subKinding kSubst
-          fixBounds constingBounds cSubst
-          fixBounds kindingBounds kSubst
+          fixSubGraph True subConsting cSubst
+          fixSubGraph True subKinding kSubst
+          fixBounds True constingBounds cSubst
+          fixBounds True kindingBounds kSubst
           (True <$) . safeHandlizeUpdate $ apply subst .
             (_2 . typing %~ apply tSubst) .
-            (_2 . consting %~ apply cSubst) .
-            (_2 . kinding %~ apply kSubst)
+            (_2 . consting %~ applyShallow cSubst) .
+            (_2 . kinding %~ applyShallow kSubst)
 
 fixHandlize :: MonadInferencer m => m Bool
 fixHandlize = uses unifs apply >>= safeHandlizeUpdate
+
+mapCollect :: (Ord a, Ord b) => [(a, b)] -> Map a (Set b)
+mapCollect =
+  Map.fromListWith mappend . fmap (_2 %~ Set.singleton)
+
+onCandidates :: [t1] -> (t1 -> t2 -> Maybe a) -> t2 -> Maybe a
+onCandidates (candidate:candidates) lookup' database =
+  case candidate `lookup'` database of
+    Just result -> return result
+    Nothing -> onCandidates candidates lookup' database
+onCandidates [] _ _ = Nothing
 
 fixTypize :: MonadInferencer m => m Bool
 fixTypize = do
   types' <- uses unifs (fmap . apply) <*> uses typize Bimap.toList
   let typize' = Bimap.fromList types'
       forgottenKeys =
-        Map.fromList types' `Map.withoutKeys` Set.fromList (Bimap.keys typize')
+        mapCollect types' `Map.withoutKeys` Set.fromList (Bimap.keys typize')
       forgottenValues =
-        Map.fromList (swap <$> types') `Map.withoutKeys`
+        mapCollect (swap <$> types') `Map.withoutKeys`
         Set.fromList (Bimap.elems typize')
     -- TODO: reduce duplication; consider continuing despite errors
       goValues [] subst = return subst
-      goValues ((primType, tVar):others) subst = do
-        let primType' = fromJust $ tVar `Bimap.lookup` typize'
+      goValues ((primType, tVars):others) subst = do
+        let primType' = fromJust $ onCandidates (Set.toList tVars) Bimap.lookup typize'
         case apply subst primType `unify` apply subst primType' of
           Left errs -> do
             errors <>= errs
             return subst
           Right (subst', _) -> goValues others $ subst' `apply` subst
       goKeys [] subst = return subst
-      goKeys ((tVar, handle''):others) subst = do
-        let tVar' = typize' Bimap.!> handle''
+      goKeys ((tVar, handles):others) subst = do
+        let tVar' = fromJust $ onCandidates (Set.toList handles) Bimap.lookupR typize'
         case apply subst tVar `unify` apply subst tVar' of
           Left errs -> do
             errors <>= errs
@@ -656,16 +731,20 @@ reduceOne (fact:facts) =
       kind <- registerKind reg
       pushKindBounds handle $ kind `Bounds` kind
       continue
-    NestedFact (tVars :. [ClassConstraint name (VarType tVar)] :=> nesteds) -> do
-      classSchemes %= Map.insertWith undefined name (tVars :. flattenFacts nesteds :=> tVar, mempty) -- TODO: error
+    NestedFact (tVars :. [ClassConstraint name t] :=> nesteds) -> do
+      tVars' <- uses unifs $ (`Set.map` tVars) . apply
+      t' <- uses unifs (`apply` t)
+      classSchemes %= Map.insertWith undefined name (tVars' :. flattenFacts nesteds :=> t', mempty) -- TODO: error
       continue
-    NestedFact (tVars :. [ClassFact name (VarType tVar)] :=> nesteds) -> do
+    NestedFact (tVars :. [ClassFact name t] :=> nesteds) -> do
       uses classSchemes (name `Map.lookup`) >>= \case
         Nothing -> skip
-        Just (scheme@(tVars' :. facts' :=> t'), consts) -> do
-          subst <- refresher tVars'
-          classSchemes %= Map.insert name (scheme, (tVars :. flattenFacts nesteds :=> tVar) : consts)
-          continueWith $ (Fact <$> typeUnion tVar (subst `apply` t') : flattenFacts nesteds <> reverseFacts (apply subst <$> facts')) <> facts
+        Just (scheme@(tVars'' :. facts'' :=> t''), consts) -> do
+          t' <- uses unifs (`apply` t)
+          tVars' <- uses unifs $ (`Set.map` tVars) . apply
+          subst <- refresher tVars''
+          classSchemes %= Map.insert name (scheme, (tVars' :. flattenFacts nesteds :=> t') : consts)
+          continueWith $ (Fact <$> typeUnion t' (subst `apply` t'') : flattenFacts nesteds <> reverseFacts (apply subst <$> facts'')) <> facts
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceOne nesteds
       (_1 %~ (|| changed)) <$>
@@ -690,20 +769,7 @@ reduce facts = do
   let (facts'', sccs) = makeCallGraph facts'
   (change', facts''') <- closeSCCs facts'' sccs
   return (change || change', facts''')
-  -- if change
-  --   then (_1 .~ True) <$> reduce facts''
-  --   else return (False, facts'')
 
--- floatFacts :: (Facts, [SCC (Fact, TypeVar, [TypeVar])]) -> Facts
--- floatFacts [] _ = (False, [])
--- floatFacts (fact:facts) counts = go $ floatFacts facts counts
---   where
---     go =
---       case fact of
---         NestedFact (_ :. [Union (VarType tVar) t] :=> fs)
---           | counts Map.! tVar == 1 -> (_1 .~ True) . (_2 %~ (newFacts <>))
---           where newFacts = Fact (Union (VarType tVar) t) : fs
---         _ -> _2 %~ (fact :)
 readBounds :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> Bounds a
 readBounds = (fromMaybe (minBound `Bounds` maxBound) .) . Map.lookup
 
@@ -744,10 +810,10 @@ minimizeSubs parent = do
       cSubst = foldTVarSubsts cSubsts
       (kSubsts, kRest) = laundry kindBounds kindings
       kSubst = foldTVarSubsts kSubsts
-  fixSubGraph subConsting cSubst
-  fixBounds constingBounds cSubst
-  fixSubGraph subKinding kSubst
-  fixBounds kindingBounds kSubst
+  fixSubGraph True subConsting cSubst
+  fixBounds True constingBounds cSubst
+  fixSubGraph True subKinding kSubst
+  fixBounds True kindingBounds kSubst
   cRest `for_` \case
     Just ((_, limits), tVar)
       | null limits -> minimizeBounds constingBounds tVar
@@ -904,8 +970,8 @@ registerScheme :: MonadInferencer m => TypeVar -> Scheme Type -> m ()
 registerScheme tVar scheme = schemes %= Map.insert tVar (Set.singleton scheme)
 
 -- TODO: check whether all typings are set (otherwise error)
-schematize :: MonadInferencer m => Set TypeVar -> m ()
-schematize tVars = do
+schematize :: MonadInferencer m => Facts -> Set TypeVar -> m Facts
+schematize facts tVars = do
   parent <- getParent
   x <- Set.toList . Set.unions <$> traverse collectPrimeTVars (Set.toList tVars)
   constings <- Set.fromList <$> traverse getConsting x
@@ -913,33 +979,50 @@ schematize tVars = do
   -- TODO: leave out trivial
   typings <- zip x <$> traverse getTyping x
   subConsts <-
-    uses subConsting $ filter (parentedBy parent `fOr` presentIn constings) .
+    uses subConsting $ filter (keyParentedBy parent `fOr` presentIn constings) .
     Map.toList
   subKinds <-
-    uses subKinding $ filter (parentedBy parent `fOr` presentIn kindings) .
+    uses subKinding $ filter (keyParentedBy parent `fOr` presentIn kindings) .
     Map.toList
   constFacts <- translateSubs constingBounds SubConst ConstnessBounds subConsts
   kindFacts <-
     translateSubs kindingBounds SubKind (KindBounds . fmap Ordered) subKinds
-  let typingFacts = uncurry typeConstraint <$> typings
-      facts = typingFacts <> constFacts <> kindFacts
+  (determineFacts, factsRest) <- do
+    let
+      elaborate' t = do
+        tVar <- simplify t
+        reconstruct tVar
+      construct (Fact (ClassDetermine name t):others) = do
+        t' <- elaborate' t
+        let pair = (t', ClassConstraint name t')
+        (_1 %~ (pair:)) <$> construct others
+      construct (fact:others) = (_2 %~ (fact:)) <$> construct others
+      construct [] = return ([], [])
+    (factPairs, others) <- construct facts
+    let (filtered, rest) =  partition (any ((`Set.member` Set.fromList x) `fOr` parentedBy parent) . freeTypeVars . view _1) factPairs
+    return (view _2 <$> filtered, (Fact . view _2 <$> rest) <> others)
+  let typingFacts = [fact | fact@(Union t t') <- uncurry typeConstraint <$> typings, t /= t']
+      facts' = typingFacts <> determineFacts <> constFacts <> kindFacts
   tVars `for_` \tVar -> do
     t <- reconstruct tVar
-    let scheme = freeTypeVars facts :. facts :=> t
+    let scheme = Set.filter ((`Set.member` freeTypeVars t) `fOr` parentedBy parent) (freeTypeVars facts') :. facts' :=> t
     registerScheme tVar scheme
+  return factsRest
   where
     translateSubs _ _ _ [] = return []
     translateSubs bounds subConstr boundsConstr ((tVar, limits):others) = do
-      let facts =
+      let facts' =
             (\tVar' -> toType tVar `subConstr` toType tVar') <$>
             Set.toList limits
           translateOthers =
-            (facts <>) <$> translateSubs bounds subConstr boundsConstr others
+            (facts' <>) <$> translateSubs bounds subConstr boundsConstr others
       uses bounds (tVar `Map.lookup`) >>= \case
         Nothing -> translateOthers
         Just bounds' ->
           (boundsConstr bounds' (toType tVar) :) <$> translateOthers
-    parentedBy parent (key, _) = tVarParent key == parent
+    keyParentedBy parent (key, _) = tVarParent key == parent
+    parentedBy parent TypeVar{tVarParent=par} = parent == par
+    parentedBy _ _ = False
     presentIn where' (key, _) = key `Set.member` where'
 
 closeSCCs ::
@@ -979,8 +1062,8 @@ closeSCCs facts (scc:others) =
       popParent *> pushParent parent''
       (_, facts'') <- fixFacts facts' >>= reduceMany
       parents' <- uses unifs ((<$> parents) . apply)
-      schematize $ Set.fromList parents'
-      (_1 .~ True) <$> (popParent *> closeSCCs facts'' others)
+      facts''' <- schematize facts'' $ Set.fromList parents'
+      (_1 .~ True) <$> (popParent *> closeSCCs facts''' others)
     transformFact (NestedFact (_ :. [fact] :=> fs), _, _) = do
       fact' <- uses unifs (`apply` fact)
       (Fact fact' :) <$> unSchematize fs
@@ -1040,7 +1123,7 @@ deduceUnifs handles which = go pairs mempty
     pairs = collectPairs Both handles which
     go [] subst = subst
     go ((tVar, tVar'):others) subst =
-      case apply subst tVar `unify` apply subst tVar' of
+      case apply subst tVar `unifyLax` apply subst tVar' of
         Left _ -> undefined -- logic error
         Right (subst', _) -> go others $ subst' `apply` subst
 
@@ -1073,7 +1156,7 @@ boundsUnifs which = do
   return $ go nontrivialTrivialGroups mempty
   where
     go ((first:second:others):rest) subst =
-      case apply subst first `unify` apply subst second of
+      case apply subst first `unifyLax` apply subst second of
         Left _ -> undefined -- logic error
         Right (subst', _) -> go ((first : others) : rest) $ subst' `apply` subst
     go (_:rest) subst = go rest subst

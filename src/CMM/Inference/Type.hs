@@ -17,16 +17,16 @@ import safe Data.Generics.Aliases (extQ)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import qualified Data.Text as T
+import safe qualified Data.Text as T
 
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Dioid (Dioid((<.>), mfull))
 import safe CMM.Data.Lattice (Lattice(..))
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 import safe CMM.Data.Ordered (Ordered(..))
-import safe CMM.Parser.HasPos (SourcePos)
 import safe Data.PartialOrd (PartialOrd)
 import safe qualified Data.PartialOrd as PartialOrd
+import safe CMM.Utils (backQuote)
 
 -- | DataKind specifies the semantics and register allocability of the types that map onto it via kinding
 data DataKind
@@ -149,6 +149,14 @@ data TypeKind
   | TypeKind :-> TypeKind
   deriving (Show, Data)
 
+class HasTypeKind a where
+  getTypeKind :: a -> TypeKind
+  setTypeKind :: TypeKind -> a -> a
+
+instance HasTypeKind TypeKind where
+  getTypeKind = id
+  setTypeKind = const
+
 instance Eq TypeKind where
   Star == Star = True
   Constraint == Constraint = True
@@ -184,21 +192,6 @@ instance Fallbackable TypeKind where
 instance Nullable TypeKind where
   nullVal = GenericType
 
-data TypeAnnot
-  = NoTypeAnnot
-  | TypeInst TypeVar
-  | TypeAST SourcePos
-  | TypeNamedAST Text SourcePos
-  | TypeBuiltIn Text
-  deriving (Show, Data)
-
-instance Fallbackable TypeAnnot where
-  NoTypeAnnot ?? kind = kind
-  kind ?? _ = kind
-
-instance Nullable TypeAnnot where
-  nullVal = NoTypeAnnot
-
 data TypeVar
   = NoType
   | TypeVar
@@ -208,20 +201,11 @@ data TypeVar
       }
   deriving (Show, Data, IsTyped)
 
-familyDepth :: TypeVar -> Int
-familyDepth NoType = 0
-familyDepth TypeVar {tVarParent = parent} = familyDepth parent + 1
+class FromTypeVar a where
+  fromTypeVar :: TypeVar -> a
 
-predecessor :: TypeVar -> TypeVar -> Bool
-predecessor NoType NoType = True
-predecessor NoType _ = False
-predecessor whose@TypeVar {tVarParent = parent} who
-  | whose == who = True
-  | otherwise = predecessor parent who
-
-toLam :: TypeVar -> TypeCompl a
-toLam NoType = undefined
-toLam (TypeVar int kind parent) = LamType int kind parent
+instance FromTypeVar TypeVar where
+  fromTypeVar = id
 
 instance Eq TypeVar where
   NoType == NoType = True
@@ -241,9 +225,34 @@ instance Fallbackable TypeVar where
 instance Nullable TypeVar where
   nullVal = NoType
 
+familyDepth :: TypeVar -> Int
+familyDepth NoType = 0
+familyDepth TypeVar {tVarParent = parent} = familyDepth parent + 1
+
+predecessor :: TypeVar -> TypeVar -> Bool
+predecessor NoType NoType = True
+predecessor NoType _ = False
+predecessor whose@TypeVar {tVarParent = parent} who
+  | whose == who = True
+  | otherwise = predecessor parent who
+
+toLam :: TypeVar -> TypeCompl a
+toLam NoType = undefined
+toLam (TypeVar int kind parent) = LamType int kind parent
+
+setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
+setTypeKindInvariantLogicError what kind =
+  error $ "(internal) " ++ backQuote (show what) ++ " has to be given the " ++ backQuote (show (getTypeKind what)) ++ " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
+
+noType :: FromTypeVar a => a
+noType = fromTypeVar NoType
+
 instance HasTypeKind TypeVar where
   getTypeKind NoType {} = GenericType
   getTypeKind (TypeVar _ kind _) = kind
+  setTypeKind GenericType NoType {} = NoType {}
+  setTypeKind kind t@NoType {} = setTypeKindInvariantLogicError t kind
+  setTypeKind kind tVar@TypeVar{} = tVar{tVarKind=kind}
 
 type PrimType = TypeCompl TypeVar
 
@@ -253,7 +262,7 @@ data TypeCompl a
   | AppType a a
   | AddrType a
   | LamType Int TypeKind TypeVar
-  | ConstType Int TypeKind TypeVar
+  | ConstType Text TypeKind TypeVar
   | StringType
   | String16Type
   | LabelType
@@ -267,10 +276,16 @@ instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
     case getTypeKind t of
       _ :-> k -> k
       GenericType -> GenericType
-      _ -> ErrorKind $ T.pack ("Kind " ++ show t ++ " cannot be applied")
+      _ -> ErrorKind $ T.pack ("Kind " ++ backQuote (show t) ++ " cannot be applied.")
   getTypeKind (LamType _ kind _) = kind
   getTypeKind (ConstType _ kind _) = kind
   getTypeKind _ = Star
+  setTypeKind kind (AppType t t') =
+    AppType (setTypeKind (kind :-> getTypeKind t') t) t'
+  setTypeKind kind (LamType int _ parent) = LamType int kind parent
+  setTypeKind kind (ConstType int _ parent) = ConstType int kind parent
+  setTypeKind Star tCompl = tCompl
+  setTypeKind kind tCompl = setTypeKindInvariantLogicError tCompl kind
 
 data Type
   = ErrorType Text
@@ -286,12 +301,19 @@ instance HasTypeKind Type where
   getTypeKind ErrorType {} = GenericType
   getTypeKind (VarType t) = getTypeKind t
   getTypeKind (ComplType t) = getTypeKind t
+  setTypeKind GenericType err@ErrorType {} = err
+  setTypeKind kind err@ErrorType {} = setTypeKindInvariantLogicError err kind
+  setTypeKind kind (VarType t) = VarType $ setTypeKind kind t
+  setTypeKind kind (ComplType t) = ComplType $ setTypeKind kind t
 
 class ToType a where
   toType :: a -> Type
 
 instance ToType Type where
   toType = id
+
+instance FromTypeVar Type where
+  fromTypeVar = toType
 
 instance ToType TypeVar where
   toType = VarType
@@ -307,6 +329,7 @@ data Qual a =
 
 instance HasTypeKind a => HasTypeKind (Qual a) where
   getTypeKind (_ :=> t) = getTypeKind t
+  setTypeKind kind (facts :=> t) = facts :=> setTypeKind kind t
 
 infix 5 :.
 
@@ -316,6 +339,7 @@ data Scheme a =
 
 instance HasTypeKind a => HasTypeKind (Scheme a) where
   getTypeKind (_ :. t) = getTypeKind t
+  setTypeKind kind (tVars :. t) = tVars :. setTypeKind kind t
 
 -- TODO: add methods and their instances
 newtype Class =
@@ -354,9 +378,6 @@ type Fact = NestedFact Type
 
 type Facts = [Fact]
 
-class HasTypeKind a where
-  getTypeKind :: a -> TypeKind
-
 class Data a =>
       IsTyped a
   where
@@ -384,6 +405,9 @@ makeFunction = FunctionType
 -- | Transforms the given list of `Type`s into a tuple `Type` (there are special cases for an empty list and for a singleton)
 makeTuple :: [a] -> TypeCompl a
 makeTuple = TupleType
+
+makeApplication :: a -> a -> TypeCompl a
+makeApplication = AppType
 
 forall :: Set TypeVar -> FlatFacts -> Facts -> Fact
 forall s fs f

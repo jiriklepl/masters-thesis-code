@@ -84,6 +84,9 @@ cradle:
     - path: "src/CMM/Inference/Type.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Inference/TypeAnnot.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Inference/TypeHandle.hs"
       component: "Compiler:exe:Compiler"
 

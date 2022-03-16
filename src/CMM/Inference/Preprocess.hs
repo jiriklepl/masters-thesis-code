@@ -1,4 +1,4 @@
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -105,7 +105,6 @@ import safe CMM.Inference.Preprocess.State as Infer
   , popContext
   , popTypeVariables
   , pushClass
-  , pushFacts
   , pushInstance
   , pushTypeVariables
   , storeCSymbol
@@ -140,7 +139,6 @@ import safe CMM.Inference.Type as Infer
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, emptyTypeHandle, handleId)
 import safe CMM.Parser.HasPos (HasPos)
-import Debug.Trace
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -299,10 +297,10 @@ instance Preprocess Decl a b where
 instance Preprocess Class a b where
   preprocessImpl _ class'@(Class paraNames paraName methods) = do
     (_, _, _, _, tVars, _, _) <- classVariables class'
-    pushTypeVariables $ traceShowId tVars
-    paraNames' <- preprocessT paraNames
-    paraName' <- preprocess paraName
-    pushClass (nameAndHandle paraName') (nameAndHandle <$> paraNames')
+    pushTypeVariables tVars
+    (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
+    (constraint, paraName') <- preprocessParaName paraName
+    pushClass (getName paraName, getTypeHandle paraName') (getName paraName, constraint) (fmap getName paraNames `zip` constraints)
     (emptyTypeHandle, ) . Class paraNames' paraName' <$> preprocessT methods <*
       popContext <*
       popTypeVariables
@@ -310,17 +308,13 @@ instance Preprocess Class a b where
 instance Preprocess Instance a b where
   preprocessImpl _ instance'@(Instance paraNames paraName methods) = do
     (_, _, _, _, tVars, _, _) <- instanceVariables instance'
-    pushTypeVariables $ traceShowId tVars
-    pushFacts
-    paraNames' <- preprocessT paraNames
-    paraName' <- preprocess paraName
-    pushInstance (nameAndHandle paraName') (nameAndHandle <$> paraNames')
+    pushTypeVariables tVars
+    (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
+    (constraint, paraName') <- preprocessParaName paraName
+    pushInstance (getName paraName, getTypeHandle paraName') (getName paraName, constraint) (fmap getName paraNames `zip` constraints)
     (emptyTypeHandle, ) . Instance paraNames' paraName' <$> preprocessT methods <*
       popContext <*
       popTypeVariables
-
-nameAndHandle :: (HasName a, HasTypeHandle a) => a -> (Text, TypeHandle)
-nameAndHandle node = (getName node, getTypeHandle node)
 
 class Preprocess param a b =>
       PreprocessParam param a b
@@ -338,18 +332,20 @@ instance PreprocessParam Name a b where
 instance PreprocessParam AST.Type a b where
   preprocessParam = preprocess
 
-instance PreprocessParam param a b => Preprocess (ParaName param) a b where
-  preprocessImpl annot (ParaName name params) = do
-    let name' = preprocessTrivial name
-    params' <- traverse preprocessParam params
-    class' <- lookupClass $ getName name'
-    handle <- freshNamedTypeHandle (getName name) annot Constraint
-    storeFact $ handleId handle `typeUnion`
-      foldl
-        ((toType .) . AppType)
-        (toType $ handleId class')
-        (toType . getTypeHandleId <$> params')
-    return (handle, ParaName name' params')
+preprocessParaName :: (WithTypeHandle a b, PreprocessParam param a b, MonadInferPreprocessor m,
+ HasPos a, MonadIO m) => Annot (ParaName param) a -> m (Infer.Type, Annot (ParaName param) b)
+preprocessParaName (Annot (ParaName name params) annot) = do
+  let name' = preprocessTrivial name
+  params' <- traverse preprocessParam params
+  class' <- lookupClass $ getName name'
+  handle <- freshNamedTypeHandle (getName name) annot Constraint
+  let
+    constraint = foldl
+      ((toType .) . AppType)
+      (toType $ handleId class')
+      (toType . getTypeHandleId <$> params')
+  storeFact $ handleId handle `typeUnion` constraint
+  return (constraint, withTypeHandle handle annot `withAnnot` ParaName name' params')
 
 instance Preprocess Import a b where
   preprocessImpl _ import'@Import {} = do
@@ -455,21 +451,21 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mTypes) = do
       | otherwise -> undefined
     Nothing -> return ()
   mTypes' `for_` \types -> do
-    retHandle <- traceShowId <$> getCurrentReturn
+    retHandle <- getCurrentReturn
     retType'@(~(TupleType retVars)) <-
       doOutsideCtx $  makeTuple <$>
       traverse (fmap handleId . (`freshASTTypeHandle` Star)) (fromJust mTypes)
     storeFact $ handleId retHandle `typeUnion` retType'
-    zipWithM_ ((storeFact .) . subType) (handleVars types) retVars
+    zipWithM_ ((storeFact .) . typeUnion) (handleVars types) retVars
   (fs, retType) <- (_2 %~ VarType . handleId) <$> endProc
   let argumentsType = VarType <$> formalTypes
   let procedureType = makeFunction argumentsType retType
   int <- nextHandleCounter
   storeFact $ constExprConstraint procedureType
   storeFact $ int `functionKind` procedureType
-  storeProc (getName name) fs procedureType
+  handle <- storeProc (getName name) fs procedureType
   return
-    ( emptyTypeHandle
+    ( handle
     , ProcedureHeader mConv (preprocessTrivial name) formals' mTypes')
 
 -- TODO: consult conventions with the man

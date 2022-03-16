@@ -20,9 +20,9 @@ import safe CMM.Inference.Type as Infer
   , PrimType
   , Type
   , TypeCompl(BoolType, LabelType, String16Type, StringType, TBitsType,
-          VoidType)
+          VoidType, ConstType)
   , kindConstraint
-  , regularExprConstraint
+  , regularExprConstraint, TypeKind (Constraint, (:->), Star), TypeVar (NoType)
   )
 
 getNamedOperator :: Text -> Infer.Type
@@ -105,3 +105,7 @@ builtInTypeFacts = (kindFact <$> types) <> (constFact <$> types)
       ]
     kindFact primType = GenericData `kindConstraint` (primType :: PrimType)
     constFact primType = regularExprConstraint (primType :: PrimType)
+
+getConstType :: String -> TypeCompl a
+getConstType "constraintWitness" = ConstType "constraintWitness" (Constraint :-> Star) NoType
+getConstType _ = error "(internal) Tried to retrieve a nonexistent type constant"
