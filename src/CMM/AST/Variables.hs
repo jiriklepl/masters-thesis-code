@@ -58,7 +58,7 @@ import safe CMM.AST.Variables.State
   , typeVariables
   , variables
   )
-import safe CMM.Inference.Type (TypeKind((:->), Constraint, GenericType, Star))
+import safe CMM.Inference.TypeKind (TypeKind(..))
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 
 type VariablePack

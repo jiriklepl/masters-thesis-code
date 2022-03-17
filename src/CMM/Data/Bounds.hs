@@ -34,11 +34,14 @@ instance (Lattice a, Bounded a) => Monoid (Bounds a) where
 absurdBounds :: Bounded a => Bounds a
 absurdBounds = maxBound `Bounds` minBound
 
-isTrivial :: PartialOrd a => Bounds a -> Bool
-isTrivial (Bounds low high) = low >= high
+isTrivial :: (PartialOrd a, Eq a) => Bounds a -> Bool
+isTrivial (Bounds low high) = low == high
 
 isAbsurd :: PartialOrd a => Bounds a -> Bool
 isAbsurd (Bounds low high) = low > high
+
+isTrivialOrAbsurd :: (PartialOrd a, Eq a) => Bounds a -> Bool
+isTrivialOrAbsurd (Bounds low high) = low >= high
 
 normalizeAbsurd :: (PartialOrd a, Bounded a) => Bounds a -> Bounds a
 normalizeAbsurd bounds@(Bounds low high) =

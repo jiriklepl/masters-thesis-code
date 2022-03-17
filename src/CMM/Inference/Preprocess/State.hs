@@ -2,11 +2,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE Rank2Types #-}
 
 module CMM.Inference.Preprocess.State where
@@ -36,7 +34,6 @@ import safe CMM.Inference.Type
   , NestedFact(Fact)
   , ToType(..)
   , Type (ComplType)
-  , TypeKind(Star)
   , TypeVar(TypeVar, tVarId)
   , classConstraint
   , classFact
@@ -56,6 +53,7 @@ import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 import safe qualified CMM.Parser.HasPos as AST
 import safe CMM.Inference.BuiltIn (getConstType)
 import safe CMM.Inference.TypeAnnot (TypeAnnot (NoTypeAnnot, TypeAST, TypeNamedAST))
+import safe CMM.Inference.TypeKind ( TypeKind(Star) )
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle

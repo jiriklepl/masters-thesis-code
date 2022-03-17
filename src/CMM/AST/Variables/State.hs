@@ -4,7 +4,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE Rank2Types #-}
 
 -- TODO: make an alias for `Map Text (SourcePos, TypeKind)`
 module CMM.AST.Variables.State where
@@ -18,13 +17,13 @@ import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
+import safe Control.Monad (unless)
 
 import safe CMM.AST.HasName (HasName(..))
-import safe CMM.Inference.Type (TypeKind)
+import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
-import Control.Monad (unless)
 
 data CollectedVariables =
   CollectedVariables

@@ -119,7 +119,6 @@ import safe CMM.Inference.Type as Infer
   , Type(ComplType, VarType)
   , TypeCompl(AddrType, AppType, BoolType, LabelType, String16Type,
           StringType, TBitsType, TupleType)
-  , TypeKind(Constraint, GenericType, Star)
   , TypeVar(NoType, tVarId)
   , constExprConstraint
   , functionKind
@@ -139,6 +138,8 @@ import safe CMM.Inference.Type as Infer
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, emptyTypeHandle, handleId)
 import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Inference.TypeKind
+    ( TypeKind(..) )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable

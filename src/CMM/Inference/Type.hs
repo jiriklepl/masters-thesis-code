@@ -1,11 +1,8 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -20,201 +17,13 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
 import safe CMM.Data.Bounds (Bounds(Bounds))
-import safe CMM.Data.Dioid (Dioid((<.>), mfull))
-import safe CMM.Data.Lattice (Lattice(..))
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 import safe CMM.Data.Ordered (Ordered(..))
-import safe Data.PartialOrd (PartialOrd)
-import safe qualified Data.PartialOrd as PartialOrd
 import safe CMM.Utils (backQuote)
-
--- | DataKind specifies the semantics and register allocability of the types that map onto it via kinding
-data DataKind
-  = GenericData -- | The most generic data kind
-  | Unstorable -- | The empty data kind
-  | DataKind (Set Int) -- | The regular case for data kinds
-  | FunctionKind Int
-  | TupleKind Int
-  deriving (Show, Eq, Data)
-
-instance PartialOrd DataKind where
-  _ <= GenericData = True
-  GenericData <= _ = False
-  Unstorable <= _ = True
-  _ <= Unstorable = False
-  DataKind rs <= DataKind rs' = rs PartialOrd.<= rs'
-  FunctionKind int <= FunctionKind int' = int PartialOrd.<= int'
-  TupleKind int <= TupleKind int' = int PartialOrd.<= int'
-  _ <= _ = False
-
-instance Fallbackable DataKind where
-  Unstorable ?? a = a
-  a ?? _ = a
-
-instance Nullable DataKind where
-  nullVal = Unstorable
-
-instance Bounded DataKind where
-  minBound = Unstorable
-  maxBound = GenericData
-
--- | Transforms the given `Set` of `Int`s denoting physical registers into a corresponding `DataKind`
-makeDataKind :: Set Int -> DataKind
-makeDataKind set
-  | null set = Unstorable
-  | otherwise = DataKind set
-
-matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
-matchKind a b = getTypeKind a `go` getTypeKind b
-  where
-    ErrorKind _ `go` _ = False
-    _ `go` ErrorKind _ = False
-    GenericType `go` _ = True
-    _ `go` GenericType = True
-    Constraint `go` Constraint = True
-    Star `go` Star = True
-    (l :-> r) `go` (l' :-> r') = go l l' && go r r'
-    _ `go` _ = False
-
-combineTypeKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> TypeKind
-combineTypeKind a b = getTypeKind a `go` getTypeKind b
-  where
-    kind `go` kind'
-      | kind == kind' = kind
-    kind@ErrorKind {} `go` _ = kind
-    _ `go` kind@ErrorKind {} = kind
-    GenericType `go` kind = kind
-    kind `go` GenericType = kind
-    (l :-> r) `go` (l' :-> r') = go l l' :-> go r r'
-    _ `go` _ = undefined -- TODO: logic error
-
-instance Lattice DataKind where
-  GenericData /\ a = a
-  Unstorable /\ _ = Unstorable
-  DataKind rs /\ DataKind rs' = makeDataKind $ rs `Set.intersection` rs'
-  FunctionKind int /\ FunctionKind int' = FunctionKind $ min int int'
-  TupleKind int /\ TupleKind int' = TupleKind $ min int int'
-  FunctionKind {} /\ _ = Unstorable
-  TupleKind {} /\ _ = Unstorable
-  a /\ b = b /\ a
-  GenericData \/ _ = GenericData
-  Unstorable \/ a = a
-  DataKind rs \/ DataKind rs' = makeDataKind $ rs <> rs'
-  FunctionKind int \/ FunctionKind int' = FunctionKind $ min int int'
-  TupleKind int \/ TupleKind int' = TupleKind $ min int int'
-  FunctionKind {} \/ _ = GenericData
-  TupleKind {} \/ _ = GenericData
-  a \/ b = b \/ a
-
-instance Semigroup DataKind where
-  (<>) = (\/)
-
-instance Monoid DataKind where
-  mempty = Unstorable
-
-instance Dioid DataKind where
-  (<.>) = (/\)
-  mfull = GenericData
-
-instance Ord (Ordered DataKind) where
-  Ordered GenericData `compare` Ordered GenericData = EQ
-  Ordered Unstorable `compare` Ordered Unstorable = EQ
-  Ordered (DataKind set) `compare` Ordered (DataKind set') = set `compare` set'
-  Ordered (FunctionKind int) `compare` Ordered (FunctionKind int') =
-    int `compare` int'
-  Ordered (TupleKind int) `compare` Ordered (TupleKind int') =
-    int `compare` int'
-  Ordered GenericData `compare` _ = LT
-  _ `compare` Ordered GenericData = GT
-  Ordered Unstorable `compare` _ = LT
-  _ `compare` (Ordered Unstorable) = GT
-  Ordered DataKind {} `compare` _ = LT
-  _ `compare` (Ordered DataKind {}) = GT
-  Ordered FunctionKind {} `compare` _ = LT
-  _ `compare` (Ordered FunctionKind {}) = GT
-
-instance Bounded (Ordered DataKind) where
-  minBound = Ordered minBound
-  maxBound = Ordered maxBound
-
-data Constness
-  = Regular
-  | LinkExpr
-  | ConstExpr
-  deriving (Show, Eq, Data)
-
-deriving instance Ord (Ordered Constness)
-
-instance Ord Constness where
-  Regular `compare` Regular = EQ
-  LinkExpr `compare` LinkExpr = EQ
-  ConstExpr `compare` ConstExpr = EQ
-  Regular `compare` _ = GT
-  _ `compare` Regular = LT
-  LinkExpr `compare` _ = GT
-  _ `compare` LinkExpr = LT
-
-instance PartialOrd Constness where
-  (<=) = (Prelude.<=)
-
-instance Lattice Constness where
-  (/\) = min
-  (\/) = max
-
-instance Bounded Constness where
-  minBound = ConstExpr
-  maxBound = Regular
-
-data TypeKind
-  = Star
-  | Constraint
-  | GenericType -- wildCard
-  | ErrorKind Text
-  | TypeKind :-> TypeKind
-  deriving (Show, Data)
-
-class HasTypeKind a where
-  getTypeKind :: a -> TypeKind
-  setTypeKind :: TypeKind -> a -> a
-
-instance HasTypeKind TypeKind where
-  getTypeKind = id
-  setTypeKind = const
-
-instance Eq TypeKind where
-  Star == Star = True
-  Constraint == Constraint = True
-  GenericType == GenericType = True
-  ErrorKind _ == _ = False
-  _ == ErrorKind _ = False
-  (l :-> r) == (l' :-> r') = l == l' && r == r'
-  _ == _ = False
-
-instance Ord TypeKind where
-  Star `compare` Star = EQ
-  Star `compare` _ = LT
-  _ `compare` Star = GT
-  Constraint `compare` Constraint = EQ
-  Constraint `compare` _ = LT
-  _ `compare` Constraint = GT
-  GenericType `compare` GenericType = EQ
-  GenericType `compare` _ = LT
-  _ `compare` GenericType = GT
-  ErrorKind s `compare` ErrorKind s' = s `compare` s'
-  ErrorKind _ `compare` _ = LT
-  _ `compare` ErrorKind _ = GT
-  (l :-> r) `compare` (l' :-> r') =
-    case l `compare` l' of
-      LT -> LT
-      GT -> GT
-      EQ -> r `compare` r'
-
-instance Fallbackable TypeKind where
-  GenericType ?? kind = kind
-  kind ?? _ = kind
-
-instance Nullable TypeKind where
-  nullVal = GenericType
+import safe CMM.Inference.TypeKind (TypeKind (..), HasTypeKind (..))
+import safe CMM.Inference.DataKind
+    ( DataKind(TupleKind, FunctionKind) )
+import safe CMM.Inference.Constness ( Constness(..) )
 
 data TypeVar
   = NoType
@@ -260,6 +69,9 @@ predecessor whose@TypeVar {tVarParent = parent} who
   | whose == who = True
   | otherwise = predecessor parent who
 
+noType :: FromTypeVar a => a
+noType = fromTypeVar NoType
+
 toLam :: TypeVar -> TypeCompl a
 toLam NoType = undefined
 toLam (TypeVar int kind parent) = LamType int kind parent
@@ -268,8 +80,6 @@ setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
 setTypeKindInvariantLogicError what kind =
   error $ "(internal) " ++ backQuote (show what) ++ " has to be given the " ++ backQuote (show (getTypeKind what)) ++ " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
 
-noType :: FromTypeVar a => a
-noType = fromTypeVar NoType
 
 instance HasTypeKind TypeVar where
   getTypeKind NoType {} = GenericType

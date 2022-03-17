@@ -3,8 +3,8 @@
 
 module CMM.Inference.BuiltIn where
 
-import safe Control.Lens.Setter
-import safe Control.Lens.Tuple
+import safe Control.Lens.Setter ( (%~) )
+import safe Control.Lens.Tuple ( Field2(_2) )
 import Data.Bimap (Bimap)
 import qualified Data.Bimap as Bimap
 import safe Data.Set (Set)
@@ -12,18 +12,19 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.AST as AST (Op)
-import safe CMM.Data.Ordered
+import safe CMM.Data.Ordered ( Ordered(..) )
 import safe CMM.Inference.Type as Infer
-  ( DataKind(DataKind, GenericData, Unstorable)
-  , Facts
+  ( Facts
   , FlatFacts
   , PrimType
   , Type
   , TypeCompl(BoolType, LabelType, String16Type, StringType, TBitsType,
           VoidType, ConstType)
   , kindConstraint
-  , regularExprConstraint, TypeKind (Constraint, (:->), Star), TypeVar (NoType)
+  , regularExprConstraint, TypeVar (NoType)
   )
+import safe CMM.Inference.TypeKind (TypeKind (..))
+import safe CMM.Inference.DataKind (DataKind(DataKind, GenericData, Unstorable))
 
 getNamedOperator :: Text -> Infer.Type
 getNamedOperator = undefined

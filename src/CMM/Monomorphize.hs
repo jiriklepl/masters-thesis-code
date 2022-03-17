@@ -7,18 +7,25 @@
 {-# LANGUAGE LambdaCase #-}
 
 module CMM.Monomorphize where
-import CMM.Inference.State (MonadInferencer, unifs, handlize)
-import CMM.Parser.HasPos
-import CMM.Inference.Preprocess.State
-import CMM.AST.Maps
-import CMM.AST.Annot
-import CMM.AST (Name)
-import CMM.Inference.Type (TypeVar, Type, IsTyped (freeTypeVars))
-import CMM.Inference.Subst (Apply(apply))
-import Control.Lens.Getter (uses)
-import qualified Data.Bimap as Bimap
-import CMM.Utils (backQuote)
 
+import qualified Data.Bimap as Bimap
+import safe Control.Lens.Getter (uses, (^.))
+import safe qualified Data.PartialOrd as PartialOrd
+import safe Control.Applicative (Applicative(liftA2))
+
+import safe CMM.Inference.State (MonadInferencer, unifs, handlize, readConstingBounds, readKindingBounds)
+import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.Inference.Preprocess.State ( HasTypeHandle )
+import safe CMM.AST.Maps
+    ( ASTmap(..), ASTmapGen, Constraint, Space )
+import safe CMM.AST.Annot ( withAnnot, Annot, Annotation(Annot) )
+import safe CMM.AST (Name)
+import safe CMM.Inference.Type (TypeVar, Type, IsTyped (freeTypeVars))
+import safe CMM.Inference.Subst (Apply(apply))
+import safe CMM.Utils (backQuote)
+import safe CMM.Data.Bounds (Bounds(Bounds) )
+import safe CMM.Data.Nullable (Nullable (nullVal), Fallbackable ((??)))
+import safe CMM.Inference.TypeHandle ( consting, kinding, typing )
 
 class Monomorphize n a where
   monomorphize :: (HasPos a, HasTypeHandle a, MonadInferencer m) => n a -> m (n a)
@@ -41,22 +48,56 @@ instance ASTmapGen MonomorphizeHint a a
 
 instance {-# OVERLAPPABLE #-} (ASTmap MonomorphizeHint n a a) =>
                               Monomorphize (Annot n) a where
-  monomorphize (Annot n annot) = withAnnot annot <$> astMapM MonomorphizeHint monomorphize' n
+  monomorphize (Annot n a) = withAnnot a <$> astMapM MonomorphizeHint monomorphize' n
 
-isMonoTyping :: Type -> Bool
-isMonoTyping t = null $ freeTypeVars t
+data PolyKind
+  = Mono
+  | Poly
+  | Absurd
+  deriving (Eq, Ord)
 
-isMonoConstness :: MonadInferencer m => TypeVar -> m Bool
-isMonoConstness = undefined
+instance Semigroup PolyKind where
+  Absurd <> _ = Absurd
+  _ <> Absurd = Absurd
+  Poly <> _ = Poly
+  _ <> Poly = Poly
+  Mono <> Mono = Mono
 
-isMonoKinding :: MonadInferencer m => TypeVar -> m Bool
-isMonoKinding = undefined
+instance Monoid PolyKind where
+  mempty = Mono
 
+instance Fallbackable PolyKind where
+  Absurd ?? kind = kind
+  kind ?? _ = kind
 
-isMonoType :: MonadInferencer m => TypeVar -> m Bool
-isMonoType tVar = do
+instance Nullable PolyKind where
+  nullVal = Absurd
+
+typingPolyKind :: Type -> PolyKind
+typingPolyKind t = if null $ freeTypeVars t
+  then Mono
+  else Poly
+
+constnessPolyKind :: MonadInferencer m => TypeVar -> m PolyKind
+constnessPolyKind tVar = go <$> readConstingBounds tVar
+  where
+    go (low `Bounds` high) = case low `compare` high of
+      LT -> Poly
+      EQ -> Mono
+      GT -> Absurd
+
+kindingPolyKind :: MonadInferencer m => TypeVar -> m PolyKind
+kindingPolyKind tVar = go <$> readKindingBounds tVar
+  where
+    go (low `Bounds` high) = if low PartialOrd.<= high
+      then if high PartialOrd.<= low
+        then Mono
+        else Poly
+      else Absurd
+
+typePolyKind :: MonadInferencer m => TypeVar -> m PolyKind
+typePolyKind tVar =
   uses handlize (flip Bimap.lookup) <*> uses unifs (`apply` tVar) >>= \case
-    Just handle -> do
-      undefined
+    Just handle ->
+      mappend (typingPolyKind $ handle ^. typing) <$> liftA2 mappend (kindingPolyKind $ handle ^. kinding) (kindingPolyKind $ handle ^. consting)
     Nothing -> error $ "(internal logic error) Type variable " <> backQuote (show tVar) <> " not registered by the inferencer."
-  return undefined

@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-
 module CMM.Inference.Unify where
 
 import safe Data.Text (Text)
@@ -17,16 +16,15 @@ import safe Control.Lens.Tuple ( Field1(_1), Field2(_2) )
 import safe CMM.Inference.Subst ( Subst, Apply(..) )
 import safe CMM.Inference.Type
     ( familyDepth,
-      Constness,
-      HasTypeKind(setTypeKind),
       IsTyped(freeTypeVars),
       PrimType,
       ToType(..),
       Type(..),
       TypeCompl(AddrType, TupleType, FunctionType, AppType),
-      TypeVar(NoType, TypeVar, tVarKind),
-      matchKind,
-      combineTypeKind )
+      TypeVar(NoType, TypeVar, tVarKind))
+import safe CMM.Inference.Constness ( Constness )
+import safe CMM.Inference.TypeKind
+    ( HasTypeKind(setTypeKind), matchKind, combineTypeKind )
 
 data UnificationError
   = Occurs TypeVar Type

@@ -72,6 +72,12 @@ cradle:
     - path: "src/CMM/Inference/BuiltIn.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Inference/Constness.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/DataKind.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Inference/Preprocess.hs"
       component: "Compiler:exe:Compiler"
 
@@ -91,6 +97,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/TypeHandle.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/TypeKind.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Unify.hs"

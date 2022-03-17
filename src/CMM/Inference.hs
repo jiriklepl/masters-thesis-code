@@ -36,7 +36,7 @@ import safe Data.List (partition)
 
 import safe CMM.Data.Bounds
   ( Bounds(Bounds)
-  , isTrivial
+  , isTrivialOrAbsurd
   , lowerBound
   , normalizeAbsurd
   , upperBound
@@ -66,13 +66,11 @@ import safe CMM.Inference.State
   , unifs, classSchemes, classFacts, getHandle, readBoundsFrom, readLowerBound, collectPrimeTVars, getConsting, getKinding, getTyping, handlizeTVar, pushSubKind, pushSubConst, pushConstBounds, pushKindBounds, registerScheme, freshTypeHelperWithHandle
   )
 import safe CMM.Inference.Type
-  ( DataKind
-  , Fact
+  ( Fact
   , Facts
   , FlatFact(ConstnessBounds, InstType, KindBounds, OnRegister,
          SubConst, SubKind, SubType, Typing, Union, ClassConstraint, ClassFact, ClassDetermine)
   , FlatFacts
-  , HasTypeKind(..)
   , IsTyped(freeTypeVars)
   , NestedFact(Fact, NestedFact)
   , PrimType
@@ -100,6 +98,8 @@ import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 import safe CMM.Inference.Subst (Subst, Apply (apply), ApplyShallow (applyShallow), foldTVarSubsts)
 import safe CMM.Inference.Unify (Unify(unify), unifyLax, unifyFold)
 import safe CMM.Data.Function (fOr)
+import safe CMM.Inference.TypeKind ( HasTypeKind(getTypeKind) )
+import safe CMM.Inference.DataKind ( DataKind )
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -586,7 +586,7 @@ minimizeSubs parent = do
               then Set.singleton tVar'
               else mempty
           | otherwise = undefined -- TODO: error
-        relevant tVar' = not . isTrivial $ readBoundsFrom tVar' boundsMap <> bounds
+        relevant tVar' = not . isTrivialOrAbsurd $ readBoundsFrom tVar' boundsMap <> bounds
     getDepends _ _ _ = undefined -- TODO: error
     transformMap =
       Map.toList . fmap (Set.filter setFilter) . Map.filterWithKey mapFilter
@@ -854,7 +854,7 @@ boundsUnifs ::
   => Getter Inferencer (Map TypeVar (Bounds a))
   -> m (Subst TypeVar)
 boundsUnifs which = do
-  whichList <- filter (isTrivial . view _2) <$> uses which Map.toList
+  whichList <- filter (isTrivialOrAbsurd . view _2) <$> uses which Map.toList
   let trivialGroups =
         mapFold $ (_2 %~ Set.singleton) . (_1 %~ Ordered . normalizeAbsurd) .
         swap <$>

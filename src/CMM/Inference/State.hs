@@ -22,16 +22,16 @@ import safe Data.Foldable (Foldable(fold))
 
 import safe CMM.Data.Bounds ( Bounds (Bounds), lowerBound, upperBound )
 import safe CMM.Inference.Type
-    ( TypeKind,
-      Type,
+    ( Type,
       TypeVar(NoType, TypeVar),
       Scheme,
-      PrimType,
-      Constness,
-      DataKind )
+      PrimType)
 import safe CMM.Inference.TypeHandle ( initTypeHandle, TypeHandle, consting, kinding, typing )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
-import CMM.Inference.Unify (UnificationError)
+import safe CMM.Inference.Unify (UnificationError)
+import safe CMM.Inference.DataKind ( DataKind )
+import safe CMM.Inference.Constness ( Constness )
+import safe CMM.Inference.TypeKind ( TypeKind )
 
 data Inferencer =
   Inferencer

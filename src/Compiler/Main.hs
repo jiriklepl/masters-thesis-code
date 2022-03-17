@@ -32,6 +32,7 @@ import CMM.Inference.Preprocess.State as Infer
 import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.State as InferState
 import CMM.Inference.Type as Infer
+import CMM.Inference.TypeKind as Infer
 import CMM.Lexer
 import CMM.Parser
 import CMM.Monomorphize (Monomorphize(monomorphize))
