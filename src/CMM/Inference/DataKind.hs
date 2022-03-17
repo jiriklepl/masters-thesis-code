@@ -4,17 +4,16 @@
 
 module CMM.Inference.DataKind where
 
-import safe Data.PartialOrd (PartialOrd)
-import safe Data.Set (Set)
 import safe Data.Data (Data)
+import safe Data.PartialOrd (PartialOrd)
 import safe qualified Data.PartialOrd as PartialOrd
+import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 
-import safe CMM.Data.Nullable (Fallbackable ((??)), Nullable (nullVal))
-import safe CMM.Data.Lattice (Lattice ((/\), (\/)))
+import safe CMM.Data.Dioid (Dioid(..))
+import safe CMM.Data.Lattice (Lattice((/\), (\/)))
+import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Data.Ordered (Ordered(Ordered))
-import safe CMM.Data.Dioid (Dioid (..))
-
 
 -- | DataKind specifies the semantics and register allocability of the types that map onto it via kinding
 data DataKind

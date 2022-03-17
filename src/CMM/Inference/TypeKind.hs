@@ -3,10 +3,10 @@
 
 module CMM.Inference.TypeKind where
 
-import safe Data.Text (Text)
 import safe Data.Data (Data)
+import safe Data.Text (Text)
 
-import safe CMM.Data.Nullable (Fallbackable ((??)), Nullable (nullVal))
+import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 
 data TypeKind
   = Star

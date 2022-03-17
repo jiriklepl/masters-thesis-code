@@ -6,10 +6,10 @@
 module CMM.Inference.Constness where
 
 import safe Data.Data (Data)
-import safe Data.PartialOrd ( PartialOrd((<=)) )
+import safe Data.PartialOrd (PartialOrd((<=)))
 
+import safe CMM.Data.Lattice (Lattice(..))
 import safe CMM.Data.Ordered (Ordered(Ordered))
-import safe CMM.Data.Lattice (Lattice (..))
 
 data Constness
   = Regular

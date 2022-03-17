@@ -11,13 +11,13 @@ module CMM.AST.Variables.State where
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Setter ((%=), (+=))
 import safe Control.Lens.TH (makeLenses)
+import safe Control.Monad (unless)
 import safe Control.Monad.State (MonadIO, MonadState)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
-import safe Control.Monad (unless)
 
 import safe CMM.AST.HasName (HasName(..))
 import safe CMM.Inference.TypeKind (TypeKind)

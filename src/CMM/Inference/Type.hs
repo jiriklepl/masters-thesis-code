@@ -19,11 +19,10 @@ import safe qualified Data.Text as T
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 import safe CMM.Data.Ordered (Ordered(..))
+import safe CMM.Inference.Constness (Constness(..))
+import safe CMM.Inference.DataKind (DataKind(FunctionKind, TupleKind))
+import safe CMM.Inference.TypeKind (HasTypeKind(..), TypeKind(..))
 import safe CMM.Utils (backQuote)
-import safe CMM.Inference.TypeKind (TypeKind (..), HasTypeKind (..))
-import safe CMM.Inference.DataKind
-    ( DataKind(TupleKind, FunctionKind) )
-import safe CMM.Inference.Constness ( Constness(..) )
 
 data TypeVar
   = NoType
@@ -78,15 +77,19 @@ toLam (TypeVar int kind parent) = LamType int kind parent
 
 setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
 setTypeKindInvariantLogicError what kind =
-  error $ "(internal) " ++ backQuote (show what) ++ " has to be given the " ++ backQuote (show (getTypeKind what)) ++ " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
-
+  error $
+  "(internal) " ++
+  backQuote (show what) ++
+  " has to be given the " ++
+  backQuote (show (getTypeKind what)) ++
+  " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
 
 instance HasTypeKind TypeVar where
   getTypeKind NoType {} = GenericType
   getTypeKind (TypeVar _ kind _) = kind
   setTypeKind GenericType NoType {} = NoType {}
   setTypeKind kind t@NoType {} = setTypeKindInvariantLogicError t kind
-  setTypeKind kind tVar@TypeVar{} = tVar{tVarKind=kind}
+  setTypeKind kind tVar@TypeVar {} = tVar {tVarKind = kind}
 
 type PrimType = TypeCompl TypeVar
 
@@ -110,7 +113,9 @@ instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
     case getTypeKind t of
       _ :-> k -> k
       GenericType -> GenericType
-      _ -> ErrorKind $ T.pack ("Kind " ++ backQuote (show t) ++ " cannot be applied.")
+      _ ->
+        ErrorKind $
+        T.pack ("Kind " ++ backQuote (show t) ++ " cannot be applied.")
   getTypeKind (LamType _ kind _) = kind
   getTypeKind (ConstType _ kind _) = kind
   getTypeKind _ = Star

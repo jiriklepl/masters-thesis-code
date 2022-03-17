@@ -7,11 +7,8 @@ module CMM.Inference.TypeHandle where
 import safe Control.Lens.TH (makeLenses)
 import safe Data.Data (Data)
 
-import safe CMM.Inference.Type
-  ( Type(VarType)
-  , TypeVar(NoType)
-  )
-import safe CMM.Inference.TypeAnnot (TypeAnnot (NoTypeAnnot))
+import safe CMM.Inference.Type (Type(VarType), TypeVar(NoType))
+import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 
 data TypeHandle =
   TypeHandle

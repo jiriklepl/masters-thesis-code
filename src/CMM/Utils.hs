@@ -5,9 +5,9 @@ module CMM.Utils where
 
 import safe Control.Monad (unless, when)
 import safe Data.Maybe (isJust)
+import safe Data.String (IsString)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
-import safe Data.String (IsString)
 
 addPrefix :: Text -> Text -> Text
 addPrefix prefix text = prefix <> T.cons ':' text
@@ -31,5 +31,4 @@ repeatUntil :: Monad m => m Bool -> m ()
 repeatUntil action = action >>= flip unless (repeatUntil action)
 
 backQuote :: (IsString a, Semigroup a) => a -> a
-backQuote string =
-  "`" <> string <> "`"
+backQuote string = "`" <> string <> "`"

@@ -2,7 +2,7 @@
 
 module CMM.Monomorphize.PolyKind where
 
-import safe CMM.Data.Nullable ( Nullable(..), Fallbackable(..) )
+import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 
 data PolyKind
   = Mono

@@ -3,8 +3,8 @@
 
 module CMM.Inference.BuiltIn where
 
-import safe Control.Lens.Setter ( (%~) )
-import safe Control.Lens.Tuple ( Field2(_2) )
+import safe Control.Lens.Setter ((%~))
+import safe Control.Lens.Tuple (Field2(_2))
 import Data.Bimap (Bimap)
 import qualified Data.Bimap as Bimap
 import safe Data.Set (Set)
@@ -12,19 +12,20 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.AST as AST (Op)
-import safe CMM.Data.Ordered ( Ordered(..) )
+import safe CMM.Data.Ordered (Ordered(..))
+import safe CMM.Inference.DataKind (DataKind(DataKind, GenericData, Unstorable))
 import safe CMM.Inference.Type as Infer
   ( Facts
   , FlatFacts
   , PrimType
   , Type
-  , TypeCompl(BoolType, LabelType, String16Type, StringType, TBitsType,
-          VoidType, ConstType)
+  , TypeCompl(BoolType, ConstType, LabelType, String16Type, StringType,
+          TBitsType, VoidType)
+  , TypeVar(NoType)
   , kindConstraint
-  , regularExprConstraint, TypeVar (NoType)
+  , regularExprConstraint
   )
-import safe CMM.Inference.TypeKind (TypeKind (..))
-import safe CMM.Inference.DataKind (DataKind(DataKind, GenericData, Unstorable))
+import safe CMM.Inference.TypeKind (TypeKind(..))
 
 getNamedOperator :: Text -> Infer.Type
 getNamedOperator = undefined
@@ -108,5 +109,7 @@ builtInTypeFacts = (kindFact <$> types) <> (constFact <$> types)
     constFact primType = regularExprConstraint (primType :: PrimType)
 
 getConstType :: String -> TypeCompl a
-getConstType "constraintWitness" = ConstType "constraintWitness" (Constraint :-> Star) NoType
-getConstType _ = error "(internal) Tried to retrieve a nonexistent type constant"
+getConstType "constraintWitness" =
+  ConstType "constraintWitness" (Constraint :-> Star) NoType
+getConstType _ =
+  error "(internal) Tried to retrieve a nonexistent type constant"

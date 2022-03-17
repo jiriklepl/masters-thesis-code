@@ -8,16 +8,22 @@
 
 module CMM.Inference.Subst where
 
-import safe Data.Map (Map)
 import safe Control.Lens.Setter ((%~))
-import safe Data.Maybe (fromMaybe)
-import safe qualified Data.Map as Map
-import safe Data.Data (Data (gmapT), Typeable)
+import safe Data.Data (Data(gmapT), Typeable)
 import Data.Generics (extT)
+import safe Data.Map (Map)
+import safe qualified Data.Map as Map
+import safe Data.Maybe (fromMaybe)
 
-import safe CMM.Inference.Type (TypeVar (tVarParent, TypeVar, NoType), Type (VarType), ToType (toType), Fact, FlatFact, PrimType)
-import safe CMM.Inference.TypeHandle
-    ( consting, kinding, typing, TypeHandle )
+import safe CMM.Inference.Type
+  ( Fact
+  , FlatFact
+  , PrimType
+  , ToType(toType)
+  , Type(VarType)
+  , TypeVar(NoType, TypeVar, tVarParent)
+  )
+import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
 
 type Subst = Map TypeVar
 
@@ -79,7 +85,8 @@ instance TypeCaseShallow TypeVar where
 
 instance (ToType b, Typeable b, TypeCase b) => Apply TypeVar b
 
-instance (ToType b, Typeable b, TypeCaseShallow b) => ApplyShallow TypeVar b
+instance (ToType b, Typeable b, TypeCaseShallow b) =>
+         ApplyShallow TypeVar b
 
 instance (ToType b, Typeable b, TypeCase b) => Apply Type b
 
@@ -100,8 +107,8 @@ instance (Apply a t, Apply b t) => Apply (a, b) t where
 instance (Apply TypeVar t, ToType t, Typeable t, TypeCase t) =>
          Apply TypeHandle t where
   apply subst =
-    (typing %~ apply subst) . (consting %~ apply subst) .
-    (kinding %~ apply subst)
+    (typing %~ apply subst) .
+    (consting %~ apply subst) . (kinding %~ apply subst)
 
 foldTVarSubsts :: [Map TypeVar TypeVar] -> Map TypeVar TypeVar
 foldTVarSubsts = foldr apply mempty

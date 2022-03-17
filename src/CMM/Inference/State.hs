@@ -6,32 +6,39 @@
 
 module CMM.Inference.State where
 
-import safe Control.Lens.Getter (use, uses, view, (^.))
+import safe Control.Lens.Getter ((^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (+=))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Bimap (Bimap)
 import safe qualified Data.Bimap as Bimap
+import safe Data.Foldable (Foldable(fold))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import safe Data.Maybe (fromJust, fromMaybe)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Maybe (fromMaybe, fromJust)
-import safe Data.Foldable (Foldable(fold))
 
-import safe CMM.Data.Bounds ( Bounds (Bounds), lowerBound, upperBound )
+import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
+import safe CMM.Inference.Constness (Constness)
+import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Type
-    ( Type,
-      TypeVar(NoType, TypeVar),
-      Scheme,
-      PrimType)
-import safe CMM.Inference.TypeHandle ( initTypeHandle, TypeHandle, consting, kinding, typing )
+  ( PrimType
+  , Scheme
+  , Type
+  , TypeVar(NoType, TypeVar)
+  )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
+import safe CMM.Inference.TypeHandle
+  ( TypeHandle
+  , consting
+  , initTypeHandle
+  , kinding
+  , typing
+  )
+import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.Unify (UnificationError)
-import safe CMM.Inference.DataKind ( DataKind )
-import safe CMM.Inference.Constness ( Constness )
-import safe CMM.Inference.TypeKind ( TypeKind )
 
 data Inferencer =
   Inferencer

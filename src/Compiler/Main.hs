@@ -34,8 +34,8 @@ import CMM.Inference.State as InferState
 import CMM.Inference.Type as Infer
 import CMM.Inference.TypeKind as Infer
 import CMM.Lexer
-import CMM.Parser
 import CMM.Monomorphize (Monomorphize(monomorphize))
+import CMM.Parser
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -80,7 +80,7 @@ main = do
         mineAST mined
         fs' <- reduce fs
         liftIO . print $ show fs'
-        mined'<- monomorphize mined
+        mined' <- monomorphize mined
         liftIO . print $ show mined')
     (InferState.initInferencer
        (CMM.Inference.Preprocess.State._handleCounter miner)) >>=

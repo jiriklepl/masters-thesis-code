@@ -6,25 +6,29 @@
 
 module CMM.Inference.Unify where
 
-import safe Data.Text (Text)
-import safe qualified Data.Set as Set
+import safe Control.Lens ((%~))
+import safe Control.Lens.Tuple (Field1(_1), Field2(_2))
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
-import safe Control.Lens ((%~))
-import safe Control.Lens.Tuple ( Field1(_1), Field2(_2) )
+import safe qualified Data.Set as Set
+import safe Data.Text (Text)
 
-import safe CMM.Inference.Subst ( Subst, Apply(..) )
+import safe CMM.Inference.Constness (Constness)
+import safe CMM.Inference.Subst (Apply(..), Subst)
 import safe CMM.Inference.Type
-    ( familyDepth,
-      IsTyped(freeTypeVars),
-      PrimType,
-      ToType(..),
-      Type(..),
-      TypeCompl(AddrType, TupleType, FunctionType, AppType),
-      TypeVar(NoType, TypeVar, tVarKind))
-import safe CMM.Inference.Constness ( Constness )
+  ( IsTyped(freeTypeVars)
+  , PrimType
+  , ToType(..)
+  , Type(..)
+  , TypeCompl(AddrType, AppType, FunctionType, TupleType)
+  , TypeVar(NoType, TypeVar, tVarKind)
+  , familyDepth
+  )
 import safe CMM.Inference.TypeKind
-    ( HasTypeKind(setTypeKind), matchKind, combineTypeKind )
+  ( HasTypeKind(setTypeKind)
+  , combineTypeKind
+  , matchKind
+  )
 
 data UnificationError
   = Occurs TypeVar Type
@@ -59,20 +63,22 @@ unifyMismatch :: Type -> Type -> UnificationError
 unifyMismatch = Mismatch "Types are not unifiable"
 
 instance Unify TypeVar TypeVar where
-  unify tVar@TypeVar{tVarKind = kind} tVar'@TypeVar{tVarKind = kind'}
+  unify tVar@TypeVar {tVarKind = kind} tVar'@TypeVar {tVarKind = kind'}
     | not (matchKind tVar tVar') = Left [BadKind (VarType tVar) (VarType tVar')]
     | otherwise = improve <$> tVar `unifyLax` tVar'
     where
       kind'' = kind `combineTypeKind` kind'
-      improve pair@(subst, tVar''@TypeVar{tVarKind = kind'''})
-        | kind''' /= kind'' = let
-          tVar''' = tVar''{tVarKind = kind''}
-          in ((setTypeKind kind'' <$> subst) <> Map.singleton tVar'' tVar''' , tVar''')
+      improve pair@(subst, tVar''@TypeVar {tVarKind = kind'''})
+        | kind''' /= kind'' =
+          let tVar''' = tVar'' {tVarKind = kind''}
+           in ( (setTypeKind kind'' <$> subst) <> Map.singleton tVar'' tVar'''
+              , tVar''')
         | otherwise = pair
       improve (_, NoType) = undefined -- TODO: logic error
   unify tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
-unifyLax :: TypeVar
+unifyLax ::
+     TypeVar
   -> TypeVar
   -> Either [UnificationError] (Map TypeVar TypeVar, TypeVar)
 unifyLax tVar@TypeVar {} tVar'@TypeVar {}
