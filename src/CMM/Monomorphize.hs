@@ -24,8 +24,8 @@ import safe CMM.Inference.Type (TypeVar, Type, IsTyped (freeTypeVars))
 import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Utils (backQuote)
 import safe CMM.Data.Bounds (Bounds(Bounds) )
-import safe CMM.Data.Nullable (Nullable (nullVal), Fallbackable ((??)))
 import safe CMM.Inference.TypeHandle ( consting, kinding, typing )
+import safe CMM.Monomorphize.PolyKind ( PolyKind(..) )
 
 class Monomorphize n a where
   monomorphize :: (HasPos a, HasTypeHandle a, MonadInferencer m) => n a -> m (n a)
@@ -49,29 +49,6 @@ instance ASTmapGen MonomorphizeHint a a
 instance {-# OVERLAPPABLE #-} (ASTmap MonomorphizeHint n a a) =>
                               Monomorphize (Annot n) a where
   monomorphize (Annot n a) = withAnnot a <$> astMapM MonomorphizeHint monomorphize' n
-
-data PolyKind
-  = Mono
-  | Poly
-  | Absurd
-  deriving (Eq, Ord)
-
-instance Semigroup PolyKind where
-  Absurd <> _ = Absurd
-  _ <> Absurd = Absurd
-  Poly <> _ = Poly
-  _ <> Poly = Poly
-  Mono <> Mono = Mono
-
-instance Monoid PolyKind where
-  mempty = Mono
-
-instance Fallbackable PolyKind where
-  Absurd ?? kind = kind
-  kind ?? _ = kind
-
-instance Nullable PolyKind where
-  nullVal = Absurd
 
 typingPolyKind :: Type -> PolyKind
 typingPolyKind t = if null $ freeTypeVars t

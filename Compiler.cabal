@@ -59,6 +59,7 @@ executable Compiler
                        CMM.Lens,
                        CMM.Lexer,
                        CMM.Monomorphize,
+                       CMM.Monomorphize.PolyKind,
                        CMM.Parser,
                        CMM.Parser.HasPos,
                        CMM.Pretty,

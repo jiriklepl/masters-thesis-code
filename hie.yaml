@@ -114,6 +114,9 @@ cradle:
     - path: "src/CMM/Monomorphize.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Monomorphize/PolyKind.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Parser.hs"
       component: "Compiler:exe:Compiler"
 
