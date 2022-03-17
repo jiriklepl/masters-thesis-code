@@ -2,20 +2,25 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module CMM.Inference.State where
 
-import safe Control.Lens.Getter (use, uses)
+import safe Control.Lens.Getter (use, uses, view, (^.))
 import safe Control.Lens.Setter ((%=), (+=))
 import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Bimap (Bimap)
 import safe qualified Data.Bimap as Bimap
 import safe Data.Map (Map)
+import safe qualified Data.Map as Map
 import safe Data.Set (Set)
+import safe qualified Data.Set as Set
 import safe Data.Text (Text)
+import safe Data.Maybe (fromMaybe, fromJust)
+import safe Data.Foldable (Foldable(fold))
 
-import safe CMM.Data.Bounds ( Bounds )
+import safe CMM.Data.Bounds ( Bounds (Bounds), lowerBound, upperBound )
 import safe CMM.Inference.Type
     ( TypeKind,
       Type,
@@ -24,10 +29,9 @@ import safe CMM.Inference.Type
       PrimType,
       Constness,
       DataKind )
-import safe CMM.Inference.TypeHandle ( initTypeHandle, TypeHandle )
+import safe CMM.Inference.TypeHandle ( initTypeHandle, TypeHandle, consting, kinding, typing )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
-
-type Subst = Map TypeVar
+import CMM.Inference.Unify (UnificationError)
 
 data Inferencer =
   Inferencer
@@ -78,21 +82,6 @@ initInferencer handleCounter =
     , _currentParent = [globalTVar]
     }
 
-data UnificationError
-  = Occurs TypeVar Type
-  | Mismatch Text Type Type
-  | NoSubType Type Type -- supertype; subtype
-  | NoConstness Constness Type
-  | NoKind Text Type
-  | NoRegister Text Type
-  | TupleMismatch [Type] [Type]
-  | GotErrorType Text
-  | IllegalPolytype Type
-  | BadKind Type Type
-  | FalseKind
-  | FalseConst
-  deriving (Show)
-
 type MonadInferencer m = (MonadState Inferencer m, MonadIO m)
 
 globalTVar :: TypeVar
@@ -124,3 +113,68 @@ freshTypeHelperWithParent tKind parent = do
   tVar <- (\counter -> TypeVar counter tKind parent) <$> nextHandleCounter
   handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
   return tVar
+
+getHandle :: MonadInferencer m => TypeVar -> m TypeHandle
+getHandle tVar = uses handlize (fromJust . Bimap.lookup tVar)
+
+readBoundsFrom :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> Bounds a
+readBoundsFrom = (fromMaybe (minBound `Bounds` maxBound) .) . Map.lookup
+
+readLowerBound :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> a
+readLowerBound = (view lowerBound .) . readBoundsFrom
+
+readUpperBound :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> a
+readUpperBound = (view upperBound .) . readBoundsFrom
+
+getConsting :: MonadInferencer m => TypeVar -> m TypeVar
+getConsting tVar = view consting <$> getHandle tVar
+
+readConstingBounds :: MonadInferencer m => TypeVar -> m (Bounds Constness)
+readConstingBounds tVar = uses constingBounds (readBoundsFrom tVar)
+
+readKindingBounds :: MonadInferencer m => TypeVar -> m (Bounds DataKind)
+readKindingBounds tVar = uses kindingBounds (readBoundsFrom tVar)
+
+getKinding :: MonadInferencer m => TypeVar -> m TypeVar
+getKinding tVar = view kinding <$> getHandle tVar
+
+getTyping :: MonadInferencer m => TypeVar -> m Type
+getTyping tVar = view typing <$> getHandle tVar
+
+collectPrimeTVars :: MonadState Inferencer m => TypeVar -> m (Set TypeVar)
+collectPrimeTVars tVar =
+  uses typize (Bimap.lookup tVar) >>= \case
+    Just primType -> fold <$> traverse collectPrimeTVars primType
+    Nothing -> return $ Set.singleton tVar
+
+handlizeTVar :: MonadInferencer m => TypeVar -> m TypeVar
+handlizeTVar tVar = do
+  handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
+  return tVar
+
+infix 6 `insertEdge`
+
+insertEdge :: Ord a => a -> a -> Map a (Set a) -> Map a (Set a)
+insertEdge a b = Map.insertWith Set.union a (Set.singleton b)
+
+pushSubKind :: MonadInferencer m => TypeHandle -> TypeHandle -> m ()
+pushSubKind handle handle' =
+  subKinding %= view kinding handle `insertEdge` view kinding handle'
+
+pushSubConst :: MonadInferencer m => TypeHandle -> TypeHandle -> m ()
+pushSubConst handle handle' =
+  subConsting %= view consting handle `insertEdge` view consting handle'
+
+pushKindBounds :: MonadInferencer m => TypeHandle -> Bounds DataKind -> m ()
+pushKindBounds handle bounds =
+  kindingBounds %= Map.insertWith (<>) (handle ^. kinding) bounds
+
+pushConstBounds :: MonadInferencer m => TypeHandle -> Bounds Constness -> m ()
+pushConstBounds handle bounds =
+  constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
+
+registerScheme :: MonadInferencer m => TypeVar -> Scheme Type -> m ()
+registerScheme tVar scheme = schemes %= Map.insert tVar (Set.singleton scheme)
+
+freshTypeHelperWithHandle :: MonadInferencer m => TypeKind -> m TypeVar
+freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar

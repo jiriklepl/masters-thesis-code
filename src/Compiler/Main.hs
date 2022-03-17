@@ -34,6 +34,7 @@ import CMM.Inference.State as InferState
 import CMM.Inference.Type as Infer
 import CMM.Lexer
 import CMM.Parser
+import CMM.Monomorphize (Monomorphize(monomorphize))
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -77,7 +78,9 @@ main = do
     (do let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
         mineAST mined
         fs' <- reduce fs
-        liftIO . print $ show fs')
+        liftIO . print $ show fs'
+        mined'<- monomorphize mined
+        liftIO . print $ show mined')
     (InferState.initInferencer
        (CMM.Inference.Preprocess.State._handleCounter miner)) >>=
     print

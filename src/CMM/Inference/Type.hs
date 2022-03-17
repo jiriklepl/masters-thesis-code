@@ -64,6 +64,30 @@ makeDataKind set
   | null set = Unstorable
   | otherwise = DataKind set
 
+matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
+matchKind a b = getTypeKind a `go` getTypeKind b
+  where
+    ErrorKind _ `go` _ = False
+    _ `go` ErrorKind _ = False
+    GenericType `go` _ = True
+    _ `go` GenericType = True
+    Constraint `go` Constraint = True
+    Star `go` Star = True
+    (l :-> r) `go` (l' :-> r') = go l l' && go r r'
+    _ `go` _ = False
+
+combineTypeKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> TypeKind
+combineTypeKind a b = getTypeKind a `go` getTypeKind b
+  where
+    kind `go` kind'
+      | kind == kind' = kind
+    kind@ErrorKind {} `go` _ = kind
+    _ `go` kind@ErrorKind {} = kind
+    GenericType `go` kind = kind
+    kind `go` GenericType = kind
+    (l :-> r) `go` (l' :-> r') = go l l' :-> go r r'
+    _ `go` _ = undefined -- TODO: logic error
+
 instance Lattice DataKind where
   GenericData /\ a = a
   Unstorable /\ _ = Unstorable

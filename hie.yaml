@@ -3,42 +3,6 @@ cradle:
     - path: "src/Compiler/Main.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Data/Nullable.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/Tuple.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/Bounds.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/Ordered.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/OrderedBounds.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/Lattice.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/Dioid.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Lexer.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Lens.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Parser.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Parser/HasPos.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Control/Applicative.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/AST.hs"
       component: "Compiler:exe:Compiler"
 
@@ -72,22 +36,37 @@ cradle:
     - path: "src/CMM/AST/Utils.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Utils.hs"
+    - path: "src/CMM/Control/Applicative.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Bounds.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Dioid.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Function.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Lattice.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Nullable.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Ordered.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/OrderedBounds.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Tuple.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/FlowAnalysis.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Inference/State.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Inference/Type.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Inference/TypeAnnot.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Inference/TypeHandle.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/BuiltIn.hs"
@@ -99,10 +78,37 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/State.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/FlowAnalysis.hs"
+    - path: "src/CMM/Inference/State.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/Subst.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/Type.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/TypeAnnot.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/TypeHandle.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/Unify.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Lens.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Lexer.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Parser.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Parser/HasPos.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Pretty.hs"
@@ -112,6 +118,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Translator/State.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Utils.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Warnings.hs"
