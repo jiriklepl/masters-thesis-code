@@ -15,11 +15,11 @@ digraph {
         Facts [label="Type facts", fillcolor="lightgreen"]
         Variables [label="Variables", fillcolor="lightgreen"]
         ASTTypeHandles [label="AST\nwith type handles", fillcolor="lightgreen"]
-        Judgements [label="Type Judgements", fillcolor="pink"]
+        Judgments [label="Type Judgments", fillcolor="lightgreen"]
         FlatAST [label="Flat AST", fillcolor="lightgreen"]
         BlockifiedAST [label="Blockified AST", fillcolor="lightgreen"]
         BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow", fillcolor="lightgreen"]
-        MonoAST [label="Monomophized AST", fillcolor="pink"]
+        MonoAST [label="Monomophized AST", fillcolor="yellow"]
     }
 
     subgraph components {
@@ -29,10 +29,10 @@ digraph {
         Flattener [fillcolor="lightgreen"]
         InferPre [label="Type inference\npreprocessing", fillcolor="lightgreen"]
         VariableMining [label="Variables collection", fillcolor="lightgreen"]
-        Infer [label="Type inference", fillcolor="pink"]
+        Infer [label="Type inference", fillcolor="yellow"]
         Blockifier [fillcolor="lightgreen"]
         FlowAnalysis [label="Flow analysis", fillcolor="lightgreen"]
-        Monomorphization [fillcolor="pink"]
+        Monomorphization [fillcolor="orange"]
         Translator [fillcolor="yellow"]
     }
 
@@ -43,7 +43,7 @@ digraph {
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
     AST -> VariableMining -> Variables -> InferPre
-    AST -> InferPre -> { Facts ASTTypeHandles } -> Infer -> Judgements -> Monomorphization
+    AST -> InferPre -> { Facts ASTTypeHandles } -> Infer -> Judgments -> Monomorphization
     FlatAST -> Blockifier -> BlockifiedAST
     BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
     BlockifiedASTAnnots -> Monomorphization -> MonoAST
