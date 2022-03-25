@@ -7,8 +7,7 @@ infixr 5 ??
 class Fallbackable a where
   (??) :: a -> a -> a
 
-class Fallbackable a =>
-      Nullable a
+class Nullable a
   where
   nullVal :: a
 

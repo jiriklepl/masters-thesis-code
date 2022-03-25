@@ -297,17 +297,19 @@ instance Preprocess Decl a b where
         traverse_ (`storeTCon` handle) (getName <$> names)
         return $ TypedefDecl type'' (preprocessTrivial <$> names)
 
+-- TODO: combine with Instance
 instance Preprocess Class a b where
   preprocessImpl _ class'@(Class paraNames paraName methods) = do
     (_, _, _, _, tVars, _, _) <- classVariables class'
     pushTypeVariables tVars
     (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
     (constraint, paraName') <- preprocessParaName paraName
+    let handle = getTypeHandle paraName'
     pushClass
-      (getName paraName, getTypeHandle paraName')
+      (getName paraName, handle)
       (getName paraName, constraint)
       (fmap getName paraNames `zip` constraints)
-    (emptyTypeHandle, ) . Class paraNames' paraName' <$> preprocessT methods <*
+    (handle, ) . Class paraNames' paraName' <$> preprocessT methods <*
       popContext <*
       popTypeVariables
 
@@ -317,11 +319,12 @@ instance Preprocess Instance a b where
     pushTypeVariables tVars
     (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
     (constraint, paraName') <- preprocessParaName paraName
+    let handle = getTypeHandle paraName'
     pushInstance
       (getName paraName, getTypeHandle paraName')
       (getName paraName, constraint)
       (fmap getName paraNames `zip` constraints)
-    (emptyTypeHandle, ) . Instance paraNames' paraName' <$> preprocessT methods <*
+    (handle, ) . Instance paraNames' paraName' <$> preprocessT methods <*
       popContext <*
       popTypeVariables
 
@@ -501,7 +504,7 @@ instance Preprocess Procedure a b where
     header' <-
       preprocessFinalize (takeAnnot header) $
       preprocessProcedureHeader (unAnnot header)
-    return (emptyTypeHandle, Procedure header' body')
+    return (getTypeHandle header', Procedure header' body')
 
 -- TODO: ditto
 instance Preprocess ProcedureDecl a b where

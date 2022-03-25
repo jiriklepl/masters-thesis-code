@@ -65,7 +65,7 @@ data Inferencer =
     -- | TODO
     , _classFacts :: Map Text (Set TypeVar)
     -- | TODO
-    , _schemes :: Map TypeVar (Set (Scheme Type))
+    , _schemes :: Map TypeVar (Scheme Type)
     -- | TODO
     , _currentParent :: [TypeVar]
     }
@@ -112,13 +112,16 @@ popParent :: MonadInferencer m => m ()
 popParent = currentParent %= tail
 
 freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
-freshTypeHelper tKind = getParent >>= freshTypeHelperWithParent tKind
+freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
-freshTypeHelperWithParent ::
-     MonadInferencer m => TypeKind -> TypeVar -> m TypeVar
-freshTypeHelperWithParent tKind parent = do
+freshAnnotatedTypeHelper :: MonadInferencer m => TypeAnnot -> TypeKind -> m TypeVar
+freshAnnotatedTypeHelper annot tKind = getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
+
+freshAnnotatedTypeHelperWithParent ::
+     MonadInferencer m => TypeAnnot -> TypeKind -> TypeVar -> m TypeVar
+freshAnnotatedTypeHelperWithParent annot tKind parent = do
   tVar <- (\counter -> TypeVar counter tKind parent) <$> nextHandleCounter
-  handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
+  handlize %= Bimap.insert tVar (initTypeHandle annot tVar)
   return tVar
 
 getHandle :: MonadInferencer m => TypeVar -> m TypeHandle
@@ -181,7 +184,7 @@ pushConstBounds handle bounds =
   constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
 
 registerScheme :: MonadInferencer m => TypeVar -> Scheme Type -> m ()
-registerScheme tVar scheme = schemes %= Map.insert tVar (Set.singleton scheme)
+registerScheme tVar scheme = schemes %= Map.insert tVar scheme
 
 freshTypeHelperWithHandle :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar

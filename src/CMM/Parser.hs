@@ -73,7 +73,6 @@ import safe CMM.AST
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
-
 import safe qualified CMM.Lexer as L
 
 type Parser = Parsec Void [Annot L.Token SourcePos]

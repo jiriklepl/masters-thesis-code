@@ -81,7 +81,7 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
-  , unifs
+  , unifs, freshAnnotatedTypeHelper
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -112,7 +112,7 @@ import safe CMM.Inference.Type
   , typeConstraint
   , typeUnion
   )
-import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
+import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -717,22 +717,18 @@ reParent newParent oldParents = go
       | otherwise = tVar
     tVarCase NoType = NoType
 
-refresher :: (MonadInferencer m, HasTypeKind k) => Set k -> m (Map k TypeVar)
-refresher tVars = sequence $ Map.fromSet (freshTypeHelper . getTypeKind) tVars
+refresher :: MonadInferencer m => Set TypeVar -> m (Map TypeVar TypeVar)
+refresher tVars = sequence $ Map.fromSet (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind  tVar) tVars
 
 unSchematize :: MonadInferencer m => Facts -> m Facts
 unSchematize [] = return []
 unSchematize (Fact (InstType (VarType scheme) inst):others) = do
   uses schemes (scheme `Map.lookup`) >>= \case
-    Just scheme'
-      | Set.size scheme' == 1 -> do
-        let tVars :. facts :=> t = Set.findMin scheme'
+    Just (tVars :. facts :=> t) -> do
         instSubst <- refresher tVars
         let facts' = Fact . apply instSubst <$> facts
             t' = instSubst `apply` t
         ((Fact (inst `Union` t') : facts') <>) <$> unSchematize others
-      | otherwise -> undefined -- TODO: classes
-    -- | Nothing: the typeVar `scheme` is in the same same scc
     Nothing -> (Fact (VarType scheme `Union` inst) :) <$> unSchematize others
 unSchematize (fact:others) = (fact :) <$> unSchematize others
 
