@@ -303,6 +303,7 @@ instance Pretty (Range a) where
 
 instance Pretty (LValue a) where
   pretty (LVName name) = pretty name
+  pretty (LVInst lValue) = pretty lValue
   pretty (LVRef type_ expr mAsserts) =
     pretty type_ <>
     brackets

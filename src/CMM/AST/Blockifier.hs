@@ -333,10 +333,12 @@ instance GetMetadata WritesVars (KindName a) where
 instance GetMetadata ReadsVars (LValue a) where
   getMetadata _ (LVName name) = [getName name]
   getMetadata t (LVRef _ expr _) = getMetadata t expr
+  getMetadata t (LVInst lValue) = getMetadata t lValue
 
 instance GetMetadata WritesVars (LValue a) where
   getMetadata _ (LVName name) = [getName name]
   getMetadata _ LVRef {} = []
+  getMetadata t (LVInst lValue) = getMetadata t lValue
 
 instance GetMetadata ReadsVars (Expr a) where
   getMetadata _ LitExpr {} = []
@@ -541,7 +543,7 @@ instance Blockify (Annot Stmt) a b where
     blockify body
   blockify stmt@(Annot (CallStmt _ _ _ _ _ callAnnots) _) -- TODO: implement `cut to` statements
    =
-    registerReads stmt *> addBlockAnnot stmt <*
+    registerReadsWrites stmt *> addBlockAnnot stmt <*
     when (neverReturns callAnnots) unsetBlock
 
 -- This is here just for completeness

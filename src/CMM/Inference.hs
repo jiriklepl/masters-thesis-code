@@ -56,7 +56,6 @@ import safe CMM.Inference.State
   , collectPrimeTVars
   , constingBounds
   , errors
-  , freshTypeHelper
   , freshTypeHelperWithHandle
   , getConsting
   , getHandle
@@ -81,7 +80,7 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
-  , unifs, freshAnnotatedTypeHelper
+  , unifs, freshAnnotatedTypeHelper, reconstruct, readConstingBounds
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -104,7 +103,7 @@ import safe CMM.Inference.Type
   , ToType(..)
   , Type(..)
   , TypeCompl(AddrType, AppType, FunctionType, TupleType)
-  , TypeVar(NoType, TypeVar, tVarParent)
+  , TypeVar(NoType, TypeVar, tVarParent, tVarKind)
   , predecessor
   , subConst
   , subKind
@@ -121,8 +120,9 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind))
+import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind (Star))
 import safe CMM.Inference.Unify (Unify(unify), unifyFold, unifyLax)
+import Debug.Trace
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -570,12 +570,6 @@ reduce facts = do
   (change', facts''') <- closeSCCs facts'' sccs
   return (change || change', facts''')
 
-reconstruct :: MonadState Inferencer m => TypeVar -> m Type
-reconstruct tVar =
-  uses typize (Bimap.lookup tVar) >>= \case
-    Just primType -> ComplType <$> traverse reconstruct primType
-    Nothing -> return $ VarType tVar
-
 minimizeSubs :: MonadInferencer m => TypeVar -> m ()
 minimizeSubs parent = do
   constings <- uses subConsting transformMap
@@ -722,7 +716,7 @@ refresher tVars = sequence $ Map.fromSet (\tVar -> freshAnnotatedTypeHelper (Typ
 
 unSchematize :: MonadInferencer m => Facts -> m Facts
 unSchematize [] = return []
-unSchematize (Fact (InstType (VarType scheme) inst):others) = do
+unSchematize (Fact (InstType (VarType scheme) inst):others) =
   uses schemes (scheme `Map.lookup`) >>= \case
     Just (tVars :. facts :=> t) -> do
         instSubst <- refresher tVars

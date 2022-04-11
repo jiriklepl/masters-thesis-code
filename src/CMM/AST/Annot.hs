@@ -37,3 +37,6 @@ updateAnnots = fmap
 -- | replaces all annotations inside the given node with units
 stripAnnots :: Functor n => n a -> n ()
 stripAnnots = void
+
+copyAnnot :: Annot n a -> m a -> Annot m a
+copyAnnot = withAnnot . takeAnnot

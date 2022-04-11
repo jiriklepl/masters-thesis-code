@@ -239,6 +239,7 @@ deriving instance Eq (Range ())
 
 data LValue a
   = LVName (Name a)
+  | LVInst (Annot LValue a)
   | LVRef (Annot Type a) (Annot Expr a) (Maybe (Annot Asserts a))
   deriving (Show, Functor, Foldable, Traversable, Data, ASTNode, AST)
 

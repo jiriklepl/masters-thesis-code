@@ -1,0 +1,21 @@
+f(auto u, bits32 w) -> auto {
+  auto r;
+
+  while:
+  if w != u {
+    r = u % w;
+    u = w;
+    w = r;
+    goto while;
+  }
+
+  return (u);
+}
+
+g(bits32 x) -> bits32 {
+  bits32 r;
+
+  r = x;
+
+  return (r);
+}

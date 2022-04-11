@@ -1,0 +1,10 @@
+g(auto a) {
+  a = f(a);
+  return (a);
+}
+
+f(auto a) {
+  auto b;
+  b = g(a);
+  return (b);
+}

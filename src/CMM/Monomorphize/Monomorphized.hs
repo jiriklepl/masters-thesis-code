@@ -17,12 +17,14 @@ import safe CMM.Inference.Type ( Scheme, Type )
 import safe CMM.Monomorphize.Schematized ( Schematized )
 import safe CMM.Inference.TypeHandle ( TypeHandle )
 import safe CMM.Data.Nullable ( Nullable(..) )
+import Control.Lens.Setter ((.~))
 
 data Monomorphized n a = Monomorphized
   { _node :: Maybe (n a)
   , _polyGenerate :: Map TypeHandle (Set TypeHandle)
   , _polySchemes :: Map TypeHandle (Scheme Type, Schematized a)
   }
+  deriving (Show)
 
 monomorphized ::
   Maybe (n a)
@@ -63,6 +65,9 @@ getNode = view node
 
 unNode :: Monomorphized n a -> Monomorphized (Const Void) a
 unNode = withMaybeNode Nothing
+
+unPolyGenerate :: Monomorphized n a -> Monomorphized n a
+unPolyGenerate = polyGenerate .~ mempty
 
 foldGetSchemes ::
   (Foldable f, Functor f) => f (Monomorphized n a)

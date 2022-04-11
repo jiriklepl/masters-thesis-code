@@ -1,4 +1,5 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE TupleSections #-}
 
 module CMM.Data.Tuple where
 
@@ -28,3 +29,9 @@ complThd4 (a, b, _, d) = (a, b, d)
 
 complFrth4 :: (a, b, c, d) -> (a, b, c)
 complFrth4 (a, b, c, _) = (a, b, c)
+
+submergeTuple :: (a, [b]) -> [(a, b)]
+submergeTuple (a, bs) = (a,) <$> bs
+
+submergeTuple' :: ([a], b) -> [(a, b)]
+submergeTuple' (as, b) = (,b) <$> as

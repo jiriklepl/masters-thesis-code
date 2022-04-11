@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Main where
 
@@ -33,10 +34,11 @@ import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.State as InferState
 import CMM.Inference.Type as Infer
 import CMM.Inference.TypeKind as Infer
+import CMM.Monomorphize.Monomorphized as Infer
 import CMM.Lexer
 import CMM.Monomorphize (Monomorphize(monomorphize))
 import CMM.Parser
-import qualified CMM.Monomorphize as Infer
+import CMM.Pretty()
 import Control.Lens.Getter (view)
 
 -- import CMM.Translator
@@ -50,7 +52,6 @@ main = do
   let flattened = flatten ast
   (mined, miner) <- runStateT (preprocess ast) initInferPreprocessor
   (blockified, _) <- runStateT (blockify flattened) B.initBlockifier
-  T.putStr . T.pack . show $ pretty blockified
   -- let translated =
   --       ppllvm $
   --       flip
@@ -65,28 +66,21 @@ main = do
   --       buildModuleT "llvm" $
   --       runIRBuilderT emptyIRBuilder $ translate blockified
   -- T.putStr translated
-  print $ void <$> tokens'
-  print $ void ast
-  print mined
   vars <- globalVariables $ unAnnot ast
-  print vars
-  print
-    (freeTypeVars
-       (TupleType
-          [ VarType (TypeVar 20 Infer.Star Infer.NoType)
-          , VarType (TypeVar 30 Infer.Star Infer.NoType)
-          ]))
-  print $ CMM.Inference.Preprocess.State._facts miner
-  execStateT
-    (do let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
-        mineAST mined
-        fs' <- reduce fs
-        liftIO . print $ show fs'
-        ~(Right mined') <- monomorphize mined
-        liftIO . print . show $ view Infer.node mined')
-    (InferState.initInferencer
-       (CMM.Inference.Preprocess.State._handleCounter miner)) >>=
-    print
+  -- print $ CMM.Inference.Preprocess.State._facts miner
+  inferencer <- (`execStateT` InferState.initInferencer
+       (CMM.Inference.Preprocess.State._handleCounter miner)) $
+    do
+      let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
+      mineAST mined
+      -- liftIO $ print fs
+      reduce fs
+      monomorphize mempty mined >>= \case
+          Left what -> liftIO $ print what
+          Right mined' ->
+            liftIO . print . pretty $ view Infer.node mined'
+  -- liftIO $ print inferencer
+  return ()
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a
 parse parser = runParser parser "stdin"

@@ -26,7 +26,7 @@ import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Type
   ( PrimType
   , Scheme
-  , Type
+  , Type (ComplType, VarType)
   , TypeVar(NoType, TypeVar)
   )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
@@ -39,6 +39,7 @@ import safe CMM.Inference.TypeHandle
   )
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.Unify (UnificationError)
+import CMM.Inference.Subst (apply)
 
 data Inferencer =
   Inferencer
@@ -125,7 +126,11 @@ freshAnnotatedTypeHelperWithParent annot tKind parent = do
   return tVar
 
 getHandle :: MonadInferencer m => TypeVar -> m TypeHandle
-getHandle tVar = uses handlize (fromJust . Bimap.lookup tVar)
+getHandle = fmap fromJust . tryGetHandle
+
+tryGetHandle :: MonadInferencer m => TypeVar -> m (Maybe TypeHandle)
+tryGetHandle tVar =
+  uses handlize (flip Bimap.lookup) <*> uses unifs (`apply` tVar)
 
 readBoundsFrom :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> Bounds a
 readBoundsFrom = (fromMaybe (minBound `Bounds` maxBound) .) . Map.lookup
@@ -188,3 +193,15 @@ registerScheme tVar scheme = schemes %= Map.insert tVar scheme
 
 freshTypeHelperWithHandle :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar
+
+fromOldName :: MonadState Inferencer m => TypeVar -> m TypeVar
+fromOldName tVar = uses unifs (`apply` tVar)
+
+reconstruct :: MonadState Inferencer m => TypeVar -> m Type
+reconstruct tVar =
+  uses typize (Bimap.lookup tVar) >>= \case
+    Just primType -> ComplType <$> traverse reconstruct primType
+    Nothing -> return $ VarType tVar
+
+reconstructOld :: MonadState Inferencer m => TypeVar -> m Type
+reconstructOld tVar = fromOldName tVar >>= reconstruct

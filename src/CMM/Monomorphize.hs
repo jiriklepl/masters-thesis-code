@@ -9,57 +9,104 @@
 
 module CMM.Monomorphize where
 
-import safe Control.Applicative (Applicative(liftA2), liftA3)
+import safe Control.Applicative (Applicative(liftA2), liftA3, Const)
 import safe Control.Lens.Getter ((^.), uses, view)
-import qualified Data.Bimap as Bimap
 import safe qualified Data.PartialOrd as PartialOrd
-import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Set (Set)
 import safe qualified Data.Set as Set
+import safe Data.Maybe ( catMaybes )
+import safe Control.Lens.Tuple ( Field2(_2) )
+import safe Control.Monad.IO.Class (MonadIO)
+import safe Control.Lens.Setter ((%~), (?~))
+import safe Data.Function ((&))
+import safe Data.Foldable (fold)
+import safe Data.Void (Void)
+import safe Data.Functor ((<&>))
 
-import safe CMM.AST
-import safe qualified CMM.AST as AST
-import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
-import safe CMM.AST.Maps (ASTmap(..), ASTmapGen, Constraint, Space)
-import safe CMM.Data.Bounds (Bounds(Bounds))
-import safe CMM.Inference.Preprocess.State (HasTypeHandle (getTypeHandle), lookupClass, getTypeHandleId)
 import safe CMM.Inference.State
   ( MonadInferencer
-  , handlize
   , readConstingBounds
   , readKindingBounds
-  , unifs, schemes
+  , schemes, reconstruct, tryGetHandle, fromOldName, reconstructOld
   )
-import safe CMM.Inference.Subst (Apply(apply))
-import safe CMM.Inference.Type (IsTyped(freeTypeVars), Type, TypeVar, Scheme)
+import safe CMM.Inference.Subst (Apply(apply), Subst)
 import safe CMM.Inference.Type as Type
-import safe CMM.Inference.TypeHandle (consting, kinding, typing, TypeHandle (TypeHandle), handleId)
+    ( IsTyped(freeTypeVars),
+      Type(..),
+      TypeCompl(..),
+      TypeVar )
+import safe CMM.Inference.TypeHandle (consting, kinding, typing, TypeHandle, handleId)
 import safe CMM.Monomorphize.PolyKind (PolyKind(..))
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
-import safe Data.Maybe
-import safe CMM.Control.Monad
-import safe Control.Monad.IO.Class (MonadIO)
+import safe CMM.Control.Monad ( (>>@=) )
 import safe CMM.Monomorphize.Schematized
-import CMM.Data.Nullable (Nullable (nullVal), Fallbackable ((??)))
-import CMM.AST.HasName
-import Control.Lens.Setter ((%~))
-import Data.Function ((&))
-import CMM.Monomorphize.Monomorphized
-import Data.Foldable (fold)
+    ( schematized2topLevel, Schematized(..) )
+import safe CMM.Data.Nullable (Nullable (nullVal))
+import safe CMM.Monomorphize.Monomorphized
+    ( foldGetGenerate,
+      foldGetSchemes,
+      getNode,
+      monomorphized,
+      monomorphizedTrivial,
+      node,
+      polyGenerate,
+      polySchemes,
+      unNode,
+      unPolyGenerate,
+      withMaybeNode,
+      withNode,
+      Monomorphized )
+import safe CMM.Control.Applicative ( liftA5 )
+import safe CMM.Inference.Unify (Unify(unify))
+import safe CMM.Data.Tuple (submergeTuple)
+import safe CMM.AST.Utils (addTopLevels)
+import safe CMM.Inference (simplify)
+import safe CMM.AST
+    ( Actual(..),
+      Asserts,
+      Body(..),
+      BodyItem(..),
+      CallAnnot,
+      Datum,
+      Decl(..),
+      Export,
+      Expr(..),
+      Import,
+      Instance(..),
+      KindName,
+      LValue(..),
+      Lit,
+      Procedure(..),
+      ProcedureHeader,
+      Section(..),
+      StackDecl,
+      Stmt(..),
+      Struct(..),
+      Targets,
+      TopLevel(..),
+      Unit(..) )
+import safe qualified CMM.AST as AST
+import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
+import safe CMM.Data.Bounds (Bounds(Bounds))
+import safe CMM.Inference.Preprocess.State (HasTypeHandle (getTypeHandle), getTypeHandleId)
+
+import Debug.Trace
+import Control.Monad (void)
 
 data MonomorphizeError
+  = FooError
+  deriving (Show, Eq)
 
 class Monomorphize n n' a | n -> n' where
   monomorphize ::
-       (HasPos a, HasTypeHandle a, MonadInferencer m) => n a -> m (MonomorphizeError `Either` n' a)
+       (HasPos a, HasTypeHandle a, MonadInferencer m) => Subst Type.Type -> n a -> m (MonomorphizeError `Either` n' a)
 
 class MonomorphizeImpl n n' a | n -> n' where
-  monomorphizeImpl :: (HasPos a, HasTypeHandle a, MonadInferencer m) => a -> n a -> m (MonomorphizeError `Either` Monomorphized (Annot n') a)
+  monomorphizeImpl :: (HasPos a, HasTypeHandle a, MonadInferencer m) => Subst Type.Type -> a -> n a -> m (MonomorphizeError `Either` Monomorphized (Annot n') a)
 
 instance {-# OVERLAPPABLE #-} MonomorphizeImpl n n' a => Monomorphize (Annot n) (Monomorphized (Annot n')) a where
-  monomorphize (Annot n a) = monomorphizeImpl a n
+  monomorphize subst (Annot n a) = monomorphizeImpl subst a n
 
 typingPolyKind :: Type.Type -> PolyKind
 typingPolyKind t =
@@ -86,49 +133,52 @@ kindingPolyKind tVar = go <$> readKindingBounds tVar
                else Poly
         else Absurd
 
-typePolyKind :: MonadInferencer m => TypeVar -> m PolyKind
-typePolyKind tVar =
-  uses handlize (flip Bimap.lookup) <*> uses unifs (`apply` tVar) >>= \case
+typePolyKind :: MonadInferencer m => Subst Type.Type -> TypeVar -> m PolyKind
+typePolyKind subst tVar =
+  fromOldName tVar >>= reconstruct >>= simplify . apply subst >>= tryGetHandle >>= \case
     Just handle ->
-      mappend (typingPolyKind $ handle ^. typing) <$>
+      mappend (typingPolyKind $ apply subst handle ^. typing) <$>
       liftA2
         mappend
-        (kindingPolyKind $ handle ^. kinding)
-        (kindingPolyKind $ handle ^. consting)
+        (kindingPolyKind $ apply subst handle ^. kinding)
+        (constnessPolyKind $ apply subst handle ^. consting)
     Nothing ->
       error $
       "(internal logic error) Type variable " <>
       backQuote (show tVar) <> " not registered by the inferencer."
 
-getTypeHandleIdPolyKind :: (MonadInferencer m, HasTypeHandle a) => a -> m PolyKind
-getTypeHandleIdPolyKind = typePolyKind . getTypeHandleId
+getTypeHandleIdPolyKind :: (MonadInferencer m, HasTypeHandle a) => Subst Type.Type -> a -> m PolyKind
+getTypeHandleIdPolyKind subst = typePolyKind subst . getTypeHandleId
 
 monomorphizeTrivial :: (MonadInferencer m, MonadIO m,
-  Monomorphize p (Monomorphized (Annot p')) a, HasPos a,
+  Monomorphize p (Monomorphized p') a, HasPos a,
   HasTypeHandle a) =>
-  a
-  -> (Annot p' a -> n a)
+  Subst Type.Type
+  -> a
+  -> (p' a -> n a)
   -> p a
   -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
-monomorphizeTrivial annot constr =
-  monomorphizeMaybe Nothing $ Just . withAnnot annot . constr
+monomorphizeTrivial subst annot constr =
+  monomorphizeMaybe subst Nothing $ Just . withAnnot annot . constr
 
 monomorphizeEmpty :: (MonadInferencer m, MonadIO m,
   Monomorphize p (Monomorphized (Annot p')) a, HasPos a,
   HasTypeHandle a) =>
-  p a
+  Subst Type.Type
+  -> p a
   -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
-monomorphizeEmpty =
-  monomorphizeMaybe Nothing $ const Nothing
+monomorphizeEmpty subst =
+  monomorphizeMaybe subst Nothing $ const Nothing
 
 monomorphizeTrivials :: (MonadInferencer m,
   MonadIO m, Monomorphize p (Monomorphized p') a, HasPos a,
   HasTypeHandle a) =>
-  a
+  Subst Type.Type
+  -> a
   -> ([p' a] -> n a)
   -> [p a]
   -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
-monomorphizeTrivials = (. (Just .)) . monomorphizeMaybes
+monomorphizeTrivials = ((. (Just .)) .) . monomorphizeMaybes
 
 ensureJustMonomorphized :: Monad m =>
   a1
@@ -144,19 +194,20 @@ ensureJustMonomorphized err mono = do
 ensuredJustMonomorphize :: (Monomorphize n1 (Monomorphized n2) a, HasPos a, HasTypeHandle a,
   MonadInferencer m, MonadIO m) =>
   MonomorphizeError
-  -> n1 a -> m (Either MonomorphizeError (Monomorphized n2 a))
-ensuredJustMonomorphize err n =
-  monomorphize n >>= ensureJustMonomorphized err
+  -> Subst Type.Type -> n1 a -> m (Either MonomorphizeError (Monomorphized n2 a))
+ensuredJustMonomorphize err subst n =
+  monomorphize subst n >>= ensureJustMonomorphized err
 
 monomorphizeMaybes :: (MonadInferencer m,
  MonadIO m, Monomorphize p (Monomorphized p') a, HasPos a,
  HasTypeHandle a) =>
-  a
+  Subst Type.Type
+  -> a
   -> ([p' a] -> Maybe (n a))
   -> [p a]
   -> m (Either MonomorphizeError (Monomorphized (Annotation n) a))
-monomorphizeMaybes annot constr pars =
-  sequence <$> traverse monomorphize pars >>@=  \pars' -> do
+monomorphizeMaybes subst annot constr pars =
+  sequence <$> traverse (monomorphize subst) pars >>@=  \pars' -> do
     let
       generate' = foldGetGenerate pars'
       schemes' = foldGetSchemes pars'
@@ -164,33 +215,54 @@ monomorphizeMaybes annot constr pars =
     return $ monomorphized node' generate' schemes'
 
 monomorphizeMaybe :: (MonadInferencer m, MonadIO m,
-  Monomorphize p (Monomorphized (Annot p')) a, HasPos a,
+  Monomorphize p (Monomorphized p') a, HasPos a,
   HasTypeHandle a) =>
-  Maybe (Annot n a)
-  -> (Annot p' a -> Maybe (Annot n a))
+  Subst Type.Type
+  -> Maybe (Annot n a)
+  -> (p' a -> Maybe (Annot n a))
   -> p a
   -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
-monomorphizeMaybe a f = monomorphizeMaybeWithFailure (Right a) (Right . f)
+monomorphizeMaybe subst a f = monomorphizeMaybeWithFailure subst (Right a) (Right . f)
 
 monomorphizeMaybeWithFailure :: (MonadInferencer m, MonadIO m,
-  Monomorphize p (Monomorphized (Annot p')) a, HasPos a,
+  Monomorphize p (Monomorphized p') a, HasPos a,
   HasTypeHandle a) =>
-  Either MonomorphizeError (Maybe (Annot n a))
-  -> (Annot p' a -> Either MonomorphizeError (Maybe (Annot n a)))
+  Subst Type.Type
+  -> Either MonomorphizeError (Maybe (Annot n a))
+  -> (p' a -> Either MonomorphizeError (Maybe (Annot n a)))
   -> p a
   -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
-monomorphizeMaybeWithFailure a f par = monomorphize par >>@= \par' ->
+monomorphizeMaybeWithFailure subst a f par = monomorphize subst par >>@= \par' ->
   case par' ^. node of
     Nothing -> (`withMaybeNode` par') <$> a
     Just n -> (`withMaybeNode` par') <$> f n
 
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Unit Unit a where
+  monomorphizeImpl subst a (Unit topLevels) = do
+    monomorphizeTrivials subst a Unit topLevels >>= go
+    where
+      go = \case
+        Left err -> return $ Left err
+        Right mono -> do
+          let more = concatMap (submergeTuple . (_2 %~ Set.toList)) . Map.toList $ mono ^. polyGenerate
+          more' <- mapM (flip (uncurry monomorphizePolyType) mono) more
+          sequence more' & \case
+            Left err -> return $ Left err
+            Right [] -> succeed mono
+            Right mores -> do
+              let
+                topLevels' = mapM (fmap schematized2topLevel . getNode) mores
+                meta = foldMap unNode mores <> unPolyGenerate (unNode mono)
+                unit = liftA2 addTopLevels topLevels' (mono ^. node)
+              go (Right $ withMaybeNode unit meta)
+
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl TopLevel TopLevel a where
-  monomorphizeImpl a = \case
+  monomorphizeImpl subst a = \case
     TopProcedure procedure ->
-      monomorphizeTrivial a TopProcedure procedure
+      monomorphizeTrivial subst a TopProcedure procedure
     TopDecl decl ->
-      monomorphizeMaybeWithFailure (Left undefined) (Right . Just . withAnnot a . TopDecl) decl
-    TopSection name items -> undefined
+      monomorphizeMaybeWithFailure subst (Left undefined) (Right . Just . withAnnot a . TopDecl) decl
+    TopSection _ _ -> undefined
       -- sequence <$> traverse monomorphize items >>@= \items' -> do
       --   let
       --     generate' = foldGetGenerate items'
@@ -198,44 +270,45 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl TopLevel TopLevel a whe
       --     node' = withAnnot a . TopSection name . catMaybes $ view node <$> items'
       --   return $ monomorphized (Just node') generate' schemes'
     TopClass class' ->
-      monomorphizeMaybeWithFailure (Right Nothing) (Left . undefined) class'
+      monomorphizeMaybeWithFailure subst (Right Nothing) (Left . undefined) class'
     TopInstance instance' ->
-      monomorphizeMaybeWithFailure (Right Nothing) (Left . undefined) instance'
+      monomorphizeMaybeWithFailure subst (Right Nothing) (Left . undefined) instance'
     TopStruct struct ->
-      monomorphizeTrivial a TopStruct struct
+      monomorphizeTrivial subst a TopStruct struct
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Section Section a where
-  monomorphizeImpl a = \case
+  monomorphizeImpl subst a = \case
     SecDecl decl ->
-      monomorphizeTrivial a SecDecl decl
+      monomorphizeTrivial subst a SecDecl decl
     SecProcedure procedure ->
-      monomorphizeTrivial a SecProcedure procedure
+      monomorphizeTrivial subst a SecProcedure procedure
     SecDatum datum ->
-      monomorphizeTrivial a SecDatum datum
-    SecSpan key value items -> undefined
+      monomorphizeTrivial subst a SecDatum datum
+    SecSpan {} -> undefined
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Decl Decl a where
-  monomorphizeImpl a = \case
+  monomorphizeImpl subst a decl = case decl of
     ImportDecl imports ->
-      monomorphizeTrivials a ImportDecl imports
+      monomorphizeTrivials subst a ImportDecl imports
     ExportDecl exports ->
-      monomorphizeTrivials a ExportDecl exports
-    ConstDecl m_an na an -> undefined
-    TypedefDecl an ans -> undefined
-    RegDecl b an -> undefined
-    PragmaDecl na an -> undefined
-    TargetDecl ans -> undefined
+      monomorphizeTrivials subst a ExportDecl exports
+    ConstDecl {} -> undefined
+    TypedefDecl {} -> undefined
+    RegDecl {} ->
+      succeed . monomorphizedTrivial . Just $ withAnnot a decl
+    PragmaDecl {} -> undefined
+    TargetDecl {} -> undefined
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl AST.Class AST.Class a where
   monomorphizeImpl = undefined
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Instance Instance a where
-  monomorphizeImpl a (Instance _ _ methods) = do
-    monomorphizeMaybes a (const Nothing) methods
+  monomorphizeImpl subst a (Instance _ _ methods) = do
+    monomorphizeMaybes subst a (const Nothing) methods
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Struct Struct a where
-  monomorphizeImpl a (Struct _ datums) = do
-    monomorphizeMaybes a (const Nothing) datums
+  monomorphizeImpl subst a (Struct _ datums) = do
+    monomorphizeMaybes subst a (const Nothing) datums
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Import Import a where
   monomorphizeImpl = undefined
@@ -243,67 +316,73 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Import Import a where
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Export Export a where
   monomorphizeImpl = undefined
 
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Datum Datum a
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Datum Datum a where
+  monomorphizeImpl = undefined
 
 succeed :: Applicative f => a -> f (Either err a)
 succeed = pure . Right
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Procedure Procedure a where
-  monomorphizeImpl a procedure@(Procedure header body) = do
-    getTypeHandleIdPolyKind a >>= \case
+  monomorphizeImpl subst a procedure@(Procedure header body) = do
+    getTypeHandleIdPolyKind subst a >>= \case
       Mono -> do
-        header' <- ensuredJustMonomorphize undefined header
-        body' <- ensuredJustMonomorphize undefined body
+        header' <- ensuredJustMonomorphize undefined subst header
+        body' <- ensuredJustMonomorphize undefined subst body
         return $ do
           header'' <- header'
           body'' <- body'
-          let procedure' = withAnnot a <$> liftA2 Procedure (header'' ^. node) (body'' ^. node)
+          let procedure' = withAnnot a <$> liftA2 Procedure (getNode header'') (getNode body'')
           let meta = unNode header'' <> unNode body''
           return $ withMaybeNode procedure' meta
       Poly -> uses schemes  (getTypeHandleId a `Map.lookup`) >>= \case
          Nothing -> undefined -- TODO: logic error
          Just scheme -> succeed $ nullVal &
-          polySchemes %~ Map.insert (getTypeHandle a) (scheme, FuncScheme procedure)
+          polySchemes %~ Map.insert (getTypeHandle a) (scheme, FuncScheme (withAnnot a procedure))
       Absurd -> return $ Left undefined
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl ProcedureHeader ProcedureHeader a where
-  monomorphizeImpl a header =
+  monomorphizeImpl _ a header =
     succeed . monomorphizedTrivial . Just $ withAnnot a header
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Body Body a where
-  monomorphizeImpl a (Body items) =
-    monomorphizeTrivials a Body items
+  monomorphizeImpl subst a (Body items) =
+    monomorphizeTrivials subst a Body items
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl BodyItem BodyItem a where
-  monomorphizeImpl a (BodyDecl decl) =
-    monomorphizeTrivial a BodyDecl decl >>= ensureJustMonomorphized undefined
-  monomorphizeImpl a (BodyStackDecl decl) =
-    monomorphizeTrivial a BodyStackDecl decl >>= ensureJustMonomorphized undefined
-  monomorphizeImpl a (BodyStmt decl) =
-    monomorphizeTrivial a BodyStmt decl >>= ensureJustMonomorphized undefined
+  monomorphizeImpl subst a (BodyDecl decl) =
+    monomorphizeTrivial subst a BodyDecl decl >>= ensureJustMonomorphized undefined
+  monomorphizeImpl subst a (BodyStackDecl decl) =
+    monomorphizeTrivial subst a BodyStackDecl decl >>= ensureJustMonomorphized undefined
+  monomorphizeImpl subst a (BodyStmt stmt) =
+    monomorphizeTrivial subst a BodyStmt stmt >>= ensureJustMonomorphized undefined
 
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl StackDecl StackDecl a
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl StackDecl StackDecl a where
+  monomorphizeImpl = undefined
+
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Actual Actual a where
+  monomorphizeImpl subst a (Actual mKind expr) =
+    monomorphizeTrivial subst a (Actual mKind) expr
 
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Stmt Stmt a where
-  monomorphizeImpl a stmt = case stmt of
+  monomorphizeImpl subst a stmt = case stmt of
     EmptyStmt -> succeed . monomorphizedTrivial . Just $ annotatedStmt
     IfStmt cond tBody eBody -> do
-      cond' <- ensuredJustMonomorphize undefined cond
-      tBody' <- ensuredJustMonomorphize undefined tBody
-      eBody' <- traverse (ensuredJustMonomorphize undefined) eBody
+      cond' <- ensuredJustMonomorphize undefined subst cond
+      tBody' <- ensuredJustMonomorphize undefined subst tBody
+      eBody' <- traverse (ensuredJustMonomorphize undefined subst) eBody
       return $ do
         cond'' <- cond'
         tBody'' <- tBody'
         eBody'' <- sequence eBody'
         let
-          stmt' = annotated <$> liftA3 IfStmt (getNode cond'') (getNode tBody'') (getNode <$> eBody'')
+          stmt' = annotated <$> liftA3 IfStmt (getNode cond'') (getNode tBody'') (traverse getNode eBody'')
           meta = unNode cond'' <> unNode tBody'' <> foldMap unNode eBody''
         return $ withMaybeNode stmt' meta
-    SwitchStmt an ans -> undefined
-    SpanStmt an an' an2 -> undefined
+    SwitchStmt {} -> undefined
+    SpanStmt {} -> undefined
     AssignStmt lValues exprs -> do
-      lValues' <- traverse (ensuredJustMonomorphize undefined) lValues
-      exprs' <- traverse (ensuredJustMonomorphize undefined) exprs
+      lValues' <- traverse (ensuredJustMonomorphize undefined subst) lValues
+      exprs' <- traverse (ensuredJustMonomorphize undefined subst) exprs
       return $ do
         lValues'' <- sequence lValues'
         exprs'' <- sequence exprs'
@@ -311,27 +390,43 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Stmt Stmt a where
           stmt' = annotated <$> liftA2 AssignStmt (traverse getNode lValues'') (traverse getNode exprs'')
           meta = foldMap unNode lValues'' <> foldMap unNode exprs''
         return $ withMaybeNode stmt' meta
-    PrimOpStmt na na' ans ans' -> undefined
-    CallStmt ans m_co an ans' m_an ans2 -> undefined
-    JumpStmt m_co an ans m_an -> undefined
+    PrimOpStmt {} -> undefined
+    CallStmt rets mConv func actuals mTargs callAnnots -> do
+      rets' <- traverse (ensuredJustMonomorphize undefined subst) rets
+      func' <- ensuredJustMonomorphize undefined subst func
+      actuals' <- traverse (ensuredJustMonomorphize undefined subst) actuals
+      mTargs' <- traverse (ensuredJustMonomorphize undefined subst) mTargs
+      callAnnots' <- traverse (ensuredJustMonomorphize undefined subst) callAnnots
+      return $ do
+        rets'' <- sequence rets'
+        func'' <- func'
+        mTargs'' <- sequence mTargs'
+        actuals'' <- sequence actuals'
+        callAnnots'' <- sequence callAnnots'
+        let
+          stmt' = annotated <$> liftA5 (`CallStmt` mConv) (traverse getNode rets'') (getNode func'') (traverse getNode actuals'') (traverse getNode mTargs'') (traverse getNode callAnnots'')
+          meta = foldMap unNode rets'' <> unNode func'' <> foldMap unNode actuals'' <> foldMap unNode mTargs'' <> foldMap unNode callAnnots''
+        return $ withMaybeNode stmt' meta
+
+    JumpStmt {} -> undefined
     ReturnStmt mConv Nothing actuals -> do
-      actuals' <- traverse (ensuredJustMonomorphize undefined) actuals
+      actuals' <- traverse (ensuredJustMonomorphize undefined subst) actuals
       return $ do
         actuals'' <- sequence actuals'
         let
           stmt' = annotated . ReturnStmt mConv Nothing <$> traverse getNode actuals''
           meta = foldMap unNode actuals''
         return $ withMaybeNode stmt' meta
-    ReturnStmt nConv (Just _) ans -> undefined
+    ReturnStmt _ (Just _) _ -> undefined
     LabelStmt {} ->
-      getTypeHandleIdPolyKind a >>= \case
+      getTypeHandleIdPolyKind subst a >>= \case
          Mono -> succeed $ withNode annotatedStmt nullVal
          Poly -> return $ Left undefined -- TODO: local label cannot be a polytype
          Absurd -> return $ Left undefined -- TODO: local label cannot have an illegal type
-    ContStmt na ans -> undefined
+    ContStmt _ _ -> undefined
     GotoStmt expr targets -> do
-      expr' <- ensuredJustMonomorphize undefined expr
-      targets' <- traverse (ensuredJustMonomorphize undefined) targets
+      expr' <- ensuredJustMonomorphize undefined subst expr
+      targets' <- traverse (ensuredJustMonomorphize undefined subst) targets
       return $ do
         expr'' <- expr'
         targets'' <- sequence targets'
@@ -339,22 +434,34 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Stmt Stmt a where
           stmt' = annotated <$> liftA2 GotoStmt (getNode expr'') (traverse getNode targets'')
           meta = unNode expr'' <> foldMap unNode targets''
         return $ withMaybeNode stmt' meta
-    CutToStmt an ans ans' -> undefined
+    CutToStmt {} -> undefined
     where
       annotated = withAnnot a
       annotatedStmt = withAnnot a stmt
 
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl KindName KindName a where
+  monomorphizeImpl _ a kindName =
+    succeed . monomorphizedTrivial . Just $ withAnnot a kindName
+
 instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl LValue LValue a where
-  monomorphizeImpl a lValue =
-    getTypeHandleIdPolyKind a >>= \case
+  monomorphizeImpl subst a lValue =
+    getTypeHandleIdPolyKind subst a >>= \case
       Poly -> return $ Left undefined -- TODO: lValue cannot be a polytype
       Absurd -> return $ Left undefined -- TODO: lValue cannot have an illegal type
       Mono -> case lValue of
-        LVName name -> undefined
+        LVName _ -> succeed $ withNode (withAnnot a lValue) nullVal
+        LVInst (Annot (LVName _) b) -> do
+          getTypeHandleIdPolyKind subst b >>= \case
+             Mono -> succeed $ withNode (withAnnot a lValue) nullVal
+             Poly -> do
+               let meta = nullVal & polyGenerate %~ Map.insertWith mappend (getTypeHandle b) (Set.singleton $ getTypeHandle a)
+               succeed $ withNode (withAnnot a lValue) meta
+             Absurd -> return $ Left undefined
+        LVInst _ -> return $ Left undefined -- logic error
         LVRef type' expr mAsserts -> do
-          type'' <- ensuredJustMonomorphize undefined type'
-          expr' <- ensuredJustMonomorphize undefined expr
-          mAsserts' <- traverse (ensuredJustMonomorphize undefined) mAsserts
+          type'' <- ensuredJustMonomorphize undefined subst type'
+          expr' <- ensuredJustMonomorphize undefined subst expr
+          mAsserts' <- traverse (ensuredJustMonomorphize undefined subst) mAsserts
           return $ do
             type''' <- type''
             expr'' <- expr'
@@ -364,9 +471,102 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl LValue LValue a where
               meta = unNode type''' <> unNode expr'' <> foldMap unNode mAsserts''
             return $ withMaybeNode lValue' meta
 
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Unit Unit a
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Expr Expr a
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Targets Targets a
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Actual Actual a
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Asserts Asserts a
-instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl AST.Type AST.Type a
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Targets Targets a where
+  monomorphizeImpl = undefined
+
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Expr Expr a where
+  monomorphizeImpl subst a expr = case expr of
+    LitExpr lit mType -> do
+      lit' <- monomorphize subst lit
+      mType' <- traverse (monomorphize subst) mType
+      return $ do
+        lit'' <- lit'
+        mType'' <- sequence mType'
+        let
+          expr' = withAnnot a <$> liftA2 LitExpr (getNode lit'') (traverse getNode mType'')
+          meta = unNode lit'' <> foldMap unNode mType''
+        return $ withMaybeNode expr' meta
+    LVExpr lValue -> monomorphizeTrivial subst a LVExpr lValue
+    ParExpr expr' -> monomorphizeTrivial subst a ParExpr expr'
+    BinOpExpr op left right -> do
+      left' <- monomorphize subst left
+      right' <- monomorphize subst right
+      return $ do
+        left'' <- left'
+        right'' <- right'
+        let
+          expr' = withAnnot a <$> liftA2 (BinOpExpr op) (getNode left'') (getNode right'')
+          meta = unNode left'' <> unNode right''
+        return $ withMaybeNode expr' meta
+    ComExpr expr' -> monomorphizeTrivial subst a ComExpr expr'
+    NegExpr expr' -> monomorphizeTrivial subst a NegExpr expr'
+    InfixExpr {} -> undefined
+    PrefixExpr {} -> undefined
+    MemberExpr {} -> undefined
+
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Lit Lit a where
+  monomorphizeImpl _ a lit = succeed $ nullVal & node ?~ withAnnot a lit
+
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl AST.Type AST.Type a where
+  monomorphizeImpl subst a type' =
+    getTypeHandleIdPolyKind subst a >>= \case
+      Mono -> do
+        type'' <- reconstructOld (getTypeHandleId a) >>= instantiateType
+        return $ (monomorphizedTrivial . Just $ withAnnot a type') <$ type''
+      Poly -> return $ Left undefined -- TODO: the type has to be concrete
+      Absurd -> return $ Left undefined -- TODO: all types have to make sense
+
+instantiateType :: MonadInferencer m => Type.Type -> m (MonomorphizeError `Either` Monomorphized (Const Void) a)
+instantiateType = \case
+  ErrorType {} -> return $ Left undefined -- TODO: encountered error type
+  VarType {} -> return $ Left undefined -- TODO: type is not a monotype
+  ComplType type' -> case type' of
+    TupleType args ->
+      fmap fold . sequence <$> traverse instantiateType args
+    FunctionType args ret ->
+      fmap fold . sequence <$> traverse instantiateType (ret : args)
+    AppType t t' ->
+      liftA2 (liftA2 mappend) (instantiateType t) (instantiateType t')
+    AddrType t -> instantiateType t
+    LamType {} -> undefined
+    ConstType {} -> undefined
+    StringType -> succeed mempty
+    String16Type -> succeed mempty
+    LabelType -> succeed mempty
+    TBitsType {} -> succeed mempty
+    BoolType -> succeed mempty
+    VoidType -> succeed mempty
+
+monomorphizePolyType :: (HasPos a, HasTypeHandle a,
+ MonadInferencer m,
+ MonadIO m) =>
+  TypeHandle
+  -> TypeHandle
+  -> Monomorphized n a
+  -> m (Either MonomorphizeError (Monomorphized Schematized a))
+monomorphizePolyType scheme inst mono =
+  case scheme `Map.lookup` view polySchemes mono of
+    Just (_, schematized) -> case schematized of
+      FuncScheme procedure -> do
+        scheme' <- reconstructOld $ handleId scheme
+        inst' <- reconstructOld $ handleId inst
+        case ComplType (AddrType scheme') `unify` inst' of
+          Left _ -> return $ Left undefined
+          Right (subst, _) -> monomorphize subst procedure <&> fmap (node %~ fmap FuncScheme)
+      StructScheme _ -> undefined
+    Nothing -> undefined
+
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl CallAnnot CallAnnot a where
+  monomorphizeImpl = undefined
+
+instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Asserts Asserts a where
+  monomorphizeImpl = undefined
+
+-- class Monomorphize n n' a | n -> n' where
+--   monomorphize ::
+--        (HasPos a, HasTypeHandle a, MonadInferencer m) => Subst Type.Type -> Annot n a -> m (MonomorphizeError `Either` Annot n' a)
+
+-- instance (HasPos a, HasTypeHandle a) => Monomorphize Procedure Procedure a where
+--   monomorphize subst (Procedure header body `Annot` a) = do
+--     monomorphize header
+

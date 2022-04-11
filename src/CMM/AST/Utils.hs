@@ -13,10 +13,11 @@ import safe CMM.AST
   , BodyItem(..)
   , Expr(..)
   , LValue(..)
-  , Stmt(..)
+  , Stmt(..), Unit (Unit), TopLevel
   )
-import safe CMM.AST.Annot (Annot, Annotation(Annot), unAnnot)
+import safe CMM.AST.Annot (Annot, Annotation(Annot), unAnnot, withAnnot)
 import safe CMM.AST.HasName (HasName(getName))
+import Data.List (foldl')
 
 class EnsureNode n' n where
   ensureNode :: n' a -> n a
@@ -53,3 +54,10 @@ instance GetTrivialGotoTarget (Body a) where
 instance GetTrivialGotoTarget (Stmt a) where
   getTrivialGotoTarget (GotoStmt expr _) = getExprLVName expr
   getTrivialGotoTarget _ = Nothing
+
+addTopLevel :: Annot TopLevel a -> Annot Unit a -> Annot Unit a
+addTopLevel topLevel (Unit topLevels `Annot` a) = withAnnot a . Unit $ topLevel : topLevels
+
+addTopLevels :: [Annot TopLevel a] -> Annot Unit a -> Annot Unit a
+addTopLevels topLevels unit
+  = foldl' (flip addTopLevel) unit topLevels
