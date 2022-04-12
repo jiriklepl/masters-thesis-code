@@ -6,7 +6,6 @@
 {-# LANGUAGE TupleSections #-}
 
 -- TODO: add the overlap check for instances
--- TODO: add the overload resolution for instances to monomorphization
 module CMM.Inference where
 
 import safe Control.Applicative (Applicative(liftA2))
@@ -80,7 +79,9 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
-  , unifs, freshAnnotatedTypeHelper, reconstruct, readConstingBounds
+  , unifs
+  , freshAnnotatedTypeHelper
+  , reconstruct
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -91,9 +92,7 @@ import safe CMM.Inference.Subst
 import safe CMM.Inference.Type
   ( Fact
   , Facts
-  , FlatFact(ClassConstraint, ClassDetermine, ClassFact,
-         ConstnessBounds, InstType, KindBounds, OnRegister, SubConst,
-         SubKind, SubType, Typing, Union)
+  , FlatFact(..)
   , FlatFacts
   , IsTyped(freeTypeVars)
   , NestedFact(Fact, NestedFact)
@@ -102,8 +101,8 @@ import safe CMM.Inference.Type
   , Scheme((:.))
   , ToType(..)
   , Type(..)
-  , TypeCompl(AddrType, AppType, FunctionType, TupleType)
-  , TypeVar(NoType, TypeVar, tVarParent, tVarKind)
+  , TypeCompl(..)
+  , TypeVar(..)
   , predecessor
   , subConst
   , subKind
@@ -120,9 +119,8 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind (Star))
+import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind))
 import safe CMM.Inference.Unify (Unify(unify), unifyFold, unifyLax)
-import Debug.Trace
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -908,9 +906,9 @@ propagateBounds which by = do
   pairs <- liftA2 (collectPairs Forward) (use handleCounter) (use by)
   for_ pairs $ \(v, v') -> do
     uses which (v' `Map.lookup`) >>=
-      traverse_ ((which %=) . Map.insertWith (<>) v . (upperBound .~ maxBound))
+      traverse_ ((which %=) . Map.insertWith (<>) v . (lowerBound .~ minBound))
     uses which (v `Map.lookup`) >>=
-      traverse_ ((which %=) . Map.insertWith (<>) v' . (lowerBound .~ minBound))
+      traverse_ ((which %=) . Map.insertWith (<>) v' . (upperBound .~ maxBound))
 
 boundsUnifs ::
      (MonadInferencer m, PartialOrd a, Eq a, Ord (Ordered a), Bounded a)

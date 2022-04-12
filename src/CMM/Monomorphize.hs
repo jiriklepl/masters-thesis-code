@@ -7,6 +7,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- TODO: add the overload resolution for instances to monomorphization
 module CMM.Monomorphize where
 
 import safe Control.Applicative (Applicative(liftA2), liftA3, Const)
