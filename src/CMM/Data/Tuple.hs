@@ -31,7 +31,7 @@ complFrth4 :: (a, b, c, d) -> (a, b, c)
 complFrth4 (a, b, c, _) = (a, b, c)
 
 submergeTuple :: (a, [b]) -> [(a, b)]
-submergeTuple (a, bs) = (a,) <$> bs
+submergeTuple (a, bs) = (a, ) <$> bs
 
 submergeTuple' :: ([a], b) -> [(a, b)]
-submergeTuple' (as, b) = (,b) <$> as
+submergeTuple' (as, b) = (, b) <$> as

@@ -55,6 +55,7 @@ import safe CMM.Inference.State
   , collectPrimeTVars
   , constingBounds
   , errors
+  , freshAnnotatedTypeHelper
   , freshTypeHelperWithHandle
   , getConsting
   , getHandle
@@ -74,14 +75,13 @@ import safe CMM.Inference.State
   , pushSubKind
   , readBoundsFrom
   , readLowerBound
+  , reconstruct
   , registerScheme
   , schemes
   , subConsting
   , subKinding
   , typize
   , unifs
-  , freshAnnotatedTypeHelper
-  , reconstruct
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -710,17 +710,21 @@ reParent newParent oldParents = go
     tVarCase NoType = NoType
 
 refresher :: MonadInferencer m => Set TypeVar -> m (Map TypeVar TypeVar)
-refresher tVars = sequence $ Map.fromSet (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind  tVar) tVars
+refresher tVars =
+  sequence $
+  Map.fromSet
+    (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind tVar)
+    tVars
 
 unSchematize :: MonadInferencer m => Facts -> m Facts
 unSchematize [] = return []
 unSchematize (Fact (InstType (VarType scheme) inst):others) =
   uses schemes (scheme `Map.lookup`) >>= \case
     Just (tVars :. facts :=> t) -> do
-        instSubst <- refresher tVars
-        let facts' = Fact . apply instSubst <$> facts
-            t' = instSubst `apply` t
-        ((Fact (inst `Union` t') : facts') <>) <$> unSchematize others
+      instSubst <- refresher tVars
+      let facts' = Fact . apply instSubst <$> facts
+          t' = instSubst `apply` t
+      ((Fact (inst `Union` t') : facts') <>) <$> unSchematize others
     Nothing -> (Fact (VarType scheme `Union` inst) :) <$> unSchematize others
 unSchematize (fact:others) = (fact :) <$> unSchematize others
 

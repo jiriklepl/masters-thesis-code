@@ -23,10 +23,11 @@ import safe Data.Text (Text)
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
+import safe CMM.Inference.Subst (apply)
 import safe CMM.Inference.Type
   ( PrimType
   , Scheme
-  , Type (ComplType, VarType)
+  , Type(ComplType, VarType)
   , TypeVar(NoType, TypeVar)
   )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
@@ -39,7 +40,6 @@ import safe CMM.Inference.TypeHandle
   )
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.Unify (UnificationError)
-import CMM.Inference.Subst (apply)
 
 data Inferencer =
   Inferencer
@@ -115,8 +115,10 @@ popParent = currentParent %= tail
 freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
-freshAnnotatedTypeHelper :: MonadInferencer m => TypeAnnot -> TypeKind -> m TypeVar
-freshAnnotatedTypeHelper annot tKind = getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
+freshAnnotatedTypeHelper ::
+     MonadInferencer m => TypeAnnot -> TypeKind -> m TypeVar
+freshAnnotatedTypeHelper annot tKind =
+  getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
 
 freshAnnotatedTypeHelperWithParent ::
      MonadInferencer m => TypeAnnot -> TypeKind -> TypeVar -> m TypeVar

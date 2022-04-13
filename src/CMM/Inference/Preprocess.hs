@@ -233,10 +233,9 @@ instance Preprocess Unit a b where
     (vars, fVars, fIVars, tCons, _, tClasses, sMems) <- globalVariables unit
     beginUnit vars fVars fIVars tCons tClasses sMems
     traverse_ (storeFact . Fact) builtInTypeFacts
-    let
-      storeFacts var = do
-        storeFact $ constExprConstraint var
-        storeFact $ functionKind (tVarId var) var -- TODO: think this through
+    let storeFacts var = do
+          storeFact $ constExprConstraint var
+          storeFact $ functionKind (tVarId var) var -- TODO: think this through
     for_ (Map.keys fIVars) $ lookupFIVar >=> storeFacts . handleId
     for_ (Map.keys fVars) $ lookupFVar >=> storeFacts . handleId
     (emptyTypeHandle, ) . Unit <$> preprocessT topLevels
@@ -708,19 +707,23 @@ instance Preprocess LValue a b where
     \case
       LVInst {} -> undefined -- TODO: illegal occurrence
       lvName@LVName {} -> do
-        lookupFVar (getName lvName) >>= \schemeHandle -> case handleId schemeHandle of
-          NoType -> lookupVar (getName lvName) >>= (`purePreprocess` lvName)
-          scheme -> do
-            inst <-
-              handleId <$> freshNamedTypeHandle (getName lvName) annot Star
-            handle <- freshNamedTypeHandle (getName lvName) annot Star
-            storeFact $ scheme `instType` inst
-            storeFact $ handleId handle `typeUnion` AddrType inst
-            storeFact $ constExprConstraint (handleId handle)
-            storeFact $ constExprConstraint inst
-            storeFact $ addressKind `kindConstraint` handleId handle
-            storeFact $ tVarId inst `functionKind` inst
-            return (handle, withTypeHandle schemeHandle <$> LVInst (withAnnot annot lvName))
+        lookupFVar (getName lvName) >>= \schemeHandle ->
+          case handleId schemeHandle of
+            NoType -> lookupVar (getName lvName) >>= (`purePreprocess` lvName)
+            scheme -> do
+              inst <-
+                handleId <$> freshNamedTypeHandle (getName lvName) annot Star
+              handle <- freshNamedTypeHandle (getName lvName) annot Star
+              storeFact $ scheme `instType` inst
+              storeFact $ handleId handle `typeUnion` AddrType inst
+              storeFact $ constExprConstraint (handleId handle)
+              storeFact $ constExprConstraint inst
+              storeFact $ addressKind `kindConstraint` handleId handle
+              storeFact $ tVarId inst `functionKind` inst
+              return
+                ( handle
+                , withTypeHandle schemeHandle <$>
+                  LVInst (withAnnot annot lvName))
     -- TODO: is there a constraint on expr? probably yes -> consult with the man
       LVRef type' expr mAsserts -> do
         type'' <- preprocess type'

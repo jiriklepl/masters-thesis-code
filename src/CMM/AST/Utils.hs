@@ -13,7 +13,9 @@ import safe CMM.AST
   , BodyItem(..)
   , Expr(..)
   , LValue(..)
-  , Stmt(..), Unit (Unit), TopLevel
+  , Stmt(..)
+  , TopLevel
+  , Unit(Unit)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), unAnnot, withAnnot)
 import safe CMM.AST.HasName (HasName(getName))
@@ -56,8 +58,8 @@ instance GetTrivialGotoTarget (Stmt a) where
   getTrivialGotoTarget _ = Nothing
 
 addTopLevel :: Annot TopLevel a -> Annot Unit a -> Annot Unit a
-addTopLevel topLevel (Unit topLevels `Annot` a) = withAnnot a . Unit $ topLevel : topLevels
+addTopLevel topLevel (Unit topLevels `Annot` a) =
+  withAnnot a . Unit $ topLevel : topLevels
 
 addTopLevels :: [Annot TopLevel a] -> Annot Unit a -> Annot Unit a
-addTopLevels topLevels unit
-  = foldl' (flip addTopLevel) unit topLevels
+addTopLevels topLevels unit = foldl' (flip addTopLevel) unit topLevels

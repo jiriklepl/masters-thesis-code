@@ -34,11 +34,11 @@ import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.State as InferState
 import CMM.Inference.Type as Infer
 import CMM.Inference.TypeKind as Infer
-import CMM.Monomorphize.Monomorphized as Infer
 import CMM.Lexer
 import CMM.Monomorphize (Monomorphize(monomorphize))
+import CMM.Monomorphize.Monomorphized as Infer
 import CMM.Parser
-import CMM.Pretty()
+import CMM.Pretty ()
 import Control.Lens.Getter (view)
 
 -- import CMM.Translator
@@ -68,17 +68,16 @@ main = do
   -- T.putStr translated
   vars <- globalVariables $ unAnnot ast
   -- print $ CMM.Inference.Preprocess.State._facts miner
-  inferencer <- (`execStateT` InferState.initInferencer
-       (CMM.Inference.Preprocess.State._handleCounter miner)) $
-    do
+  inferencer <-
+    (`execStateT` InferState.initInferencer
+                    (CMM.Inference.Preprocess.State._handleCounter miner)) $ do
       let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
       mineAST mined
       -- liftIO $ print fs
       reduce fs
       monomorphize mempty mined >>= \case
-          Left what -> liftIO $ print what
-          Right mined' ->
-            liftIO . print . pretty $ view Infer.node mined'
+        Left what -> liftIO $ print what
+        Right mined' -> liftIO . print . pretty $ view Infer.node mined'
   -- liftIO $ print inferencer
   return ()
 

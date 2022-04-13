@@ -1,3 +1,5 @@
+{-# LANGUAGE Safe #-}
+
 module CMM.Control.Monad where
 
 infixl 1 >>@=

@@ -38,6 +38,7 @@ import safe Text.Megaparsec.Char
   , string
   )
 import safe qualified Text.Megaparsec.Char.Lexer as L
+
 import safe CMM.AST.Annot (Annot, withAnnot)
 
 type Lexer = Parsec Void Text

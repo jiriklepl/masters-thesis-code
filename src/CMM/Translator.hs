@@ -170,7 +170,7 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
          Translate m Decl a (m ()) -- TODO: continue from here
-                                                               where
+                                                                where
   translate _ = return () -- TODO: continue from here
 
 {- |
