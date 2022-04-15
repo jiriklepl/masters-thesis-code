@@ -20,13 +20,11 @@ import safe Data.Text (Text)
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
+import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Subst (apply)
-import safe CMM.Inference.Fact ( Scheme )
-import safe CMM.Inference.Type
-  ( Type(ComplType, VarType)
-  )
-import safe CMM.Inference.TypeVar (TypeVar(..))
+import safe CMM.Inference.Type (Type(ComplType, VarType))
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
+import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -35,8 +33,8 @@ import safe CMM.Inference.TypeHandle
   , typing
   )
 import safe CMM.Inference.TypeKind (TypeKind)
+import safe CMM.Inference.TypeVar (TypeVar(..))
 import safe CMM.Inference.Unify (UnificationError)
-import safe CMM.Inference.TypeCompl ( PrimType )
 
 data Inferencer =
   Inferencer

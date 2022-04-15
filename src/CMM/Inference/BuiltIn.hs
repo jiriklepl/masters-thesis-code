@@ -13,16 +13,16 @@ import safe Data.Text (Text)
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Ordered (Ordered(..))
 import safe CMM.Inference.DataKind (DataKind(DataKind, GenericData, Unstorable))
-import safe CMM.Inference.Type as Infer
-  ( Type
-  )
-import safe CMM.Inference.TypeVar as Infer ( TypeVar(NoType) )
-import safe CMM.Inference.TypeKind (TypeKind(..))
-import safe CMM.Inference.TypeCompl
-    ( TypeCompl(..),
-      PrimType )
 import safe CMM.Inference.Fact
-    ( Facts, FlatFacts, regularExprConstraint, kindConstraint )
+  ( Facts
+  , FlatFacts
+  , kindConstraint
+  , regularExprConstraint
+  )
+import safe CMM.Inference.Type as Infer (Type)
+import safe CMM.Inference.TypeCompl (PrimType, TypeCompl(..))
+import safe CMM.Inference.TypeKind (TypeKind(..))
+import safe CMM.Inference.TypeVar as Infer (TypeVar(NoType))
 
 getNamedOperator :: Text -> Infer.Type
 getNamedOperator = undefined

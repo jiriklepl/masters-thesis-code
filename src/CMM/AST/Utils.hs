@@ -2,8 +2,8 @@
 
 module CMM.AST.Utils where
 
-import safe Data.Text (Text)
 import safe Data.List (foldl')
+import safe Data.Text (Text)
 
 import safe CMM.AST
   ( ASTNode

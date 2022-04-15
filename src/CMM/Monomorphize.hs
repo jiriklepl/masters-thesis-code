@@ -53,6 +53,7 @@ import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Nullable (nullVal)
 import safe CMM.Data.Tuple (submergeTuple)
 import safe CMM.Inference (simplify)
+import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Preprocess.State
   ( HasTypeHandle(getTypeHandle)
   , getTypeHandleId
@@ -67,11 +68,9 @@ import safe CMM.Inference.State
   , schemes
   , tryGetHandle
   )
-import safe CMM.Inference.Subst (apply, Subst)
-import safe CMM.Inference.Type as Type
-  ( Type(..)
-  )
-import safe CMM.Inference.TypeVar as Type ( TypeVar )
+import safe CMM.Inference.Subst (Subst, apply)
+import safe CMM.Inference.Type as Type (Type(..))
+import safe CMM.Inference.TypeCompl (TypeCompl(..))
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -79,9 +78,12 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
+import safe CMM.Inference.TypeVar as Type (TypeVar)
 import safe CMM.Inference.Unify (unify)
 import safe CMM.Monomorphize.Monomorphized
   ( Monomorphized
+  , PolyGenerate(getPolyGenerate)
+  , addGenerate
   , foldGetGenerate
   , foldGetSchemes
   , getNode
@@ -93,15 +95,12 @@ import safe CMM.Monomorphize.Monomorphized
   , unNode
   , unPolyGenerate
   , withMaybeNode
-  , withNode, PolyGenerate (getPolyGenerate), addGenerate
+  , withNode
   )
 import safe CMM.Monomorphize.PolyKind (PolyKind(..))
 import safe CMM.Monomorphize.Schematized (Schematized(..), schematized2topLevel)
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
-import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.TypeCompl
-    ( TypeCompl(..) )
 
 data MonomorphizeError =
   FooError
@@ -298,8 +297,9 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Unit Unit a where
           Left err -> return $ Left err
           Right mono -> do
             let more =
-                  concatMap (submergeTuple . (_2 %~ Set.toList)) . Map.toList .
-                  getPolyGenerate $ mono ^. polyGenerate
+                  concatMap (submergeTuple . (_2 %~ Set.toList)) .
+                  Map.toList . getPolyGenerate $
+                  mono ^. polyGenerate
             more' <- mapM (flip (uncurry monomorphizePolyType) mono) more
             sequence more' & \case
               Left err -> return $ Left err

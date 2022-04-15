@@ -4,8 +4,12 @@ module CMM.Inference.TypeVar where
 
 import safe Data.Data (Data)
 
-import safe CMM.Inference.TypeKind ( TypeKind (GenericType), HasTypeKind (..), setTypeKindInvariantLogicError )
-import safe CMM.Data.Nullable (Fallbackable (..), Nullable (..))
+import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
+import safe CMM.Inference.TypeKind
+  ( HasTypeKind(..)
+  , TypeKind(GenericType)
+  , setTypeKindInvariantLogicError
+  )
 
 data TypeVar
   = NoType

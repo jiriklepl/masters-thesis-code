@@ -11,14 +11,11 @@ import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (fromMaybe)
 
-import safe CMM.Inference.Fact ( Fact, FlatFact )
-import safe CMM.Inference.Type
-  ( ToType(toType)
-  , Type(VarType)
-  )
-import safe CMM.Inference.TypeVar (TypeVar(..))
+import safe CMM.Inference.Fact (Fact, FlatFact)
+import safe CMM.Inference.Type (ToType(toType), Type(VarType))
+import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
-import safe CMM.Inference.TypeCompl ( PrimType )
+import safe CMM.Inference.TypeVar (TypeVar(..))
 
 type Subst = Map TypeVar
 

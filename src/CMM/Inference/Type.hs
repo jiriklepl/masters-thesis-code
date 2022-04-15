@@ -6,11 +6,13 @@ import safe Data.Data (Data)
 import safe Data.Text (Text)
 
 import safe CMM.Data.Nullable (Fallbackable(..))
-import safe CMM.Inference.TypeKind (HasTypeKind(..), TypeKind(..), setTypeKindInvariantLogicError)
-import safe CMM.Inference.TypeVar
-    ( TypeVar(..), FromTypeVar(..) )
-import safe CMM.Inference.TypeCompl
-    ( TypeCompl(..) )
+import safe CMM.Inference.TypeCompl (TypeCompl(..))
+import safe CMM.Inference.TypeKind
+  ( HasTypeKind(..)
+  , TypeKind(..)
+  , setTypeKindInvariantLogicError
+  )
+import safe CMM.Inference.TypeVar (FromTypeVar(..), TypeVar(..))
 
 data Type
   = ErrorType Text

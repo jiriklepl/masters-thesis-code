@@ -2,20 +2,20 @@
 
 module CMM.Inference.Fact where
 
-import safe Data.Data ( Data )
+import safe Data.Data (Data)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 
-import safe CMM.Inference.TypeKind ( HasTypeKind(..) )
-import safe CMM.Inference.TypeVar ( TypeVar )
-import safe CMM.Inference.Type ( ToType(..), Type )
-import safe CMM.Data.Bounds ( Bounds(Bounds) )
-import safe CMM.Data.Ordered ( Ordered(Ordered) )
-import safe CMM.Inference.Constness ( Constness(..) )
-import safe CMM.Inference.DataKind
-    ( DataKind(TupleKind, FunctionKind) )
+import safe CMM.Data.Bounds (Bounds(Bounds))
+import safe CMM.Data.Ordered (Ordered(Ordered))
+import safe CMM.Inference.Constness (Constness(..))
+import safe CMM.Inference.DataKind (DataKind(FunctionKind, TupleKind))
+import safe CMM.Inference.Type (ToType(..), Type)
 import safe CMM.Inference.TypeCompl
-    ( TypeCompl(AppType, FunctionType, TupleType) )
+  ( TypeCompl(AppType, FunctionType, TupleType)
+  )
+import safe CMM.Inference.TypeKind (HasTypeKind(..))
+import safe CMM.Inference.TypeVar (TypeVar)
 
 infix 6 :=>
 

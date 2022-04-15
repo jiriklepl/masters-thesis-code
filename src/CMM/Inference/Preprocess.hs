@@ -75,6 +75,24 @@ import safe CMM.Inference.BuiltIn as Infer
   , getNamedOperator
   , integerKind
   )
+import safe CMM.Inference.Fact as Infer
+  ( NestedFact(Fact)
+  , constExprConstraint
+  , functionKind
+  , instType
+  , kindConstraint
+  , linkExprConstraint
+  , makeFunction
+  , makeTuple
+  , minKindConstraint
+  , registerConstraint
+  , regularExprConstraint
+  , subConst
+  , subType
+  , typeConstraint
+  , typeUnion
+  , unstorableConstraint
+  )
 import safe CMM.Inference.Preprocess.State as Infer
   ( HasTypeHandle(getTypeHandle)
   , MonadInferPreprocessor
@@ -112,29 +130,11 @@ import safe CMM.Inference.Type as Infer
   ( ToType(toType)
   , Type(ComplType, VarType)
   )
+import safe CMM.Inference.TypeCompl (TypeCompl(..))
 import safe CMM.Inference.TypeHandle (TypeHandle, emptyTypeHandle, handleId)
 import safe CMM.Inference.TypeKind (TypeKind(..))
-import safe CMM.Inference.TypeVar ( TypeVar(NoType, tVarId) )
+import safe CMM.Inference.TypeVar (TypeVar(NoType, tVarId))
 import safe CMM.Parser.HasPos (HasPos)
-import safe CMM.Inference.TypeCompl
-    ( TypeCompl(..) )
-import safe CMM.Inference.Fact as Infer
-    ( NestedFact(Fact),
-      makeFunction,
-      makeTuple,
-      typeUnion,
-      typeConstraint,
-      subType,
-      subConst,
-      instType,
-      minKindConstraint,
-      unstorableConstraint,
-      constExprConstraint,
-      linkExprConstraint,
-      regularExprConstraint,
-      registerConstraint,
-      kindConstraint,
-      functionKind )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable

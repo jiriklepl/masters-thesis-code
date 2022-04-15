@@ -2,7 +2,7 @@
 
 module CMM.Parser where
 
-import safe Control.Applicative (liftA2, (<**>), liftA3)
+import safe Control.Applicative ((<**>), liftA2, liftA3)
 import safe Data.Functor (($>))
 import safe Data.Maybe (fromMaybe)
 import safe qualified Data.Set as Set

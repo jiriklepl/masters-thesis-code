@@ -20,7 +20,6 @@ class HasTypeKind a where
   getTypeKind :: a -> TypeKind
   setTypeKind :: TypeKind -> a -> a
 
-
 setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
 setTypeKindInvariantLogicError what kind =
   error $

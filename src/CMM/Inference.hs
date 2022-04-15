@@ -42,6 +42,20 @@ import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.OrderedBounds ()
 import safe CMM.Inference.DataKind (DataKind)
+import safe CMM.Inference.Fact
+  ( Fact
+  , Facts
+  , FlatFact(..)
+  , FlatFacts
+  , NestedFact(..)
+  , Qual((:=>))
+  , Scheme((:.))
+  , subConst
+  , subKind
+  , typeConstraint
+  , typeUnion
+  )
+import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Preprocess.State (HasTypeHandle(getTypeHandle))
 import safe CMM.Inference.State
   ( Inferencer
@@ -85,25 +99,9 @@ import safe CMM.Inference.Subst
   , Subst
   , foldTVarSubsts
   )
-import safe CMM.Inference.Fact
-    ( Facts,
-      Fact,
-      FlatFacts,
-      NestedFact(..),
-      FlatFact(..),
-      Scheme((:.)),
-      Qual((:=>)),
-      typeUnion,
-      typeConstraint,
-      subKind,
-      subConst )
-import safe CMM.Inference.Type
-  ( ToType(..)
-  , Type(..)
-  )
+import safe CMM.Inference.Type (ToType(..), Type(..))
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
-import safe CMM.Inference.TypeVar
-    ( TypeVar(TypeVar, NoType, tVarParent, tVarId), predecessor )
+import safe CMM.Inference.TypeCompl (PrimType, TypeCompl(..))
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -113,10 +111,11 @@ import safe CMM.Inference.TypeHandle
   , typing
   )
 import safe CMM.Inference.TypeKind (getTypeKind)
+import safe CMM.Inference.TypeVar
+  ( TypeVar(NoType, TypeVar, tVarId, tVarParent)
+  , predecessor
+  )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
-import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.TypeCompl
-    ( TypeCompl(..), PrimType )
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -597,32 +596,37 @@ minimizeSubs parent = do
     setFilter = predecessor parent . tVarParent
     mapFilter from _ = tVarParent from == parent
 
-laundry :: (Bounded a, Lattice a, Eq a, Ord (Ordered a), Applicative f,
- Nullable (f ((Ordered a, Set TypeVar), TypeVar))) =>
-  TypeVar
+laundry ::
+     ( Bounded a
+     , Lattice a
+     , Eq a
+     , Ord (Ordered a)
+     , Applicative f
+     , Nullable (f ((Ordered a, Set TypeVar), TypeVar))
+     )
+  => TypeVar
   -> Map TypeVar (Bounds a)
   -> [(TypeVar, Set TypeVar)]
   -> ([Map TypeVar TypeVar], [f ((Ordered a, Set TypeVar), TypeVar)])
 laundry parent boundsMap subGraph =
   let scc =
         Graph.stronglyConnCompR $
-        (\(from, to) ->
-            (from `readBoundsFrom` boundsMap, from, Set.toList to)) <$>
+        (\(from, to) -> (from `readBoundsFrom` boundsMap, from, Set.toList to)) <$>
         subGraph
       depends = getDepends scc mempty
       clusters =
         Map.toList . Map.fromListWith mappend .
         fmap (\(a, (b, c)) -> ((Ordered <$> b, c), Set.singleton a)) $
         Map.toList depends
-    in unzip $ fromClusters <$> clusters
+   in unzip $ fromClusters <$> clusters
   where
     fromClusters ((Ordered lower `Bounds` _, limits), tVars)
       | null limits = def
       | Set.size limits == 1 =
         let tVar' = Set.findMin limits
-          in if readLowerBound tVar' boundsMap == lower
+         in if readLowerBound tVar' boundsMap == lower
               then let Right (subst', _) =
-                          apply subst tVar `unify` apply subst tVar'
+                         apply subst tVar `unify` apply subst tVar'
                     in (subst' `apply` subst, nullVal)
               else def
       | otherwise = def

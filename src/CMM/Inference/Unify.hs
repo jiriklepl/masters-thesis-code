@@ -10,20 +10,16 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.Inference.Constness (Constness)
+import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Subst (Apply(..), Subst)
-import safe CMM.Inference.Type
-  ( ToType(..)
-  , Type(..)
-  )
-import safe CMM.Inference.TypeVar (TypeVar(..), familyDepth)
+import safe CMM.Inference.Type (ToType(..), Type(..))
+import safe CMM.Inference.TypeCompl (PrimType, TypeCompl(..))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(setTypeKind)
   , combineTypeKind
   , matchKind
   )
-import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.TypeCompl
-    ( TypeCompl(..), PrimType )
+import safe CMM.Inference.TypeVar (TypeVar(..), familyDepth)
 
 data UnificationError
   = Occurs TypeVar Type

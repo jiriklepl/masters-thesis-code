@@ -23,12 +23,22 @@ import safe qualified CMM.AST.Annot as AST
 import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.Data.Tuple (complThd3)
 import safe CMM.Inference.BuiltIn (getConstType)
-import safe CMM.Inference.Type
-  ( ToType(..)
-  , Type(ComplType)
+import safe CMM.Inference.Fact
+  ( Fact
+  , Facts
+  , FlatFact
+  , NestedFact(Fact)
+  , classConstraint
+  , classFact
+  , constExprConstraint
+  , forall
+  , instType
+  , makeApplication
+  , makeFunction
+  , tupleKind
+  , typeUnion
   )
-import safe CMM.Inference.TypeVar
-    ( TypeVar(TypeVar, tVarId), noType )
+import safe CMM.Inference.Type (ToType(..), Type(ComplType))
 import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
   )
@@ -39,22 +49,9 @@ import safe CMM.Inference.TypeHandle
   , initTypeHandle
   )
 import safe CMM.Inference.TypeKind (TypeKind(Star))
+import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 import safe qualified CMM.Parser.HasPos as AST
-import safe CMM.Inference.Fact
-    ( Facts,
-      Fact,
-      NestedFact(Fact),
-      FlatFact,
-      makeFunction,
-      makeApplication,
-      forall,
-      typeUnion,
-      instType,
-      constExprConstraint,
-      tupleKind,
-      classConstraint,
-      classFact )
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle

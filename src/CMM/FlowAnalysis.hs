@@ -18,7 +18,7 @@ import safe Data.Tuple (swap)
 import safe Prelude hiding (reads)
 
 import safe CMM.AST (Procedure)
-import safe CMM.AST.Annot (Annot, Annotation (Annot))
+import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.Blockifier.State
   ( MonadBlockifier
   , blockData

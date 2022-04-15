@@ -3,17 +3,21 @@
 
 module CMM.Inference.FreeTypeVars where
 
-import safe Data.Data (Data (gmapQ))
+import safe Data.Data (Data(gmapQ))
 import safe Data.Generics.Aliases (extQ)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 
-import safe CMM.Inference.TypeVar ( TypeVar(TypeVar) )
-import safe CMM.Inference.Type
-    ( Type )
-import safe CMM.Inference.TypeCompl ( TypeCompl )
 import safe CMM.Inference.Fact
-    ( Fact, NestedFact(..), FlatFact(InstType), Scheme(..), Qual(..) )
+  ( Fact
+  , FlatFact(InstType)
+  , NestedFact(..)
+  , Qual(..)
+  , Scheme(..)
+  )
+import safe CMM.Inference.Type (Type)
+import safe CMM.Inference.TypeCompl (TypeCompl)
+import safe CMM.Inference.TypeVar (TypeVar(TypeVar))
 
 class Data a =>
       FreeTypeVars a
@@ -34,10 +38,17 @@ class Data a =>
       leaf _ = mempty
 
 deriving instance FreeTypeVars a => FreeTypeVars [a]
+
 deriving instance FreeTypeVars a => FreeTypeVars (NestedFact a)
+
 deriving instance FreeTypeVars a => FreeTypeVars (FlatFact a)
+
 deriving instance Data a => FreeTypeVars (Scheme a)
+
 deriving instance Data a => FreeTypeVars (Qual a)
+
 deriving instance Data a => FreeTypeVars (TypeCompl a)
+
 deriving instance FreeTypeVars Type
+
 deriving instance FreeTypeVars TypeVar

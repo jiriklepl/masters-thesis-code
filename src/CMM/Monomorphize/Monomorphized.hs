@@ -13,12 +13,15 @@ import safe Data.Set (Set)
 import safe Data.Void (Void)
 
 import safe CMM.Data.Nullable (Nullable(..))
-import safe CMM.Inference.Fact ( Scheme )
+import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Monomorphize.Schematized (Schematized)
 
-newtype PolyGenerate = PolyGenerate { getPolyGenerate :: Map TypeHandle (Set TypeHandle) }
+newtype PolyGenerate =
+  PolyGenerate
+    { getPolyGenerate :: Map TypeHandle (Set TypeHandle)
+    }
   deriving (Eq, Ord, Show)
 
 type PolySchemes a = Map TypeHandle (Scheme Type, Schematized a)
@@ -41,10 +44,7 @@ data Monomorphized n a =
   deriving (Show)
 
 monomorphized ::
-     Maybe (n a)
-  -> PolyGenerate
-  -> PolySchemes a
-  -> Monomorphized n a
+     Maybe (n a) -> PolyGenerate -> PolySchemes a -> Monomorphized n a
 monomorphized n gen s =
   Monomorphized {_node = n, _polyGenerate = gen, _polySchemes = s}
 
@@ -85,13 +85,9 @@ unPolyGenerate :: Monomorphized n a -> Monomorphized n a
 unPolyGenerate = polyGenerate .~ mempty
 
 foldGetSchemes ::
-     (Foldable f, Functor f)
-  => f (Monomorphized n a)
-  -> PolySchemes a
+     (Foldable f, Functor f) => f (Monomorphized n a) -> PolySchemes a
 foldGetSchemes = foldMap $ view polySchemes
 
 foldGetGenerate ::
-     (Foldable f, Functor f)
-  => f (Monomorphized n a)
-  -> PolyGenerate
+     (Foldable f, Functor f) => f (Monomorphized n a) -> PolyGenerate
 foldGetGenerate = foldMap $ view polyGenerate

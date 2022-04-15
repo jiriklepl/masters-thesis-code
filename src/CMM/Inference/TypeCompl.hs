@@ -2,15 +2,16 @@
 
 module CMM.Inference.TypeCompl where
 
-import safe Data.Text ( Text )
-import safe Data.Data ( Data )
+import safe Data.Data (Data)
+import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
 import safe CMM.Inference.TypeKind
-    ( HasTypeKind(..),
-      TypeKind(Star, GenericType, ErrorKind, (:->)),
-      setTypeKindInvariantLogicError )
-import safe CMM.Inference.TypeVar ( TypeVar(TypeVar, NoType) )
+  ( HasTypeKind(..)
+  , TypeKind((:->), ErrorKind, GenericType, Star)
+  , setTypeKindInvariantLogicError
+  )
+import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar))
 import safe CMM.Utils (backQuote)
 
 data TypeCompl a
