@@ -1,7 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module CMM.AST.BlockAnnot where
 

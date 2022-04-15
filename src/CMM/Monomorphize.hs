@@ -1,9 +1,5 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE TypeOperators #-}
 
 -- TODO: add the overload resolution for instances to monomorphization
@@ -12,7 +8,7 @@ module CMM.Monomorphize where
 import safe Control.Applicative (Applicative(liftA2), Const, liftA3)
 import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%~), (?~))
-import safe Control.Lens.Tuple (Field2(_2))
+import safe Control.Lens.Tuple (_2)
 import safe Control.Monad.IO.Class (MonadIO)
 import safe Data.Foldable (fold)
 import safe Data.Function ((&))
@@ -54,7 +50,7 @@ import safe CMM.AST.Utils (addTopLevels)
 import safe CMM.Control.Applicative (liftA5)
 import safe CMM.Control.Monad ((>>@=))
 import safe CMM.Data.Bounds (Bounds(Bounds))
-import safe CMM.Data.Nullable (Nullable(nullVal))
+import safe CMM.Data.Nullable (nullVal)
 import safe CMM.Data.Tuple (submergeTuple)
 import safe CMM.Inference (simplify)
 import safe CMM.Inference.Preprocess.State
@@ -71,13 +67,11 @@ import safe CMM.Inference.State
   , schemes
   , tryGetHandle
   )
-import safe CMM.Inference.Subst (Apply(apply), Subst)
+import safe CMM.Inference.Subst (apply, Subst)
 import safe CMM.Inference.Type as Type
-  ( IsTyped(freeTypeVars)
-  , Type(..)
-  , TypeCompl(..)
-  , TypeVar
+  ( Type(..)
   )
+import safe CMM.Inference.TypeVar as Type ( TypeVar )
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -85,7 +79,7 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.Unify (Unify(unify))
+import safe CMM.Inference.Unify (unify)
 import safe CMM.Monomorphize.Monomorphized
   ( Monomorphized
   , foldGetGenerate
@@ -99,12 +93,15 @@ import safe CMM.Monomorphize.Monomorphized
   , unNode
   , unPolyGenerate
   , withMaybeNode
-  , withNode
+  , withNode, PolyGenerate (getPolyGenerate), addGenerate
   )
 import safe CMM.Monomorphize.PolyKind (PolyKind(..))
 import safe CMM.Monomorphize.Schematized (Schematized(..), schematized2topLevel)
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
+import safe CMM.Inference.FreeTypeVars (freeTypeVars)
+import safe CMM.Inference.TypeCompl
+    ( TypeCompl(..) )
 
 data MonomorphizeError =
   FooError
@@ -301,8 +298,8 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl Unit Unit a where
           Left err -> return $ Left err
           Right mono -> do
             let more =
-                  concatMap (submergeTuple . (_2 %~ Set.toList)) . Map.toList $
-                  mono ^. polyGenerate
+                  concatMap (submergeTuple . (_2 %~ Set.toList)) . Map.toList .
+                  getPolyGenerate $ mono ^. polyGenerate
             more' <- mapM (flip (uncurry monomorphizePolyType) mono) more
             sequence more' & \case
               Left err -> return $ Left err
@@ -567,8 +564,7 @@ instance (HasPos a, HasTypeHandle a) => MonomorphizeImpl LValue LValue a where
                 let meta =
                       nullVal &
                       polyGenerate %~
-                      Map.insertWith
-                        mappend
+                      addGenerate
                         (getTypeHandle b)
                         (Set.singleton $ getTypeHandle a)
                 succeed $ withNode (withAnnot a lValue) meta

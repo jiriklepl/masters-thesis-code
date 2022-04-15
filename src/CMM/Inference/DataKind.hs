@@ -1,6 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 module CMM.Inference.DataKind where
 

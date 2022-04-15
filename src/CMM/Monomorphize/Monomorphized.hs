@@ -1,35 +1,49 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveTraversable #-}
 
 module CMM.Monomorphize.Monomorphized where
 
 import safe Control.Lens.Getter (view)
+import safe Control.Lens.Setter ((.~))
 import safe Control.Lens.TH (makeLenses)
 import safe Data.Functor.Const (Const)
 import safe Data.Map (Map)
+import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Void (Void)
 
 import safe CMM.Data.Nullable (Nullable(..))
-import safe CMM.Inference.Type (Scheme, Type)
+import safe CMM.Inference.Fact ( Scheme )
+import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Monomorphize.Schematized (Schematized)
-import Control.Lens.Setter ((.~))
+
+newtype PolyGenerate = PolyGenerate { getPolyGenerate :: Map TypeHandle (Set TypeHandle) }
+  deriving (Eq, Ord, Show)
+
+type PolySchemes a = Map TypeHandle (Scheme Type, Schematized a)
+
+instance Semigroup PolyGenerate where
+  PolyGenerate a <> PolyGenerate b = PolyGenerate $ Map.unionWith mappend a b
+
+instance Monoid PolyGenerate where
+  mempty = PolyGenerate mempty
+
+addGenerate :: TypeHandle -> Set TypeHandle -> PolyGenerate -> PolyGenerate
+addGenerate key value = mappend . PolyGenerate $ Map.singleton key value
 
 data Monomorphized n a =
   Monomorphized
     { _node :: Maybe (n a)
-    , _polyGenerate :: Map TypeHandle (Set TypeHandle)
-    , _polySchemes :: Map TypeHandle (Scheme Type, Schematized a)
+    , _polyGenerate :: PolyGenerate
+    , _polySchemes :: PolySchemes a
     }
   deriving (Show)
 
 monomorphized ::
      Maybe (n a)
-  -> Map TypeHandle (Set TypeHandle)
-  -> Map TypeHandle (Scheme Type, Schematized a)
+  -> PolyGenerate
+  -> PolySchemes a
   -> Monomorphized n a
 monomorphized n gen s =
   Monomorphized {_node = n, _polyGenerate = gen, _polySchemes = s}
@@ -73,11 +87,11 @@ unPolyGenerate = polyGenerate .~ mempty
 foldGetSchemes ::
      (Foldable f, Functor f)
   => f (Monomorphized n a)
-  -> Map TypeHandle (Scheme Type, Schematized a)
+  -> PolySchemes a
 foldGetSchemes = foldMap $ view polySchemes
 
 foldGetGenerate ::
      (Foldable f, Functor f)
   => f (Monomorphized n a)
-  -> Map TypeHandle (Set TypeHandle)
+  -> PolyGenerate
 foldGetGenerate = foldMap $ view polyGenerate

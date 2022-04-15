@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Main where
 
@@ -14,8 +13,8 @@ import Data.Text.IO as TS
 -- import Data.Tuple
 import Text.Megaparsec hiding (parse)
 
-import Data.Text.Lazy as T
-import Data.Text.Lazy.IO as T
+-- import Data.Text.Lazy as T
+-- import Data.Text.Lazy.IO as T
 
 -- import LLVM.Pretty -- from the llvm-hs-pretty package
 -- import LLVM.IRBuilder.Module
@@ -32,8 +31,8 @@ import CMM.Inference.Preprocess as Infer
 import CMM.Inference.Preprocess.State as Infer
 import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.State as InferState
-import CMM.Inference.Type as Infer
-import CMM.Inference.TypeKind as Infer
+-- import CMM.Inference.Type as Infer
+-- import CMM.Inference.TypeKind as Infer
 import CMM.Lexer
 import CMM.Monomorphize (Monomorphize(monomorphize))
 import CMM.Monomorphize.Monomorphized as Infer
@@ -51,7 +50,7 @@ main = do
   let ast = either undefined id $ parse unit tokens'
   let flattened = flatten ast
   (mined, miner) <- runStateT (preprocess ast) initInferPreprocessor
-  (blockified, _) <- runStateT (blockify flattened) B.initBlockifier
+  (_, _) <- runStateT (blockify flattened) B.initBlockifier
   -- let translated =
   --       ppllvm $
   --       flip
@@ -66,7 +65,7 @@ main = do
   --       buildModuleT "llvm" $
   --       runIRBuilderT emptyIRBuilder $ translate blockified
   -- T.putStr translated
-  vars <- globalVariables $ unAnnot ast
+  _ <- globalVariables $ unAnnot ast
   -- print $ CMM.Inference.Preprocess.State._facts miner
   inferencer <-
     (`execStateT` InferState.initInferencer

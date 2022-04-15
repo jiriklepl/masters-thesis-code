@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 module CMM.Inference.TypeAnnot where
 
@@ -9,7 +8,7 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
-import safe CMM.Inference.Type (TypeVar)
+import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Parser.HasPos (SourcePos)
 
 data TypeAnnot

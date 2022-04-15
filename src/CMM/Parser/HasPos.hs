@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleInstances #-}
 
 -- TODO: rename to GetPos?
 module CMM.Parser.HasPos

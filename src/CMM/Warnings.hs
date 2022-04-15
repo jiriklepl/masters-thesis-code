@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module CMM.Warnings where
 

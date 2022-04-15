@@ -1,7 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleInstances #-}
 
 module CMM.Inference.Constness where
 

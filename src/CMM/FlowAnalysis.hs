@@ -1,7 +1,5 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module CMM.FlowAnalysis
   ( analyzeFlow
@@ -9,7 +7,7 @@ module CMM.FlowAnalysis
 
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((.=))
-import safe Control.Lens.Tuple (Field3(_3))
+import safe Control.Lens.Tuple (_3)
 import safe Control.Monad.State.Lazy (unless)
 import safe qualified Data.Graph as Graph
 import safe Data.List (elemIndex, sortOn)
@@ -20,7 +18,7 @@ import safe Data.Tuple (swap)
 import safe Prelude hiding (reads)
 
 import safe CMM.AST (Procedure)
-import safe CMM.AST.Annot (Annot, Annotation(Annot))
+import safe CMM.AST.Annot (Annot, Annotation (Annot))
 import safe CMM.AST.Blockifier.State
   ( MonadBlockifier
   , blockData

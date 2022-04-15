@@ -1,12 +1,9 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module CMM.AST.Flattener where
 
-import safe Control.Applicative (Applicative(liftA2))
+import safe Control.Applicative (liftA2)
 import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T

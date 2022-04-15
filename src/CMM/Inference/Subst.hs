@@ -1,29 +1,24 @@
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module CMM.Inference.Subst where
 
 import safe Control.Lens.Setter ((%~))
 import safe Data.Data (Data(gmapT), Typeable)
-import Data.Generics (extT)
+import safe Data.Generics.Aliases (extT)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (fromMaybe)
 
+import safe CMM.Inference.Fact ( Fact, FlatFact )
 import safe CMM.Inference.Type
-  ( Fact
-  , FlatFact
-  , PrimType
-  , ToType(toType)
+  ( ToType(toType)
   , Type(VarType)
-  , TypeVar(NoType, TypeVar, tVarParent)
   )
+import safe CMM.Inference.TypeVar (TypeVar(..))
 import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
+import safe CMM.Inference.TypeCompl ( PrimType )
 
 type Subst = Map TypeVar
 

@@ -1,20 +1,15 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE Rank2Types #-}
 
 module CMM.Inference.Preprocess.State where
 
 -- TODO: reduce the number of "_2 %~ handleId"
-import safe Control.Applicative (Alternative((<|>)))
+import safe Control.Applicative ((<|>))
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((%=), (+=), (.=), (<~))
 import safe Control.Lens.TH (makeLenses)
-import safe Control.Lens.Tuple (Field3(_3))
+import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Map (Map)
@@ -29,24 +24,11 @@ import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.Data.Tuple (complThd3)
 import safe CMM.Inference.BuiltIn (getConstType)
 import safe CMM.Inference.Type
-  ( Fact
-  , Facts
-  , FlatFact
-  , NestedFact(Fact)
-  , ToType(..)
+  ( ToType(..)
   , Type(ComplType)
-  , TypeVar(TypeVar, tVarId)
-  , classConstraint
-  , classFact
-  , constExprConstraint
-  , forall
-  , instType
-  , makeApplication
-  , makeFunction
-  , noType
-  , tupleKind
-  , typeUnion
   )
+import safe CMM.Inference.TypeVar
+    ( TypeVar(TypeVar, tVarId), noType )
 import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
   )
@@ -59,6 +41,20 @@ import safe CMM.Inference.TypeHandle
 import safe CMM.Inference.TypeKind (TypeKind(Star))
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 import safe qualified CMM.Parser.HasPos as AST
+import safe CMM.Inference.Fact
+    ( Facts,
+      Fact,
+      NestedFact(Fact),
+      FlatFact,
+      makeFunction,
+      makeApplication,
+      forall,
+      typeUnion,
+      instType,
+      constExprConstraint,
+      tupleKind,
+      classConstraint,
+      classFact )
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle

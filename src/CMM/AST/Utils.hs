@@ -1,10 +1,9 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 
 module CMM.AST.Utils where
 
 import safe Data.Text (Text)
+import safe Data.List (foldl')
 
 import safe CMM.AST
   ( ASTNode
@@ -18,8 +17,7 @@ import safe CMM.AST
   , Unit(Unit)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), unAnnot, withAnnot)
-import safe CMM.AST.HasName (HasName(getName))
-import Data.List (foldl')
+import safe CMM.AST.HasName (getName)
 
 class EnsureNode n' n where
   ensureNode :: n' a -> n a

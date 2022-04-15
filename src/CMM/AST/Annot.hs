@@ -1,7 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveTraversable #-}
 
 module CMM.AST.Annot where
 

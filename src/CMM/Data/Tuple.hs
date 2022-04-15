@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE TupleSections #-}
 
 module CMM.Data.Tuple where
 

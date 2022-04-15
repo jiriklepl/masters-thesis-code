@@ -1,17 +1,10 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeFamilies #-}
 
 module CMM.AST.Maps where
 
-import safe Data.Functor.Identity (Identity(runIdentity))
+import safe Data.Functor.Identity (runIdentity)
 import safe qualified Data.Kind as Kind
 
 import safe CMM.AST

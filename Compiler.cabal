@@ -3,7 +3,7 @@ cabal-version:       2.4
 name:                Compiler
 version:             0.1.0.0
 synopsis:            TODO: add synopsis
--- description:
+description:         TODO: add description
 homepage:            https://github.com/jiriklepl/masters-thesis-code
 bug-reports:         https://github.com/jiriklepl/masters-thesis-code/issues
 license:             NONE
@@ -17,7 +17,26 @@ source-repository head
   location:            https://github.com/jiriklepl/masters-thesis-code
 
 common common-options
+  default-extensions:  ConstraintKinds
+                       DeriveDataTypeable
+                       DeriveTraversable
+                       FlexibleContexts
+                       FlexibleInstances
+                       FunctionalDependencies
+                       KindSignatures
+                       LambdaCase
+                       OverloadedStrings
+                       ScopedTypeVariables
+                       StandaloneDeriving
+                       TupleSections
+                       TypeFamilies
+  default-language:    Haskell2010
   ghc-options:         -Wall
+  build-depends:       base >= 4.13 && < 4.17,
+                       containers ^>=0.6.4.1,
+                       megaparsec ^>=9.0.1,
+                       prettyprinter ^>=1.7.1,
+                       text ^>=1.2.4.0,
 
 executable Compiler
   import:              common-options
@@ -29,10 +48,10 @@ executable Compiler
                        CMM.AST.BlockAnnot,
                        CMM.AST.Flattener,
                        CMM.AST.HasName,
-                       CMM.AST.Variables,
-                       CMM.AST.Variables.State,
                        CMM.AST.Maps,
                        CMM.AST.Utils,
+                       CMM.AST.Variables,
+                       CMM.AST.Variables.State,
                        CMM.Control.Applicative,
                        CMM.Control.Monad,
                        CMM.Data.Bounds,
@@ -48,18 +67,23 @@ executable Compiler
                        CMM.Inference.BuiltIn,
                        CMM.Inference.Constness,
                        CMM.Inference.DataKind,
+                       CMM.Inference.Fact,
+                       CMM.Inference.FreeTypeVars,
                        CMM.Inference.Preprocess,
                        CMM.Inference.Preprocess.State,
                        CMM.Inference.State,
                        CMM.Inference.Subst,
                        CMM.Inference.Type,
                        CMM.Inference.TypeAnnot,
+                       CMM.Inference.TypeCompl,
                        CMM.Inference.TypeHandle,
                        CMM.Inference.TypeKind,
+                       CMM.Inference.TypeVar,
                        CMM.Inference.Unify,
                        CMM.Lens,
                        CMM.Lexer,
                        CMM.Monomorphize,
+                       CMM.Monomorphize.Mangle,
                        CMM.Monomorphize.Monomorphized,
                        CMM.Monomorphize.PolyKind,
                        CMM.Monomorphize.Schematized,
@@ -70,24 +94,16 @@ executable Compiler
                        CMM.Translator.State,
                        CMM.Utils,
                        CMM.Warnings
-  -- other-extensions:
-  build-depends:       base >= 4.13 && < 4.17,
-                       bimap ^>= 0.4.0,
-                       partial-order ^>=0.2.0.0,
-                       megaparsec ^>=9.0.1,
-                       mtl ^>=2.2.2,
-                       mtl ^>=2.2.2,
-                       text ^>=1.2.4.0,
-                       parser-combinators ^>=1.3.0,
-                       containers ^>=0.6.4.1,
-                       llvm-hs-pure ^>=9.0.0,
-                       llvm-hs-pretty ^>=0.9.0.0,
+  build-depends:       bimap ^>= 0.4.0,
                        bytestring >=0.10.12.1 && <0.12,
                        lens >=5.0.1 && <5.2,
-                       prettyprinter ^>=1.7.1,
+                       llvm-hs-pure ^>=9.0.0,
+                       llvm-hs-pretty ^>=0.9.0.0,
+                       mtl ^>=2.2.2,
+                       parser-combinators ^>=1.3.0,
+                       partial-order ^>=0.2.0.0,
                        syb ^>=0.7.2.1,
   hs-source-dirs:      src
-  default-language:    Haskell2010
 
 Test-Suite parser-testsuite
   import:              common-options
@@ -102,12 +118,6 @@ Test-Suite parser-testsuite
                        CMM.Utils,
                        CMM.Warnings,
                        QuasiQuotes
-  build-depends:       base >=4.13 && <4.17,
-                       megaparsec ^>=9.0.1,
-                       text ^>=1.2.4.0,
-                       template-haskell >=2.17.0.0 && <2.19.0.0,
-                       containers ^>=0.6.4.1,
-                       prettyprinter ^>=1.7.1,
+  build-depends:       template-haskell >=2.17.0.0 && <2.19.0.0,
                        HUnit,
   hs-source-dirs:      src, test
-  default-language:    Haskell2010

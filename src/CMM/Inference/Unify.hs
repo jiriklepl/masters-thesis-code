@@ -1,13 +1,9 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module CMM.Inference.Unify where
 
 import safe Control.Lens ((%~))
-import safe Control.Lens.Tuple (Field1(_1), Field2(_2))
+import safe Control.Lens.Tuple (_1, _2)
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
 import safe qualified Data.Set as Set
@@ -16,19 +12,18 @@ import safe Data.Text (Text)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.Subst (Apply(..), Subst)
 import safe CMM.Inference.Type
-  ( IsTyped(freeTypeVars)
-  , PrimType
-  , ToType(..)
+  ( ToType(..)
   , Type(..)
-  , TypeCompl(AddrType, AppType, FunctionType, TupleType)
-  , TypeVar(NoType, TypeVar, tVarKind)
-  , familyDepth
   )
+import safe CMM.Inference.TypeVar (TypeVar(..), familyDepth)
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(setTypeKind)
   , combineTypeKind
   , matchKind
   )
+import safe CMM.Inference.FreeTypeVars (freeTypeVars)
+import safe CMM.Inference.TypeCompl
+    ( TypeCompl(..), PrimType )
 
 data UnificationError
   = Occurs TypeVar Type

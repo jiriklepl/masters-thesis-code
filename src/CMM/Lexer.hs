@@ -1,7 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveFunctor #-}
 
 module CMM.Lexer
   ( Lexer

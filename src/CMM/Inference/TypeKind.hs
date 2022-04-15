@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 
 module CMM.Inference.TypeKind where
 
@@ -7,6 +6,7 @@ import safe Data.Data (Data)
 import safe Data.Text (Text)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
+import safe CMM.Utils (backQuote)
 
 data TypeKind
   = Star
@@ -19,6 +19,16 @@ data TypeKind
 class HasTypeKind a where
   getTypeKind :: a -> TypeKind
   setTypeKind :: TypeKind -> a -> a
+
+
+setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
+setTypeKindInvariantLogicError what kind =
+  error $
+  "(internal) " ++
+  backQuote (show what) ++
+  " has to be given the " ++
+  backQuote (show (getTypeKind what)) ++
+  " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
 
 instance HasTypeKind TypeKind where
   getTypeKind = id

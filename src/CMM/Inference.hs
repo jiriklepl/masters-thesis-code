@@ -1,9 +1,5 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE TupleSections #-}
 
 -- TODO: add the overlap check for instances
 module CMM.Inference where
@@ -13,7 +9,7 @@ import safe Control.Lens (Lens')
 import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~), (<>=))
 import safe Control.Lens.Traversal (both)
-import safe Control.Lens.Tuple (Field1(_1), Field2(_2))
+import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad.State.Lazy (MonadState, void, when)
 import qualified Data.Bimap as Bimap
 import safe Data.Data (Data(gmapT))
@@ -89,28 +85,25 @@ import safe CMM.Inference.Subst
   , Subst
   , foldTVarSubsts
   )
+import safe CMM.Inference.Fact
+    ( Facts,
+      Fact,
+      FlatFacts,
+      NestedFact(..),
+      FlatFact(..),
+      Scheme((:.)),
+      Qual((:=>)),
+      typeUnion,
+      typeConstraint,
+      subKind,
+      subConst )
 import safe CMM.Inference.Type
-  ( Fact
-  , Facts
-  , FlatFact(..)
-  , FlatFacts
-  , IsTyped(freeTypeVars)
-  , NestedFact(Fact, NestedFact)
-  , PrimType
-  , Qual((:=>))
-  , Scheme((:.))
-  , ToType(..)
+  ( ToType(..)
   , Type(..)
-  , TypeCompl(..)
-  , TypeVar(..)
-  , predecessor
-  , subConst
-  , subKind
-  , tVarId
-  , typeConstraint
-  , typeUnion
   )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
+import safe CMM.Inference.TypeVar
+    ( TypeVar(TypeVar, NoType, tVarParent, tVarId), predecessor )
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -119,8 +112,11 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind))
-import safe CMM.Inference.Unify (Unify(unify), unifyFold, unifyLax)
+import safe CMM.Inference.TypeKind (getTypeKind)
+import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
+import safe CMM.Inference.FreeTypeVars (freeTypeVars)
+import safe CMM.Inference.TypeCompl
+    ( TypeCompl(..), PrimType )
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -574,9 +570,9 @@ minimizeSubs parent = do
   constBounds <- use constingBounds
   kindings <- uses subKinding transformMap
   kindBounds <- use kindingBounds
-  let (cSubsts, cRest) = laundry constBounds constings
+  let (cSubsts, cRest) = laundry parent constBounds constings
       cSubst = foldTVarSubsts cSubsts
-      (kSubsts, kRest) = laundry kindBounds kindings
+      (kSubsts, kRest) = laundry parent kindBounds kindings
       kSubst = foldTVarSubsts kSubsts
   fixSubGraph True subConsting cSubst
   fixBounds True constingBounds cSubst
@@ -596,37 +592,49 @@ minimizeSubs parent = do
     safeHandlizeUpdate
       ((_2 . consting %~ apply cSubst) . (_2 . kinding %~ apply kSubst))
   where
-    laundry boundsMap subGraph =
-      let scc =
-            Graph.stronglyConnCompR $
-            (\(from, to) ->
-               (from `readBoundsFrom` boundsMap, from, Set.toList to)) <$>
-            subGraph
-          depends = getDepends boundsMap scc mempty
-          clusters =
-            Map.toList . Map.fromListWith mappend .
-            fmap (\(a, (b, c)) -> ((Ordered <$> b, c), Set.singleton a)) $
-            Map.toList depends
-       in unzip $ fromClusters boundsMap <$> clusters
-    fromClusters boundsMap ((Ordered lower `Bounds` _, limits), tVars)
+    transformMap =
+      Map.toList . fmap (Set.filter setFilter) . Map.filterWithKey mapFilter
+    setFilter = predecessor parent . tVarParent
+    mapFilter from _ = tVarParent from == parent
+
+laundry :: (Bounded a, Lattice a, Eq a, Ord (Ordered a), Applicative f,
+ Nullable (f ((Ordered a, Set TypeVar), TypeVar))) =>
+  TypeVar
+  -> Map TypeVar (Bounds a)
+  -> [(TypeVar, Set TypeVar)]
+  -> ([Map TypeVar TypeVar], [f ((Ordered a, Set TypeVar), TypeVar)])
+laundry parent boundsMap subGraph =
+  let scc =
+        Graph.stronglyConnCompR $
+        (\(from, to) ->
+            (from `readBoundsFrom` boundsMap, from, Set.toList to)) <$>
+        subGraph
+      depends = getDepends scc mempty
+      clusters =
+        Map.toList . Map.fromListWith mappend .
+        fmap (\(a, (b, c)) -> ((Ordered <$> b, c), Set.singleton a)) $
+        Map.toList depends
+    in unzip $ fromClusters <$> clusters
+  where
+    fromClusters ((Ordered lower `Bounds` _, limits), tVars)
       | null limits = def
       | Set.size limits == 1 =
         let tVar' = Set.findMin limits
-         in if readLowerBound tVar' boundsMap == lower
+          in if readLowerBound tVar' boundsMap == lower
               then let Right (subst', _) =
-                         apply subst tVar `unify` apply subst tVar'
+                          apply subst tVar `unify` apply subst tVar'
                     in (subst' `apply` subst, nullVal)
               else def
       | otherwise = def
       where
         def = (subst, pure ((Ordered lower, limits), tVar))
         Right (subst, Just tVar) = unifyFold $ Set.toList tVars
-    getDepends _ [] acc = acc
-    getDepends boundsMap (Graph.AcyclicSCC (bounds, tVar, tVars):others) acc
+    getDepends [] acc = acc
+    getDepends (Graph.AcyclicSCC (bounds, tVar, tVars):others) acc
       | tVarParent tVar == parent =
-        getDepends boundsMap others $
+        getDepends others $
         Map.insert tVar (bounds, mconcat (getLimits <$> tVars)) acc
-      | otherwise = getDepends boundsMap others acc
+      | otherwise = getDepends others acc
       where
         getLimits tVar'
           | tVarParent tVar' == parent =
@@ -639,11 +647,7 @@ minimizeSubs parent = do
           | otherwise = undefined -- TODO: error
         relevant tVar' =
           not . isTrivialOrAbsurd $ readBoundsFrom tVar' boundsMap <> bounds
-    getDepends _ _ _ = undefined -- TODO: error
-    transformMap =
-      Map.toList . fmap (Set.filter setFilter) . Map.filterWithKey mapFilter
-    setFilter = predecessor parent . tVarParent
-    mapFilter from _ = tVarParent from == parent
+    getDepends _ _ = undefined -- TODO: error
 
 minimizeBounds ::
      (MonadInferencer m, Bounded a)

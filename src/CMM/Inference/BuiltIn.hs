@@ -1,10 +1,9 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module CMM.Inference.BuiltIn where
 
 import safe Control.Lens.Setter ((%~))
-import safe Control.Lens.Tuple (Field2(_2))
+import safe Control.Lens.Tuple (_2)
 import Data.Bimap (Bimap)
 import qualified Data.Bimap as Bimap
 import safe Data.Set (Set)
@@ -15,17 +14,15 @@ import safe CMM.AST as AST (Op)
 import safe CMM.Data.Ordered (Ordered(..))
 import safe CMM.Inference.DataKind (DataKind(DataKind, GenericData, Unstorable))
 import safe CMM.Inference.Type as Infer
-  ( Facts
-  , FlatFacts
-  , PrimType
-  , Type
-  , TypeCompl(BoolType, ConstType, LabelType, String16Type, StringType,
-          TBitsType, VoidType)
-  , TypeVar(NoType)
-  , kindConstraint
-  , regularExprConstraint
+  ( Type
   )
+import safe CMM.Inference.TypeVar as Infer ( TypeVar(NoType) )
 import safe CMM.Inference.TypeKind (TypeKind(..))
+import safe CMM.Inference.TypeCompl
+    ( TypeCompl(..),
+      PrimType )
+import safe CMM.Inference.Fact
+    ( Facts, FlatFacts, regularExprConstraint, kindConstraint )
 
 getNamedOperator :: Text -> Infer.Type
 getNamedOperator = undefined

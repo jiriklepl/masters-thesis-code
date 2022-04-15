@@ -1,8 +1,5 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 
 module CMM.Inference.State where
 
@@ -12,7 +9,7 @@ import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Bimap (Bimap)
 import safe qualified Data.Bimap as Bimap
-import safe Data.Foldable (Foldable(fold))
+import safe Data.Foldable (fold)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (fromJust, fromMaybe)
@@ -24,12 +21,11 @@ import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Subst (apply)
+import safe CMM.Inference.Fact ( Scheme )
 import safe CMM.Inference.Type
-  ( PrimType
-  , Scheme
-  , Type(ComplType, VarType)
-  , TypeVar(NoType, TypeVar)
+  ( Type(ComplType, VarType)
   )
+import safe CMM.Inference.TypeVar (TypeVar(..))
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
@@ -40,6 +36,7 @@ import safe CMM.Inference.TypeHandle
   )
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.Unify (UnificationError)
+import safe CMM.Inference.TypeCompl ( PrimType )
 
 data Inferencer =
   Inferencer

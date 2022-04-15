@@ -1,10 +1,5 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveTraversable #-}
 
 module CMM.AST where
 

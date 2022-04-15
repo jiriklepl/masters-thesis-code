@@ -1,21 +1,14 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TypeFamilies #-}
 
 -- TODO: add kinds and constnesses where they make sense
 -- TODO: all types of things inside procedures should be subtypes of the return type
 module CMM.Inference.Preprocess where
 
-import safe Control.Applicative (Applicative(liftA2))
+import safe Control.Applicative (liftA2)
 import safe Control.Lens.Setter ((%~))
-import safe Control.Lens.Tuple (Field2(_2))
+import safe Control.Lens.Tuple (_2)
 import safe Control.Monad ((>=>))
 import safe Control.Monad.State.Lazy (MonadIO, zipWithM_)
 import safe Data.Foldable (for_, traverse_)
@@ -116,31 +109,32 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeVar
   )
 import safe CMM.Inference.Type as Infer
-  ( NestedFact(Fact)
-  , ToType(toType)
+  ( ToType(toType)
   , Type(ComplType, VarType)
-  , TypeCompl(AddrType, AppType, BoolType, LabelType, String16Type,
-          StringType, TBitsType, TupleType)
-  , TypeVar(NoType, tVarId)
-  , constExprConstraint
-  , functionKind
-  , instType
-  , kindConstraint
-  , linkExprConstraint
-  , makeFunction
-  , makeTuple
-  , minKindConstraint
-  , registerConstraint
-  , regularExprConstraint
-  , subConst
-  , subType
-  , typeConstraint
-  , typeUnion
-  , unstorableConstraint
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, emptyTypeHandle, handleId)
 import safe CMM.Inference.TypeKind (TypeKind(..))
+import safe CMM.Inference.TypeVar ( TypeVar(NoType, tVarId) )
 import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Inference.TypeCompl
+    ( TypeCompl(..) )
+import safe CMM.Inference.Fact as Infer
+    ( NestedFact(Fact),
+      makeFunction,
+      makeTuple,
+      typeUnion,
+      typeConstraint,
+      subType,
+      subConst,
+      instType,
+      minKindConstraint,
+      unstorableConstraint,
+      constExprConstraint,
+      linkExprConstraint,
+      regularExprConstraint,
+      registerConstraint,
+      kindConstraint,
+      functionKind )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable

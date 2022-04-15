@@ -1,7 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Rank2Types #-}
 
 module CMM.AST.Variables where
@@ -35,7 +32,7 @@ import safe CMM.AST
   , Unit
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
-import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.AST.HasName (getName)
 import safe CMM.AST.Variables.State
   ( CollectedVariables
   , MonadCollectVariables

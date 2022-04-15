@@ -1,11 +1,5 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE LambdaCase #-}
 
 {-|
 Module      : CMM.Translator
