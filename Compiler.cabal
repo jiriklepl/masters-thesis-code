@@ -30,6 +30,7 @@ common common-options
                        StandaloneDeriving
                        TupleSections
                        TypeFamilies
+                       TypeOperators
   default-language:    Haskell2010
   ghc-options:         -Wall
   build-depends:       base >= 4.13 && < 4.17,
@@ -70,6 +71,9 @@ executable Compiler
                        CMM.Inference.Fact,
                        CMM.Inference.FreeTypeVars,
                        CMM.Inference.Preprocess,
+                       CMM.Inference.Preprocess.HasTypeHandle,
+                       CMM.Inference.Preprocess.HasTypeHole,
+                       CMM.Inference.Preprocess.TypeHole,
                        CMM.Inference.Preprocess.State,
                        CMM.Inference.State,
                        CMM.Inference.Subst,

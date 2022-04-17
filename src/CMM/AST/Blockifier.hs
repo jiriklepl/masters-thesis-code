@@ -42,6 +42,7 @@ import safe CMM.AST
   , StackDecl(..)
   , Stmt(..)
   , Targets(..)
+  , ProcedureDecl (ProcedureDecl)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot)
 import safe CMM.AST.BlockAnnot
@@ -326,12 +327,10 @@ instance GetMetadata WritesVars (KindName a) where
 instance GetMetadata ReadsVars (LValue a) where
   getMetadata _ (LVName name) = [getName name]
   getMetadata t (LVRef _ expr _) = getMetadata t expr
-  getMetadata t (LVInst lValue) = getMetadata t lValue
 
 instance GetMetadata WritesVars (LValue a) where
   getMetadata _ (LVName name) = [getName name]
   getMetadata _ LVRef {} = []
-  getMetadata t (LVInst lValue) = getMetadata t lValue
 
 instance GetMetadata ReadsVars (Expr a) where
   getMetadata _ LitExpr {} = []
@@ -394,7 +393,7 @@ blockifyProcedureHeader ::
      (MonadBlockify m, HasPos a, WithBlockAnnot a b)
   => Annotation ProcedureHeader a
   -> m (Annot ProcedureHeader b)
-blockifyProcedureHeader (Annot (ProcedureHeader mConv name formals mType) a) = do
+blockifyProcedureHeader (ProcedureHeader mConv name formals mType `Annot` a) = do
   formals' <- traverse blockify formals
   traverse_ registerWrites formals
   return . withNoBlockAnnot a $
@@ -405,7 +404,7 @@ blockifyProcedureHeader (Annot (ProcedureHeader mConv name formals mType) a) = d
       (fmap noBlockAnnots <$> mType)
 
 instance Blockify (Annot Procedure) a b where
-  blockify procedure@(Annot (Procedure header body) a) = do
+  blockify procedure@(Procedure header body `Annot` a) = do
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
     header' <- blockifyProcedureHeader header
@@ -415,8 +414,17 @@ instance Blockify (Annot Procedure) a b where
       analyzeFlow procedure <*
       clearBlockifier
 
+instance Blockify (Annot ProcedureDecl) a b where
+  blockify (ProcedureDecl header `Annot` a) = do
+    index <- blocksCache $ helperName "procedure"
+    currentBlock ?= index
+    header' <- blockifyProcedureHeader header
+    withAnnot (Begins index `withBlockAnnot` a) (ProcedureDecl header') <$
+      unsetBlock <*
+      clearBlockifier
+
 instance Blockify (Annot Body) a b where
-  blockify (Annot (Body bodyItems) a) =
+  blockify (Body bodyItems `Annot` a) =
     withNoBlockAnnot a . Body <$> traverse blockify bodyItems
 
 constructBlockified ::
@@ -435,19 +443,19 @@ constructBlockified constr a n = do
   return . withAnnot (withBlockAnnot (getBlockAnnot n') a) $ constr n'
 
 instance Blockify (Annot BodyItem) a b where
-  blockify (Annot (BodyStmt stmt) a) = constructBlockified BodyStmt a stmt
-  blockify (Annot (BodyDecl decl) a) = constructBlockified BodyDecl a decl
-  blockify (Annot (BodyStackDecl stackDecl) a) =
+  blockify (BodyStmt stmt `Annot` a) = constructBlockified BodyStmt a stmt
+  blockify (BodyDecl decl `Annot` a) = constructBlockified BodyDecl a decl
+  blockify (BodyStackDecl stackDecl `Annot` a) =
     constructBlockified BodyStackDecl a stackDecl
 
 instance Blockify (Annot StackDecl) a b where
-  blockify (Annot (StackDecl datums) a) =
+  blockify (StackDecl datums `Annot` a) =
     withNoBlockAnnot a . StackDecl <$> traverse blockify datums
 
 instance Blockify (Annot Decl) a b where
-  blockify (Annot (RegDecl invar regs) a) =
+  blockify (RegDecl invar regs `Annot` a) =
     constructBlockified (RegDecl invar) a regs
-  blockify (Annot (ImportDecl imports') a) =
+  blockify (ImportDecl imports' `Annot` a) =
     withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
   blockify decl@(Annot ConstDecl {} _) =
     storeSymbol constants "constant declaration" decl $> noBlockAnnots decl
@@ -458,7 +466,7 @@ instance Blockify (Annot Import) a b where
     storeSymbol imports "import" import' $> noBlockAnnots import'
 
 instance Blockify (Annot Registers) a b where
-  blockify regs@(Annot (Registers _ _ nameStrLits) _) =
+  blockify regs@(Registers _ _ nameStrLits `Annot` _) =
     traverse_ (storeRegister . fst) nameStrLits $> noBlockAnnots regs
 
 instance Blockify (Annot Formal) a b where
@@ -492,7 +500,7 @@ instance Blockify (Annot Stmt) a b where
     blockIsSet >>=
       (`when` registerError stmt "Fallthrough to a continuation is forbidden")
     blockifyLabelStmt stmt <* registerWrites stmt
-  blockify stmt@(Annot (GotoStmt expr _) _) = do
+  blockify stmt@(GotoStmt expr _ `Annot` _) = do
     case (getExprLVName expr, getTargetNames stmt) of
       (Nothing, Just targets@(_:_)) -> traverse_ addControlFlow targets
       (Just name, Just targets@(_:_)) ->
@@ -517,7 +525,7 @@ instance Blockify (Annot Stmt) a b where
     registerReadsWrites stmt *> addBlockAnnot stmt
   blockify stmt@(Annot PrimOpStmt {} _) -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
    = registerReadsWrites stmt *> addBlockAnnot stmt
-  blockify stmt@(Annot (IfStmt _ tBody mEBody) _) = do
+  blockify stmt@(IfStmt _ tBody mEBody `Annot` _) = do
     case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
       (Just left, Just (Just right)) -> do
         addControlFlow left
@@ -526,15 +534,15 @@ instance Blockify (Annot Stmt) a b where
         addControlFlow left
       _ -> flatteningError stmt
     addBlockAnnot stmt <* unsetBlock
-  blockify stmt@(Annot (SwitchStmt _ arms) _) = do
+  blockify stmt@(SwitchStmt _ arms `Annot` _) = do
     case traverse getTrivialGotoTarget arms of
       Just names -> traverse_ addControlFlow names
       Nothing -> flatteningError stmt
     addBlockAnnot stmt <* unsetBlock
-  blockify (Annot (SpanStmt key value body) a) =
+  blockify (SpanStmt key value body `Annot` a) =
     withNoBlockAnnot a . SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
     blockify body
-  blockify stmt@(Annot (CallStmt _ _ _ _ _ callAnnots) _) -- TODO: implement `cut to` statements
+  blockify stmt@(CallStmt _ _ _ _ _ callAnnots `Annot` _) -- TODO: implement `cut to` statements
    =
     registerReadsWrites stmt *> addBlockAnnot stmt <*
     when (neverReturns callAnnots) unsetBlock

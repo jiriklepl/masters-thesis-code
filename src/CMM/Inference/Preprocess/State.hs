@@ -19,7 +19,6 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
-import safe qualified CMM.AST.Annot as AST
 import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.Data.Tuple (complThd3)
 import safe CMM.Inference.BuiltIn (getConstType)
@@ -44,36 +43,15 @@ import safe CMM.Inference.TypeAnnot
   )
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
-  , emptyTypeHandle
-  , handleId
-  , initTypeHandle
+  , initTypeHandle, handleId
   )
 import safe CMM.Inference.TypeKind (TypeKind(Star))
 import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
-import safe qualified CMM.Parser.HasPos as AST
-
-class HasTypeHandle a where
-  getTypeHandle :: a -> TypeHandle
-
-getTypeHandleId :: HasTypeHandle a => a -> TypeVar
-getTypeHandleId = handleId . getTypeHandle
-
-instance HasTypeHandle (AST.SourcePos, TypeHandle) where
-  getTypeHandle = snd
-
-instance HasTypeHandle a => HasTypeHandle (AST.Annot n a) where
-  getTypeHandle = getTypeHandle . AST.takeAnnot
-
-class HasTypeHandle b =>
-      WithTypeHandle a b
-  | a -> b
-  , b -> a
-  where
-  withTypeHandle :: TypeHandle -> a -> b
-
-instance WithTypeHandle AST.SourcePos (AST.SourcePos, TypeHandle) where
-  withTypeHandle = flip (,)
+import safe CMM.Inference.Preprocess.HasTypeHandle ( getTypeHandleId )
+import CMM.Inference.Preprocess.TypeHole
+import CMM.Inference.Preprocess.HasTypeHole
+import GHC.Stack
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
 
@@ -112,9 +90,9 @@ initInferPreprocessor =
 
 data Context
   = GlobalCtx
-  | ClassCtx (Text, TypeHandle) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
-  | InstanceCtx (Text, TypeHandle) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
-  | FunctionCtx (Text, TypeHandle) TypeHandle
+  | ClassCtx (Text, TypeHole) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
+  | InstanceCtx (Text, TypeHole) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
+  | FunctionCtx (Text, TypeHole) TypeHandle
   -- | SectionCtx Text
 
 instance HasName Context where
@@ -123,24 +101,24 @@ instance HasName Context where
   getName (InstanceCtx (name, _) _ _) = name
   getName (FunctionCtx (name, _) _) = name
 
-instance HasTypeHandle Context where
-  getTypeHandle GlobalCtx = emptyTypeHandle
-  getTypeHandle (FunctionCtx (_, handle) _) = handle
-  getTypeHandle (ClassCtx (_, handle) _ _) = handle
-  getTypeHandle (InstanceCtx (_, handle) _ _) = handle
+instance HasTypeHole Context where
+  getTypeHole GlobalCtx = EmptyTypeHole
+  getTypeHole (FunctionCtx (_, handle) _) = handle
+  getTypeHole (ClassCtx (_, handle) _ _) = handle
+  getTypeHole (InstanceCtx (_, handle) _ _) = handle
 
 data ClassData =
   ClassData
-    { _classHandle :: TypeHandle
+    { _classHole :: TypeHole
     , _methodDecls :: Set Text
     }
 
-initClassData :: TypeHandle -> Set Text -> ClassData
+initClassData :: TypeHole -> Set Text -> ClassData
 initClassData handle decls =
-  ClassData {_classHandle = handle, _methodDecls = decls}
+  ClassData {_classHole = handle, _methodDecls = decls}
 
-noCurrentReturn :: TypeHandle
-noCurrentReturn = emptyTypeHandle
+noCurrentReturn :: TypeHole
+noCurrentReturn = EmptyTypeHole
 
 makeLenses ''InferPreprocessor
 
@@ -162,42 +140,42 @@ beginUnit vars fVars fIVars tCons tClasses sMems = do
   typeConstants <~ pure <$> declVars tCons
   classHandles <- declVars $ complThd3 <$> tClasses
   typeClasses .=
-    Map.intersectionWith ClassData classHandles ((^. _3) <$> tClasses)
+    Map.intersectionWith (ClassData . SimpleTypeHole) classHandles ((^. _3) <$> tClasses)
   structMembers <~ declVars sMems
 
 -- | returns `NoType` on failure
-lookupVar :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupVar :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupVar name = lookupVarImpl name <$> use variables
 
-lookupFVar :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupFVar :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupFVar name = lookupVarImpl name <$> uses funcVariables pure
 
-lookupFIVar :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupFIVar :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupFIVar name = do
   handle <- freshTypeHelper Star
   funcInstVariables %= Map.adjust (handle :) name
-  return handle
+  return $ SimpleTypeHole handle
 
-lookupFEVar :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupFEVar :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupFEVar name = lookupVarImpl name <$> uses funcElabVariables pure
 
-lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeHandle)
-lookupProc = uses variables . (. last) . Map.lookup
+lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeHole)
+lookupProc = uses variables . fmap (fmap SimpleTypeHole) .  (. last) . Map.lookup
 
-lookupTCon :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupTCon :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupTCon name = lookupVarImpl name <$> use typeConstants
 
-lookupTVar :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupTVar :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupTVar name = lookupVarImpl name <$> use typeVariables
 
-lookupClass :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupClass :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupClass name =
-  uses typeClasses $ maybe emptyTypeHandle (^. classHandle) .
+  uses typeClasses $ maybe EmptyTypeHole (^. classHole) .
   (name `Map.lookup`)
 
-lookupVarImpl :: Ord k => k -> [Map k TypeHandle] -> TypeHandle
+lookupVarImpl :: Ord k => k -> [Map k TypeHandle] -> TypeHole
 lookupVarImpl name vars =
-  fromMaybe emptyTypeHandle . foldr (<|>) Nothing $ (name `Map.lookup`) <$> vars
+  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $ (name `Map.lookup`) <$> vars
 
 storeVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeVar name handle = do
@@ -220,7 +198,7 @@ beginProc name vars tCons tVars = do
   typeVariables %= reverse . (tVars' :) . reverse
   pushFacts
   currentReturn <- freshTypeHelper Star
-  let returnId = handleId currentReturn
+  let returnId = getTypeHandleId currentReturn
   storeFact $ constExprConstraint returnId
   storeFact $ tVarId returnId `tupleKind` returnId
   handle <- lookupCtxFVar name
@@ -248,7 +226,7 @@ declVars ::
 declVars =
   Map.traverseWithKey (\name (pos, kind) -> freshNamedTypeHandle name pos kind)
 
-endProc :: MonadInferPreprocessor m => m (Facts, TypeHandle)
+endProc :: MonadInferPreprocessor m => m (Facts, TypeHole)
 endProc = do
   variables %= tail
   typeConstants %= tail
@@ -263,7 +241,7 @@ poppedGlobalCtxError =
   error
     "(internal) Inconsistent context; probable cause: popped global context."
 
-lookupCtxFVar :: MonadInferPreprocessor m => Text -> m TypeHandle
+lookupCtxFVar :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupCtxFVar name = use currentContext >>= go
   where
     go (GlobalCtx:_) = lookupFVar name
@@ -274,17 +252,17 @@ lookupCtxFVar name = use currentContext >>= go
       | otherwise = go others
     go [] = poppedGlobalCtxError
 
-getCurrentReturn :: MonadInferPreprocessor m => m TypeHandle
+getCurrentReturn :: MonadInferPreprocessor m => m TypeHole
 getCurrentReturn = uses currentContext (go . head)
   where
-    go (FunctionCtx _ handle) = handle
+    go (FunctionCtx _ handle) = SimpleTypeHole handle
     go _ = noCurrentReturn
 
 getCtxName :: MonadInferPreprocessor m => m Text
 getCtxName = uses currentContext (getName . head)
 
-getCtxHandle :: MonadInferPreprocessor m => m TypeHandle
-getCtxHandle = uses currentContext (getTypeHandle . head)
+getCtxHandle :: (MonadInferPreprocessor m, HasCallStack ) => m (Maybe TypeHandle)
+getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)
 
 getCtxClassConstraint :: MonadInferPreprocessor m => m (Text, Type)
 getCtxClassConstraint = uses currentContext go
@@ -298,14 +276,14 @@ getCtxClassConstraint = uses currentContext go
 storeProc ::
      ToType a
   => MonadInferPreprocessor m =>
-       Text -> Facts -> a -> m TypeHandle
+       Text -> Facts -> a -> m TypeHole
 storeProc name fs x = do
   tVars <- collectTVars
   uses currentContext head >>= \case
     GlobalCtx -> do
-      handle <- lookupFVar name
-      storeFact $ forall tVars [handleId handle `typeUnion` t] fs
-      return handle
+      hole <- lookupFVar name
+      storeFact $ forall tVars [holeId hole `typeUnion` t] fs
+      return hole
     ClassCtx _ classConstraint' _ ->
       storeElaboratedProc tVars $
       Fact (uncurry classConstraint classConstraint') :
@@ -314,13 +292,13 @@ storeProc name fs x = do
       storeElaboratedProc tVars $ Fact (uncurry classFact classConstraint') :
       (Fact . uncurry classFact <$> superConstraints) <>
       fs
-    FunctionCtx {} -> error "(internal) Illegal local function encountered."
+    FunctionCtx {} -> error "(internal) Illegal local function encountered." -- TODO: reword this (consolidate)
   where
     t = toType x
     storeElaboratedProc tVars facts' = do
-      handle <- lookupCtxFVar name
-      eHandle <- handleId <$> lookupFEVar name
-      iHandle <- handleId <$> freshTypeHelper Star
+      handle <- holeHandle <$> lookupCtxFVar name
+      eHandle <- holeHandle <$> lookupFEVar name
+      iHandle <- getTypeHandleId <$> freshTypeHelper Star
       classConstraint' <- getCtxClassConstraint
       let eType =
             makeFunction
@@ -328,18 +306,18 @@ storeProc name fs x = do
                 snd classConstraint'
               ]
               t
-          instFact = Fact $ eHandle `instType` iHandle
+          instFact = Fact $ handleId eHandle `instType` iHandle
           unionFact = Fact $ iHandle `typeUnion` eType
       uses currentContext head >>= \case
         ClassCtx {} -> do
-          storeFact $ forall tVars [eHandle `typeUnion` eType] facts'
+          storeFact $ forall tVars [getTypeHandleId eHandle `typeUnion` eType] facts'
           storeFact $
             forall tVars [handleId handle `typeUnion` t] [instFact, unionFact]
         _ ->
           storeFact . forall tVars [handleId handle `typeUnion` t] $ instFact :
           unionFact :
           facts'
-      return handle
+      return $ MethodTypeHole handle eHandle
 
 pushFacts :: MonadInferPreprocessor m => m ()
 pushFacts = facts %= ([] :)
@@ -356,11 +334,11 @@ popTypeVariables = do
 
 collectTVars :: MonadInferPreprocessor m => m (Set TypeVar)
 collectTVars =
-  uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
+  uses typeVariables (Set.fromList . (getTypeHandleId <$>) . Map.elems . Map.unions)
 
 pushClass ::
      MonadInferPreprocessor m
-  => (Text, TypeHandle)
+  => (Text, TypeHole)
   -> (Text, Type)
   -> [(Text, Type)]
   -> m ()
@@ -376,7 +354,7 @@ pushClass handle mainHandle supHandles -- TODO: solve type variables not in scop
 
 pushInstance ::
      MonadInferPreprocessor m
-  => (Text, TypeHandle)
+  => (Text, TypeHole)
   -> (Text, Type)
   -> [(Text, Type)]
   -> m ()
@@ -417,7 +395,7 @@ storeVarImpl ::
   -> [Map k TypeHandle]
   -> m ()
 storeVarImpl name handle vars =
-  storeFact $ handleId (lookupVarImpl name vars) `typeUnion` handle
+  storeFact $ holeId (lookupVarImpl name vars) `typeUnion` handle
 
 -- | Stores the given `fact` to the state monad
 class StoreFact a where
@@ -461,10 +439,10 @@ nextHandleCounter :: MonadInferPreprocessor m => m Int
 nextHandleCounter = handleCounter += 1 >> getHandleCounter
 
 freshTypeHandle ::
-     MonadInferPreprocessor m => TypeAnnot -> TypeKind -> m TypeHandle
+    MonadInferPreprocessor m => TypeAnnot -> TypeKind -> m TypeHandle
 freshTypeHandle annot tKind = do
-  parent <- handleId <$> getCtxHandle
-  initTypeHandle annot . (\int -> TypeVar int tKind parent) <$>
+  parent <- fmap handleId <$> getCtxHandle
+  initTypeHandle annot . (\int -> TypeVar int tKind $ fromMaybe noType parent) <$>
     nextHandleCounter
 
 storeCSymbol :: MonadInferPreprocessor m => Text -> m ()

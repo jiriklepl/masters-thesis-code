@@ -300,7 +300,6 @@ instance Pretty (Range a) where
 
 instance Pretty (LValue a) where
   pretty (LVName name) = pretty name
-  pretty (LVInst lValue) = pretty lValue
   pretty (LVRef type_ expr mAsserts) =
     pretty type_ <>
     brackets
@@ -393,7 +392,7 @@ instance Pretty StrLit where
 
 prettyCallStmtRest :: Stmt a -> Doc ann
 prettyCallStmtRest (CallStmt _ _ expr actuals mTargets flowOrAliases) =
-  pretty expr <> parens (commaPretty actuals) <+>
-  maybeSpacedR mTargets <> hsep (pretty <$> flowOrAliases) <> semi
+  pretty expr <> parens (commaPretty actuals) <>
+  maybeSpacedL mTargets <> ifTrue (not $ null flowOrAliases) space <> hsep (pretty <$> flowOrAliases) <> semi
 prettyCallStmtRest _ =
   error "`prettyCallStmtRest` is implemented only for call statements"

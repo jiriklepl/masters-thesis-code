@@ -295,12 +295,11 @@ instance ASTmapCTX1 hint a b Expr => ASTmap hint Range a b where
     \case
       Range a b -> liftA2 Range (f a) (traverse f b)
 
-instance (ASTmapCTX4 hint a b Asserts Expr LValue Type, Space hint a b Name) =>
+instance (ASTmapCTX3 hint a b Asserts Expr Type, Space hint a b Name) =>
          ASTmap hint LValue a b where
   astMapM _ f =
     \case
       LVName a -> LVName <$> f a
-      LVInst a -> LVInst <$> f a
       LVRef a b c -> liftA3 LVRef (f a) (f b) (traverse f c)
 
 instance ASTmapCTX1 hint a b Name => ASTmap hint Flow a b where

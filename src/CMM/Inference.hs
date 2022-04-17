@@ -56,7 +56,6 @@ import safe CMM.Inference.Fact
   , typeUnion
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.Preprocess.State (HasTypeHandle(getTypeHandle))
 import safe CMM.Inference.State
   ( Inferencer
   , MonadInferencer
@@ -105,10 +104,9 @@ import safe CMM.Inference.TypeCompl (PrimType, TypeCompl(..))
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
-  , handleId
   , initTypeHandle
   , kinding
-  , typing
+  , typing, handleId
   )
 import safe CMM.Inference.TypeKind (getTypeKind)
 import safe CMM.Inference.TypeVar
@@ -116,6 +114,8 @@ import safe CMM.Inference.TypeVar
   , predecessor
   )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
+import CMM.Inference.Preprocess.HasTypeHole
+import CMM.Inference.Preprocess.TypeHole (TypeHole(SimpleTypeHole, EmptyTypeHole, LVInstTypeHole, MethodTypeHole))
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -187,10 +187,14 @@ pushTyping handle handle' = do
               False -> fixSubs
       safeHandlizeUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
 
-mineAST :: (MonadInferencer m, HasTypeHandle a, Foldable n) => n a -> m ()
-mineAST = traverse_ (addHandle . getTypeHandle)
+mineAST :: (MonadInferencer m, HasTypeHole a, Foldable n) => n a -> m ()
+mineAST = traverse_ (addHandles . getTypeHole)
   where
     addHandle handle = handlize %= Bimap.insert (handleId handle) handle
+    addHandles EmptyTypeHole = return ()
+    addHandles (SimpleTypeHole handle) = addHandle handle
+    addHandles (LVInstTypeHole handle hole) = addHandle handle *> addHandles hole
+    addHandles (MethodTypeHole handle handle') = addHandle handle *> addHandle handle'
 
 fixClasses :: MonadInferencer m => m ()
 fixClasses = do
