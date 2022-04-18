@@ -2,19 +2,20 @@
 
 module Main where
 
-import Control.Monad.State as State
-    ( Monad(return, (>>=)),
-      void,
-      StateT(runStateT),
-      MonadIO(liftIO),
-      execStateT )
 import Control.Lens.Getter (view)
-import System.IO ( print, IO )
-import Data.Either ( Either(..), either )
-import Data.Monoid ( Monoid(mempty) )
-import Data.List ( head )
-import Data.Function ( ($), (.), id )
-import GHC.Err ( undefined )
+import Control.Monad.State as State
+  ( Monad((>>=), return)
+  , MonadIO(liftIO)
+  , StateT(runStateT)
+  , execStateT
+  , void
+  )
+import Data.Either (Either(..), either)
+import Data.Function (($), (.), id)
+import Data.List (head)
+import Data.Monoid (Monoid(mempty))
+import GHC.Err (undefined)
+import System.IO (IO, print)
 
 -- import qualified Data.Map as Map
 -- import Control.Lens
@@ -26,7 +27,6 @@ import Text.Megaparsec hiding (parse)
 
 -- import Data.Text.Lazy as T
 -- import Data.Text.Lazy.IO as T
-
 -- import LLVM.Pretty -- from the llvm-hs-pretty package
 -- import LLVM.IRBuilder.Module
 -- import LLVM.IRBuilder.Monad
@@ -42,6 +42,7 @@ import CMM.Inference.Preprocess as Infer
 import CMM.Inference.Preprocess.State as Infer
 import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.State as InferState
+
 -- import CMM.Inference.Type as Infer
 -- import CMM.Inference.TypeKind as Infer
 import CMM.Lexer

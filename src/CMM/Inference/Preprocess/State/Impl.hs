@@ -9,10 +9,10 @@ import safe Control.Lens.TH (makeLenses)
 import safe Data.Map
 import safe Data.Text
 
-import safe CMM.Inference.TypeHandle
-import safe CMM.Inference.Preprocess.ClassData
 import safe CMM.Inference.Fact
+import safe CMM.Inference.Preprocess.ClassData
 import safe CMM.Inference.Preprocess.Context
+import safe CMM.Inference.TypeHandle
 
 data InferPreprocessor =
   InferPreprocessor

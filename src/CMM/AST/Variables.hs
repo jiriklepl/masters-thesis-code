@@ -3,22 +3,22 @@
 
 module CMM.AST.Variables where
 
-import safe Data.Functor ( Functor((<$)), (<$>) )
-import safe Data.Maybe ( Maybe(Just, Nothing) )
-import safe Data.Foldable ( Foldable(foldr), traverse_ )
-import safe Data.List ( repeat )
-import safe Data.Function ( ($), (.), flip )
-import safe Data.Tuple ( fst )
-import safe Control.Applicative ( Applicative((<*), (*>)) )
+import safe Control.Applicative (Applicative((*>), (<*)))
 import safe Control.Lens.Getter ((^.))
-import safe Control.Monad ( Monad(return), zipWithM_)
+import safe Control.Monad (Monad(return), zipWithM_)
 import safe Control.Monad.State (MonadIO, StateT, execStateT)
 import safe Data.Data (Data(gmapM), Typeable)
+import safe Data.Foldable (Foldable(foldr), traverse_)
+import safe Data.Function (($), (.), flip)
+import safe Data.Functor (Functor((<$)), (<$>))
 import safe Data.Generics.Aliases (extM)
+import safe Data.List (repeat)
 import safe Data.Map (Map)
+import safe Data.Maybe (Maybe(Just, Nothing))
 import safe qualified Data.Set as Set
 import safe Data.Set (Set)
 import safe Data.Text (Text)
+import safe Data.Tuple (fst)
 
 import safe CMM.AST
   ( Class(Class)

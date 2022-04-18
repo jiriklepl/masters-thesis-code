@@ -4,10 +4,10 @@ module CMM.Inference.Preprocess.TypeHole where
 
 import safe Prelude
 
-import safe Data.Maybe ( fromMaybe )
+import safe Data.Maybe (fromMaybe)
 
-import safe CMM.Inference.TypeHandle ( TypeHandle, handleId )
-import safe CMM.Inference.TypeVar ( TypeVar )
+import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
+import safe CMM.Inference.TypeVar (TypeVar)
 
 data TypeHole
   = EmptyTypeHole
@@ -17,7 +17,8 @@ data TypeHole
 
 holeHandle :: TypeHole -> TypeHandle
 holeHandle = fromMaybe err . safeHoleHandle
-  where err = error "(Internal) implementations error" -- TODO
+  where
+    err = error "(Internal) implementations error" -- TODO
 
 safeHoleHandle :: TypeHole -> Maybe TypeHandle
 safeHoleHandle EmptyTypeHole = Nothing

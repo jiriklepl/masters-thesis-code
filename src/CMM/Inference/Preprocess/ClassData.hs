@@ -4,10 +4,10 @@
 module CMM.Inference.Preprocess.ClassData where
 
 import safe Control.Lens.TH (makeLenses)
-import safe Data.Set ( Set )
-import safe Data.Text ( Text )
+import safe Data.Set (Set)
+import safe Data.Text (Text)
 
-import safe CMM.Inference.Preprocess.TypeHole ( TypeHole )
+import safe CMM.Inference.Preprocess.TypeHole (TypeHole)
 
 data ClassData =
   ClassData

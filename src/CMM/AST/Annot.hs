@@ -3,13 +3,13 @@
 module CMM.AST.Annot where
 
 import safe Data.Data (Data)
-import safe Data.Functor (void, Functor (fmap))
-import safe Text.Show ( Show )
-import safe Data.Foldable ( Foldable )
-import safe Data.Traversable ( Traversable )
-import safe Data.Eq ( Eq )
-import safe Data.Ord ( Ord )
-import safe Data.Function ( (.), flip )
+import safe Data.Eq (Eq)
+import safe Data.Foldable (Foldable)
+import safe Data.Function ((.), flip)
+import safe Data.Functor (Functor(fmap), void)
+import safe Data.Ord (Ord)
+import safe Data.Traversable (Traversable)
+import safe Text.Show (Show)
 
 data Annotation node annot =
   Annot (node annot) annot

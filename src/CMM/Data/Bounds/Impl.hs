@@ -1,12 +1,16 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module CMM.Data.Bounds.Impl (Bounds(..), lowerBound, upperBound) where
+module CMM.Data.Bounds.Impl
+  ( Bounds(..)
+  , lowerBound
+  , upperBound
+  ) where
 
 import safe Prelude
 
-import safe Data.Data (Data)
 import safe Control.Lens.TH (makeLenses)
+import safe Data.Data (Data)
 
 data Bounds a =
   Bounds

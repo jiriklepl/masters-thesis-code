@@ -35,13 +35,13 @@ import safe CMM.AST
   , LValue(..)
   , Name
   , Procedure(..)
+  , ProcedureDecl(ProcedureDecl)
   , ProcedureHeader(ProcedureHeader)
   , Range(..)
   , Registers(..)
   , StackDecl(..)
   , Stmt(..)
   , Targets(..)
-  , ProcedureDecl (ProcedureDecl)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot)
 import safe CMM.AST.BlockAnnot

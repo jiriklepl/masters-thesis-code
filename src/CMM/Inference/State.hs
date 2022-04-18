@@ -1,6 +1,9 @@
 {-# LANGUAGE Safe #-}
 
-module CMM.Inference.State (module CMM.Inference.State.Impl, module CMM.Inference.State) where
+module CMM.Inference.State
+  ( module CMM.Inference.State.Impl
+  , module CMM.Inference.State
+  ) where
 
 import safe Prelude
 
@@ -14,6 +17,7 @@ import safe Data.Maybe (fromJust, fromMaybe)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 
+import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
@@ -30,7 +34,6 @@ import safe CMM.Inference.TypeHandle
   )
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(..))
-import safe qualified CMM.Data.Bimap as Bimap
 
 import safe CMM.Inference.State.Impl
 

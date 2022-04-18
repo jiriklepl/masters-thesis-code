@@ -2,7 +2,10 @@
 {-# LANGUAGE Rank2Types #-}
 
 -- TODO: reduce the number of "_2 %~ handleId"
-module CMM.Inference.Preprocess.State (module CMM.Inference.Preprocess.State, module CMM.Inference.Preprocess.State.Impl) where
+module CMM.Inference.Preprocess.State
+  ( module CMM.Inference.Preprocess.State
+  , module CMM.Inference.Preprocess.State.Impl
+  ) where
 
 import safe Prelude
 
@@ -37,27 +40,23 @@ import safe CMM.Inference.Fact
   , tupleKind
   , typeUnion
   )
+import safe CMM.Inference.Preprocess.ClassData
+import safe CMM.Inference.Preprocess.Context (Context(..))
+import safe CMM.Inference.Preprocess.HasTypeHandle (getTypeHandleId)
+import safe CMM.Inference.Preprocess.HasTypeHole
+import safe CMM.Inference.Preprocess.TypeHole
 import safe CMM.Inference.Type (ToType(..), Type(ComplType))
 import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
   )
-import safe CMM.Inference.TypeHandle
-  ( TypeHandle
-  , initTypeHandle, handleId
-  )
+import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeKind (TypeKind(Star))
 import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
-import safe CMM.Inference.Preprocess.HasTypeHandle ( getTypeHandleId )
-import safe CMM.Inference.Preprocess.TypeHole
-import safe CMM.Inference.Preprocess.HasTypeHole
-import safe CMM.Inference.Preprocess.ClassData
-import safe CMM.Inference.Preprocess.Context ( Context(..) )
 
 import safe CMM.Inference.Preprocess.State.Impl
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
-
 
 initInferPreprocessor :: InferPreprocessor
 initInferPreprocessor =
@@ -75,7 +74,6 @@ initInferPreprocessor =
     , _currentContext = [GlobalCtx]
     , _handleCounter = 0
     }
-
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
@@ -96,7 +94,10 @@ beginUnit vars fVars fIVars tCons tClasses sMems = do
   typeConstants <~ pure <$> declVars tCons
   classHandles <- declVars $ complThd3 <$> tClasses
   typeClasses .=
-    Map.intersectionWith (ClassData . SimpleTypeHole) classHandles ((^. _3) <$> tClasses)
+    Map.intersectionWith
+      (ClassData . SimpleTypeHole)
+      classHandles
+      ((^. _3) <$> tClasses)
   structMembers <~ declVars sMems
 
 -- | returns `NoType` on failure
@@ -116,7 +117,7 @@ lookupFEVar :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupFEVar name = lookupVarImpl name <$> uses funcElabVariables pure
 
 lookupProc :: MonadInferPreprocessor m => Text -> m (Maybe TypeHole)
-lookupProc = uses variables . fmap (fmap SimpleTypeHole) .  (. last) . Map.lookup
+lookupProc = uses variables . fmap (fmap SimpleTypeHole) . (. last) . Map.lookup
 
 lookupTCon :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupTCon name = lookupVarImpl name <$> use typeConstants
@@ -126,12 +127,12 @@ lookupTVar name = lookupVarImpl name <$> use typeVariables
 
 lookupClass :: MonadInferPreprocessor m => Text -> m TypeHole
 lookupClass name =
-  uses typeClasses $ maybe EmptyTypeHole (^. classHole) .
-  (name `Map.lookup`)
+  uses typeClasses $ maybe EmptyTypeHole (^. classHole) . (name `Map.lookup`)
 
 lookupVarImpl :: Ord k => k -> [Map k TypeHandle] -> TypeHole
 lookupVarImpl name vars =
-  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $ (name `Map.lookup`) <$> vars
+  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $ (name `Map.lookup`) <$>
+  vars
 
 storeVar :: MonadInferPreprocessor m => Text -> Type -> m ()
 storeVar name handle = do
@@ -267,13 +268,15 @@ storeProc name fs x = do
           unionFact = Fact $ iHandle `typeUnion` eType
       uses currentContext head >>= \case
         ClassCtx {} -> do
-          storeFact $ forall tVars [getTypeHandleId eHandle `typeUnion` eType] facts'
+          storeFact $
+            forall tVars [getTypeHandleId eHandle `typeUnion` eType] facts'
           storeFact $
             forall tVars [handleId handle `typeUnion` t] [instFact, unionFact]
           return $ SimpleTypeHole handle
         _ -> do
-          storeFact . forall tVars [handleId handle `typeUnion` t] $
-            instFact : unionFact : facts'
+          storeFact . forall tVars [handleId handle `typeUnion` t] $ instFact :
+            unionFact :
+            facts'
           return $ MethodTypeHole handle fHandle eHandle
 
 pushFacts :: MonadInferPreprocessor m => m ()
@@ -291,7 +294,9 @@ popTypeVariables = do
 
 collectTVars :: MonadInferPreprocessor m => m (Set TypeVar)
 collectTVars =
-  uses typeVariables (Set.fromList . (getTypeHandleId <$>) . Map.elems . Map.unions)
+  uses
+    typeVariables
+    (Set.fromList . (getTypeHandleId <$>) . Map.elems . Map.unions)
 
 pushClass ::
      MonadInferPreprocessor m
@@ -396,7 +401,7 @@ nextHandleCounter :: MonadInferPreprocessor m => m Int
 nextHandleCounter = handleCounter += 1 >> getHandleCounter
 
 freshTypeHandle ::
-    MonadInferPreprocessor m => TypeAnnot -> TypeKind -> m TypeHandle
+     MonadInferPreprocessor m => TypeAnnot -> TypeKind -> m TypeHandle
 freshTypeHandle annot tKind = do
   parent <- fmap handleId <$> getCtxHandle
   initTypeHandle annot . (\int -> TypeVar int tKind $ fromMaybe noType parent) <$>

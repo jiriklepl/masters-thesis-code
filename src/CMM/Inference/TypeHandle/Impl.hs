@@ -6,11 +6,11 @@ module CMM.Inference.TypeHandle.Impl where
 import safe Prelude
 
 import safe Control.Lens.TH (makeLenses)
-import safe Data.Data ( Data )
+import safe Data.Data (Data)
 
-import safe CMM.Inference.TypeVar ( TypeVar )
-import safe CMM.Inference.Type ( Type )
-import safe CMM.Inference.TypeAnnot ( TypeAnnot )
+import safe CMM.Inference.Type (Type)
+import safe CMM.Inference.TypeAnnot (TypeAnnot)
+import safe CMM.Inference.TypeVar (TypeVar)
 
 data TypeHandle =
   TypeHandle

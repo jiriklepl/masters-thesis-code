@@ -1,13 +1,16 @@
 {-# LANGUAGE Safe #-}
 
-module CMM.AST.Blockifier.State (module CMM.AST.Blockifier.State, module CMM.AST.Blockifier.State.Impl) where
+module CMM.AST.Blockifier.State
+  ( module CMM.AST.Blockifier.State
+  , module CMM.AST.Blockifier.State.Impl
+  ) where
 
 import safe Control.Lens.Setter ((+=), (.=))
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
+import safe Data.Maybe (Maybe(Nothing))
+import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
-import safe Data.Monoid ( Monoid(mempty) )
-import safe Data.Maybe ( Maybe(Nothing) )
 
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)

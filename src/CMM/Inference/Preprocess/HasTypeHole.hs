@@ -8,9 +8,9 @@ import safe Control.Lens.Getter (view)
 import safe Control.Lens.Tuple (_2)
 
 import safe CMM.AST.Annot (Annot, takeAnnot)
+import safe CMM.Inference.Preprocess.TypeHole (TypeHole, holeId)
+import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Parser.HasPos (SourcePos)
-import safe CMM.Inference.Preprocess.TypeHole ( TypeHole, holeId)
-import safe CMM.Inference.TypeVar ( TypeVar )
 
 class HasTypeHole a where
   getTypeHole :: a -> TypeHole

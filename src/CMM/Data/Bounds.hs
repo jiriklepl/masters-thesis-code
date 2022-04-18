@@ -1,7 +1,10 @@
 {-# LANGUAGE Safe #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module CMM.Data.Bounds (module CMM.Data.Bounds, module CMM.Data.Bounds.Impl) where
+module CMM.Data.Bounds
+  ( module CMM.Data.Bounds
+  , module CMM.Data.Bounds.Impl
+  ) where
 
 import safe Data.PartialOrd (PartialOrd((<=), (>), (>=)))
 import safe Prelude hiding (Ord(..))

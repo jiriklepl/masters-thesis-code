@@ -10,9 +10,9 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
+import safe CMM.AST as AST (Op)
 import safe CMM.Data.Bimap (Bimap)
 import safe qualified CMM.Data.Bimap as Bimap
-import safe CMM.AST as AST (Op)
 import safe CMM.Data.Ordered (Ordered(..))
 import safe CMM.Inference.DataKind (DataKind(DataKind, GenericData, Unstorable))
 import safe CMM.Inference.Fact
@@ -45,12 +45,10 @@ builtInKinds =
   ]
 
 getDataKind :: Text -> DataKind
-getDataKind name =
-  maybe mempty unOrdered $ name `Bimap.lookup` builtInKinds
+getDataKind name = maybe mempty unOrdered $ name `Bimap.lookup` builtInKinds
 
 translateDataKind :: DataKind -> Maybe Text
-translateDataKind name =
-  Ordered name `Bimap.lookupR` builtInKinds
+translateDataKind name = Ordered name `Bimap.lookupR` builtInKinds
 
 builtInRegisters :: Bimap Text Int
 builtInRegisters = Bimap.fromList $ zip [] [0 ..]

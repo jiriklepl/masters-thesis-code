@@ -5,10 +5,10 @@ module CMM.AST.Blockifier.State.Impl where
 
 import safe Prelude
 
+import safe Control.Lens.TH (makeLenses)
 import safe Data.Map (Map)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
-import safe Control.Lens.TH (makeLenses)
 
 import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
 

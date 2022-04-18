@@ -68,7 +68,8 @@ flattenerPrefix = "F"
 instance Flatten n => Flatten (Annot n) where
   flatten (Annot n a) = Annot (flatten n) a
 
-deriving instance {-# OVERLAPPABLE #-} FlattenTrivial n => Flatten n
+deriving instance {-# OVERLAPPABLE #-}
+         FlattenTrivial n => Flatten n
 
 instance Flatten Unit where
   flatten (Unit topLevels) = Unit $ flatten <$> topLevels

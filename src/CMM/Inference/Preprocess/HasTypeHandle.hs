@@ -4,9 +4,9 @@ module CMM.Inference.Preprocess.HasTypeHandle where
 
 import safe Prelude
 
-import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.AST.Annot (Annot, takeAnnot)
-import safe CMM.Inference.TypeVar ( TypeVar )
+import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
+import safe CMM.Inference.TypeVar (TypeVar)
 
 class HasTypeHandle a where
   getTypeHandle :: a -> TypeHandle

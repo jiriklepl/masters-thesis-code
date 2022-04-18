@@ -394,7 +394,10 @@ instance Pretty StrLit where
 
 prettyCallStmtRest :: Stmt a -> Doc ann
 prettyCallStmtRest (CallStmt _ _ expr actuals mTargets flowOrAliases) =
-  pretty expr <> parens (commaPretty actuals) <>
-  maybeSpacedL mTargets <> ifTrue (not $ null flowOrAliases) space <> hsep (pretty <$> flowOrAliases) <> semi
+  pretty expr <>
+  parens (commaPretty actuals) <>
+  maybeSpacedL mTargets <>
+  ifTrue (not $ null flowOrAliases) space <>
+  hsep (pretty <$> flowOrAliases) <> semi
 prettyCallStmtRest _ =
   error "`prettyCallStmtRest` is implemented only for call statements"

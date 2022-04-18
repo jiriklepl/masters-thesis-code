@@ -1,7 +1,10 @@
 {-# LANGUAGE Safe #-}
 
 -- TODO: make an alias for `Map Text (SourcePos, TypeKind)`
-module CMM.AST.Variables.State (module CMM.AST.Variables.State.Impl, module CMM.AST.Variables.State) where
+module CMM.AST.Variables.State
+  ( module CMM.AST.Variables.State.Impl
+  , module CMM.AST.Variables.State
+  ) where
 
 import safe Prelude
 
@@ -86,21 +89,13 @@ addTConTrivial ::
   -> m n
 addTConTrivial n tKind = n <$ addTCon n (getName n) tKind
 
-addTVar ::
-     (HasPos n, MonadCollectVariables m)
-  => n
-  -> Text
-  -> TypeKind
-  -> m ()
+addTVar :: (HasPos n, MonadCollectVariables m) => n -> Text -> TypeKind -> m ()
 addTVar node tVar tKind = do
   uses typeVariables (tVar `Map.member`) >>=
     flip unless (typeVariables %= Map.insert tVar (getPos node, tKind))
 
 addTVarTrivial ::
-     (HasPos n, HasName n, MonadCollectVariables m)
-  => n
-  -> TypeKind
-  -> m n
+     (HasPos n, HasName n, MonadCollectVariables m) => n -> TypeKind -> m n
 addTVarTrivial n tKind = n <$ addTVar n (getName n) tKind
 
 addFVar ::
@@ -158,19 +153,11 @@ addTClassTrivial ::
   -> m n
 addTClassTrivial n tKind methods = n <$ addTClass n (getName n) tKind methods
 
-addSMem ::
-     (HasPos n, MonadCollectVariables m)
-  => n
-  -> Text
-  -> TypeKind
-  -> m ()
+addSMem :: (HasPos n, MonadCollectVariables m) => n -> Text -> TypeKind -> m ()
 addSMem node tVar tKind = do
   uses structMembers (tVar `Map.member`) >>=
     flip unless (structMembers %= Map.insert tVar (getPos node, tKind))
 
 addSMemTrivial ::
-     (HasPos n, HasName n, MonadCollectVariables m)
-  => n
-  -> TypeKind
-  -> m n
+     (HasPos n, HasName n, MonadCollectVariables m) => n -> TypeKind -> m n
 addSMemTrivial n tKind = n <$ addSMem n (getName n) tKind

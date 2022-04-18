@@ -47,9 +47,14 @@ data Monomorphized n a =
   deriving (Show)
 
 monomorphized ::
-     Maybe (n a) -> PolyGenerate -> PolyGenerate -> PolySchemes a -> Monomorphized n a
+     Maybe (n a)
+  -> PolyGenerate
+  -> PolyGenerate
+  -> PolySchemes a
+  -> Monomorphized n a
 monomorphized n m gen s =
-  Monomorphized {_node = n, _polyGenerate = gen, _polyMethods = m, _polySchemes = s}
+  Monomorphized
+    {_node = n, _polyGenerate = gen, _polyMethods = m, _polySchemes = s}
 
 monomorphizedTrivial :: Maybe (n a) -> Monomorphized n a
 monomorphizedTrivial n = monomorphized n mempty mempty mempty
@@ -87,14 +92,11 @@ unNode = withMaybeNode Nothing
 unPolyGenerate :: Monomorphized n a -> Monomorphized n a
 unPolyGenerate = polyGenerate .~ mempty
 
-foldGetSchemes ::
-     (Foldable f) => f (Monomorphized n a) -> PolySchemes a
+foldGetSchemes :: Foldable f => f (Monomorphized n a) -> PolySchemes a
 foldGetSchemes = foldMap $ view polySchemes
 
-foldGetGenerate ::
-     (Foldable f) => f (Monomorphized n a) -> PolyGenerate
+foldGetGenerate :: Foldable f => f (Monomorphized n a) -> PolyGenerate
 foldGetGenerate = foldMap $ view polyGenerate
 
-foldGetMethods ::
-     (Foldable f) => f (Monomorphized n a) -> PolyGenerate
+foldGetMethods :: Foldable f => f (Monomorphized n a) -> PolyGenerate
 foldGetMethods = foldMap $ view polyMethods

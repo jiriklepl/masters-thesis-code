@@ -4,15 +4,13 @@ module CMM.Inference.Preprocess.Context where
 
 import safe Prelude
 
-import safe Data.Text ( Text )
+import safe Data.Text (Text)
 
-import safe CMM.Inference.Preprocess.TypeHole
-    ( TypeHole(EmptyTypeHole) )
-import safe CMM.Inference.Type ( Type )
-import safe CMM.Inference.TypeHandle ( TypeHandle )
-import safe CMM.Inference.Preprocess.HasTypeHole
-    ( HasTypeHole(..) )
-import safe CMM.AST.HasName ( HasName(..) )
+import safe CMM.AST.HasName (HasName(..))
+import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(..))
+import safe CMM.Inference.Preprocess.TypeHole (TypeHole(EmptyTypeHole))
+import safe CMM.Inference.Type (Type)
+import safe CMM.Inference.TypeHandle (TypeHandle)
 
 data Context
   = GlobalCtx

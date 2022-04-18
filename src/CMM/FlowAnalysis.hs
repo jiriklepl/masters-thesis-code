@@ -6,24 +6,24 @@ module CMM.FlowAnalysis
 
 import safe Prelude ((-))
 
-import safe Data.Bool ( Bool(False), (&&), not, (||) )
-import safe Control.Applicative ( (<$), (<*>), (<$>) )
-import safe Data.Function ( ($), (.), flip )
-import safe Control.Monad ( return, fmap, unless )
-import safe Data.Foldable ( null, or )
-import safe Data.Eq ( (/=) )
-import safe Data.Monoid ( (<>), mempty )
-import safe Data.Traversable ( traverse )
+import safe Control.Applicative ((<$), (<$>), (<*>))
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((.=))
 import safe Control.Lens.Tuple (_3)
-import safe Data.Int ( Int )
+import safe Control.Monad (fmap, return, unless)
+import safe Data.Bool (Bool(False), (&&), (||), not)
+import safe Data.Eq ((/=))
+import safe Data.Foldable (null, or)
+import safe Data.Function (($), (.), flip)
 import safe qualified Data.Graph as Graph
-import safe Data.List (elemIndex, sortOn, zip, filter, zipWith)
+import safe Data.Int (Int)
+import safe Data.List (elemIndex, filter, sortOn, zip, zipWith)
 import safe qualified Data.Map as Map
+import safe Data.Monoid ((<>), mempty)
 import safe qualified Data.Set as Set
 import safe qualified Data.Text as T
-import safe Data.Tuple (swap, fst)
+import safe Data.Traversable (traverse)
+import safe Data.Tuple (fst, swap)
 
 import safe CMM.AST (Procedure)
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
