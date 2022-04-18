@@ -2,6 +2,8 @@
 
 module CMM.Control.Applicative where
 
+import safe Prelude
+
 import safe Control.Applicative (Applicative(liftA2), liftA3)
 
 liftA4 ::

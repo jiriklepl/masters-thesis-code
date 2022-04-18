@@ -1,7 +1,10 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module CMM.AST.Flattener where
+
+import safe Prelude
 
 import safe Control.Applicative (liftA2)
 import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
@@ -50,6 +53,7 @@ import safe CMM.Utils (addPrefix)
 
 class Flatten n where
   flatten :: n a -> n a
+  flatten = id
 
 class Functor n =>
       FlattenTrivial n
@@ -61,11 +65,10 @@ helperName = Name . addPrefix flattenerPrefix . T.pack
 flattenerPrefix :: Text
 flattenerPrefix = "F"
 
-instance {-# OVERLAPPING #-} Flatten n => Flatten (Annot n) where
+instance Flatten n => Flatten (Annot n) where
   flatten (Annot n a) = Annot (flatten n) a
 
-instance {-# OVERLAPPABLE #-} FlattenTrivial n => Flatten n where
-  flatten = id
+deriving instance {-# OVERLAPPABLE #-} FlattenTrivial n => Flatten n
 
 instance Flatten Unit where
   flatten (Unit topLevels) = Unit $ flatten <$> topLevels

@@ -2,6 +2,8 @@
 
 module CMM.Data.Nullable where
 
+import safe Prelude
+
 infixr 5 ??
 
 class Fallbackable a where

@@ -3,6 +3,8 @@
 
 module CMM.Lens where
 
+import safe Prelude
+
 import safe Control.Lens.Getter (use)
 import safe Control.Lens.Setter ((.=))
 import safe Control.Lens.Type (Lens)

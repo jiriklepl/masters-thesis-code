@@ -2,6 +2,8 @@
 
 module CMM.AST.BlockAnnot where
 
+import safe Prelude
+
 import safe Data.Data (Data)
 import safe Data.Map (Map)
 import safe Data.Text (Text)

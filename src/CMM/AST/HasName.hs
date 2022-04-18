@@ -2,6 +2,8 @@
 
 module CMM.AST.HasName where
 
+import safe Prelude
+
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 

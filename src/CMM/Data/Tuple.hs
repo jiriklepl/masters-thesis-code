@@ -2,6 +2,8 @@
 
 module CMM.Data.Tuple where
 
+import safe Prelude
+
 uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (a, b, c) = f a b c
 

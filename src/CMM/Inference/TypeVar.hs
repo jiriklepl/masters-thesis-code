@@ -2,6 +2,8 @@
 
 module CMM.Inference.TypeVar where
 
+import safe Prelude
+
 import safe Data.Data (Data)
 
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))

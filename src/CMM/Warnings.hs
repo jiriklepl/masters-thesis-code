@@ -2,6 +2,8 @@
 
 module CMM.Warnings where
 
+import safe Prelude
+
 import safe Control.Monad.IO.Class (MonadIO(..))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T

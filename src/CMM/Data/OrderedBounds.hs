@@ -6,6 +6,8 @@ module CMM.Data.OrderedBounds
   (
   ) where
 
+import safe Prelude
+
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 

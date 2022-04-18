@@ -2,6 +2,8 @@
 
 module CMM.Parser where
 
+import safe Prelude
+
 import safe Control.Applicative ((<**>), liftA2, liftA3)
 import safe Data.Functor (($>))
 import safe Data.Maybe (fromMaybe)

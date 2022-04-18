@@ -1,9 +1,20 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE Safe #-}
 
 module Main where
 
 import Control.Monad.State as State
+    ( Monad(return, (>>=)),
+      void,
+      StateT(runStateT),
+      MonadIO(liftIO),
+      execStateT )
+import Control.Lens.Getter (view)
+import System.IO ( print, IO )
+import Data.Either ( Either(..), either )
+import Data.Monoid ( Monoid(mempty) )
+import Data.List ( head )
+import Data.Function ( ($), (.), id )
+import GHC.Err ( undefined )
 
 -- import qualified Data.Map as Map
 -- import Control.Lens
@@ -38,7 +49,6 @@ import CMM.Monomorphize (Monomorphize(monomorphize))
 import CMM.Monomorphize.Monomorphized as Infer
 import CMM.Parser
 import CMM.Pretty ()
-import Control.Lens.Getter (view)
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -70,15 +80,15 @@ main = do
   inferencer <-
     (`execStateT` InferState.initInferencer
                     (CMM.Inference.Preprocess.State._handleCounter miner)) $ do
-      let fs = Prelude.head $ CMM.Inference.Preprocess.State._facts miner
+      let fs = head $ CMM.Inference.Preprocess.State._facts miner
       mineAST mined
       -- liftIO $ print fs
-      reduce fs
+      void $ reduce fs
       monomorphize mempty mined >>= \case
         Left what -> liftIO $ print what
         Right mined' -> liftIO . print . pretty $ view Infer.node mined'
   -- liftIO $ print inferencer
-  return ()
+  void $ return inferencer
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a
 parse parser = runParser parser "stdin"

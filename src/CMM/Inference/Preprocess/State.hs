@@ -1,14 +1,14 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE Rank2Types #-}
 
-module CMM.Inference.Preprocess.State where
-
 -- TODO: reduce the number of "_2 %~ handleId"
+module CMM.Inference.Preprocess.State (module CMM.Inference.Preprocess.State, module CMM.Inference.Preprocess.State.Impl) where
+
+import safe Prelude
+
 import safe Control.Applicative ((<|>))
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((%=), (+=), (.=), (<~))
-import safe Control.Lens.TH (makeLenses)
 import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad.State.Lazy (MonadState)
@@ -49,27 +49,15 @@ import safe CMM.Inference.TypeKind (TypeKind(Star))
 import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 import safe CMM.Inference.Preprocess.HasTypeHandle ( getTypeHandleId )
-import CMM.Inference.Preprocess.TypeHole
-import CMM.Inference.Preprocess.HasTypeHole
-import GHC.Stack
+import safe CMM.Inference.Preprocess.TypeHole
+import safe CMM.Inference.Preprocess.HasTypeHole
+import safe CMM.Inference.Preprocess.ClassData
+import safe CMM.Inference.Preprocess.Context ( Context(..) )
+
+import safe CMM.Inference.Preprocess.State.Impl
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
 
-data InferPreprocessor =
-  InferPreprocessor
-    { _variables :: [Map Text TypeHandle]
-    , _funcVariables :: Map Text TypeHandle
-    , _funcInstVariables :: Map Text [TypeHandle]
-    , _funcElabVariables :: Map Text TypeHandle
-    , _typeConstants :: [Map Text TypeHandle]
-    , _typeVariables :: [Map Text TypeHandle]
-    , _typeClasses :: Map Text ClassData
-    , _structMembers :: Map Text TypeHandle
-    , _facts :: [Facts]
-    , _cSymbols :: [Text]
-    , _currentContext :: [Context]
-    , _handleCounter :: Int
-    }
 
 initInferPreprocessor :: InferPreprocessor
 initInferPreprocessor =
@@ -88,41 +76,9 @@ initInferPreprocessor =
     , _handleCounter = 0
     }
 
-data Context
-  = GlobalCtx
-  | ClassCtx (Text, TypeHole) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
-  | InstanceCtx (Text, TypeHole) (Text, Type) [(Text, Type)] -- className, classHandle, superClassHandles
-  | FunctionCtx (Text, TypeHole) TypeHandle
-  -- | SectionCtx Text
-
-instance HasName Context where
-  getName GlobalCtx = undefined -- error
-  getName (ClassCtx (name, _) _ _) = name
-  getName (InstanceCtx (name, _) _ _) = name
-  getName (FunctionCtx (name, _) _) = name
-
-instance HasTypeHole Context where
-  getTypeHole GlobalCtx = EmptyTypeHole
-  getTypeHole (FunctionCtx (_, handle) _) = handle
-  getTypeHole (ClassCtx (_, handle) _ _) = handle
-  getTypeHole (InstanceCtx (_, handle) _ _) = handle
-
-data ClassData =
-  ClassData
-    { _classHole :: TypeHole
-    , _methodDecls :: Set Text
-    }
-
-initClassData :: TypeHole -> Set Text -> ClassData
-initClassData handle decls =
-  ClassData {_classHole = handle, _methodDecls = decls}
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
-
-makeLenses ''InferPreprocessor
-
-makeLenses ''ClassData
 
 beginUnit ::
      MonadInferPreprocessor m
@@ -261,7 +217,7 @@ getCurrentReturn = uses currentContext (go . head)
 getCtxName :: MonadInferPreprocessor m => m Text
 getCtxName = uses currentContext (getName . head)
 
-getCtxHandle :: (MonadInferPreprocessor m, HasCallStack ) => m (Maybe TypeHandle)
+getCtxHandle :: MonadInferPreprocessor m => m (Maybe TypeHandle)
 getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)
 
 getCtxClassConstraint :: MonadInferPreprocessor m => m (Text, Type)
@@ -297,6 +253,7 @@ storeProc name fs x = do
     t = toType x
     storeElaboratedProc tVars facts' = do
       handle <- holeHandle <$> lookupCtxFVar name
+      fHandle <- holeHandle <$> lookupFVar name
       eHandle <- holeHandle <$> lookupFEVar name
       iHandle <- getTypeHandleId <$> freshTypeHelper Star
       classConstraint' <- getCtxClassConstraint
@@ -313,11 +270,11 @@ storeProc name fs x = do
           storeFact $ forall tVars [getTypeHandleId eHandle `typeUnion` eType] facts'
           storeFact $
             forall tVars [handleId handle `typeUnion` t] [instFact, unionFact]
-        _ ->
-          storeFact . forall tVars [handleId handle `typeUnion` t] $ instFact :
-          unionFact :
-          facts'
-      return $ MethodTypeHole handle eHandle
+          return $ SimpleTypeHole handle
+        _ -> do
+          storeFact . forall tVars [handleId handle `typeUnion` t] $
+            instFact : unionFact : facts'
+          return $ MethodTypeHole handle fHandle eHandle
 
 pushFacts :: MonadInferPreprocessor m => m ()
 pushFacts = facts %= ([] :)

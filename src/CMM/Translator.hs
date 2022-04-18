@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# OPTIONS_GHC -w #-}
 
 {-|
 Module      : CMM.Translator
@@ -10,6 +11,8 @@ This module follows the `CMM.AST.LRAnalysis` module and translates the AST using
 There is no AST-aware module that would follow this module.
 -}
 module CMM.Translator where
+
+import safe Prelude
 
 import safe Control.Applicative
 import safe Control.Monad.State.Lazy

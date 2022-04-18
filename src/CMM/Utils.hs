@@ -2,6 +2,8 @@
 
 module CMM.Utils where
 
+import safe Prelude
+
 import safe Control.Monad (unless, when)
 import safe Data.Maybe (isJust)
 import safe Data.String (IsString)

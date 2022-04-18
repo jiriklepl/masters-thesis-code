@@ -1,25 +1,14 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE Safe #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module CMM.Data.Bounds where
+module CMM.Data.Bounds (module CMM.Data.Bounds, module CMM.Data.Bounds.Impl) where
 
-import safe Control.Lens.TH (makeLenses)
-import safe Data.Data (Data)
 import safe Data.PartialOrd (PartialOrd((<=), (>), (>=)))
 import safe Prelude hiding (Ord(..))
-import safe Prelude (Ord)
 
 import safe CMM.Data.Lattice (Lattice(..), join, meet)
 
-data Bounds a =
-  Bounds
-    { _lowerBound :: a
-    , _upperBound :: a
-    }
-  deriving (Show, Eq, Ord, Functor, Data)
-
-makeLenses ''Bounds
+import safe CMM.Data.Bounds.Impl
 
 instance Lattice a => Semigroup (Bounds a) where
   Bounds low high <> Bounds low' high' = join low low' `Bounds` meet high high'
@@ -30,13 +19,13 @@ instance (Lattice a, Bounded a) => Monoid (Bounds a) where
 absurdBounds :: Bounded a => Bounds a
 absurdBounds = maxBound `Bounds` minBound
 
-isTrivial :: (PartialOrd a, Eq a) => Bounds a -> Bool
+isTrivial :: Eq a => Bounds a -> Bool
 isTrivial (Bounds low high) = low == high
 
 isAbsurd :: PartialOrd a => Bounds a -> Bool
 isAbsurd (Bounds low high) = low > high
 
-isTrivialOrAbsurd :: (PartialOrd a, Eq a) => Bounds a -> Bool
+isTrivialOrAbsurd :: PartialOrd a => Bounds a -> Bool
 isTrivialOrAbsurd (Bounds low high) = low >= high
 
 normalizeAbsurd :: (PartialOrd a, Bounded a) => Bounds a -> Bounds a

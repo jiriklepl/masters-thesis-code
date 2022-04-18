@@ -5,6 +5,8 @@ module CMM.Pretty
   (
   ) where
 
+import safe Prelude
+
 import safe Prettyprinter
   ( Doc
   , Pretty(pretty)

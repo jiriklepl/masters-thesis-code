@@ -1,21 +1,29 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module CMM.FlowAnalysis
   ( analyzeFlow
   ) where
 
+import safe Prelude ((-))
+
+import safe Data.Bool ( Bool(False), (&&), not, (||) )
+import safe Control.Applicative ( (<$), (<*>), (<$>) )
+import safe Data.Function ( ($), (.), flip )
+import safe Control.Monad ( return, fmap, unless )
+import safe Data.Foldable ( null, or )
+import safe Data.Eq ( (/=) )
+import safe Data.Monoid ( (<>), mempty )
+import safe Data.Traversable ( traverse )
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((.=))
 import safe Control.Lens.Tuple (_3)
-import safe Control.Monad.State.Lazy (unless)
+import safe Data.Int ( Int )
 import safe qualified Data.Graph as Graph
-import safe Data.List (elemIndex, sortOn)
+import safe Data.List (elemIndex, sortOn, zip, filter, zipWith)
 import safe qualified Data.Map as Map
 import safe qualified Data.Set as Set
 import safe qualified Data.Text as T
-import safe Data.Tuple (swap)
-import safe Prelude hiding (reads)
+import safe Data.Tuple (swap, fst)
 
 import safe CMM.AST (Procedure)
 import safe CMM.AST.Annot (Annot, Annotation(Annot))

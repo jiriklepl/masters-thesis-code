@@ -2,6 +2,8 @@
 
 module CMM.Inference.DataKind where
 
+import safe Prelude
+
 import safe Data.Data (Data)
 import safe Data.PartialOrd (PartialOrd)
 import safe qualified Data.PartialOrd as PartialOrd

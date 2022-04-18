@@ -2,6 +2,8 @@
 
 module CMM.Inference.Preprocess.HasTypeHole where
 
+import safe Prelude
+
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Tuple (_2)
 

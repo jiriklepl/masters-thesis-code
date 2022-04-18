@@ -2,6 +2,8 @@
 
 module CMM.Inference.Unify where
 
+import safe Prelude
+
 import safe Control.Lens ((%~))
 import safe Control.Lens.Tuple (_1, _2)
 import safe qualified Data.Map as Map

@@ -3,6 +3,8 @@
 
 module CMM.Data.Dioid where
 
+import safe Prelude
+
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
 import safe Data.Monoid (All(All), Any(Any))

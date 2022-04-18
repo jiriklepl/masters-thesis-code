@@ -1,6 +1,9 @@
 {-# LANGUAGE Safe #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module CMM.AST.Utils where
+
+import safe Prelude
 
 import safe Data.List (foldl')
 import safe Data.Text (Text)

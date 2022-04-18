@@ -2,6 +2,8 @@
 
 module CMM.Inference.TypeAnnot where
 
+import safe Prelude
+
 import safe Data.Data (Data)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set

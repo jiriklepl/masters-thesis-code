@@ -1,34 +1,60 @@
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE Rank2Types #-}
 
 -- TODO: add the overlap check for instances
 module CMM.Inference where
 
-import safe Control.Applicative (Applicative(liftA2))
+import Prelude (Bounded (minBound, maxBound), Num ((+)))
+
+import safe Data.Either ( Either(Right, Left) )
+import safe Data.Bool ( otherwise, Bool(..), (&&), not, (||) )
+import safe Data.Ord ( Ord((>), (<)) )
+import safe Data.Semigroup ( Semigroup((<>)) )
+import safe Data.Eq ( Eq(..) )
+import safe Data.Int ( Int )
+import safe Data.Function ( ($), (.), flip, id )
+import safe Data.List
+    ( filter,
+      zip,
+      foldr,
+      foldl,
+      null,
+      all,
+      any,
+      concat,
+      or,
+      head,
+      unzip,
+      partition )
+import safe Data.Monoid ( Monoid(mempty, mconcat, mappend) )
+import safe Data.Functor
+    ( Functor(fmap, (<$)), (<$>), void, ($>), (<&>) )
+import safe Data.Tuple ( snd, uncurry, swap )
+import safe GHC.Err (undefined)
+import safe Control.Monad
+    ( Monad(return, (>>=)), sequence, when )
+import safe Data.Traversable ( Traversable(traverse) )
+import safe Control.Applicative (Applicative(liftA2, (*>), pure, (<*>), (<*)))
 import safe Control.Lens (Lens')
 import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~), (<>=))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Monad.State.Lazy (MonadState, void, when)
-import qualified Data.Bimap as Bimap
+import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Data (Data(gmapT))
-import safe Data.Foldable (for_, traverse_)
-import safe Data.Functor (($>), (<&>))
+import safe Data.Foldable (for_, traverse_, Foldable)
 import safe Data.Generics.Aliases (extT)
 import safe Data.Graph (SCC(AcyclicSCC, CyclicSCC), stronglyConnCompR)
 import safe qualified Data.Graph as Graph
-import safe Data.List (partition)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (fromMaybe)
+import safe Data.Maybe (fromMaybe, Maybe (Just, Nothing), maybe)
 import safe Data.PartialOrd (PartialOrd)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Tuple (swap)
-import safe Prelude hiding (const)
 
+import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounds
   ( Bounds(Bounds)
   , isTrivialOrAbsurd
@@ -114,8 +140,9 @@ import safe CMM.Inference.TypeVar
   , predecessor
   )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
-import CMM.Inference.Preprocess.HasTypeHole
-import CMM.Inference.Preprocess.TypeHole (TypeHole(SimpleTypeHole, EmptyTypeHole, LVInstTypeHole, MethodTypeHole))
+import safe CMM.Inference.Preprocess.HasTypeHole
+    ( HasTypeHole(..) )
+import safe CMM.Inference.Preprocess.TypeHole (TypeHole(SimpleTypeHole, EmptyTypeHole, LVInstTypeHole, MethodTypeHole))
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -194,7 +221,7 @@ mineAST = traverse_ (addHandles . getTypeHole)
     addHandles EmptyTypeHole = return ()
     addHandles (SimpleTypeHole handle) = addHandle handle
     addHandles (LVInstTypeHole handle hole) = addHandle handle *> addHandles hole
-    addHandles (MethodTypeHole handle handle') = addHandle handle *> addHandle handle'
+    addHandles (MethodTypeHole handle handle' handle'') = addHandle handle *> addHandle handle' *> addHandle handle''
 
 fixClasses :: MonadInferencer m => m ()
 fixClasses = do
@@ -948,5 +975,5 @@ boundsUnifs which = do
     go (_:rest) subst = go rest subst
     go [] subst = subst
 
-registerKind :: MonadInferencer m => Text -> m DataKind
+registerKind :: Text -> m DataKind
 registerKind = undefined

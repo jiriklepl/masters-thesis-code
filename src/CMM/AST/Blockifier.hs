@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE Rank2Types #-}

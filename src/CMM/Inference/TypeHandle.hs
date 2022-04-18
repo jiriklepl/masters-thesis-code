@@ -1,51 +1,40 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE Safe #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
-module CMM.Inference.TypeHandle where
+module CMM.Inference.TypeHandle (module CMM.Inference.TypeHandle, module CMM.Inference.TypeHandle.Impl) where
 
-import safe Control.Lens.TH (makeLenses)
-import safe Data.Data (Data)
+import safe Prelude
 
 import safe CMM.Inference.Type (Type(VarType))
 import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.TypeVar (TypeVar)
 
-data TypeHandle =
-  TypeHandle
-    { _identifier :: TypeVar
-    , _typing :: Type
-    , _consting :: TypeVar
-    , _kinding :: TypeVar
-    , _annot :: TypeAnnot
-    }
-  deriving (Show, Data)
+import safe CMM.Inference.TypeHandle.Impl
 
 instance Eq TypeHandle where
-  TypeHandle {_typing = typing, _consting = consting, _kinding = kinding} == TypeHandle { _typing = typing'
-                                                                                        , _consting = consting'
-                                                                                        , _kinding = kinding'
+  TypeHandle {_typing = t, _consting = c, _kinding = k} == TypeHandle { _typing = t'
+                                                                                        , _consting = c'
+                                                                                        , _kinding = k'
                                                                                         } =
-    typing == typing' && consting == consting' && kinding == kinding'
+    t == t' && c == c' && k == k'
 
 instance Ord TypeHandle where
-  TypeHandle {_typing = typing, _consting = consting, _kinding = kinding} `compare` TypeHandle { _typing = typing'
-                                                                                               , _consting = consting'
-                                                                                               , _kinding = kinding'
+  TypeHandle {_typing = t, _consting = c, _kinding = k} `compare` TypeHandle { _typing = t'
+                                                                                               , _consting = c'
+                                                                                               , _kinding = k'
                                                                                                } =
-    compare typing typing' <>
-    compare consting consting' <> compare kinding kinding'
+    compare t t' <>
+    compare c c' <> compare k k'
 
 initTypeHandle :: TypeAnnot -> TypeVar -> TypeHandle
-initTypeHandle annot tVar =
+initTypeHandle annotation tVar =
   TypeHandle
     { _identifier = tVar
     , _typing = VarType tVar
     , _consting = tVar
     , _kinding = tVar
-    , _annot = annot
+    , _annot = annotation
     }
 
 handleId :: TypeHandle -> TypeVar
 handleId = _identifier
-
-$(makeLenses ''TypeHandle)

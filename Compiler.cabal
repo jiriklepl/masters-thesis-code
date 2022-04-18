@@ -25,6 +25,7 @@ common common-options
                        FunctionalDependencies
                        KindSignatures
                        LambdaCase
+                       NoImplicitPrelude
                        OverloadedStrings
                        ScopedTypeVariables
                        StandaloneDeriving
@@ -33,6 +34,15 @@ common common-options
                        TypeOperators
   default-language:    Haskell2010
   ghc-options:         -Wall
+                       -Wcompat
+                       -Wcpp-undef
+                       -Wextra
+                       -Widentities
+                       -Wimplicit-prelude
+                       -Wmissing-import-lists
+                       -Wredundant-constraints
+                       -Wsafe
+                       -Wunused-packages
   build-depends:       base >= 4.13 && < 4.17,
                        containers ^>=0.6.4.1,
                        megaparsec ^>=9.0.1,
@@ -46,6 +56,7 @@ executable Compiler
                        CMM.AST.Annot,
                        CMM.AST.Blockifier,
                        CMM.AST.Blockifier.State,
+                       CMM.AST.Blockifier.State.Impl,
                        CMM.AST.BlockAnnot,
                        CMM.AST.Flattener,
                        CMM.AST.HasName,
@@ -53,10 +64,14 @@ executable Compiler
                        CMM.AST.Utils,
                        CMM.AST.Variables,
                        CMM.AST.Variables.State,
+                       CMM.AST.Variables.State.Impl,
                        CMM.Control.Applicative,
                        CMM.Control.Monad,
+                       CMM.Data.Bimap,
                        CMM.Data.Bounds,
+                       CMM.Data.Bounds.Impl,
                        CMM.Data.Dioid,
+                       CMM.Data.Either,
                        CMM.Data.Function,
                        CMM.Data.Lattice,
                        CMM.Data.Nullable,
@@ -71,16 +86,21 @@ executable Compiler
                        CMM.Inference.Fact,
                        CMM.Inference.FreeTypeVars,
                        CMM.Inference.Preprocess,
+                       CMM.Inference.Preprocess.ClassData,
+                       CMM.Inference.Preprocess.Context,
                        CMM.Inference.Preprocess.HasTypeHandle,
                        CMM.Inference.Preprocess.HasTypeHole,
                        CMM.Inference.Preprocess.TypeHole,
                        CMM.Inference.Preprocess.State,
+                       CMM.Inference.Preprocess.State.Impl,
                        CMM.Inference.State,
+                       CMM.Inference.State.Impl,
                        CMM.Inference.Subst,
                        CMM.Inference.Type,
                        CMM.Inference.TypeAnnot,
                        CMM.Inference.TypeCompl,
                        CMM.Inference.TypeHandle,
+                       CMM.Inference.TypeHandle.Impl,
                        CMM.Inference.TypeKind,
                        CMM.Inference.TypeVar,
                        CMM.Inference.Unify,

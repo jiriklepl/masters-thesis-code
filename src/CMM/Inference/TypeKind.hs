@@ -2,6 +2,8 @@
 
 module CMM.Inference.TypeKind where
 
+import safe Prelude
+
 import safe Data.Data (Data)
 import safe Data.Text (Text)
 

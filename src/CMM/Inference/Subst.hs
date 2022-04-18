@@ -4,6 +4,8 @@
 
 module CMM.Inference.Subst where
 
+import safe Prelude
+
 import safe Control.Lens.Setter ((%~))
 import safe Data.Data (Data(gmapT), Typeable)
 import safe Data.Generics.Aliases (extT)

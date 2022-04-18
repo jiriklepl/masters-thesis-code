@@ -2,6 +2,8 @@
 
 module CMM.Inference.TypeCompl where
 
+import safe Prelude
+
 import safe Data.Data (Data)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T

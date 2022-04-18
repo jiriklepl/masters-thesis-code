@@ -3,11 +3,17 @@
 
 module CMM.AST.Variables where
 
+import safe Data.Functor ( Functor((<$)), (<$>) )
+import safe Data.Maybe ( Maybe(Just, Nothing) )
+import safe Data.Foldable ( Foldable(foldr), traverse_ )
+import safe Data.List ( repeat )
+import safe Data.Function ( ($), (.), flip )
+import safe Data.Tuple ( fst )
+import safe Control.Applicative ( Applicative((<*), (*>)) )
 import safe Control.Lens.Getter ((^.))
-import safe Control.Monad (zipWithM_)
+import safe Control.Monad ( Monad(return), zipWithM_)
 import safe Control.Monad.State (MonadIO, StateT, execStateT)
 import safe Data.Data (Data(gmapM), Typeable)
-import safe Data.Foldable (traverse_)
 import safe Data.Generics.Aliases (extM)
 import safe Data.Map (Map)
 import safe qualified Data.Set as Set
@@ -34,7 +40,7 @@ import safe CMM.AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.HasName (getName)
 import safe CMM.AST.Variables.State
-  ( CollectedVariables
+  ( Collector
   , MonadCollectVariables
   , addFIVar
   , addFVar
@@ -48,7 +54,7 @@ import safe CMM.AST.Variables.State
   , addVarTrivial
   , funcInstVariables
   , funcVariables
-  , initCollectedVariables
+  , initCollector
   , structMembers
   , typeClasses
   , typeConstants
@@ -97,9 +103,9 @@ instanceVariables n = variablesCommon . go $ getPos <$> n
     go :: (Data d, MonadCollectVariables m) => d -> m d
     go = addTAutoCases $ addProcedureCases $ gmapM go
 
-variablesCommon :: MonadIO m => StateT CollectedVariables m a -> m VariablePack
+variablesCommon :: MonadIO m => StateT Collector m a -> m VariablePack
 variablesCommon go = do
-  result <- execStateT go initCollectedVariables
+  result <- execStateT go initCollector
   return
     ( result ^. variables
     , result ^. funcVariables

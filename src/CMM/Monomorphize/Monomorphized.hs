@@ -3,6 +3,8 @@
 
 module CMM.Monomorphize.Monomorphized where
 
+import safe Prelude
+
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Setter ((.~))
 import safe Control.Lens.TH (makeLenses)
@@ -39,17 +41,18 @@ data Monomorphized n a =
   Monomorphized
     { _node :: Maybe (n a)
     , _polyGenerate :: PolyGenerate
+    , _polyMethods :: PolyGenerate
     , _polySchemes :: PolySchemes a
     }
   deriving (Show)
 
 monomorphized ::
-     Maybe (n a) -> PolyGenerate -> PolySchemes a -> Monomorphized n a
-monomorphized n gen s =
-  Monomorphized {_node = n, _polyGenerate = gen, _polySchemes = s}
+     Maybe (n a) -> PolyGenerate -> PolyGenerate -> PolySchemes a -> Monomorphized n a
+monomorphized n m gen s =
+  Monomorphized {_node = n, _polyGenerate = gen, _polyMethods = m, _polySchemes = s}
 
 monomorphizedTrivial :: Maybe (n a) -> Monomorphized n a
-monomorphizedTrivial n = monomorphized n mempty mempty
+monomorphizedTrivial n = monomorphized n mempty mempty mempty
 
 makeLenses ''Monomorphized
 
@@ -57,11 +60,11 @@ instance Nullable (Monomorphized n a) where
   nullVal = monomorphizedTrivial Nothing
 
 instance Semigroup (n a) => Semigroup (Monomorphized n a) where
-  Monomorphized n g s <> Monomorphized n' g' s' =
-    Monomorphized (n <> n') (g <> g') (s <> s')
+  Monomorphized n g m s <> Monomorphized n' g' m' s' =
+    Monomorphized (n <> n') (g <> g') (m <> m') (s <> s')
 
 instance Semigroup (n a) => Monoid (Monomorphized n a) where
-  mempty = Monomorphized Nothing mempty mempty
+  mempty = Monomorphized Nothing mempty mempty mempty
 
 deriving instance Functor n => Functor (Monomorphized n)
 
@@ -85,9 +88,13 @@ unPolyGenerate :: Monomorphized n a -> Monomorphized n a
 unPolyGenerate = polyGenerate .~ mempty
 
 foldGetSchemes ::
-     (Foldable f, Functor f) => f (Monomorphized n a) -> PolySchemes a
+     (Foldable f) => f (Monomorphized n a) -> PolySchemes a
 foldGetSchemes = foldMap $ view polySchemes
 
 foldGetGenerate ::
-     (Foldable f, Functor f) => f (Monomorphized n a) -> PolyGenerate
+     (Foldable f) => f (Monomorphized n a) -> PolyGenerate
 foldGetGenerate = foldMap $ view polyGenerate
+
+foldGetMethods ::
+     (Foldable f) => f (Monomorphized n a) -> PolyGenerate
+foldGetMethods = foldMap $ view polyMethods

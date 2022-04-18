@@ -3,6 +3,8 @@
 
 module CMM.Inference.FreeTypeVars where
 
+import safe Prelude
+
 import safe Data.Data (Data(gmapQ))
 import safe Data.Generics.Aliases (extQ)
 import safe Data.Set (Set)

@@ -1,15 +1,14 @@
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE Safe #-}
 
 -- TODO: make an alias for `Map Text (SourcePos, TypeKind)`
-module CMM.AST.Variables.State where
+module CMM.AST.Variables.State (module CMM.AST.Variables.State.Impl, module CMM.AST.Variables.State) where
+
+import safe Prelude
 
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Setter ((%=), (+=))
-import safe Control.Lens.TH (makeLenses)
 import safe Control.Monad (unless)
 import safe Control.Monad.State (MonadIO, MonadState)
-import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
@@ -17,26 +16,15 @@ import safe Prettyprinter (Pretty)
 
 import safe CMM.AST.HasName (HasName(..))
 import safe CMM.Inference.TypeKind (TypeKind)
-import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
+import safe CMM.Parser.HasPos (HasPos(getPos))
 import safe CMM.Pretty ()
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 
-data CollectedVariables =
-  CollectedVariables
-    { _variables :: Map Text (SourcePos, TypeKind)
-    , _funcVariables :: Map Text (SourcePos, TypeKind)
-    , _funcInstVariables :: Map Text (SourcePos, TypeKind)
-    , _typeConstants :: Map Text (SourcePos, TypeKind)
-    , _typeVariables :: Map Text (SourcePos, TypeKind)
-    , _typeClasses :: Map Text (SourcePos, TypeKind, Set Text) {- method decls -}
-    , _structMembers :: Map Text (SourcePos, TypeKind)
-    , _errors :: Int
-    , _warnings :: Int
-    }
+import safe CMM.AST.Variables.State.Impl
 
-initCollectedVariables :: CollectedVariables
-initCollectedVariables =
-  CollectedVariables
+initCollector :: Collector
+initCollector =
+  Collector
     { _variables = mempty
     , _funcVariables = mempty
     , _funcInstVariables = mempty
@@ -48,9 +36,7 @@ initCollectedVariables =
     , _warnings = 0
     }
 
-type MonadCollectVariables m = (MonadState CollectedVariables m, MonadIO m)
-
-makeLenses ''CollectedVariables
+type MonadCollectVariables m = (MonadState Collector m, MonadIO m)
 
 registerError ::
      (HasPos n, Pretty n, MonadCollectVariables m) => n -> Text -> m ()
@@ -101,7 +87,7 @@ addTConTrivial ::
 addTConTrivial n tKind = n <$ addTCon n (getName n) tKind
 
 addTVar ::
-     (HasPos n, Pretty n, MonadCollectVariables m)
+     (HasPos n, MonadCollectVariables m)
   => n
   -> Text
   -> TypeKind
@@ -111,7 +97,7 @@ addTVar node tVar tKind = do
     flip unless (typeVariables %= Map.insert tVar (getPos node, tKind))
 
 addTVarTrivial ::
-     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+     (HasPos n, HasName n, MonadCollectVariables m)
   => n
   -> TypeKind
   -> m n
@@ -154,7 +140,7 @@ addFIVarTrivial ::
 addFIVarTrivial n tKind = n <$ addFVar n (getName n) tKind
 
 addTClass ::
-     (HasPos n, Pretty n, MonadCollectVariables m)
+     (HasPos n, MonadCollectVariables m)
   => n
   -> Text
   -> TypeKind
@@ -165,7 +151,7 @@ addTClass node tVar tKind methods = do
     flip unless (typeClasses %= Map.insert tVar (getPos node, tKind, methods))
 
 addTClassTrivial ::
-     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+     (HasPos n, HasName n, MonadCollectVariables m)
   => n
   -> TypeKind
   -> Set Text
@@ -173,7 +159,7 @@ addTClassTrivial ::
 addTClassTrivial n tKind methods = n <$ addTClass n (getName n) tKind methods
 
 addSMem ::
-     (HasPos n, Pretty n, MonadCollectVariables m)
+     (HasPos n, MonadCollectVariables m)
   => n
   -> Text
   -> TypeKind
@@ -183,7 +169,7 @@ addSMem node tVar tKind = do
     flip unless (structMembers %= Map.insert tVar (getPos node, tKind))
 
 addSMemTrivial ::
-     (HasPos n, Pretty n, HasName n, MonadCollectVariables m)
+     (HasPos n, HasName n, MonadCollectVariables m)
   => n
   -> TypeKind
   -> m n

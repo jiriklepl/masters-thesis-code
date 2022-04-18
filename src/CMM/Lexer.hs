@@ -7,6 +7,8 @@ module CMM.Lexer
   , tokenize
   ) where
 
+import safe Prelude
+
 import safe Control.Applicative
   ( Alternative((<|>))
   , Applicative(liftA2)

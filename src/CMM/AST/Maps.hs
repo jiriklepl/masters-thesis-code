@@ -4,6 +4,8 @@
 
 module CMM.AST.Maps where
 
+import safe Prelude
+
 import safe Data.Functor.Identity (runIdentity)
 import safe qualified Data.Kind as Kind
 

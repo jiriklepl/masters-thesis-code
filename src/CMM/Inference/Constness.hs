@@ -2,6 +2,12 @@
 
 module CMM.Inference.Constness where
 
+import safe Prelude (Bounded(minBound, maxBound))
+
+import safe Data.Eq ( Eq )
+import safe Data.Ord as Ord
+    ( Ord(..), Ordering(..) )
+import safe Text.Show ( Show )
 import safe Data.Data (Data)
 import safe Data.PartialOrd (PartialOrd((<=)))
 
@@ -26,7 +32,7 @@ instance Ord Constness where
   _ `compare` LinkExpr = LT
 
 instance PartialOrd Constness where
-  (<=) = (Prelude.<=)
+  (<=) = (Ord.<=)
 
 instance Lattice Constness where
   (/\) = min

@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 -- TODO: add kinds and constnesses where they make sense
@@ -173,7 +172,7 @@ class Preprocess' a b n where
     => n a
     -> m (n b)
 
-instance (WithTypeHole a b, HasPos a) => Preprocess' a b Name where
+instance WithTypeHole a b => Preprocess' a b Name where
   preprocess' = return . preprocessTrivial
 
 instance Preprocess n a b => Preprocess' a b (Annot n) where

@@ -4,6 +4,8 @@
 
 module CMM.Data.Ordered where
 
+import safe Prelude
+
 import safe Data.Data (Data)
 
 data Ordered a where

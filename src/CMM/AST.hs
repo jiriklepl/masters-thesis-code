@@ -1,19 +1,32 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveAnyClass #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module CMM.AST where
 
+import safe Prelude (Float)
+
+import safe Text.Show ( Show(show) )
+import safe Data.Functor ( Functor )
+import safe Data.Foldable ( Foldable )
+import safe Data.Traversable ( Traversable )
+import safe Data.Eq ( Eq((==)) )
+import safe Data.Maybe ( Maybe )
+import safe Data.Bool ( Bool )
+import safe Data.Int ( Int )
+import safe Data.Char ( Char )
+import safe GHC.Err (error)
 import safe Data.Data (Data)
 import safe qualified Data.Kind as Kind
 import safe Data.Text (Text)
 
-import safe CMM.AST.Annot
+import safe CMM.AST.Annot ( Annot )
 
 class ASTNode (n :: Kind.Type -> Kind.Type)
 
 class AST (n :: Kind.Type -> Kind.Type)
 
-instance ASTNode n => AST (Annot n)
+deriving instance ASTNode n => AST (Annot n)
 
 newtype Unit a =
   Unit [Annot TopLevel a]

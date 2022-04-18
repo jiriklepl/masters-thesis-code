@@ -2,6 +2,8 @@
 
 module CMM.Monomorphize.PolyKind where
 
+import safe Prelude
+
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 
 data PolyKind
