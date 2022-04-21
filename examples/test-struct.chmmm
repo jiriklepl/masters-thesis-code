@@ -1,0 +1,10 @@
+struct F {
+  x: bits32;
+}
+
+f () {
+  F y;
+  auto a;
+  a = y->x;
+  return (a);
+}

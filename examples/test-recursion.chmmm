@@ -3,7 +3,7 @@ g(auto a) {
   return (a);
 }
 
-f(auto a) {
+f(bits32 a) {
   auto b;
   b = g(a);
   return (b);

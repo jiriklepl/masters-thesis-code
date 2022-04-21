@@ -1,0 +1,36 @@
+class Id a {
+  id (auto (a) x) -> auto (a);
+}
+
+instance Id bits32 {
+  id (auto u) {
+    return (u);
+  }
+}
+
+instance Id bits64 {
+  id (auto u) {
+    auto w;
+    w = u * u;
+    return (w);
+  }
+}
+
+f(bits32 x) -> bits32 {
+  x = id(x);
+
+  return (x);
+}
+
+
+g(bits32 x) -> bits32 {
+  x = id(x);
+
+  return (x);
+}
+
+h(bits64 x) -> bits64 {
+  x = id(x);
+
+  return (x);
+}

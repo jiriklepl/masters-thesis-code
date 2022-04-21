@@ -1,9 +1,0 @@
-class Id a {
-  id (auto (a) u) -> auto (a);
-}
-
-instance Id bits32 {
-  id (auto u) {
-    return (u);
-  }
-}
