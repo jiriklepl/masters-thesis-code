@@ -17,7 +17,7 @@ import safe GHC.Err (undefined)
 import safe Text.Show (Show(show))
 
 import safe CMM.Inference.TypeKind
-  ( HasTypeKind(..)
+  ( HasTypeKind(getTypeKind, setTypeKind)
   , TypeKind((:->), ErrorKind, GenericType, Star)
   , setTypeKindInvariantLogicError
   )

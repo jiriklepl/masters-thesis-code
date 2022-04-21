@@ -17,7 +17,7 @@ import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
 
-import safe CMM.AST.HasName (HasName(..))
+import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Parser.HasPos (HasPos(getPos))
 import safe CMM.Pretty ()

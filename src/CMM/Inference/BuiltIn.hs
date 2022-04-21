@@ -19,7 +19,7 @@ import safe GHC.Err (error, undefined)
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Bimap (Bimap)
 import safe qualified CMM.Data.Bimap as Bimap
-import safe CMM.Data.Ordered (Ordered(..))
+import safe CMM.Data.Ordered (Ordered(Ordered, unOrdered))
 import safe CMM.Inference.DataKind (DataKind(DataKind, GenericData, Unstorable))
 import safe CMM.Inference.Fact
   ( Facts
@@ -28,8 +28,12 @@ import safe CMM.Inference.Fact
   , regularExprConstraint
   )
 import safe CMM.Inference.Type as Infer (Type)
-import safe CMM.Inference.TypeCompl (PrimType, TypeCompl(..))
-import safe CMM.Inference.TypeKind (TypeKind(..))
+import safe CMM.Inference.TypeCompl
+  ( PrimType
+  , TypeCompl(BoolType, ConstType, LabelType, String16Type, StringType,
+          TBitsType, VoidType)
+  )
+import safe CMM.Inference.TypeKind (TypeKind((:->), Constraint, Star))
 import safe CMM.Inference.TypeVar as Infer (TypeVar(NoType))
 
 getNamedOperator :: Text -> Infer.Type
@@ -97,7 +101,6 @@ builtInTypeFacts = (kindFact <$> types) <> (constFact <$> types)
       , StringType
       , String16Type
       , BoolType
-      , LabelType
       , VoidType
       , TBitsType 8
       , TBitsType 16

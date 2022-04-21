@@ -15,7 +15,7 @@ import safe Control.Applicative
   , Applicative((*>), (<*), liftA2, pure)
   , optional
   )
-import safe Data.Bool (Bool(..))
+import safe Data.Bool (Bool(False, True))
 import safe Data.Char (Char)
 import safe Data.Eq (Eq)
 import safe Data.Function (($), (.))

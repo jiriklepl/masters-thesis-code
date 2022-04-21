@@ -20,7 +20,7 @@ import safe CMM.Inference.Fact (Fact, FlatFact)
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
-import safe CMM.Inference.TypeVar (TypeVar(..))
+import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar, tVarParent))
 
 type Subst = Map TypeVar
 

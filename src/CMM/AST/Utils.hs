@@ -5,17 +5,17 @@ module CMM.AST.Utils where
 
 import safe Data.Function (($), (.), flip, id)
 import safe Data.List (foldl')
-import safe Data.Maybe (Maybe(..))
+import safe Data.Maybe (Maybe(Just, Nothing))
 import safe Data.Text (Text)
 
 import safe CMM.AST
   ( ASTNode
-  , Arm(..)
-  , Body(..)
-  , BodyItem(..)
-  , Expr(..)
-  , LValue(..)
-  , Stmt(..)
+  , Arm(Arm)
+  , Body(Body)
+  , BodyItem(BodyStmt)
+  , Expr(LVExpr, ParExpr)
+  , LValue(LVName)
+  , Stmt(GotoStmt)
   , TopLevel
   , Unit(Unit)
   )

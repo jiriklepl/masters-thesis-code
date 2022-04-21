@@ -13,9 +13,9 @@ import safe qualified Data.Set as Set
 import safe CMM.Inference.Fact
   ( Fact
   , FlatFact(InstType)
-  , NestedFact(..)
-  , Qual(..)
-  , Scheme(..)
+  , NestedFact(Fact, NestedFact)
+  , Qual((:=>))
+  , Scheme((:.))
   )
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (TypeCompl)

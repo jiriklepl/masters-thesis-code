@@ -10,14 +10,14 @@ import safe Data.Ord (Ord)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
 
-import safe CMM.Data.Nullable (Fallbackable(..))
-import safe CMM.Inference.TypeCompl (TypeCompl(..))
+import safe CMM.Data.Nullable (Fallbackable((??)))
+import safe CMM.Inference.TypeCompl (TypeCompl)
 import safe CMM.Inference.TypeKind
-  ( HasTypeKind(..)
-  , TypeKind(..)
+  ( HasTypeKind(getTypeKind, setTypeKind)
+  , TypeKind(GenericType)
   , setTypeKindInvariantLogicError
   )
-import safe CMM.Inference.TypeVar (FromTypeVar(..), TypeVar(..))
+import safe CMM.Inference.TypeVar (FromTypeVar(fromTypeVar), TypeVar)
 
 data Type
   = ErrorType Text

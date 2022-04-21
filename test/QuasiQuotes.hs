@@ -7,7 +7,9 @@ import safe Data.Function (($), (.), const)
 import safe Data.String (String)
 
 import safe Language.Haskell.TH (Exp(LitE), Lit(StringL))
-import safe Language.Haskell.TH.Quote (QuasiQuoter(..))
+import safe Language.Haskell.TH.Quote
+  ( QuasiQuoter(QuasiQuoter, quoteDec, quoteExp, quotePat, quoteType)
+  )
 
 text :: QuasiQuoter
 text =

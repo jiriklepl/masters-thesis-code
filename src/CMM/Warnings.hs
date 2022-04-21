@@ -2,7 +2,7 @@
 
 module CMM.Warnings where
 
-import safe Control.Monad.IO.Class (MonadIO(..))
+import safe Control.Monad.IO.Class (MonadIO(liftIO))
 import safe Data.Function (($), (.))
 import safe Data.Monoid ((<>))
 import safe Data.Text (Text)
@@ -13,7 +13,7 @@ import safe Text.Megaparsec.Pos (sourcePosPretty)
 import safe Text.Show (Show(show))
 
 import safe CMM.AST.Utils ()
-import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
+import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
 -- | Creates a warning text from a `SourcePos` object, which gets printed out as the header for the warning, and from the message itself
 mkWarning :: SourcePos -> Text -> Text

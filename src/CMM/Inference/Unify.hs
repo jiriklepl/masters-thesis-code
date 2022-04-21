@@ -7,12 +7,12 @@ import safe Control.Lens ((%~))
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad (Functor(fmap), Monad(return))
 import safe Data.Bool (not, otherwise)
-import safe Data.Either (Either(..))
-import safe Data.Eq (Eq(..))
+import safe Data.Either (Either(Left, Right))
+import safe Data.Eq (Eq((/=), (==)))
 import safe Data.Function ((.))
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
-import safe Data.Maybe (Maybe(..))
+import safe Data.Maybe (Maybe(Just, Nothing))
 import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Ord (Ord((<), (>)))
 import safe qualified Data.Set as Set
@@ -22,15 +22,24 @@ import safe Text.Show (Show)
 
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.Subst (Apply(..), Subst)
-import safe CMM.Inference.Type (ToType(..), Type(..))
-import safe CMM.Inference.TypeCompl (PrimType, TypeCompl(..))
+import safe CMM.Inference.Subst (Apply(apply), Subst)
+import safe CMM.Inference.Type
+  ( ToType(toType)
+  , Type(ComplType, ErrorType, VarType)
+  )
+import safe CMM.Inference.TypeCompl
+  ( PrimType
+  , TypeCompl(AddrType, AppType, FunctionType, TupleType)
+  )
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(setTypeKind)
   , combineTypeKind
   , matchKind
   )
-import safe CMM.Inference.TypeVar (TypeVar(..), familyDepth)
+import safe CMM.Inference.TypeVar
+  ( TypeVar(NoType, TypeVar, tVarKind)
+  , familyDepth
+  )
 
 data UnificationError
   = Occurs TypeVar Type

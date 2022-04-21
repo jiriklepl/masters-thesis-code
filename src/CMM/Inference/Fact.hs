@@ -19,13 +19,13 @@ import safe Text.Show (Show)
 
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
-import safe CMM.Inference.Constness (Constness(..))
+import safe CMM.Inference.Constness (Constness(ConstExpr, LinkExpr, Regular))
 import safe CMM.Inference.DataKind (DataKind(FunctionKind, TupleKind))
-import safe CMM.Inference.Type (ToType(..), Type)
+import safe CMM.Inference.Type (ToType(toType), Type)
 import safe CMM.Inference.TypeCompl
   ( TypeCompl(AppType, FunctionType, TupleType)
   )
-import safe CMM.Inference.TypeKind (HasTypeKind(..))
+import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind, setTypeKind))
 import safe CMM.Inference.TypeVar (TypeVar)
 
 infix 6 :=>

@@ -18,7 +18,7 @@ import safe qualified Data.Set as Set
 import safe Prelude (Bounded(maxBound, minBound))
 import safe Text.Show (Show)
 
-import safe CMM.Data.Dioid (Dioid(..))
+import safe CMM.Data.Dioid (Dioid((<.>), mfull))
 import safe CMM.Data.Lattice (Lattice((/\), (\/)))
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Data.Ordered (Ordered(Ordered))

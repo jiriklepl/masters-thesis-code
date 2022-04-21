@@ -2,7 +2,7 @@
 
 module CMM.Inference.TypeKind where
 
-import safe Data.Bool (Bool(..), (&&))
+import safe Data.Bool (Bool(False, True), (&&))
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
 import safe Data.Function (($), const, id)

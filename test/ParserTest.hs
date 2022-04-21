@@ -13,8 +13,8 @@ module Main
 import safe Prelude (Integer, Monoid(mempty), Num((+)))
 
 import safe Control.Applicative (Applicative(pure))
-import safe Data.Bool (Bool(..))
-import safe Data.Either (Either(..), either)
+import safe Data.Bool (Bool(False, True))
+import safe Data.Either (Either(Left, Right), either)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (all)
 import safe Data.Function (($), (.), const, flip)
