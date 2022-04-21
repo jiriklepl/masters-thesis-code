@@ -4,8 +4,6 @@
 -- TODO: add the overlap check for instances
 module CMM.Inference where
 
-import Prelude (Bounded(maxBound, minBound), Num((+)))
-
 import safe Control.Applicative (Applicative((*>), (<*), (<*>), liftA2, pure))
 import safe Control.Lens (Lens')
 import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
@@ -14,10 +12,10 @@ import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad (Monad((>>=), return), sequence, when)
 import safe Control.Monad.State.Lazy (MonadState)
-import safe Data.Bool (Bool(..), (&&), (||), not, otherwise)
+import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
-import safe Data.Eq (Eq(..))
+import safe Data.Eq (Eq((/=), (==)))
 import safe Data.Foldable (Foldable, for_, traverse_)
 import safe Data.Function (($), (.), flip, id)
 import safe Data.Functor (Functor((<$), fmap), ($>), (<$>), (<&>), void)
@@ -54,6 +52,7 @@ import safe Data.Tuple (snd, swap, uncurry)
 import safe GHC.Err (undefined)
 
 import safe qualified CMM.Data.Bimap as Bimap
+import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds
   ( Bounds(Bounds)
   , isTrivialOrAbsurd
@@ -64,15 +63,18 @@ import safe CMM.Data.Bounds
 import safe CMM.Data.Function (fOr)
 import safe CMM.Data.Lattice (Lattice)
 import safe CMM.Data.Nullable (Nullable(nullVal))
+import safe CMM.Data.Num (Num((+)))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.OrderedBounds ()
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
-  , FlatFact(..)
+  , FlatFact(ClassConstraint, ClassDetermine, ClassFact,
+         ConstnessBounds, InstType, KindBounds, OnRegister, SubConst,
+         SubKind, SubType, Typing, Union)
   , FlatFacts
-  , NestedFact(..)
+  , NestedFact(Fact, NestedFact)
   , Qual((:=>))
   , Scheme((:.))
   , subConst
@@ -81,7 +83,7 @@ import safe CMM.Inference.Fact
   , typeUnion
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(..))
+import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MethodTypeHole,
          SimpleTypeHole)
@@ -128,9 +130,15 @@ import safe CMM.Inference.Subst
   , Subst
   , foldTVarSubsts
   )
-import safe CMM.Inference.Type (ToType(..), Type(..))
+import safe CMM.Inference.Type
+  ( ToType(toType)
+  , Type(ComplType, ErrorType, VarType)
+  )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
-import safe CMM.Inference.TypeCompl (PrimType, TypeCompl(..))
+import safe CMM.Inference.TypeCompl
+  ( PrimType
+  , TypeCompl(AddrType, AppType, FunctionType, TupleType)
+  )
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting

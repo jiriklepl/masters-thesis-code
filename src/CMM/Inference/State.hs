@@ -5,8 +5,6 @@ module CMM.Inference.State
   , module CMM.Inference.State
   ) where
 
-import safe Prelude (Bounded(maxBound, minBound))
-
 import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (+=))
@@ -27,6 +25,7 @@ import safe qualified Data.Set as Set
 import safe Data.Traversable (Traversable(traverse))
 
 import safe qualified CMM.Data.Bimap as Bimap
+import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
@@ -42,7 +41,7 @@ import safe CMM.Inference.TypeHandle
   , typing
   )
 import safe CMM.Inference.TypeKind (TypeKind)
-import safe CMM.Inference.TypeVar (TypeVar(..))
+import safe CMM.Inference.TypeVar (TypeVar(TypeVar))
 
 import safe CMM.Inference.State.Impl
   ( Inferencer(Inferencer)

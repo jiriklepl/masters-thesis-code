@@ -2,8 +2,6 @@
 
 module CMM.Inference.Fact where
 
-import safe Prelude (Bounded(maxBound, minBound))
-
 import safe Data.Data (Data)
 import safe Data.Eq (Eq)
 import safe Data.Foldable (Foldable(null))
@@ -17,6 +15,7 @@ import safe Data.Text (Text)
 import safe Data.Traversable (Traversable)
 import safe Text.Show (Show)
 
+import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Inference.Constness (Constness(ConstExpr, LinkExpr, Regular))

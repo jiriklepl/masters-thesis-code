@@ -7,7 +7,7 @@ import safe Data.Monoid (Monoid(mempty))
 import safe Data.Ord (Ord)
 import safe Data.Semigroup (Semigroup((<>)))
 
-import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
+import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 
 data PolyKind
   = Mono

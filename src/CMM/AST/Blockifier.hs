@@ -12,14 +12,14 @@ import safe Control.Lens.Setter ((%=), (.=), (?=))
 import safe Control.Lens.Type (Lens)
 import safe Control.Monad (Monad((>>=), return))
 import safe Control.Monad.State.Lazy (MonadIO, MonadState, when)
-import safe Data.Bool (Bool(..), (||), not)
+import safe Data.Bool (Bool(False, True), (||), not)
 import safe Data.Eq (Eq)
 import safe Data.Foldable (Foldable(elem, null), any, concat, traverse_)
 import safe Data.Function (($), (.), flip)
-import safe Data.Functor (Functor(..), ($>), (<$>))
+import safe Data.Functor (Functor((<$)), ($>), (<$>), fmap)
 import safe Data.Int (Int)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(..), maybe)
+import safe Data.Maybe (Maybe(Just, Nothing), maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
@@ -30,34 +30,37 @@ import safe GHC.Err (error)
 import safe Prettyprinter (Pretty)
 
 import safe CMM.AST
-  ( Actual(..)
-  , Arm(..)
-  , Body(..)
-  , BodyItem(..)
-  , CallAnnot(..)
-  , Datum(..)
-  , Decl(..)
-  , Expr(..)
-  , Flow(..)
+  ( Actual(Actual)
+  , Arm(Arm)
+  , Body(Body)
+  , BodyItem(BodyDecl, BodyStackDecl, BodyStmt)
+  , CallAnnot(AliasAnnot, FlowAnnot)
+  , Datum(DatumLabel)
+  , Decl(ConstDecl, ImportDecl, RegDecl)
+  , Expr(BinOpExpr, ComExpr, InfixExpr, LVExpr, LitExpr, MemberExpr,
+     NegExpr, ParExpr, PrefixExpr)
+  , Flow(NeverReturns)
   , Formal
-  , Import(..)
+  , Import(Import)
   , KindName
-  , LValue(..)
+  , LValue(LVName, LVRef)
   , Name
-  , Procedure(..)
+  , Procedure(Procedure)
   , ProcedureDecl(ProcedureDecl)
   , ProcedureHeader(ProcedureHeader)
-  , Range(..)
-  , Registers(..)
-  , StackDecl(..)
-  , Stmt(..)
-  , Targets(..)
+  , Range(Range)
+  , Registers(Registers)
+  , StackDecl(StackDecl)
+  , Stmt(AssignStmt, CallStmt, ContStmt, CutToStmt, EmptyStmt,
+     GotoStmt, IfStmt, JumpStmt, LabelStmt, PrimOpStmt, ReturnStmt,
+     SpanStmt, SwitchStmt)
+  , Targets(Targets)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot)
 import safe CMM.AST.BlockAnnot
-  ( BlockAnnot(..)
-  , HasBlockAnnot(..)
-  , WithBlockAnnot(..)
+  ( BlockAnnot(Begins, NoBlock, PartOf, Unreachable)
+  , HasBlockAnnot(getBlockAnnot)
+  , WithBlockAnnot(withBlockAnnot)
   )
 import safe CMM.AST.Blockifier.State
   ( Blockifier
@@ -76,8 +79,8 @@ import safe CMM.AST.Blockifier.State
   , registers
   , stackLabels
   )
-import safe CMM.AST.HasName (HasName(..))
-import safe CMM.AST.Maps (ASTmap(..), ASTmapGen, Constraint, Space)
+import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.AST.Maps (ASTmap(astMapM), ASTmapGen, Constraint, Space)
 import safe CMM.AST.Utils
   ( GetTrivialGotoTarget(getTrivialGotoTarget)
   , getExprLVName

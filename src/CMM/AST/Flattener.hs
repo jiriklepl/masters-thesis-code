@@ -4,8 +4,6 @@
 
 module CMM.AST.Flattener where
 
-import safe Prelude (Num((+)))
-
 import safe Control.Applicative (Applicative(pure), liftA2)
 import safe Control.Monad (Functor(fmap), Monad(return), sequence)
 import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
@@ -24,41 +22,43 @@ import safe Text.Show (Show(show))
 import safe CMM.AST
   ( Actual
   , Alias
-  , Arm(..)
+  , Arm(Arm)
   , Asserts
-  , Body(..)
-  , BodyItem(..)
+  , Body(Body)
+  , BodyItem(BodyDecl, BodyStackDecl, BodyStmt)
   , CallAnnot
   , Class(Class)
   , Export
-  , Expr(..)
+  , Expr(LVExpr)
   , Flow
   , Formal
   , Import
   , Init
   , Instance(Instance)
   , KindName
-  , LValue(..)
+  , LValue(LVName)
   , Lit
-  , Name(..)
+  , Name(Name)
   , ParaType
   , Pragma
-  , Procedure(..)
+  , Procedure(Procedure)
   , ProcedureDecl(ProcedureDecl)
   , ProcedureHeader(ProcedureHeader)
   , Range
   , Registers
-  , Section(..)
+  , Section(SecDatum, SecDecl, SecProcedure, SecSpan)
   , Size
-  , Stmt(..)
+  , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt)
   , Struct
   , TargetDirective
   , Targets
-  , TopLevel(..)
+  , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
+         TopStruct)
   , Type
-  , Unit(..)
+  , Unit(Unit)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
+import safe CMM.Data.Num (Num((+)))
 import safe CMM.Utils (addPrefix)
 
 class Flatten n where

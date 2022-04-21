@@ -4,7 +4,7 @@ module CMM.Data.Either where
 
 import safe Control.Monad ((>>=))
 import safe Data.Bifunctor (bimap, first)
-import safe Data.Either (Either(..))
+import safe Data.Either (Either(Left, Right))
 import safe Data.Function (($))
 import safe Data.Functor (($>))
 

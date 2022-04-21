@@ -28,36 +28,40 @@ import safe GHC.Err (undefined)
 import safe Text.Show (Show(show))
 
 import safe CMM.AST as AST
-  ( Actual(..)
+  ( Actual(Actual)
   , Arm
   , Class(Class)
-  , Conv(..)
-  , Datum(..)
-  , Decl(..)
-  , Export(..)
-  , Expr(..)
-  , Formal(..)
-  , Import(..)
-  , Init(..)
+  , Conv(Foreign)
+  , Datum(Datum, DatumAlign, DatumLabel)
+  , Decl(ConstDecl, ExportDecl, ImportDecl, PragmaDecl, RegDecl,
+     TargetDecl, TypedefDecl)
+  , Export(Export)
+  , Expr(BinOpExpr, ComExpr, InfixExpr, LVExpr, LitExpr, NegExpr,
+     ParExpr, PrefixExpr)
+  , Formal(Formal)
+  , Import(Import)
+  , Init(ExprInit, Str16Init, StrInit)
   , Instance(Instance)
-  , KindName(..)
-  , LValue(..)
-  , Lit(..)
+  , KindName(KindName)
+  , LValue(LVName, LVRef)
+  , Lit(LitChar, LitFloat, LitInt)
   , Name
-  , Op(..)
+  , Op(EqOp, GeOp, GtOp, LeOp, LtOp, NeqOp)
   , ParaName(ParaName)
-  , ParaType(..)
-  , Procedure(..)
+  , ParaType(ParaType)
+  , Procedure(Procedure)
   , ProcedureDecl(ProcedureDecl)
-  , ProcedureHeader(..)
-  , Registers(..)
-  , Section(..)
-  , Size(..)
-  , Stmt(..)
-  , StrLit(..)
+  , ProcedureHeader(ProcedureHeader)
+  , Registers(Registers)
+  , Section(SecDatum, SecDecl, SecProcedure, SecSpan)
+  , Size(Size)
+  , Stmt(AssignStmt, CallStmt, ContStmt, CutToStmt, EmptyStmt,
+     GotoStmt, IfStmt, JumpStmt, LabelStmt, PrimOpStmt, ReturnStmt,
+     SpanStmt, SwitchStmt)
+  , StrLit(StrLit)
   , Targets
-  , Type(..)
-  , Unit(..)
+  , Type(TAuto, TBits, TName, TPar)
+  , Unit(Unit)
   )
 import safe CMM.AST.Annot as AST
   ( Annot
@@ -67,7 +71,7 @@ import safe CMM.AST.Annot as AST
   , withAnnot
   )
 import safe CMM.AST.HasName as AST (HasName(getName))
-import safe CMM.AST.Maps as AST (ASTmap(..), ASTmapGen, Constraint, Space)
+import safe CMM.AST.Maps as AST (ASTmap(astMapM), ASTmapGen, Constraint, Space)
 import safe CMM.AST.Variables as AST
   ( classVariables
   , globalVariables
@@ -102,8 +106,8 @@ import safe CMM.Inference.Fact as Infer
   , unstorableConstraint
   )
 import safe CMM.Inference.Preprocess.HasTypeHole
-  ( HasTypeHole(..)
-  , WithTypeHole(..)
+  ( HasTypeHole(getTypeHole)
+  , WithTypeHole(withTypeHole)
   , getTypeHoleId
   )
 import safe CMM.Inference.Preprocess.State as Infer
@@ -144,9 +148,12 @@ import safe CMM.Inference.Type as Infer
   ( ToType(toType)
   , Type(ComplType, VarType)
   )
-import safe CMM.Inference.TypeCompl (TypeCompl(..))
+import safe CMM.Inference.TypeCompl
+  ( TypeCompl(AddrType, AppType, BoolType, LabelType, String16Type,
+          StringType, TBitsType, TupleType)
+  )
 import safe CMM.Inference.TypeHandle (handleId)
-import safe CMM.Inference.TypeKind (TypeKind(..))
+import safe CMM.Inference.TypeKind (TypeKind(Constraint, GenericType, Star))
 import safe CMM.Inference.TypeVar (TypeVar(NoType, tVarId))
 import safe CMM.Parser.HasPos (HasPos)
 

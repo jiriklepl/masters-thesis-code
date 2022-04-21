@@ -4,8 +4,6 @@ module CMM.FlowAnalysis
   ( analyzeFlow
   ) where
 
-import safe Prelude ((-))
-
 import safe Control.Applicative ((<$), (<$>), (<*>))
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((.=))
@@ -38,6 +36,7 @@ import safe CMM.AST.Blockifier.State
   , registerWarning
   , registers
   )
+import safe CMM.Data.Num ((-))
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)

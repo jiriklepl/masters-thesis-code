@@ -50,7 +50,9 @@ import safe CMM.Inference.Fact
   , typeUnion
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
-import safe CMM.Inference.Preprocess.Context (Context(..))
+import safe CMM.Inference.Preprocess.Context
+  ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx)
+  )
 import safe CMM.Inference.Preprocess.HasTypeHandle (getTypeHandleId)
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
@@ -59,14 +61,14 @@ import safe CMM.Inference.Preprocess.TypeHole
   , holeId
   , safeHoleHandle
   )
-import safe CMM.Inference.Type (ToType(..), Type(ComplType))
+import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
 import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeKind (TypeKind(Star))
 import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
-import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
+import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
 import safe CMM.Inference.Preprocess.State.Impl
   ( InferPreprocessor(InferPreprocessor)

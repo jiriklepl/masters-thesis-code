@@ -4,8 +4,6 @@
 
 module CMM.AST where
 
-import safe Prelude (Float)
-
 import safe Data.Bool (Bool)
 import safe Data.Char (Char)
 import safe Data.Data (Data)
@@ -21,6 +19,7 @@ import safe GHC.Err (error)
 import safe Text.Show (Show(show))
 
 import safe CMM.AST.Annot (Annot)
+import safe CMM.Data.Float (Float)
 
 class ASTNode (n :: Kind.Type -> Kind.Type)
 

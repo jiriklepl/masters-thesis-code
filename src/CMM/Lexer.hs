@@ -7,8 +7,6 @@ module CMM.Lexer
   , tokenize
   ) where
 
-import safe Prelude (Float, Num(negate))
-
 import safe CMM.AST.Annot (Annot, withAnnot)
 import safe Control.Applicative
   ( Alternative((<|>))
@@ -47,6 +45,9 @@ import safe Text.Megaparsec.Char
   )
 import safe qualified Text.Megaparsec.Char.Lexer as L
 import safe Text.Show (Show)
+
+import safe CMM.Data.Float (Float)
+import safe CMM.Data.Num (Num(negate))
 
 type Lexer = Parsec Void Text
 

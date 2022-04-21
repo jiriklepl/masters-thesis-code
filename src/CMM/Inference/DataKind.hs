@@ -15,9 +15,9 @@ import safe qualified Data.PartialOrd as PartialOrd
 import safe Data.Semigroup (Semigroup)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Prelude (Bounded(maxBound, minBound))
 import safe Text.Show (Show)
 
+import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Dioid (Dioid((<.>), mfull))
 import safe CMM.Data.Lattice (Lattice((/\), (\/)))
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))

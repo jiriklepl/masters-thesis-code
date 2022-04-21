@@ -2,8 +2,6 @@
 
 module CMM.Parser where
 
-import Prelude (Float)
-
 import safe Control.Applicative
   ( Alternative((<|>))
   , Applicative((*>), (<*), (<*>), liftA2, pure)
@@ -92,6 +90,7 @@ import safe CMM.AST
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
+import safe CMM.Data.Float (Float)
 import safe qualified CMM.Lexer as L
 
 type Parser = Parsec Void [Annot L.Token SourcePos]

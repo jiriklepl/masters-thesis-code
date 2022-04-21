@@ -6,14 +6,13 @@ module CMM.Data.Bounds
   , module CMM.Data.Bounds.Impl
   ) where
 
-import safe Prelude (Bounded(maxBound, minBound))
-
 import safe Data.Bool (Bool)
 import safe Data.Eq (Eq((==)))
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.PartialOrd (PartialOrd((<=), (>), (>=)))
 import safe Data.Semigroup (Semigroup((<>)))
 
+import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Lattice (Lattice, join, meet)
 
 import safe CMM.Data.Bounds.Impl (Bounds(Bounds), lowerBound, upperBound)
