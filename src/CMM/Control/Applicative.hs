@@ -2,9 +2,8 @@
 
 module CMM.Control.Applicative where
 
-import safe Prelude
-
-import safe Control.Applicative (Applicative(liftA2), liftA3)
+import safe Control.Applicative (Applicative((<*>), liftA2), liftA3)
+import safe Data.Function ((.), flip)
 
 liftA4 ::
      Applicative f => (a -> b -> c -> d -> e) -> f a -> f b -> f c -> f d -> f e

@@ -2,9 +2,9 @@
 
 module CMM.Inference.Preprocess.Context where
 
-import safe Prelude
-
 import safe Data.Text (Text)
+
+import safe GHC.Err (undefined)
 
 import safe CMM.AST.HasName (HasName(..))
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(..))

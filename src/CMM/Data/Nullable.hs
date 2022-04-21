@@ -2,7 +2,9 @@
 
 module CMM.Data.Nullable where
 
-import safe Prelude
+import safe Data.Bool (Bool(False), (||))
+import safe Data.Either (Either(Left))
+import safe Data.Maybe (Maybe(Nothing))
 
 infixr 5 ??
 

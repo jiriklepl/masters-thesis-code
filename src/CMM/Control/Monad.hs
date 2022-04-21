@@ -2,7 +2,8 @@
 
 module CMM.Control.Monad where
 
-import safe Prelude
+import safe Control.Applicative ((<$>))
+import safe Control.Monad (Functor, Monad((>>=)))
 
 infixl 1 >>@=
 

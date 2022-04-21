@@ -3,11 +3,12 @@
 
 module CMM.Data.Dioid where
 
-import safe Prelude
-
+import safe Data.Bool (Bool(False, True), (&&), (||))
+import safe Data.Function (($))
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
-import safe Data.Monoid (All(All), Any(Any))
+import safe Data.Monoid (All(All), Any(Any), Monoid(mempty), (<>))
+import safe Data.Ord (Ord)
 import safe qualified Data.Set as Set
 import safe Data.Set (Set)
 

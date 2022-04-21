@@ -80,8 +80,8 @@ main = do
   -- print $ CMM.Inference.Preprocess.State._facts miner
   inferencer <-
     (`execStateT` InferState.initInferencer
-                    (CMM.Inference.Preprocess.State._handleCounter miner)) $ do
-      let fs = head $ CMM.Inference.Preprocess.State._facts miner
+                    (view CMM.Inference.Preprocess.State.handleCounter miner)) $ do
+      let fs = head $ view CMM.Inference.Preprocess.State.facts miner
       mineAST mined
       -- liftIO $ print fs
       void $ reduce fs

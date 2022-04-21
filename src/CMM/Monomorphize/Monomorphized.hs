@@ -3,16 +3,24 @@
 
 module CMM.Monomorphize.Monomorphized where
 
-import safe Prelude
-
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Setter ((.~))
 import safe Control.Lens.TH (makeLenses)
+import Data.Eq (Eq)
+import Data.Foldable (Foldable(foldMap))
+import Data.Function (($), (.))
+import Data.Functor (Functor)
 import safe Data.Functor.Const (Const)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
+import Data.Maybe (Maybe(..))
+import Data.Monoid (Monoid(mappend, mempty))
+import Data.Ord (Ord)
+import Data.Semigroup (Semigroup((<>)))
 import safe Data.Set (Set)
+import Data.Traversable (Traversable)
 import safe Data.Void (Void)
+import Text.Show (Show)
 
 import safe CMM.Data.Nullable (Nullable(..))
 import safe CMM.Inference.Fact (Scheme)

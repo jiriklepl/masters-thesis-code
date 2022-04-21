@@ -2,10 +2,15 @@
 
 module CMM.Inference.TypeKind where
 
-import safe Prelude
-
+import safe Data.Bool (Bool(..), (&&))
 import safe Data.Data (Data)
+import safe Data.Eq (Eq((==)))
+import safe Data.Function (($), const, id)
+import safe Data.List ((++))
+import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Data.Text (Text)
+import safe GHC.Err (error, undefined)
+import safe Text.Show (Show(show))
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Utils (backQuote)

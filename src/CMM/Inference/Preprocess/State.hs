@@ -7,20 +7,29 @@ module CMM.Inference.Preprocess.State
   , module CMM.Inference.Preprocess.State.Impl
   ) where
 
-import safe Prelude
-
-import safe Control.Applicative ((<|>))
+import safe Control.Applicative (Applicative(pure), (<|>))
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((%=), (+=), (.=), (<~))
 import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
+import safe Control.Monad (Functor((<$), fmap), Monad((>>), (>>=), return))
 import safe Control.Monad.State.Lazy (MonadState)
+import safe Data.Bool (otherwise)
+import safe Data.Eq (Eq((==)))
+import safe Data.Function (($), (.))
+import safe Data.Functor ((<$>))
+import safe Data.Int (Int)
+import safe Data.List (foldr, head, init, last, reverse, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (fromMaybe)
+import safe Data.Maybe (Maybe(Nothing), fromMaybe, maybe)
+import safe Data.Monoid (Monoid(mempty), (<>))
+import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
+import safe Data.Tuple (snd, uncurry)
+import safe GHC.Err (error)
 
 import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.Data.Tuple (complThd3)
@@ -40,11 +49,16 @@ import safe CMM.Inference.Fact
   , tupleKind
   , typeUnion
   )
-import safe CMM.Inference.Preprocess.ClassData
+import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context (Context(..))
 import safe CMM.Inference.Preprocess.HasTypeHandle (getTypeHandleId)
-import safe CMM.Inference.Preprocess.HasTypeHole
+import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
+  ( TypeHole(EmptyTypeHole, MethodTypeHole, SimpleTypeHole)
+  , holeHandle
+  , holeId
+  , safeHoleHandle
+  )
 import safe CMM.Inference.Type (ToType(..), Type(ComplType))
 import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
@@ -55,25 +69,23 @@ import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)
 
 import safe CMM.Inference.Preprocess.State.Impl
+  ( InferPreprocessor(InferPreprocessor)
+  , cSymbols
+  , currentContext
+  , facts
+  , funcElabVariables
+  , funcInstVariables
+  , funcVariables
+  , handleCounter
+  , initInferPreprocessor
+  , structMembers
+  , typeClasses
+  , typeConstants
+  , typeVariables
+  , variables
+  )
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
-
-initInferPreprocessor :: InferPreprocessor
-initInferPreprocessor =
-  InferPreprocessor
-    { _variables = [mempty]
-    , _funcVariables = mempty
-    , _funcInstVariables = mempty
-    , _funcElabVariables = mempty
-    , _typeConstants = [mempty]
-    , _typeVariables = [mempty]
-    , _typeClasses = mempty
-    , _structMembers = mempty
-    , _facts = [mempty]
-    , _cSymbols = mempty
-    , _currentContext = [GlobalCtx]
-    , _handleCounter = 0
-    }
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole

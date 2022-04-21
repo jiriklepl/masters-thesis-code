@@ -7,7 +7,6 @@ module CMM.AST.Blockifier.State
 
 import safe Control.Lens.Setter ((+=), (.=))
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
-import safe Data.Maybe (Maybe(Nothing))
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
 import safe Prettyprinter (Pretty)
@@ -16,26 +15,24 @@ import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 
 import safe CMM.AST.Blockifier.State.Impl
+  ( Blockifier(Blockifier)
+  , blockData
+  , blocksTable
+  , constants
+  , continuations
+  , controlFlow
+  , currentBlock
+  , currentData
+  , errors
+  , imports
+  , initBlockifier
+  , labels
+  , registers
+  , stackLabels
+  , warnings
+  )
 
 type MonadBlockifier m = (MonadState Blockifier m, MonadIO m)
-
-initBlockifier :: Blockifier
-initBlockifier =
-  Blockifier
-    { _controlFlow = mempty
-    , _blocksTable = mempty
-    , _currentBlock = Nothing
-    , _currentData = mempty
-    , _blockData = mempty
-    , _registers = mempty
-    , _imports = mempty
-    , _constants = mempty
-    , _stackLabels = mempty
-    , _labels = mempty
-    , _continuations = mempty
-    , _errors = 0
-    , _warnings = 0
-    }
 
 clearBlockifier :: MonadBlockifier m => m ()
 clearBlockifier = do

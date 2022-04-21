@@ -4,12 +4,22 @@
 
 module CMM.AST.Flattener where
 
-import safe Prelude
+import safe Prelude (Num((+)))
 
-import safe Control.Applicative (liftA2)
+import safe Control.Applicative (Applicative(pure), liftA2)
+import safe Control.Monad (Functor(fmap), Monad(return), sequence)
 import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
+import safe Data.Function (($), (.), flip, id)
+import safe Data.Functor ((<$>))
+import safe Data.Int (Int)
+import safe Data.List ((++), concat, length, reverse, take, zip)
+import safe Data.Maybe (Maybe(Just, Nothing))
+import safe Data.Monoid ((<>))
+import safe Data.String (String)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
+import safe GHC.Err (error)
+import safe Text.Show (Show(show))
 
 import safe CMM.AST
   ( Actual

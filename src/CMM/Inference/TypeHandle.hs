@@ -1,18 +1,31 @@
-{-# LANGUAGE Safe #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE TemplateHaskell #-}
 
-module CMM.Inference.TypeHandle
-  ( module CMM.Inference.TypeHandle
-  , module CMM.Inference.TypeHandle.Impl
-  ) where
+module CMM.Inference.TypeHandle where
 
-import safe Prelude
+import safe Control.Lens.TH (makeLenses)
+import safe Data.Bool ((&&))
+import safe Data.Data (Data)
+import safe Data.Eq (Eq((==)))
+import safe Data.Monoid ((<>))
+import safe Data.Ord (Ord(compare))
+import safe Text.Show (Show)
 
 import safe CMM.Inference.Type (Type(VarType))
 import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.TypeVar (TypeVar)
 
-import safe CMM.Inference.TypeHandle.Impl
+data TypeHandle =
+  TypeHandle
+    { _identifier :: TypeVar
+    , _typing :: Type
+    , _consting :: TypeVar
+    , _kinding :: TypeVar
+    , _annot :: TypeAnnot
+    }
+  deriving (Show, Data)
+
+makeLenses ''TypeHandle
 
 instance Eq TypeHandle where
   TypeHandle {_typing = t, _consting = c, _kinding = k} == TypeHandle { _typing = t'

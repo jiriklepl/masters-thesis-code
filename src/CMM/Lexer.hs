@@ -7,15 +7,24 @@ module CMM.Lexer
   , tokenize
   ) where
 
-import safe Prelude
+import safe Prelude (Float, Num(negate))
 
+import safe CMM.AST.Annot (Annot, withAnnot)
 import safe Control.Applicative
   ( Alternative((<|>))
-  , Applicative(liftA2)
+  , Applicative((*>), (<*), liftA2, pure)
   , optional
   )
-import safe Data.Functor (($>), void)
+import safe Data.Bool (Bool(..))
+import safe Data.Char (Char)
+import safe Data.Eq (Eq)
+import safe Data.Function (($), (.))
+import safe Data.Functor (Functor, ($>), (<$>), void)
+import safe Data.Int (Int)
+import safe Data.List ((++))
 import safe Data.Maybe (isNothing)
+import safe Data.Ord (Ord)
+import safe Data.String (String)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
 import safe Data.Void (Void)
@@ -37,8 +46,7 @@ import safe Text.Megaparsec.Char
   , string
   )
 import safe qualified Text.Megaparsec.Char.Lexer as L
-
-import safe CMM.AST.Annot (Annot, withAnnot)
+import safe Text.Show (Show)
 
 type Lexer = Parsec Void Text
 

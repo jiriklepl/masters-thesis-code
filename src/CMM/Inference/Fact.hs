@@ -2,11 +2,20 @@
 
 module CMM.Inference.Fact where
 
-import safe Prelude
+import safe Prelude (Bounded(maxBound, minBound))
 
 import safe Data.Data (Data)
+import safe Data.Eq (Eq)
+import safe Data.Foldable (Foldable(null))
+import safe Data.Function (($), (.))
+import safe Data.Functor (Functor)
+import safe Data.Int (Int)
+import safe Data.Monoid (Monoid(mempty))
+import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
+import safe Data.Traversable (Traversable)
+import safe Text.Show (Show)
 
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))

@@ -5,17 +5,26 @@ module CMM.Inference.State
   , module CMM.Inference.State
   ) where
 
-import safe Prelude
+import safe Prelude (Bounded(maxBound, minBound))
 
+import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (+=))
+import safe Control.Monad (Functor(fmap), Monad((>>), (>>=), return))
 import safe Control.Monad.State.Lazy (MonadIO, MonadState)
 import safe Data.Foldable (fold)
+import safe Data.Function (($), (.), flip)
+import safe Data.Functor ((<$>))
+import safe Data.Int (Int)
+import safe Data.List (head, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (fromJust, fromMaybe)
+import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
+import safe Data.Monoid ((<>))
+import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
+import safe Data.Traversable (Traversable(traverse))
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
@@ -36,29 +45,24 @@ import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(..))
 
 import safe CMM.Inference.State.Impl
-
-initInferencer :: Int -> Inferencer
-initInferencer counter =
-  Inferencer
-    { _subKinding = mempty
-    , _kindingBounds = mempty
-    , _subConsting = mempty
-    , _constingBounds = mempty
-    , _unifs = mempty
-    , _typize = Bimap.empty
-    , _handlize = Bimap.empty
-    , _handleCounter = counter
-    , _classSchemes = mempty
-    , _classFacts = mempty
-    , _errors = mempty
-    , _schemes = mempty
-    , _currentParent = [globalTVar]
-    }
+  ( Inferencer(Inferencer)
+  , classFacts
+  , classSchemes
+  , constingBounds
+  , currentParent
+  , errors
+  , handleCounter
+  , handlize
+  , initInferencer
+  , kindingBounds
+  , schemes
+  , subConsting
+  , subKinding
+  , typize
+  , unifs
+  )
 
 type MonadInferencer m = (MonadState Inferencer m, MonadIO m)
-
-globalTVar :: TypeVar
-globalTVar = NoType
 
 getHandleCounter :: MonadInferencer m => m Int
 getHandleCounter = use handleCounter

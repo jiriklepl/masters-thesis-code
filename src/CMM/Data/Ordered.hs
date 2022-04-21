@@ -4,9 +4,10 @@
 
 module CMM.Data.Ordered where
 
-import safe Prelude
-
 import safe Data.Data (Data)
+import safe Data.Eq (Eq)
+import safe Data.Ord (Ord)
+import safe Text.Show (Show)
 
 data Ordered a where
   Ordered :: { unOrdered :: a} -> Ordered a

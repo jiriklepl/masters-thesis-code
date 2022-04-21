@@ -2,10 +2,12 @@
 
 module CMM.AST.HasName where
 
-import safe Prelude
-
+import safe Data.Function (($))
+import safe Data.List ((++))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
+import safe GHC.Err (error)
+import safe Text.Show (Show(show))
 
 import safe CMM.AST
   ( Class(..)

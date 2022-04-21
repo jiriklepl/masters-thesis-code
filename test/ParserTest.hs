@@ -10,18 +10,49 @@ module Main
   ( main
   ) where
 
+import safe Prelude (Integer, Monoid(mempty), Num((+)))
+
+import safe Control.Applicative (Applicative(pure))
+import safe Data.Bool (Bool(..))
+import safe Data.Either (Either(..), either)
+import safe Data.Eq (Eq((==)))
+import safe Data.Foldable (all)
+import safe Data.Function (($), (.), const, flip)
+import safe Data.Functor (Functor, (<$>))
+import safe Data.List ((++))
+import safe Data.String (String)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import Debug.Trace (trace)
-import safe Prettyprinter (Doc(), Pretty(), pretty)
+import safe GHC.Err (undefined)
 import safe System.Exit (exitFailure, exitSuccess)
-import safe Test.HUnit
+import safe System.IO (IO)
 import safe Text.Megaparsec (ParseErrorBundle(), Parsec(), many, runParser)
+import safe Text.Show (Show(show))
 
-import safe CMM.AST
-import safe CMM.AST.Annot
-import safe CMM.Lexer
+import safe Prettyprinter (Doc(), Pretty(), pretty)
+
+import safe Test.HUnit
+  ( Counts(errors, failures)
+  , Test
+  , Testable(test)
+  , (~:)
+  , assertBool
+  , assertEqual
+  , assertFailure
+  , runTestTT
+  )
+
+import safe CMM.AST (Expr(BinOpExpr), Op(AddOp, MulOp))
+import safe CMM.AST.Annot (Annotation(Annot), stripAnnots)
+import safe CMM.Lexer (tokenize)
 import safe CMM.Parser
+  ( Parser
+  , expr
+  , identifier
+  , litExpr
+  , stringLiteral
+  , topLevel
+  )
 import safe CMM.Pretty ()
 import safe QuasiQuotes (text)
 
@@ -61,11 +92,10 @@ checkReparse parser ast =
   either undefined (parse parser) . parse tokenize . T.pack . show $ -- TODO: clean this up (along with the other undefined)
   pretty ast
 
-testTemplate ::
-     (Show a, Pretty a) => String -> Text -> Parser a -> (a -> Bool) -> Test
+testTemplate :: Pretty a => String -> Text -> Parser a -> (a -> Bool) -> Test
 testTemplate testName input parser validator =
   testName ~: assertion $
-  either ((`trace` undefined) . show) (parse parser) $ parse tokenize input
+  either (undefined . show) (parse parser) $ parse tokenize input
   where
     assertion (Left result) =
       assertFailure $

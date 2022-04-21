@@ -2,10 +2,13 @@
 
 module CMM.Inference.Type where
 
-import safe Prelude
-
 import safe Data.Data (Data)
+import safe Data.Eq (Eq)
+import safe Data.Function (($), (.), id)
+import safe Data.Functor (Functor(fmap))
+import safe Data.Ord (Ord)
 import safe Data.Text (Text)
+import safe Text.Show (Show)
 
 import safe CMM.Data.Nullable (Fallbackable(..))
 import safe CMM.Inference.TypeCompl (TypeCompl(..))

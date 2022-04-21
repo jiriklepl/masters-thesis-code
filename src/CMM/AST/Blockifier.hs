@@ -6,17 +6,27 @@
 
 module CMM.AST.Blockifier where
 
+import safe Control.Applicative (Applicative((*>), (<*), pure))
 import safe Control.Lens.Getter (use, uses)
 import safe Control.Lens.Setter ((%=), (.=), (?=))
 import safe Control.Lens.Type (Lens)
+import safe Control.Monad (Monad((>>=), return))
 import safe Control.Monad.State.Lazy (MonadIO, MonadState, when)
-import safe Data.Foldable (traverse_)
-import safe Data.Functor (($>))
+import safe Data.Bool (Bool(..), (||), not)
+import safe Data.Eq (Eq)
+import safe Data.Foldable (Foldable(elem, null), any, concat, traverse_)
+import safe Data.Function (($), (.), flip)
+import safe Data.Functor (Functor(..), ($>), (<$>))
+import safe Data.Int (Int)
 import safe qualified Data.Map as Map
+import safe Data.Maybe (Maybe(..), maybe)
+import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Prelude hiding (reads)
+import safe Data.Traversable (Traversable(traverse))
+import safe Data.Tuple (fst, snd)
+import safe GHC.Err (error)
 import safe Prettyprinter (Pretty)
 
 import safe CMM.AST

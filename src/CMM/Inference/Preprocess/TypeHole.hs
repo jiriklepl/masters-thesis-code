@@ -2,9 +2,9 @@
 
 module CMM.Inference.Preprocess.TypeHole where
 
-import safe Prelude
-
-import safe Data.Maybe (fromMaybe)
+import safe Data.Function ((.))
+import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe)
+import safe GHC.Err (error)
 
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeVar (TypeVar)

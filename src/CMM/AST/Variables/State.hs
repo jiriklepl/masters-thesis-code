@@ -6,12 +6,12 @@ module CMM.AST.Variables.State
   , module CMM.AST.Variables.State
   ) where
 
-import safe Prelude
-
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Setter ((%=), (+=))
-import safe Control.Monad (unless)
+import safe Control.Monad (Functor((<$)), Monad((>>=)), unless)
 import safe Control.Monad.State (MonadIO, MonadState)
+import safe Data.Bool (Bool(False, True))
+import safe Data.Function (flip)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
@@ -24,20 +24,18 @@ import safe CMM.Pretty ()
 import safe CMM.Warnings (makeMessage, mkError, mkWarning)
 
 import safe CMM.AST.Variables.State.Impl
-
-initCollector :: Collector
-initCollector =
-  Collector
-    { _variables = mempty
-    , _funcVariables = mempty
-    , _funcInstVariables = mempty
-    , _typeConstants = mempty
-    , _typeVariables = mempty
-    , _typeClasses = mempty
-    , _structMembers = mempty
-    , _errors = 0
-    , _warnings = 0
-    }
+  ( Collector(Collector)
+  , errors
+  , funcInstVariables
+  , funcVariables
+  , initCollector
+  , structMembers
+  , typeClasses
+  , typeConstants
+  , typeVariables
+  , variables
+  , warnings
+  )
 
 type MonadCollectVariables m = (MonadState Collector m, MonadIO m)
 

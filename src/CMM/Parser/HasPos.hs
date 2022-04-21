@@ -6,8 +6,7 @@ module CMM.Parser.HasPos
   , SourcePos
   ) where
 
-import safe Prelude
-
+import safe Data.Function ((.), id)
 import safe Text.Megaparsec.Pos (SourcePos)
 
 import safe CMM.AST.Annot (Annot, takeAnnot)

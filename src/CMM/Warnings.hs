@@ -2,14 +2,15 @@
 
 module CMM.Warnings where
 
-import safe Prelude
-
 import safe Control.Monad.IO.Class (MonadIO(..))
+import safe Data.Function (($), (.))
+import safe Data.Monoid ((<>))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe qualified Data.Text.IO as T
 import safe Prettyprinter (Pretty(pretty))
 import safe Text.Megaparsec.Pos (sourcePosPretty)
+import safe Text.Show (Show(show))
 
 import safe CMM.AST.Utils ()
 import safe CMM.Parser.HasPos (HasPos(..), SourcePos)

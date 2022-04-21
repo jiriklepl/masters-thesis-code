@@ -2,10 +2,9 @@
 
 module CMM.Inference.Preprocess.HasTypeHole where
 
-import safe Prelude
-
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Tuple (_2)
+import safe Data.Function ((.), flip, id)
 
 import safe CMM.AST.Annot (Annot, takeAnnot)
 import safe CMM.Inference.Preprocess.TypeHole (TypeHole, holeId)

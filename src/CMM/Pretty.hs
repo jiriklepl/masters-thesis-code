@@ -5,7 +5,14 @@ module CMM.Pretty
   (
   ) where
 
-import safe Prelude
+import safe Data.Bool (Bool, not)
+import safe Data.Foldable (Foldable(null))
+import safe Data.Function (($), (.))
+import safe Data.Functor (Functor(fmap), (<$>))
+import safe Data.Maybe (Maybe(..), maybe)
+import safe Data.Monoid (Monoid(mempty), (<>))
+import safe GHC.Err (error)
+import safe Text.Show (Show(show))
 
 import safe Prettyprinter
   ( Doc

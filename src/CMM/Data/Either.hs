@@ -2,9 +2,10 @@
 
 module CMM.Data.Either where
 
-import safe Prelude
-
+import safe Control.Monad ((>>=))
 import safe Data.Bifunctor (bimap, first)
+import safe Data.Either (Either(..))
+import safe Data.Function (($))
 import safe Data.Functor (($>))
 
 oneRight :: [Either a b] -> Either [a] b

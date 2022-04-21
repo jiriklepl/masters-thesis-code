@@ -2,13 +2,19 @@
 
 module CMM.Inference.BuiltIn where
 
-import safe Prelude
-
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
+import safe Data.Function (($))
+import safe Data.Functor ((<$>))
+import safe Data.Int (Int)
+import safe Data.List (zip)
+import safe Data.Maybe (Maybe, maybe)
+import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
+import safe Data.String (String)
 import safe Data.Text (Text)
+import safe GHC.Err (error, undefined)
 
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Bimap (Bimap)

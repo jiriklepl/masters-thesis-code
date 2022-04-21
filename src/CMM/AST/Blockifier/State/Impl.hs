@@ -3,12 +3,14 @@
 
 module CMM.AST.Blockifier.State.Impl where
 
-import safe Prelude
-
 import safe Control.Lens.TH (makeLenses)
+import safe Data.Int (Int)
 import safe Data.Map (Map)
+import safe Data.Maybe (Maybe(Nothing))
+import safe Data.Monoid (Monoid(mempty))
 import safe Data.Set (Set)
 import safe Data.Text (Text)
+import safe Text.Show (Show)
 
 import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
 
@@ -29,5 +31,23 @@ data Blockifier =
     , _warnings :: Int -- TODO: move to a separate state ?
     }
   deriving (Show)
+
+initBlockifier :: Blockifier
+initBlockifier =
+  Blockifier
+    { _controlFlow = mempty
+    , _blocksTable = mempty
+    , _currentBlock = Nothing
+    , _currentData = mempty
+    , _blockData = mempty
+    , _registers = mempty
+    , _imports = mempty
+    , _constants = mempty
+    , _stackLabels = mempty
+    , _labels = mempty
+    , _continuations = mempty
+    , _errors = 0
+    , _warnings = 0
+    }
 
 makeLenses ''Blockifier

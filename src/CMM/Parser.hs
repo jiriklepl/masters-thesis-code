@@ -2,23 +2,37 @@
 
 module CMM.Parser where
 
-import safe Prelude
+import Prelude (Float)
 
-import safe Control.Applicative ((<**>), liftA2, liftA3)
-import safe Data.Functor (($>))
-import safe Data.Maybe (fromMaybe)
+import safe Control.Applicative
+  ( Alternative((<|>))
+  , Applicative((*>), (<*), (<*>), liftA2, pure)
+  , (<**>)
+  , liftA2
+  , liftA3
+  , optional
+  )
+import safe Control.Monad (Monad(return))
+import safe Data.Bool (Bool(..))
+import safe Data.Char (Char)
+import safe Data.Eq (Eq((==)))
+import safe Data.Foldable (Foldable(foldl1))
+import safe Data.Function (($), (.), flip, id)
+import safe Data.Functor (($>), ($>), (<$>))
+import safe Data.Int (Int)
+import safe Data.Maybe (Maybe(..), fromMaybe)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
+import safe Data.Tuple (fst, uncurry)
 import safe Data.Void (Void)
+import safe GHC.Err (error)
 import safe Text.Megaparsec
   ( MonadParsec(lookAhead, token, try)
   , Parsec
   , SourcePos
-  , (<|>)
   , between
   , choice
   , many
-  , optional
   , sepBy1
   , sepEndBy
   , sepEndBy1

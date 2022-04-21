@@ -3,9 +3,9 @@
 
 module CMM.AST.Utils where
 
-import safe Prelude
-
+import safe Data.Function (($), (.), flip, id)
 import safe Data.List (foldl')
+import safe Data.Maybe (Maybe(..))
 import safe Data.Text (Text)
 
 import safe CMM.AST

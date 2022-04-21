@@ -11,7 +11,7 @@ import safe Prelude hiding (Ord(..))
 
 import safe CMM.Data.Lattice (Lattice(..), join, meet)
 
-import safe CMM.Data.Bounds.Impl
+import safe CMM.Data.Bounds.Impl (Bounds(Bounds), lowerBound, upperBound)
 
 instance Lattice a => Semigroup (Bounds a) where
   Bounds low high <> Bounds low' high' = join low low' `Bounds` meet high high'

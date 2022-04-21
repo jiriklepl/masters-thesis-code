@@ -4,10 +4,14 @@
 
 module CMM.AST.Maps where
 
-import safe Prelude
-
+import safe Control.Applicative (Applicative(liftA2, pure), liftA3)
+import safe Data.Function (($), (.))
+import safe Data.Functor (Functor, (<$>))
 import safe Data.Functor.Identity (runIdentity)
 import safe qualified Data.Kind as Kind
+import safe Data.Maybe (Maybe(Just, Nothing))
+import safe Data.Traversable (Traversable(traverse))
+import safe GHC.Err (error)
 
 import safe CMM.AST
   ( Actual(..)
@@ -52,7 +56,6 @@ import safe CMM.AST
   )
 import safe CMM.AST.Annot (Annot)
 import safe CMM.Control.Applicative (liftA4, liftA6)
-import safe Control.Applicative (Applicative(liftA2), liftA3)
 
 type family Constraint hint a b :: Kind.Constraint
 

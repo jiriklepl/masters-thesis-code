@@ -2,11 +2,19 @@
 
 module CMM.Inference.TypeCompl where
 
-import safe Prelude
-
 import safe Data.Data (Data)
+import safe Data.Eq (Eq)
+import safe Data.Foldable (Foldable)
+import safe Data.Function (($))
+import safe Data.Functor (Functor)
+import safe Data.Int (Int)
+import safe Data.List ((++))
+import safe Data.Ord (Ord)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
+import safe Data.Traversable (Traversable)
+import safe GHC.Err (undefined)
+import safe Text.Show (Show(show))
 
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(..)

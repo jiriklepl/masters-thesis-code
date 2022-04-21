@@ -5,18 +5,27 @@
 -- TODO: all types of things inside procedures should be subtypes of the return type
 module CMM.Inference.Preprocess where
 
-import safe Control.Applicative (liftA2)
+import safe Control.Applicative (Applicative((<*), pure), liftA2)
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
-import safe Control.Monad ((>=>))
-import safe Control.Monad.State.Lazy (MonadIO, zipWithM_)
+import safe Control.Monad (Monad((>>=), return), (>=>), zipWithM_)
+import safe Control.Monad.IO.Class (MonadIO)
+import safe Data.Bool (otherwise)
+import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (for_, traverse_)
+import safe Data.Function (($), (.))
+import safe Data.Functor (Functor(fmap), (<$>))
+import safe Data.Int (Int)
+import safe Data.List (elem, foldl, unzip, zip)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (fromJust)
+import safe Data.Maybe (Maybe(Just, Nothing), fromJust)
+import safe Data.Monoid ((<>))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe Data.Traversable (for)
-import safe Prelude hiding (init)
+import safe Data.Traversable (Traversable(traverse), for)
+import safe Data.Tuple (uncurry)
+import safe GHC.Err (undefined)
+import safe Text.Show (Show(show))
 
 import safe CMM.AST as AST
   ( Actual(..)

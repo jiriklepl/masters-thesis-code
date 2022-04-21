@@ -2,10 +2,13 @@
 
 module CMM.Utils where
 
-import safe Prelude
-
-import safe Control.Monad (unless, when)
+import safe Control.Applicative (Applicative((*>)))
+import safe Control.Monad (Monad((>>=)), unless, when)
+import safe Data.Bool (Bool)
+import safe Data.Eq (Eq((/=), (==)))
+import safe Data.Function ((.), flip)
 import safe Data.Maybe (isJust)
+import safe Data.Semigroup (Semigroup((<>)))
 import safe Data.String (IsString)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)

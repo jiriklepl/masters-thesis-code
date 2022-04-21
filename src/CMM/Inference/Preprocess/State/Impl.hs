@@ -3,16 +3,16 @@
 
 module CMM.Inference.Preprocess.State.Impl where
 
-import safe Prelude
-
 import safe Control.Lens.TH (makeLenses)
-import safe Data.Map
-import safe Data.Text
+import safe Data.Int (Int)
+import safe Data.Map (Map)
+import safe Data.Monoid (Monoid(mempty))
+import safe Data.Text (Text)
 
-import safe CMM.Inference.Fact
-import safe CMM.Inference.Preprocess.ClassData
-import safe CMM.Inference.Preprocess.Context
-import safe CMM.Inference.TypeHandle
+import safe CMM.Inference.Fact (Facts)
+import safe CMM.Inference.Preprocess.ClassData (ClassData)
+import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
+import safe CMM.Inference.TypeHandle (TypeHandle)
 
 data InferPreprocessor =
   InferPreprocessor
@@ -28,6 +28,23 @@ data InferPreprocessor =
     , _cSymbols :: [Text]
     , _currentContext :: [Context]
     , _handleCounter :: Int
+    }
+
+initInferPreprocessor :: InferPreprocessor
+initInferPreprocessor =
+  InferPreprocessor
+    { _variables = [mempty]
+    , _funcVariables = mempty
+    , _funcInstVariables = mempty
+    , _funcElabVariables = mempty
+    , _typeConstants = [mempty]
+    , _typeVariables = [mempty]
+    , _typeClasses = mempty
+    , _structMembers = mempty
+    , _facts = [mempty]
+    , _cSymbols = mempty
+    , _currentContext = [GlobalCtx]
+    , _handleCounter = 0
     }
 
 makeLenses ''InferPreprocessor

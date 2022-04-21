@@ -2,7 +2,10 @@
 
 module CMM.Monomorphize.PolyKind where
 
-import safe Prelude
+import safe Data.Eq (Eq)
+import safe Data.Monoid (Monoid(mempty))
+import safe Data.Ord (Ord)
+import safe Data.Semigroup (Semigroup((<>)))
 
 import safe CMM.Data.Nullable (Fallbackable(..), Nullable(..))
 
