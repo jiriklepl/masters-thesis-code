@@ -69,7 +69,7 @@ type family Space hint :: Kind.Type -> Kind.Type -> (Kind.Type -> Kind.Type) -> 
 
 type SpaceAnnot hint a b n = Space hint a b (Annot n)
 
-type ASTmapCTX1 hint a b n = (SpaceAnnot hint a b n, ASTmapGen hint a b)
+type ASTmapCTX1 hint a b n = SpaceAnnot hint a b n
 
 type ASTmapCTX2 hint a b n m = (SpaceAnnot hint a b n, ASTmapCTX1 hint a b m)
 
@@ -93,8 +93,6 @@ type ASTmapCTX8 hint a b n m o p q r s t
 
 type ASTmapCTX9 hint a b n m o p q r s t u
    = (SpaceAnnot hint a b n, ASTmapCTX8 hint a b m o p q r s t u)
-
-class ASTmapGen hint a b
 
 class ASTmap hint n a b where
   astMapM ::
@@ -290,7 +288,7 @@ instance ( ASTmapCTX9 hint a b Actual Arm Body CallAnnot Expr Flow KindName LVal
       GotoStmt a b -> liftA2 GotoStmt (f a) (traverse f b)
       CutToStmt a b c -> liftA3 CutToStmt (f a) (traverse f b) (traverse f c)
 
-instance (ASTmapGen hint a b, Space hint a b Name) =>
+instance Space hint a b Name =>
          ASTmap hint KindName a b where
   astMapM _ f =
     \case

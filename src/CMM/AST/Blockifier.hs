@@ -80,7 +80,7 @@ import safe CMM.AST.Blockifier.State
   , stackLabels
   )
 import safe CMM.AST.HasName (HasName(getName))
-import safe CMM.AST.Maps (ASTmap(astMapM), ASTmapGen, Constraint, Space)
+import safe CMM.AST.Maps (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Utils
   ( GetTrivialGotoTarget(getTrivialGotoTarget)
   , getExprLVName
@@ -393,8 +393,6 @@ instance {-# OVERLAPPABLE #-} (ASTmap BlockifyHint n a b) =>
                               Blockify (Annot n) a b where
   blockify (Annot n a) =
     withAnnot (withBlockAnnot NoBlock a) <$> astMapM BlockifyHint blockify' n
-
-instance ASTmapGen BlockifyHint a b
 
 instance Blockify (Annot Datum) a b where
   blockify datum@(Annot DatumLabel {} _) =

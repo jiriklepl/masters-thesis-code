@@ -71,7 +71,7 @@ import safe CMM.AST.Annot as AST
   , withAnnot
   )
 import safe CMM.AST.HasName as AST (HasName(getName))
-import safe CMM.AST.Maps as AST (ASTmap(astMapM), ASTmapGen, Constraint, Space)
+import safe CMM.AST.Maps as AST (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Variables as AST
   ( classVariables
   , globalVariables
@@ -198,8 +198,6 @@ instance WithTypeHole a b => Preprocess' a b Name where
 
 instance Preprocess n a b => Preprocess' a b (Annot n) where
   preprocess' = preprocess
-
-instance ASTmapGen PreprocessHint a b
 
 pass ::
      ( ASTmap PreprocessHint n a b

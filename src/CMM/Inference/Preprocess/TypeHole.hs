@@ -18,7 +18,7 @@ data TypeHole
 holeHandle :: TypeHole -> TypeHandle
 holeHandle = fromMaybe err . safeHoleHandle
   where
-    err = error "(Internal) implementations error" -- TODO
+    err = error "(Internal) implementation error" -- TODO
 
 safeHoleHandle :: TypeHole -> Maybe TypeHandle
 safeHoleHandle EmptyTypeHole = Nothing
