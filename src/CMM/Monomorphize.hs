@@ -22,29 +22,34 @@ import safe Data.Traversable (for)
 import safe Data.Void (Void)
 
 import safe CMM.AST
-  ( Actual(..)
+  ( Actual(Actual)
   , Asserts
-  , Body(..)
-  , BodyItem(..)
+  , Body(Body)
+  , BodyItem(BodyDecl, BodyStackDecl, BodyStmt)
   , CallAnnot
   , Datum
-  , Decl(..)
+  , Decl(ConstDecl, ExportDecl, ImportDecl, PragmaDecl, RegDecl,
+     TargetDecl, TypedefDecl)
   , Export
-  , Expr(..)
+  , Expr(BinOpExpr, ComExpr, InfixExpr, LVExpr, LitExpr, MemberExpr,
+     NegExpr, ParExpr, PrefixExpr)
   , Import
-  , Instance(..)
+  , Instance(Instance)
   , KindName
-  , LValue(..)
+  , LValue(LVName, LVRef)
   , Lit
-  , Procedure(..)
+  , Procedure(Procedure)
   , ProcedureHeader
-  , Section(..)
+  , Section(SecDatum, SecDecl, SecProcedure, SecSpan)
   , StackDecl
-  , Stmt(..)
-  , Struct(..)
+  , Stmt(AssignStmt, CallStmt, ContStmt, CutToStmt, EmptyStmt,
+     GotoStmt, IfStmt, JumpStmt, LabelStmt, PrimOpStmt, ReturnStmt,
+     SpanStmt, SwitchStmt)
+  , Struct(Struct)
   , Targets
-  , TopLevel(..)
-  , Unit(..)
+  , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
+         TopStruct)
+  , Unit(Unit)
   )
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
@@ -58,7 +63,13 @@ import safe CMM.Data.Tuple (submergeTuple)
 import safe CMM.Inference (simplify)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Preprocess.HasTypeHole
+  ( HasTypeHole(getTypeHole)
+  , getTypeHoleId
+  )
 import safe CMM.Inference.Preprocess.TypeHole
+  ( TypeHole(LVInstTypeHole, MethodTypeHole, SimpleTypeHole)
+  , holeHandle
+  )
 import safe CMM.Inference.State
   ( MonadInferencer
   , fromOldName
@@ -70,8 +81,12 @@ import safe CMM.Inference.State
   , tryGetHandle
   )
 import safe CMM.Inference.Subst (Subst, apply)
-import safe CMM.Inference.Type as Type (Type(..))
-import safe CMM.Inference.TypeCompl (TypeCompl(..))
+import safe CMM.Inference.Type as Type (Type(ComplType, ErrorType, VarType))
+import safe CMM.Inference.TypeCompl
+  ( TypeCompl(AddrType, AppType, BoolType, ConstType, FunctionType,
+          LabelType, LamType, String16Type, StringType, TBitsType, TupleType,
+          VoidType)
+  )
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -100,8 +115,11 @@ import safe CMM.Monomorphize.Monomorphized
   , withMaybeNode
   , withNode
   )
-import safe CMM.Monomorphize.PolyKind (PolyKind(..))
-import safe CMM.Monomorphize.Schematized (Schematized(..), schematized2topLevel)
+import safe CMM.Monomorphize.PolyKind (PolyKind(Absurd, Mono, Poly))
+import safe CMM.Monomorphize.Schematized
+  ( Schematized(FuncScheme, StructScheme)
+  , schematized2topLevel
+  )
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
 

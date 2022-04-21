@@ -288,8 +288,7 @@ instance ( ASTmapCTX9 hint a b Actual Arm Body CallAnnot Expr Flow KindName LVal
       GotoStmt a b -> liftA2 GotoStmt (f a) (traverse f b)
       CutToStmt a b c -> liftA3 CutToStmt (f a) (traverse f b) (traverse f c)
 
-instance Space hint a b Name =>
-         ASTmap hint KindName a b where
+instance Space hint a b Name => ASTmap hint KindName a b where
   astMapM _ f =
     \case
       KindName a b -> KindName a <$> f b
