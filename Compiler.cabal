@@ -23,6 +23,7 @@ common common-options
                        FlexibleContexts
                        FlexibleInstances
                        FunctionalDependencies
+                       GADTSyntax
                        KindSignatures
                        LambdaCase
                        NoImplicitPrelude
