@@ -36,8 +36,8 @@ common common-options
   default-language:    Haskell2010
   ghc-options:         -Wall
                        -Wcompat
-                       -Wcpp-undef
                        -Wextra
+                       -Wcpp-undef
                        -Widentities
                        -Wimplicit-prelude
                        -Wmissing-import-lists
@@ -49,7 +49,6 @@ common common-options
                        megaparsec ^>=9.0.1,
                        prettyprinter ^>=1.7.1,
                        text ^>=1.2.4.0,
-
 executable Compiler
   import:              common-options
   main-is:             Compiler/Main.hs
@@ -77,6 +76,7 @@ executable Compiler
                        CMM.Data.Float,
                        CMM.Data.Function,
                        CMM.Data.Lattice,
+                       CMM.Data.List,
                        CMM.Data.Nullable,
                        CMM.Data.Num,
                        CMM.Data.Ordered,
@@ -120,6 +120,7 @@ executable Compiler
                        CMM.Translator,
                        CMM.Translator.State,
                        CMM.Utils,
+                       CMM.Err.State,
                        CMM.Warnings
   build-depends:       bimap ^>= 0.4.0,
                        lens >=5.0.1 && <5.2,
