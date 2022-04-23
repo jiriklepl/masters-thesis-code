@@ -7,9 +7,9 @@ module CMM.Inference.State
 
 import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), use, uses, view)
-import safe Control.Lens.Setter ((%=), (+=))
+import safe Control.Lens.Setter ((%=), (+=), (<>=))
 import safe Control.Monad (Functor(fmap), Monad((>>), (>>=), return))
-import safe Control.Monad.State.Lazy (MonadIO, MonadState)
+import safe Control.Monad.State (MonadState)
 import safe Data.Foldable (fold)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
@@ -43,13 +43,15 @@ import safe CMM.Inference.TypeHandle
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(TypeVar))
 
+import safe CMM.Err.Error (Error(Error))
+import safe CMM.Err.Severity (Severity(ErrorLevel))
+import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
 import safe CMM.Inference.State.Impl
   ( Inferencer(Inferencer)
   , classFacts
   , classSchemes
   , constingBounds
   , currentParent
-  , errors
   , handleCounter
   , handlize
   , initInferencer
@@ -60,8 +62,9 @@ import safe CMM.Inference.State.Impl
   , typize
   , unifs
   )
+import safe CMM.Inference.Unify.Error (UnificationError)
 
-type MonadInferencer m = (MonadState Inferencer m, MonadIO m)
+type MonadInferencer m = MonadState Inferencer m
 
 getHandleCounter :: MonadInferencer m => m Int
 getHandleCounter = use handleCounter
@@ -124,7 +127,7 @@ getKinding tVar = view kinding <$> getHandle tVar
 getTyping :: MonadInferencer m => TypeVar -> m Type
 getTyping tVar = view typing <$> getHandle tVar
 
-collectPrimeTVars :: MonadState Inferencer m => TypeVar -> m (Set TypeVar)
+collectPrimeTVars :: MonadInferencer m => TypeVar -> m (Set TypeVar)
 collectPrimeTVars tVar =
   uses typize (Bimap.lookup tVar) >>= \case
     Just primType -> fold <$> traverse collectPrimeTVars primType
@@ -162,14 +165,18 @@ registerScheme tVar scheme = schemes %= Map.insert tVar scheme
 freshTypeHelperWithHandle :: MonadInferencer m => TypeKind -> m TypeVar
 freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar
 
-fromOldName :: MonadState Inferencer m => TypeVar -> m TypeVar
+fromOldName :: MonadInferencer m => TypeVar -> m TypeVar
 fromOldName tVar = uses unifs (`apply` tVar)
 
-reconstruct :: MonadState Inferencer m => TypeVar -> m Type
+reconstruct :: MonadInferencer m => TypeVar -> m Type
 reconstruct tVar =
   uses typize (Bimap.lookup tVar) >>= \case
     Just primType -> ComplType <$> traverse reconstruct primType
     Nothing -> return $ VarType tVar
 
-reconstructOld :: MonadState Inferencer m => TypeVar -> m Type
+reconstructOld :: MonadInferencer m => TypeVar -> m Type
 reconstructOld tVar = fromOldName tVar >>= reconstruct
+
+addUnificationErrors :: MonadInferencer m => [UnificationError] -> m ()
+addUnificationErrors errs =
+  errorState <>= ErrorState (Error ErrorLevel <$> errs)

@@ -4,6 +4,7 @@
 module CMM.Inference.Preprocess.State.Impl where
 
 import safe Control.Lens.TH (makeLenses)
+
 import safe Data.Int (Int)
 import safe Data.Map (Map)
 import safe Data.Monoid (Monoid(mempty))

@@ -4,6 +4,7 @@
 module CMM.Inference.TypeHandle where
 
 import safe Control.Lens.TH (makeLenses)
+
 import safe Data.Bool ((&&))
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))

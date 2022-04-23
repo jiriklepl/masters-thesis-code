@@ -5,14 +5,13 @@ module CMM.AST.Variables where
 
 import safe Control.Applicative (Applicative((*>), (<*)))
 import safe Control.Lens.Getter ((^.))
-import safe Control.Monad (Monad(return), zipWithM_)
+import safe Control.Monad (Monad(return))
 import safe Control.Monad.State (MonadIO, StateT, execStateT)
 import safe Data.Data (Data(gmapM), Typeable)
 import safe Data.Foldable (Foldable(foldr), traverse_)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor (Functor((<$)), (<$>))
 import safe Data.Generics.Aliases (extM)
-import safe Data.List (repeat)
 import safe Data.Map (Map)
 import safe Data.Maybe (Maybe(Just, Nothing))
 import safe qualified Data.Set as Set
@@ -141,8 +140,7 @@ addCommonCases go =
       \case
         decl@(Annot ConstDecl {} (_ :: SourcePos)) -> addVarTrivial decl Star
         decl@(Annot (TypedefDecl _ names) (_ :: SourcePos)) ->
-          decl <$
-          traverse_ (flip (addTCon decl) GenericType) (getName <$> names)
+          decl <$ traverse_ (`addTCon` GenericType) names
         decl -> gmapM go decl
     goImport =
       \case
@@ -150,10 +148,7 @@ addCommonCases go =
     goRegisters =
       \case
         registers@(Annot (Registers _ _ nameStrLits) (_ :: SourcePos)) ->
-          registers <$
-          traverse_
-            (flip (addVar registers) Star)
-            (getName . fst <$> nameStrLits)
+          registers <$ traverse_ (`addVar` Star) (fst <$> nameStrLits)
     goDatum =
       \case
         datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum Star
@@ -170,28 +165,26 @@ addGlobalCases go =
     goClass =
       \case
         class'@(Annot (Class _ (Annot (ParaName _ args) _) methods) (_ :: SourcePos)) -> do
-          zipWithM_ addMethod methods (getName <$> methods)
+          traverse_ addMethod methods
           class' <$
             addTClass
               class'
-              (getName class')
               (foldr (:->) Constraint (Star <$ args))
               (Set.fromList $ getName <$> methods) -- TODO: add less trivial kind analysis (should be a simple bunch of unifs)
       where
-        addMethod node name = do
-          addFVar node name Star
-          addFIVar node name Star
+        addMethod node = do
+          addFVar node Star
+          addFIVar node Star
     goInstance =
       \case
         (instance' :: Annot Instance SourcePos) -> return instance'
     goStruct =
       \case
         struct@(Annot (Struct (Annot (ParaName _ args) _) decls) (_ :: SourcePos)) -> do
-          addTCon struct (getName struct) (foldr (:->) Star (Star <$ args)) -- TODO: add less trivial kind analysis
-          zipWithM_
-            addSMemTrivial
+          addTCon struct (foldr (:->) Star (Star <$ args)) -- TODO: add less trivial kind analysis
+          traverse_
+            (`addSMemTrivial` Star)
             [label | label@(Annot DatumLabel {} _) <- decls]
-            (repeat Star)
           return struct
     goSection =
       \case
@@ -247,6 +240,6 @@ addTAutoCases go = goTAuto *|* go
     goTAuto =
       \case
         tAuto@(Annot (TAuto Nothing) (_ :: SourcePos)) -> return tAuto
-        tAuto@(Annot (TAuto (Just n)) (_ :: SourcePos)) ->
-          tAuto <$ addTVar tAuto (getName n) GenericType
+        tAuto@(Annot (TAuto Just {}) (_ :: SourcePos)) ->
+          tAuto <$ addTVar tAuto GenericType
         type' -> gmapM go type'

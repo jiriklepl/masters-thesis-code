@@ -19,12 +19,15 @@ import safe Data.List (elemIndex, filter, sortOn, zip, zipWith)
 import safe qualified Data.Map as Map
 import safe Data.Monoid ((<>), mempty)
 import safe qualified Data.Set as Set
-import safe qualified Data.Text as T
 import safe Data.Traversable (traverse)
 import safe Data.Tuple (fst, swap)
 
 import safe CMM.AST (Procedure)
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
+import CMM.AST.Blockifier.Error
+  ( BlockifierError(UninitializedRegisters, UnreachableContinuations,
+                UnreachableLabels)
+  )
 import safe CMM.AST.Blockifier.State
   ( MonadBlockifier
   , blockData
@@ -32,11 +35,10 @@ import safe CMM.AST.Blockifier.State
   , continuations
   , controlFlow
   , labels
-  , registerError
-  , registerWarning
   , registers
   )
 import safe CMM.Data.Num ((-))
+import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)
@@ -50,18 +52,16 @@ analyzeFlow procedure@(Annot _ _)
   let graph = Graph.buildG (0, Map.size blocks - 1) flow -- one block is guaranteed (procedure)
       blockNames = Map.fromList $ swap <$> Map.toList blocks
       reachable = Set.fromList $ Graph.reachable graph 0
-      removeReachable = (Set.\\ Set.map (blockNames Map.!) reachable)
-      makeMessageFromVisible = T.unwords . filter (not . hasPrefix) . Set.toList
+      removeReachable = (`Map.withoutKeys` Set.map (blockNames Map.!) reachable)
+      makeMessageFromVisible = filter (not . hasPrefix) . Map.keys
   labelsWarning <- makeMessageFromVisible <$> uses labels removeReachable
   continuationsWarning <-
     makeMessageFromVisible <$> uses continuations removeReachable
-  unless (T.null labelsWarning && T.null continuationsWarning) .
-    registerWarning procedure $
-    "Unreachable labels: " <>
-    labelsWarning <>
-    "\n\t" <> "Unreachable continuations: " <> continuationsWarning
+  unless (null labelsWarning && null continuationsWarning) $ do
+    registerASTWarning procedure $ UnreachableLabels labelsWarning
+    registerASTWarning procedure $ UnreachableContinuations continuationsWarning
   preCleanData <-
-    uses registers (fmap . flip Map.restrictKeys) <*>
+    uses registers (fmap . flip Map.restrictKeys . Map.keysSet) <*>
     uses blockData (`Map.restrictKeys` reachable) -- we filter out variables that are not local variables and whole blocks that are not reachable
   let allVars =
         (False, False, False) <$
@@ -76,9 +76,7 @@ analyzeFlow procedure@(Annot _ _)
   doWhile $ or <$> traverse updateFlowPair cleanFlow
   uninitialized <- uses blockData $ Map.keys . Map.filter (^. _3) . (Map.! 0)
   unless (null uninitialized) $
-    registerError
-      procedure
-      ("Uninitialized registers: " <> T.unwords uninitialized)
+    registerASTError procedure $ UninitializedRegisters uninitialized
 
 -- TODO: "unused after write" warning
 updateFlowPair :: MonadBlockifier m => (Int, Int) -> m Bool

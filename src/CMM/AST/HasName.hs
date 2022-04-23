@@ -4,6 +4,7 @@ module CMM.AST.HasName where
 
 import safe Data.Function (($))
 import safe Data.List ((++))
+import safe Data.Maybe (Maybe(Just))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe GHC.Err (error)
@@ -31,7 +32,7 @@ import safe CMM.AST
   , Struct(Struct)
   , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
          TopStruct)
-  , Type(TBits, TName)
+  , Type(TAuto, TBits, TName)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -109,6 +110,7 @@ instance HasName (LValue a) where
 instance HasName (Type a) where
   getName (TName n) = getName n
   getName (TBits n) = T.pack $ "bits" ++ show n
+  getName (TAuto (Just n)) = getName n
   getName _ = error "This type does not have a name"
 
 instance HasName Conv where

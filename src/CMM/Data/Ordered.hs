@@ -1,5 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ExistentialQuantification #-}
 
 module CMM.Data.Ordered where
 
@@ -9,7 +10,7 @@ import safe Data.Ord (Ord)
 import safe Text.Show (Show)
 
 data Ordered a where
-  Ordered :: { unOrdered :: a} -> Ordered a
+  Ordered :: forall a . Ord (Ordered a) => { unOrdered :: a} -> Ordered a
 
 deriving instance Show a => Show (Ordered a)
 

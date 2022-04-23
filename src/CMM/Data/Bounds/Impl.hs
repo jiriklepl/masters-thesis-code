@@ -8,6 +8,7 @@ module CMM.Data.Bounds.Impl
   ) where
 
 import safe Control.Lens.TH (makeLenses)
+
 import safe Data.Data (Data)
 import safe Data.Eq (Eq)
 import safe Data.Functor (Functor)

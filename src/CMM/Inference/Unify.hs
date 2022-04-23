@@ -16,11 +16,8 @@ import safe Data.Maybe (Maybe(Just, Nothing))
 import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Ord (Ord((<), (>)))
 import safe qualified Data.Set as Set
-import safe Data.Text (Text)
 import safe GHC.Err (undefined)
-import safe Text.Show (Show)
 
-import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Subst (Apply(apply), Subst)
 import safe CMM.Inference.Type
@@ -40,21 +37,9 @@ import safe CMM.Inference.TypeVar
   ( TypeVar(NoType, TypeVar, tVarKind)
   , familyDepth
   )
-
-data UnificationError
-  = Occurs TypeVar Type
-  | Mismatch Text Type Type
-  | NoSubType Type Type -- supertype; subtype
-  | NoConstness Constness Type
-  | NoKind Text Type
-  | NoRegister Text Type
-  | TupleMismatch [Type] [Type]
-  | GotErrorType Text
-  | IllegalPolytype Type
-  | BadKind Type Type
-  | FalseKind
-  | FalseConst
-  deriving (Show)
+import safe CMM.Inference.Unify.Error
+  ( UnificationError(BadKind, GotErrorType, Mismatch, Occurs)
+  )
 
 class Unify a b | a -> b where
   unify :: a -> a -> Either [UnificationError] (Subst b, a)

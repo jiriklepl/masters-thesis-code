@@ -3,9 +3,10 @@
 
 module CMM.Monomorphize.Monomorphized where
 
+import safe Control.Lens.TH (makeLenses)
+
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Setter ((.~))
-import safe Control.Lens.TH (makeLenses)
 import Data.Eq (Eq)
 import Data.Foldable (Foldable(foldMap))
 import Data.Function (($), (.))

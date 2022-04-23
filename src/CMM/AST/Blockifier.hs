@@ -21,13 +21,10 @@ import safe Data.Int (Int)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
-import safe Data.Set (Set)
-import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (fst, snd)
 import safe GHC.Err (error)
-import safe Prettyprinter (Pretty)
 
 import safe CMM.AST
   ( Actual(Actual)
@@ -62,6 +59,12 @@ import safe CMM.AST.BlockAnnot
   , HasBlockAnnot(getBlockAnnot)
   , WithBlockAnnot(withBlockAnnot)
   )
+import safe CMM.AST.Blockifier.Error
+  ( BlockifierError(FlatteningInconsistency, GotoWithoutTargets,
+                UnreachableStatement)
+  , continuationFallthrough
+  , duplicateSymbol
+  )
 import safe CMM.AST.Blockifier.State
   ( Blockifier
   , blockData
@@ -74,8 +77,6 @@ import safe CMM.AST.Blockifier.State
   , currentData
   , imports
   , labels
-  , registerError
-  , registerWarning
   , registers
   , stackLabels
   )
@@ -85,10 +86,16 @@ import safe CMM.AST.Utils
   ( GetTrivialGotoTarget(getTrivialGotoTarget)
   , getExprLVName
   )
+import safe CMM.AST.Variables.SymbolType
+  ( SymbolType(ConstDeclSymbol, ContSymbol, DatumLabelSymbol,
+           ImportSymbol, LabelSymbol, RegisterSymbol)
+  )
 import safe CMM.FlowAnalysis (analyzeFlow)
-import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
+import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (addPrefix)
+import safe Data.Map (Map)
 
 type MonadBlockify m = (MonadState Blockifier m, MonadIO m)
 
@@ -231,7 +238,7 @@ addBlockAnnot ::
 addBlockAnnot stmt@(Annot n annot) =
   use currentBlock >>= \case
     Nothing ->
-      registerWarning stmt "The statement is unreachable" $>
+      registerASTWarning stmt UnreachableStatement $>
       withAnnot (withBlockAnnot Unreachable annot) (noBlockAnnots n)
     Just block ->
       return . withAnnot (withBlockAnnot (PartOf block) annot) $ noBlockAnnots n
@@ -396,7 +403,7 @@ instance {-# OVERLAPPABLE #-} (ASTmap BlockifyHint n a b) =>
 
 instance Blockify (Annot Datum) a b where
   blockify datum@(Annot DatumLabel {} _) =
-    storeSymbol stackLabels "datum label" datum $> noBlockAnnots datum
+    storeSymbol stackLabels DatumLabelSymbol datum $> noBlockAnnots datum
   blockify datum@(Annot _ _) = return $ noBlockAnnots datum
 
 blockifyProcedureHeader ::
@@ -468,12 +475,12 @@ instance Blockify (Annot Decl) a b where
   blockify (ImportDecl imports' `Annot` a) =
     withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
   blockify decl@(Annot ConstDecl {} _) =
-    storeSymbol constants "constant declaration" decl $> noBlockAnnots decl
+    storeSymbol constants ConstDeclSymbol decl $> noBlockAnnots decl
   blockify decl@(Annot _ _) = return $ noBlockAnnots decl
 
 instance Blockify (Annot Import) a b where
   blockify import'@(Annot Import {} _) =
-    storeSymbol imports "import" import' $> noBlockAnnots import'
+    storeSymbol imports ImportSymbol import' $> noBlockAnnots import'
 
 instance Blockify (Annot Registers) a b where
   blockify regs@(Registers _ _ nameStrLits `Annot` _) =
@@ -482,33 +489,29 @@ instance Blockify (Annot Registers) a b where
 instance Blockify (Annot Formal) a b where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
-storeRegister ::
-     (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m)
-  => n
-  -> m ()
-storeRegister = storeSymbol registers "register"
+storeRegister :: (MonadState Blockifier m, HasName n, HasPos n) => n -> m ()
+storeRegister = storeSymbol registers RegisterSymbol
 
 storeSymbol ::
-     (MonadState Blockifier m, HasName n, HasPos n, Pretty n, MonadIO m)
-  => Lens Blockifier Blockifier (Set Text) (Set Text)
-  -> Text
+     (MonadState Blockifier m, HasName n, HasPos n)
+  => Lens Blockifier Blockifier (Map Text SourcePos) (Map Text SourcePos)
+  -> SymbolType
   -> n
   -> m ()
-storeSymbol symbolSet symbolName node = do
-  symbols' <- use symbolSet
-  if getName node `Set.member` symbols'
-    then registerError node ("Duplicate " <> symbolName)
-    else symbolSet .= getName node `Set.insert` symbols'
+storeSymbol symbolMap symbolName node = do
+  symbols' <- use symbolMap
+  if getName node `Map.member` symbols'
+    then registerASTError node $ duplicateSymbol symbolName node
+    else symbolMap .= Map.insert (getName node) (getPos node) symbols'
 
 instance Blockify (Annot Stmt) a b where
   blockify stmt@(Annot LabelStmt {} _) = do
     addControlFlow $ getName stmt -- a possible fallthrough
-    storeSymbol labels "label" stmt
+    storeSymbol labels LabelSymbol stmt
     blockifyLabelStmt stmt
   blockify stmt@(Annot ContStmt {} _) = do
-    storeSymbol continuations "continuation" stmt
-    blockIsSet >>=
-      (`when` registerError stmt "Fallthrough to a continuation is forbidden")
+    storeSymbol continuations ContSymbol stmt
+    blockIsSet >>= (`when` registerASTError stmt (continuationFallthrough stmt))
     blockifyLabelStmt stmt <* registerWrites stmt
   blockify stmt@(GotoStmt expr _ `Annot` _) = do
     case (getExprLVName expr, getTargetNames stmt) of
@@ -518,13 +521,10 @@ instance Blockify (Annot Stmt) a b where
           then addControlFlow name
           else traverse_ addControlFlow targets
       (Just name, _) -> addControlFlow name
-      (Nothing, _) ->
-        registerError
-          stmt
-          "Indirect goto statement without specified targets is illegal"
+      (Nothing, _) -> registerASTError stmt GotoWithoutTargets
     registerReads stmt *> addBlockAnnot stmt <* unsetBlock
   blockify (Annot CutToStmt {} _) =
-    error "Cut to statements are not currently implemented" -- TODO: implement `cut to` statements
+    error "'Cut to' statements are not currently implemented" -- TODO: implement `cut to` statements
   blockify stmt@(Annot ReturnStmt {} _) =
     registerReads stmt *> addBlockAnnot stmt <* unsetBlock
   blockify stmt@(Annot JumpStmt {} _) =
@@ -558,9 +558,8 @@ instance Blockify (Annot Stmt) a b where
     when (neverReturns callAnnots) unsetBlock
 
 -- This is here just for completeness
-flatteningError :: (HasPos n, Pretty n, MonadBlockify m) => n -> m ()
-flatteningError stmt =
-  registerError stmt "Compilation internal failure in the flattening phase"
+flatteningError :: (HasPos n, MonadBlockify m) => n -> m ()
+flatteningError stmt = registerASTError stmt FlatteningInconsistency
 
 blockifyLabelStmt ::
      (MonadState Blockifier m, WithBlockAnnot a b)

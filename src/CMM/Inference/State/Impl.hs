@@ -3,7 +3,7 @@
 
 module CMM.Inference.State.Impl where
 
-import safe Control.Lens.TH (makeLenses)
+import safe Control.Lens.TH (makeFieldsNoPrefix)
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe Data.Int (Int)
@@ -15,6 +15,7 @@ import safe Text.Show (Show)
 
 import safe CMM.Data.Bimap (Bimap)
 import safe CMM.Data.Bounds (Bounds)
+import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Scheme)
@@ -22,7 +23,6 @@ import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import safe CMM.Inference.Unify (UnificationError)
 
 data Inferencer =
   Inferencer
@@ -43,7 +43,7 @@ data Inferencer =
     -- | TODO
     , _handleCounter :: Int
     -- | TODO
-    , _errors :: [UnificationError]
+    , _errorState :: ErrorState
     -- | TODO
     , _classSchemes :: Map Text (Scheme Type, [Scheme Type])
     -- | TODO
@@ -68,7 +68,7 @@ initInferencer counter =
     , _handleCounter = counter
     , _classSchemes = mempty
     , _classFacts = mempty
-    , _errors = mempty
+    , _errorState = mempty
     , _schemes = mempty
     , _currentParent = [globalTVar]
     }
@@ -76,4 +76,4 @@ initInferencer counter =
 globalTVar :: TypeVar
 globalTVar = NoType
 
-makeLenses ''Inferencer
+makeFieldsNoPrefix ''Inferencer

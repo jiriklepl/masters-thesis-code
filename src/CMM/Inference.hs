@@ -7,7 +7,7 @@ module CMM.Inference where
 import safe Control.Applicative (Applicative((*>), (<*), (<*>), liftA2, pure))
 import safe Control.Lens (Lens')
 import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
-import safe Control.Lens.Setter ((%=), (%~), (.=), (.~), (<>=))
+import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad (Monad((>>=), return), sequence, when)
@@ -91,11 +91,11 @@ import safe CMM.Inference.Preprocess.TypeHole
 import safe CMM.Inference.State
   ( Inferencer
   , MonadInferencer
+  , addUnificationErrors
   , classFacts
   , classSchemes
   , collectPrimeTVars
   , constingBounds
-  , errors
   , freshAnnotatedTypeHelper
   , freshTypeHelperWithHandle
   , getConsting
@@ -213,7 +213,7 @@ pushTyping handle handle' = do
   let t = handle ^. typing
       t' = handle' ^. typing
   case unify t t' of
-    Left errs -> errors <>= errs
+    Left errs -> addUnificationErrors errs
     Right (subst, _) -> do
       let fixIt = do
             fixTypize >>= \case
@@ -393,7 +393,7 @@ safeHandlizeUpdate change = do
             return (tSubst, cSubst, kSubst, subst)
       case performForgotten of
         Left errs -> do
-          errors <>= errs
+          addUnificationErrors errs
           return False -- TODO: error
         Right (tSubst, cSubst, kSubst, subst) -> do
           unifs %= apply subst
@@ -430,7 +430,7 @@ fixTypize = do
       goValues ((primType:primType':primTypes):others) subst =
         case apply subst primType `unify` apply subst primType' of
           Left errs -> do
-            errors <>= errs
+            addUnificationErrors errs
             return subst
           Right (subst', _) ->
             goValues ((primType' : primTypes) : others) $ subst' `apply` subst
@@ -439,7 +439,7 @@ fixTypize = do
       goKeys ((tVar:tVar':tVars):others) subst =
         case apply subst tVar `unify` apply subst tVar' of
           Left errs -> do
-            errors <>= errs
+            addUnificationErrors errs
             return subst
           Right (subst', _) ->
             goKeys ((tVar' : tVars) : others) $ subst' `apply` subst
@@ -510,7 +510,7 @@ reduceOne (fact:facts) =
       tVar <- simplify t
       tVar' <- simplify t'
       case tVar `unify` tVar' of
-        Left errs -> errors <>= errs
+        Left errs -> addUnificationErrors errs
         Right (subst, _) -> unifs %= (subst `apply`)
       _ <- fixAll
       fixFacts facts >>= continueWith

@@ -3,14 +3,14 @@
 
 module CMM.AST.Variables.State.Impl where
 
-import safe Control.Lens.TH (makeLenses)
+import safe Control.Lens.TH (makeFieldsNoPrefix)
 
-import safe Data.Int (Int)
 import safe Data.Map (Map)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 
+import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Parser.HasPos (SourcePos)
 
@@ -23,8 +23,7 @@ data Collector =
     , _typeVariables :: Map Text (SourcePos, TypeKind)
     , _typeClasses :: Map Text (SourcePos, TypeKind, Set Text) {- method decls -}
     , _structMembers :: Map Text (SourcePos, TypeKind)
-    , _errors :: Int
-    , _warnings :: Int
+    , _errorState :: ErrorState
     }
 
 initCollector :: Collector
@@ -37,8 +36,7 @@ initCollector =
     , _typeVariables = mempty
     , _typeClasses = mempty
     , _structMembers = mempty
-    , _errors = 0
-    , _warnings = 0
+    , _errorState = mempty
     }
 
-makeLenses ''Collector
+makeFieldsNoPrefix ''Collector
