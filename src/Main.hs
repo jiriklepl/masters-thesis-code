@@ -11,6 +11,7 @@ import Data.Monoid (Monoid(mempty))
 import GHC.Err (undefined)
 
 import qualified Data.Text.IO as TS
+
 -- import qualified Data.Map as Map
 -- import Control.Lens
 -- import Data.Text as T
@@ -41,6 +42,7 @@ import safe CMM.Inference.HandleCounter
   ( HasHandleCounter(handleCounter)
   , setHandleCounter
   )
+
 -- import CMM.Inference.Type as Infer
 -- import CMM.Inference.TypeKind as Infer
 import CMM.Lexer

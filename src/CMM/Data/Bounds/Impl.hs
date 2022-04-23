@@ -12,13 +12,13 @@ import safe Control.Lens.TH (makeLenses)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq)
 import safe Data.Functor (Functor)
+import safe Data.Monoid (Monoid(mempty))
 import safe Data.Ord (Ord)
-import safe Data.Semigroup ( Semigroup((<>)) )
-import safe Data.Monoid ( Monoid(mempty) )
+import safe Data.Semigroup (Semigroup((<>)))
 import safe Text.Show (Show)
 
-import safe CMM.Data.Lattice ( join, meet, Lattice )
-import safe CMM.Data.Bounded ( Bounded (minBound, maxBound) )
+import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
+import safe CMM.Data.Lattice (Lattice, join, meet)
 
 data Bounds a =
   Bounds

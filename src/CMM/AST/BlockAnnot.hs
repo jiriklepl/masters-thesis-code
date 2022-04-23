@@ -12,7 +12,7 @@ import safe Data.Text (Text)
 import safe Text.Show (Show)
 
 import safe CMM.AST.Annot (Annot, takeAnnot)
-import safe Data.Tuple ( snd )
+import safe Data.Tuple (snd)
 
 -- | Contains information about basic-block structure
 data BlockAnnot
