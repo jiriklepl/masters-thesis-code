@@ -18,15 +18,17 @@ import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Scheme)
+import CMM.Inference.HandleCounter
+  ( HandleCounter
+  , HasHandleCounter(handleCounter)
+  )
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import CMM.Inference.HandleCounter
-    ( HasHandleCounter(handleCounter), HandleCounter )
 
-data Inferencer =
-  Inferencer
+data InferencerState =
+  InferencerState
     -- | Maps variables to their respective superKinding variables (forms a graph)
     { _subKinding :: Map TypeVar (Set TypeVar)
     -- | Maps variables to their respective superKinding variables (forms a graph)
@@ -56,9 +58,9 @@ data Inferencer =
     }
   deriving (Show)
 
-initInferencer :: Inferencer
+initInferencer :: InferencerState
 initInferencer =
-  Inferencer
+  InferencerState
     { _subKinding = mempty
     , _kindingBounds = mempty
     , _subConsting = mempty
@@ -77,4 +79,4 @@ initInferencer =
 globalTVar :: TypeVar
 globalTVar = NoType
 
-makeFieldsNoPrefix ''Inferencer
+makeFieldsNoPrefix ''InferencerState

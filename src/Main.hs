@@ -3,24 +3,18 @@
 module Main where
 
 import Control.Lens.Getter (view)
-import Control.Monad.State as State
-  ( Monad((>>=), return)
-  , MonadIO(liftIO)
-  , StateT(runStateT)
-  , execStateT
-  , void
-  )
+import Control.Monad.State as State (Monad(return), runState)
 import Data.Either (Either(..), either)
 import Data.Function (($), (.), id)
 import Data.List (head)
 import Data.Monoid (Monoid(mempty))
 import GHC.Err (undefined)
-import System.IO (IO, print)
 
+import qualified Data.Text.IO as TS
 -- import qualified Data.Map as Map
 -- import Control.Lens
 -- import Data.Text as T
-import Data.Text.IO as TS
+import safe System.IO (IO, putStrLn)
 
 -- import Data.Tuple
 import Text.Megaparsec hiding (parse)
@@ -43,6 +37,10 @@ import CMM.Inference.Preprocess.State as Infer
 import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.State as InferState
 
+import safe CMM.Inference.HandleCounter
+  ( HasHandleCounter(handleCounter)
+  , setHandleCounter
+  )
 -- import CMM.Inference.Type as Infer
 -- import CMM.Inference.TypeKind as Infer
 import CMM.Lexer
@@ -50,8 +48,8 @@ import CMM.Monomorphize (Monomorphize(monomorphize))
 import CMM.Monomorphize.Monomorphized as Infer
 import CMM.Parser
 import CMM.Pretty ()
-import safe CMM.Inference.HandleCounter
-    ( HasHandleCounter(handleCounter), setHandleCounter )
+import Data.Functor
+import GHC.Show
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -62,8 +60,8 @@ main = do
   let tokens' = either undefined id $ parse tokenize contents
   let ast = either undefined id $ parse unit tokens'
   let flattened = flatten ast
-  (mined, miner) <- runStateT (preprocess ast) initInferPreprocessor
-  (_, _) <- runStateT (blockify flattened) B.initBlockifier
+  let (mined, miner) = runState (preprocess ast) initPreprocessor
+  let (_, _) = runState (blockify flattened) B.initBlockifier
   -- let translated =
   --       ppllvm $
   --       flip
@@ -78,19 +76,19 @@ main = do
   --       buildModuleT "llvm" $
   --       runIRBuilderT emptyIRBuilder $ translate blockified
   -- T.putStr translated
-  _ <- globalVariables $ unAnnot ast
+  let _ = globalVariables $ unAnnot ast
   -- print $ CMM.Inference.Preprocess.State._facts miner
-  inferencer <-
-    (`execStateT` InferState.initInferencer) $ do
-      setHandleCounter $ view handleCounter miner
-      let fs = head $ view CMM.Inference.Preprocess.State.facts miner
-      mineAST mined
-      -- liftIO $ print fs
-      void $ reduce fs
-      monomorphize mempty mined >>= \case
-        Left what -> liftIO $ print what
-        Right mined' -> liftIO . print . pretty $ view Infer.node mined'
-  -- liftIO $ print inferencer
+  let (msg, inferencer) =
+        (`runState` InferState.initInferencer) $ do
+          setHandleCounter $ view handleCounter miner
+          let fs = head $ view CMM.Inference.Preprocess.State.facts miner
+          mineAST mined
+        -- liftIO $ print fs
+          void $ reduce fs
+          monomorphize mempty mined <&> \case
+            Left what -> show what
+            Right mined' -> show . pretty $ view Infer.node mined'
+  putStrLn msg
   void $ return inferencer
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a

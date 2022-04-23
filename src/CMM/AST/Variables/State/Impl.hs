@@ -14,8 +14,8 @@ import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Parser.HasPos (SourcePos)
 
-data Collector =
-  Collector
+data CollectorState =
+  CollectorState
     { _variables :: Map Text (SourcePos, TypeKind)
     , _funcVariables :: Map Text (SourcePos, TypeKind)
     , _funcInstVariables :: Map Text (SourcePos, TypeKind)
@@ -26,9 +26,9 @@ data Collector =
     , _errorState :: ErrorState
     }
 
-initCollector :: Collector
+initCollector :: CollectorState
 initCollector =
-  Collector
+  CollectorState
     { _variables = mempty
     , _funcVariables = mempty
     , _funcInstVariables = mempty
@@ -39,4 +39,4 @@ initCollector =
     , _errorState = mempty
     }
 
-makeFieldsNoPrefix ''Collector
+makeFieldsNoPrefix ''CollectorState

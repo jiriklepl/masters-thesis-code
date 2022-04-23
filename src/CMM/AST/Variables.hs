@@ -5,12 +5,12 @@ module CMM.AST.Variables where
 
 import safe Control.Applicative (Applicative((*>), (<*)))
 import safe Control.Lens.Getter ((^.))
-import safe Control.Monad (Monad(return))
-import safe Control.Monad.State (MonadIO, StateT, execStateT)
+import safe Control.Monad (Monad((>>), return))
+import safe Control.Monad.State (MonadState(get), evalState)
 import safe Data.Data (Data(gmapM), Typeable)
 import safe Data.Foldable (Foldable(foldr), traverse_)
 import safe Data.Function (($), (.), flip)
-import safe Data.Functor (Functor((<$)), (<$>))
+import safe Data.Functor (Functor((<$), fmap), (<$>))
 import safe Data.Generics.Aliases (extM)
 import safe Data.Map (Map)
 import safe Data.Maybe (Maybe(Just, Nothing))
@@ -40,7 +40,6 @@ import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.HasName (getName)
 import safe CMM.AST.Variables.State
   ( Collector
-  , MonadCollectVariables
   , addFIVar
   , addFVar
   , addFVarTrivial
@@ -75,46 +74,45 @@ type VariablePack
      , Map Text (SourcePos, TypeKind))
 
 localVariables ::
-     (MonadIO m, Data (n SourcePos), Functor n, HasPos a)
-  => n a
-  -> m VariablePack
+     (Data (n SourcePos), Functor n, HasPos a) => n a -> VariablePack
 localVariables n = variablesCommon . go $ getPos <$> n
   where
-    go :: (Data d, MonadCollectVariables m) => d -> m d
+    go :: Data d => d -> Collector d
     go = addTAutoCases $ addCommonCases $ gmapM go
 
-globalVariables :: (MonadIO m, HasPos a) => Unit a -> m VariablePack
+globalVariables :: HasPos a => Unit a -> VariablePack
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
-    go :: (Data d, MonadCollectVariables m) => d -> m d
+    go :: Data d => d -> Collector d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
-classVariables :: (MonadIO m, HasPos a) => Class a -> m VariablePack
+classVariables :: HasPos a => Class a -> VariablePack
 classVariables class'@(Class _ (Annot (ParaName _ params) _) _) =
   variablesCommon $ do
     traverse_ (`addTVarTrivial` GenericType) params
     gmapM go $ getPos <$> class'
   where
-    go :: (Data d, MonadCollectVariables m) => d -> m d
+    go :: Data d => d -> Collector d
     go = addProcedureDeclCases $ gmapM go
 
-instanceVariables :: (MonadIO m, HasPos a) => Instance a -> m VariablePack
+instanceVariables :: HasPos a => Instance a -> VariablePack
 instanceVariables n = variablesCommon . go $ getPos <$> n
   where
-    go :: (Data d, MonadCollectVariables m) => d -> m d
+    go :: Data d => d -> Collector d
     go = addTAutoCases $ addProcedureCases $ gmapM go
 
-variablesCommon :: MonadIO m => StateT Collector m a -> m VariablePack
-variablesCommon go = do
-  result <- execStateT go initCollector
-  return
-    ( result ^. variables
-    , result ^. funcVariables
-    , result ^. funcInstVariables
-    , result ^. typeConstants
-    , result ^. typeVariables
-    , result ^. typeClasses
-    , result ^. structMembers)
+variablesCommon :: Collector a -> VariablePack
+variablesCommon go = fmap finalize goGet `evalState` initCollector
+  where
+    goGet = go >> get
+    finalize result =
+      ( result ^. variables
+      , result ^. funcVariables
+      , result ^. funcInstVariables
+      , result ^. typeConstants
+      , result ^. typeVariables
+      , result ^. typeClasses
+      , result ^. structMembers)
 
 infixr 3 *|*
 
@@ -124,9 +122,9 @@ infixr 3 *|*
 (*|*) = flip extM
 
 type CasesAdder m a
-   = (Data a, MonadCollectVariables m) =>
+   = Data a =>
        (forall d. Data d =>
-                    d -> m d) -> a -> m a
+                    d -> Collector d) -> a -> Collector a
 
 addCommonCases :: CasesAdder m a
 addCommonCases go =
@@ -193,7 +191,7 @@ addGlobalCases go =
       \case
         (procedure :: Annot Procedure SourcePos) ->
           addFVarTrivial procedure Star
-    goSectionItems :: (Data d, MonadCollectVariables m) => d -> m d
+    goSectionItems :: Data d => d -> Collector d
     goSectionItems = addSectionCases $ addCommonCases $ gmapM goSectionItems
 
 addSectionCases :: CasesAdder m a
@@ -203,7 +201,7 @@ addSectionCases go = goProcedure *|* go
       \case
         (procedure :: Annot Procedure SourcePos) ->
           addFVarTrivial procedure Star <* gmapM goLabels procedure
-    goLabels :: (Data d, MonadCollectVariables m) => d -> m d
+    goLabels :: Data d => d -> Collector d
     goLabels = addLabelCases $ gmapM goLabels
 
 addProcedureDeclCases :: CasesAdder m a

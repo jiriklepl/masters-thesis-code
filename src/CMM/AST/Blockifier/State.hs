@@ -6,11 +6,11 @@ module CMM.AST.Blockifier.State
   ) where
 
 import safe Control.Lens.Setter ((.=))
-import safe Control.Monad.State (MonadState)
+import safe Control.Monad.State (State)
 import safe Data.Monoid (Monoid(mempty))
 
 import safe CMM.AST.Blockifier.State.Impl
-  ( Blockifier(Blockifier)
+  ( BlockifierState(BlockifierState)
   , blockData
   , blocksTable
   , constants
@@ -25,9 +25,9 @@ import safe CMM.AST.Blockifier.State.Impl
   , stackLabels
   )
 
-type MonadBlockifier m = MonadState Blockifier m
+type Blockifier = State BlockifierState
 
-clearBlockifier :: MonadBlockifier m => m ()
+clearBlockifier :: Blockifier ()
 clearBlockifier = do
   labels .= mempty
   stackLabels .= mempty

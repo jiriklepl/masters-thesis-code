@@ -204,12 +204,12 @@ instance ASTmapCTX1 hint a b Expr => ASTmap hint Size a b where
     \case
       Size a -> Size <$> traverse f a
 
-instance (ASTmapCTX1 hint a b BodyItem) => ASTmap hint Body a b where
+instance ASTmapCTX1 hint a b BodyItem => ASTmap hint Body a b where
   astMapM _ f =
     \case
       Body a -> Body <$> traverse f a
 
-instance (ASTmapCTX3 hint a b Decl StackDecl Stmt) =>
+instance ASTmapCTX3 hint a b Decl StackDecl Stmt =>
          ASTmap hint BodyItem a b where
   astMapM _ f =
     \case

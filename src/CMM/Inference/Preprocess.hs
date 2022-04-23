@@ -9,7 +9,6 @@ import safe Control.Applicative (Applicative((<*), pure), liftA2)
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
 import safe Control.Monad (Monad((>>=), return), (>=>), zipWithM_)
-import safe Control.Monad.IO.Class (MonadIO)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (for_, traverse_)
@@ -36,8 +35,8 @@ import safe CMM.AST as AST
   , Decl(ConstDecl, ExportDecl, ImportDecl, PragmaDecl, RegDecl,
      TargetDecl, TypedefDecl)
   , Export(Export)
-  , Expr(BinOpExpr, ComExpr, InfixExpr, LVExpr, LitExpr, NegExpr,
-     ParExpr, PrefixExpr)
+  , Expr(BinOpExpr, ComExpr, InfixExpr, LVExpr, LitExpr, MemberExpr,
+     NegExpr, ParExpr, PrefixExpr)
   , Formal(Formal)
   , Import(Import)
   , Init(ExprInit, Str16Init, StrInit)
@@ -105,13 +104,14 @@ import safe CMM.Inference.Fact as Infer
   , typeUnion
   , unstorableConstraint
   )
+import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.Preprocess.HasTypeHole
   ( HasTypeHole(getTypeHole)
   , WithTypeHole(withTypeHole)
   , getTypeHoleId
   )
 import safe CMM.Inference.Preprocess.State as Infer
-  ( MonadInferPreprocessor
+  ( Preprocessor
   , beginProc
   , beginUnit
   , endProc
@@ -155,21 +155,15 @@ import safe CMM.Inference.TypeHandle (handleId)
 import safe CMM.Inference.TypeKind (TypeKind(Constraint, GenericType, Star))
 import safe CMM.Inference.TypeVar (TypeVar(NoType, tVarId))
 import safe CMM.Parser.HasPos (HasPos)
-import safe CMM.Inference.HandleCounter ( nextHandleCounter )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
 class Preprocess n a b where
   preprocess ::
-       (WithTypeHole a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
-    => Annot n a
-    -> m (Annot n b)
+       (WithTypeHole a b, HasPos a) => Annot n a -> Preprocessor (Annot n b)
   preprocess (Annot n a) = preprocessFinalize a $ preprocessImpl a n
   preprocessImpl ::
-       (WithTypeHole a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
-    => a
-    -> n a
-    -> m (TypeHole, n b)
+       (WithTypeHole a b, HasPos a) => a -> n a -> Preprocessor (TypeHole, n b)
 
 preprocessTrivial :: (Functor n, WithTypeHole a b) => n a -> n b
 preprocessTrivial = (withTypeHole EmptyTypeHole <$>)
@@ -188,10 +182,7 @@ type instance Constraint PreprocessHint a b =
 type instance Space PreprocessHint = Preprocess'
 
 class Preprocess' a b n where
-  preprocess' ::
-       (WithTypeHole a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
-    => n a
-    -> m (n b)
+  preprocess' :: (WithTypeHole a b, HasPos a) => n a -> Preprocessor (n b)
 
 instance WithTypeHole a b => Preprocess' a b Name where
   preprocess' = return . preprocessTrivial
@@ -200,14 +191,9 @@ instance Preprocess n a b => Preprocess' a b (Annot n) where
   preprocess' = preprocess
 
 pass ::
-     ( ASTmap PreprocessHint n a b
-     , WithTypeHole a b
-     , MonadInferPreprocessor m
-     , HasPos a
-     , MonadIO m
-     )
+     (ASTmap PreprocessHint n a b, WithTypeHole a b, HasPos a)
   => n a
-  -> m (n b)
+  -> Preprocessor (n b)
 pass = astMapM PreprocessHint preprocess'
 
 instance {-# OVERLAPPABLE #-} ASTmap PreprocessHint n a b =>
@@ -215,15 +201,9 @@ instance {-# OVERLAPPABLE #-} ASTmap PreprocessHint n a b =>
   preprocessImpl _ = fmap (EmptyTypeHole, ) . pass
 
 preprocessT ::
-     ( Preprocess n a b
-     , WithTypeHole a b
-     , Traversable t
-     , MonadInferPreprocessor m
-     , HasPos a
-     , MonadIO m
-     )
+     (Preprocess n a b, WithTypeHole a b, Traversable t, HasPos a)
   => t (Annot n a)
-  -> m (t (Annot n b))
+  -> Preprocessor (t (Annot n b))
 preprocessT = traverse preprocess
 
 withTypeHoledAnnot :: WithTypeHole a b => TypeHole -> a -> n b -> Annot n b
@@ -231,10 +211,10 @@ withTypeHoledAnnot = (withAnnot .) . withTypeHole
 
 -- TODO: create a better name
 purePreprocess ::
-     (Monad m, WithTypeHole a b, Functor n)
+     (WithTypeHole a b, Functor n)
   => TypeHole
   -> n a
-  -> m (TypeHole, n b)
+  -> Preprocessor (TypeHole, n b)
 purePreprocess hole = return . (hole, ) . (withTypeHole hole <$>)
 
 handleVars :: (Functor f, HasTypeHole a) => f a -> f TypeVar
@@ -242,7 +222,7 @@ handleVars types = holeId . getTypeHole <$> types
 
 instance Preprocess Unit a b where
   preprocessImpl _ unit@(Unit topLevels) = do
-    (vars, fVars, fIVars, tCons, _, tClasses, sMems) <- globalVariables unit
+    let (vars, fVars, fIVars, tCons, _, tClasses, sMems) = globalVariables unit
     beginUnit vars fVars fIVars tCons tClasses sMems
     traverse_ (storeFact . Fact) builtInTypeFacts
     let storeFacts var = do
@@ -264,10 +244,10 @@ instance Preprocess Section a b where
         return $ SecSpan key' value' sectionItems'
 
 preprocessSpanCommon ::
-     (MonadInferPreprocessor m, WithTypeHole a b, HasPos a, MonadIO m)
+     (WithTypeHole a b, HasPos a)
   => Annot Expr a
   -> Annot Expr a
-  -> m (Annot Expr b, Annot Expr b)
+  -> Preprocessor (Annot Expr b, Annot Expr b)
 preprocessSpanCommon key value = do
   key' <- preprocess key
   let keyType = getTypeHoleId key'
@@ -311,7 +291,7 @@ instance Preprocess Decl a b where
 -- TODO: combine with Instance
 instance Preprocess Class a b where
   preprocessImpl _ class'@(Class paraNames paraName methods) = do
-    (_, _, _, _, tVars, _, _) <- classVariables class'
+    let (_, _, _, _, tVars, _, _) = classVariables class'
     pushTypeVariables tVars
     (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
     (constraint, paraName') <- preprocessParaName paraName
@@ -325,7 +305,7 @@ instance Preprocess Class a b where
 
 instance Preprocess Instance a b where
   preprocessImpl _ instance'@(Instance paraNames paraName methods) = do
-    (_, _, _, _, tVars, _, _) <- instanceVariables instance'
+    let (_, _, _, _, tVars, _, _) = instanceVariables instance'
     pushTypeVariables tVars
     (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
     (constraint, paraName') <- preprocessParaName paraName
@@ -342,9 +322,9 @@ class Preprocess param a b =>
       PreprocessParam param a b
   where
   preprocessParam ::
-       (MonadInferPreprocessor m, WithTypeHole a b, HasPos a, MonadIO m)
+       (WithTypeHole a b, HasPos a)
     => Annot param a
-    -> m (Annot param b)
+    -> Preprocessor (Annot param b)
 
 instance PreprocessParam Name a b where
   preprocessParam name = do
@@ -355,14 +335,9 @@ instance PreprocessParam AST.Type a b where
   preprocessParam = preprocess
 
 preprocessParaName ::
-     ( WithTypeHole a b
-     , PreprocessParam param a b
-     , MonadInferPreprocessor m
-     , HasPos a
-     , MonadIO m
-     )
+     (WithTypeHole a b, PreprocessParam param a b, HasPos a)
   => Annot (ParaName param) a
-  -> m (Infer.Type, Annot (ParaName param) b)
+  -> Preprocessor (Infer.Type, Annot (ParaName param) b)
 preprocessParaName (Annot (ParaName name params) annot) = do
   let name' = preprocessTrivial name
   params' <- traverse preprocessParam params
@@ -422,11 +397,7 @@ instance Preprocess ParaType a b where
     return (SimpleTypeHole handle, ParaType type'' types'')
 
 maybeKindUnif ::
-     (MonadInferPreprocessor m, ToType t, ToType t', HasName n)
-  => Maybe n
-  -> t
-  -> t'
-  -> m ()
+     (ToType t, ToType t', HasName n) => Maybe n -> t -> t' -> Preprocessor ()
 maybeKindUnif mKind derived base = do
   case mKind of
     Nothing -> storeFact $ derived `typeUnion` base
@@ -471,9 +442,9 @@ instance FormalNames (Procedure a) where
 
 -- TODO: consult conventions with man
 preprocessProcedureHeader ::
-     (WithTypeHole a b, MonadInferPreprocessor m, HasPos a, MonadIO m)
+     (WithTypeHole a b, HasPos a)
   => ProcedureHeader a
-  -> m (TypeHole, ProcedureHeader b)
+  -> Preprocessor (TypeHole, ProcedureHeader b)
 preprocessProcedureHeader (ProcedureHeader mConv name formals mTypes) = do
   formals' <- doOutsideCtx $ preprocessT formals
   mTypes' <- doOutsideCtx $ traverse (traverse preprocess) mTypes
@@ -507,9 +478,9 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mTypes) = do
 -- TODO: add handle (dependent on the context) to the node
 instance Preprocess Procedure a b where
   preprocessImpl _ procedure@(Procedure header body) = do
-    (vars, _, _, tCons, tVars, _, _) <- localVariables header
+    let (vars, _, _, tCons, tVars, _, _) = localVariables header
     beginProc (getName procedure) vars tCons tVars
-    (vars', _, _, tCons', tVars', _, _) <- localVariables body
+    let (vars', _, _, tCons', tVars', _, _) = localVariables body
     openProc vars' tCons' tVars'
     body' <- preprocess body
     header' <-
@@ -520,7 +491,7 @@ instance Preprocess Procedure a b where
 -- TODO: ditto
 instance Preprocess ProcedureDecl a b where
   preprocessImpl _ procedure@(ProcedureDecl header) = do
-    (vars, _, _, tCons, tVars, _, _) <- localVariables header
+    let (vars, _, _, tCons, tVars, _, _) = localVariables header
     beginProc (getName procedure) vars tCons tVars
     header' <-
       preprocessFinalize (takeAnnot header) $
@@ -621,7 +592,7 @@ instance Preprocess Stmt a b where
         (EmptyTypeHole, ) . GotoStmt expr' <$> preprocessT mTargets
       CutToStmt {} -> undefined
 
-doOutsideCtx :: MonadInferPreprocessor m => m a -> m a
+doOutsideCtx :: Preprocessor a -> Preprocessor a
 doOutsideCtx action = popTopContext >>= (action <*) . pushContext
 
 -- TODO: this seems wrong
@@ -742,6 +713,7 @@ instance Preprocess Expr a b where
   preprocessImpl _ -- TODO: this is just ugly
    =
     \case
+      MemberExpr expr field -> undefined
       ParExpr expr -> ParExpr `preprocessInherit` expr
       LVExpr lvalue -> LVExpr `preprocessInherit` lvalue
       BinOpExpr op left right -- TODO: implement correctly, this is just a placeholder

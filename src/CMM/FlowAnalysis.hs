@@ -29,7 +29,7 @@ import CMM.AST.Blockifier.Error
                 UnreachableLabels)
   )
 import safe CMM.AST.Blockifier.State
-  ( MonadBlockifier
+  ( Blockifier
   , blockData
   , blocksTable
   , continuations
@@ -43,7 +43,7 @@ import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)
 
-analyzeFlow :: (HasPos a, MonadBlockifier m) => Annot Procedure a -> m ()
+analyzeFlow :: HasPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)
   -- TODO: implement `cut to` statements
  = do
@@ -79,7 +79,7 @@ analyzeFlow procedure@(Annot _ _)
     registerASTError procedure $ UninitializedRegisters uninitialized
 
 -- TODO: "unused after write" warning
-updateFlowPair :: MonadBlockifier m => (Int, Int) -> m Bool
+updateFlowPair :: (Int, Int) -> Blockifier Bool
 updateFlowPair (f, t) = do
   blocks <- use blockData
   let toVars = blocks Map.! t

@@ -51,7 +51,7 @@ common common-options
                        text ^>=1.2.4.0,
 executable Compiler
   import:              common-options
-  main-is:             Compiler/Main.hs
+  main-is:             Main.hs
   other-modules:       CMM.AST,
                        CMM.AST.Annot,
                        CMM.AST.Blockifier,
@@ -145,7 +145,12 @@ Test-Suite parser-testsuite
   type:                exitcode-stdio-1.0
   main-is:             ParserTest.hs
   other-modules:       CMM.AST,
+                       CMM.AST.Annot,
+                       CMM.AST.HasName,
                        CMM.AST.Utils,
+                       CMM.Control.Applicative,
+                       CMM.Data.Float,
+                       CMM.Data.Num,
                        CMM.Lexer,
                        CMM.Parser,
                        CMM.Parser.HasPos,

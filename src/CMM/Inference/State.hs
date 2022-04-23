@@ -9,7 +9,7 @@ import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%=), (<>=))
 import safe Control.Monad (Functor(fmap), Monad((>>=), return))
-import safe Control.Monad.State (MonadState)
+import safe Control.Monad.State (State)
 import safe Data.Foldable (fold)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
@@ -45,8 +45,9 @@ import safe CMM.Inference.TypeVar (TypeVar(TypeVar))
 import safe CMM.Err.Error (Error(Error))
 import safe CMM.Err.Severity (Severity(ErrorLevel))
 import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
+import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.State.Impl
-  ( Inferencer(Inferencer)
+  ( InferencerState(InferencerState)
   , classFacts
   , classSchemes
   , constingBounds
@@ -61,38 +62,36 @@ import safe CMM.Inference.State.Impl
   , unifs
   )
 import safe CMM.Inference.Unify.Error (UnificationError)
-import safe CMM.Inference.HandleCounter ( nextHandleCounter )
 
-type MonadInferencer m = MonadState Inferencer m
+type Inferencer m = State InferencerState m
 
-pushParent :: MonadInferencer m => TypeVar -> m ()
+pushParent :: TypeVar -> Inferencer ()
 pushParent parent = currentParent %= (parent :)
 
-getParent :: MonadInferencer m => m TypeVar
+getParent :: Inferencer TypeVar
 getParent = uses currentParent head
 
-popParent :: MonadInferencer m => m ()
+popParent :: Inferencer ()
 popParent = currentParent %= tail
 
-freshTypeHelper :: MonadInferencer m => TypeKind -> m TypeVar
+freshTypeHelper :: TypeKind -> Inferencer TypeVar
 freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
-freshAnnotatedTypeHelper ::
-     MonadInferencer m => TypeAnnot -> TypeKind -> m TypeVar
+freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Inferencer TypeVar
 freshAnnotatedTypeHelper annot tKind =
   getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
 
 freshAnnotatedTypeHelperWithParent ::
-     MonadInferencer m => TypeAnnot -> TypeKind -> TypeVar -> m TypeVar
+     TypeAnnot -> TypeKind -> TypeVar -> Inferencer TypeVar
 freshAnnotatedTypeHelperWithParent annot tKind parent = do
   tVar <- (\counter -> TypeVar counter tKind parent) <$> nextHandleCounter
   handlize %= Bimap.insert tVar (initTypeHandle annot tVar)
   return tVar
 
-getHandle :: MonadInferencer m => TypeVar -> m TypeHandle
+getHandle :: TypeVar -> Inferencer TypeHandle
 getHandle = fmap fromJust . tryGetHandle
 
-tryGetHandle :: MonadInferencer m => TypeVar -> m (Maybe TypeHandle)
+tryGetHandle :: TypeVar -> Inferencer (Maybe TypeHandle)
 tryGetHandle tVar =
   uses handlize (flip Bimap.lookup) <*> uses unifs (`apply` tVar)
 
@@ -105,28 +104,28 @@ readLowerBound = (view lowerBound .) . readBoundsFrom
 readUpperBound :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> a
 readUpperBound = (view upperBound .) . readBoundsFrom
 
-getConsting :: MonadInferencer m => TypeVar -> m TypeVar
+getConsting :: TypeVar -> Inferencer TypeVar
 getConsting tVar = view consting <$> getHandle tVar
 
-readConstingBounds :: MonadInferencer m => TypeVar -> m (Bounds Constness)
+readConstingBounds :: TypeVar -> Inferencer (Bounds Constness)
 readConstingBounds tVar = uses constingBounds (readBoundsFrom tVar)
 
-readKindingBounds :: MonadInferencer m => TypeVar -> m (Bounds DataKind)
+readKindingBounds :: TypeVar -> Inferencer (Bounds DataKind)
 readKindingBounds tVar = uses kindingBounds (readBoundsFrom tVar)
 
-getKinding :: MonadInferencer m => TypeVar -> m TypeVar
+getKinding :: TypeVar -> Inferencer TypeVar
 getKinding tVar = view kinding <$> getHandle tVar
 
-getTyping :: MonadInferencer m => TypeVar -> m Type
+getTyping :: TypeVar -> Inferencer Type
 getTyping tVar = view typing <$> getHandle tVar
 
-collectPrimeTVars :: MonadInferencer m => TypeVar -> m (Set TypeVar)
+collectPrimeTVars :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVars tVar =
   uses typize (Bimap.lookup tVar) >>= \case
     Just primType -> fold <$> traverse collectPrimeTVars primType
     Nothing -> return $ Set.singleton tVar
 
-handlizeTVar :: MonadInferencer m => TypeVar -> m TypeVar
+handlizeTVar :: TypeVar -> Inferencer TypeVar
 handlizeTVar tVar = do
   handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
   return tVar
@@ -136,40 +135,40 @@ infix 6 `insertEdge`
 insertEdge :: Ord a => a -> a -> Map a (Set a) -> Map a (Set a)
 insertEdge a b = Map.insertWith Set.union a (Set.singleton b)
 
-pushSubKind :: MonadInferencer m => TypeHandle -> TypeHandle -> m ()
+pushSubKind :: TypeHandle -> TypeHandle -> Inferencer ()
 pushSubKind handle handle' =
   subKinding %= view kinding handle `insertEdge` view kinding handle'
 
-pushSubConst :: MonadInferencer m => TypeHandle -> TypeHandle -> m ()
+pushSubConst :: TypeHandle -> TypeHandle -> Inferencer ()
 pushSubConst handle handle' =
   subConsting %= view consting handle `insertEdge` view consting handle'
 
-pushKindBounds :: MonadInferencer m => TypeHandle -> Bounds DataKind -> m ()
+pushKindBounds :: TypeHandle -> Bounds DataKind -> Inferencer ()
 pushKindBounds handle bounds =
   kindingBounds %= Map.insertWith (<>) (handle ^. kinding) bounds
 
-pushConstBounds :: MonadInferencer m => TypeHandle -> Bounds Constness -> m ()
+pushConstBounds :: TypeHandle -> Bounds Constness -> Inferencer ()
 pushConstBounds handle bounds =
   constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
 
-registerScheme :: MonadInferencer m => TypeVar -> Scheme Type -> m ()
+registerScheme :: TypeVar -> Scheme Type -> Inferencer ()
 registerScheme tVar scheme = schemes %= Map.insert tVar scheme
 
-freshTypeHelperWithHandle :: MonadInferencer m => TypeKind -> m TypeVar
+freshTypeHelperWithHandle :: TypeKind -> Inferencer TypeVar
 freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar
 
-fromOldName :: MonadInferencer m => TypeVar -> m TypeVar
+fromOldName :: TypeVar -> Inferencer TypeVar
 fromOldName tVar = uses unifs (`apply` tVar)
 
-reconstruct :: MonadInferencer m => TypeVar -> m Type
+reconstruct :: TypeVar -> Inferencer Type
 reconstruct tVar =
   uses typize (Bimap.lookup tVar) >>= \case
     Just primType -> ComplType <$> traverse reconstruct primType
     Nothing -> return $ VarType tVar
 
-reconstructOld :: MonadInferencer m => TypeVar -> m Type
+reconstructOld :: TypeVar -> Inferencer Type
 reconstructOld tVar = fromOldName tVar >>= reconstruct
 
-addUnificationErrors :: MonadInferencer m => [UnificationError] -> m ()
+addUnificationErrors :: [UnificationError] -> Inferencer ()
 addUnificationErrors errs =
   errorState <>= ErrorState (Error ErrorLevel <$> errs)

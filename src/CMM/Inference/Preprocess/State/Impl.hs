@@ -10,13 +10,16 @@ import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
 
 import safe CMM.Inference.Fact (Facts)
+import safe CMM.Inference.HandleCounter
+  ( HandleCounter
+  , HasHandleCounter(handleCounter)
+  )
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
 import safe CMM.Inference.TypeHandle (TypeHandle)
-import safe CMM.Inference.HandleCounter (HasHandleCounter(handleCounter), HandleCounter)
 
-data InferPreprocessor =
-  InferPreprocessor
+data PreprocessorState =
+  PreprocessorState
     { _variables :: [Map Text TypeHandle]
     , _funcVariables :: Map Text TypeHandle
     , _funcInstVariables :: Map Text [TypeHandle]
@@ -31,9 +34,9 @@ data InferPreprocessor =
     , _handleCounter :: HandleCounter
     }
 
-initInferPreprocessor :: InferPreprocessor
-initInferPreprocessor =
-  InferPreprocessor
+initPreprocessor :: PreprocessorState
+initPreprocessor =
+  PreprocessorState
     { _variables = [mempty]
     , _funcVariables = mempty
     , _funcInstVariables = mempty
@@ -48,4 +51,4 @@ initInferPreprocessor =
     , _handleCounter = 0
     }
 
-makeFieldsNoPrefix ''InferPreprocessor
+makeFieldsNoPrefix ''PreprocessorState

@@ -16,8 +16,8 @@ import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Parser.HasPos (SourcePos)
 
-data Blockifier =
-  Blockifier
+data BlockifierState =
+  BlockifierState
     { _controlFlow :: [(Int, Int)] -- | [(from, to)] edges in the control-flow graph
     , _blocksTable :: Map Text Int -- | Maps block names to their respective indices
     , _currentBlock :: Maybe Int -- | Contains the index of the current block
@@ -33,9 +33,9 @@ data Blockifier =
     }
   deriving (Show)
 
-initBlockifier :: Blockifier
+initBlockifier :: BlockifierState
 initBlockifier =
-  Blockifier
+  BlockifierState
     { _controlFlow = mempty
     , _blocksTable = mempty
     , _currentBlock = Nothing
@@ -50,4 +50,4 @@ initBlockifier =
     , _errorState = mempty
     }
 
-makeFieldsNoPrefix ''Blockifier
+makeFieldsNoPrefix ''BlockifierState

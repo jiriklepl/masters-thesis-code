@@ -52,7 +52,7 @@ import safe CMM.AST
   , Unit(Unit)
   )
 import safe qualified CMM.AST as AST
-import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
+import safe CMM.AST.Annot (Annot, takeAnnot, unAnnot, withAnnot)
 import safe CMM.AST.Utils (addTopLevels)
 import safe CMM.Control.Applicative (liftA5)
 import safe CMM.Control.Monad ((>>@=))
@@ -71,7 +71,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   , holeHandle
   )
 import safe CMM.Inference.State
-  ( MonadInferencer
+  ( Inferencer
   , fromOldName
   , readConstingBounds
   , readKindingBounds
@@ -129,22 +129,22 @@ data MonomorphizeError =
 
 class Monomorphize n n' a | n -> n' where
   monomorphize ::
-       (HasPos a, HasTypeHole a, MonadInferencer m)
+       (HasPos a, HasTypeHole a)
     => Subst Type.Type
     -> n a
-    -> m (MonomorphizeError `Either` n' a)
+    -> Inferencer (MonomorphizeError `Either` n' a)
 
 class MonomorphizeImpl n n' a | n -> n' where
   monomorphizeImpl ::
-       (HasPos a, HasTypeHole a, MonadInferencer m)
+       (HasPos a, HasTypeHole a)
     => Subst Type.Type
     -> a
     -> n a
-    -> m (MonomorphizeError `Either` Monomorphized (Annot n') a)
+    -> Inferencer (MonomorphizeError `Either` Monomorphized (Annot n') a)
 
 instance {-# OVERLAPPABLE #-} MonomorphizeImpl n n' a =>
                               Monomorphize (Annot n) (Monomorphized (Annot n')) a where
-  monomorphize subst (Annot n a) = monomorphizeImpl subst a n
+  monomorphize subst n = monomorphizeImpl subst (takeAnnot n) (unAnnot n)
 
 typingPolyKind :: Type.Type -> PolyKind
 typingPolyKind t =
@@ -152,7 +152,7 @@ typingPolyKind t =
     then Mono
     else Poly
 
-constnessPolyKind :: MonadInferencer m => TypeVar -> m PolyKind
+constnessPolyKind :: TypeVar -> Inferencer PolyKind
 constnessPolyKind tVar = go <$> readConstingBounds tVar
   where
     go (low `Bounds` high) =
@@ -161,7 +161,7 @@ constnessPolyKind tVar = go <$> readConstingBounds tVar
         EQ -> Mono
         GT -> Absurd
 
-kindingPolyKind :: MonadInferencer m => TypeVar -> m PolyKind
+kindingPolyKind :: TypeVar -> Inferencer PolyKind
 kindingPolyKind tVar = go <$> readKindingBounds tVar
   where
     go (low `Bounds` high) =
@@ -171,7 +171,7 @@ kindingPolyKind tVar = go <$> readKindingBounds tVar
                else Poly
         else Absurd
 
-typePolyKind :: MonadInferencer m => Subst Type.Type -> TypeVar -> m PolyKind
+typePolyKind :: Subst Type.Type -> TypeVar -> Inferencer PolyKind
 typePolyKind subst tVar =
   fromOldName tVar >>= reconstruct >>= simplify . apply subst >>= tryGetHandle >>= \case
     Just handle ->
@@ -186,52 +186,38 @@ typePolyKind subst tVar =
       backQuote (show tVar) <> " not registered by the inferencer."
 
 getTypeHandleIdPolyKind ::
-     (MonadInferencer m, HasTypeHole a) => Subst Type.Type -> a -> m PolyKind
+     HasTypeHole a => Subst Type.Type -> a -> Inferencer PolyKind
 getTypeHandleIdPolyKind subst = typePolyKind subst . getTypeHoleId
 
 monomorphizeTrivial ::
-     ( MonadInferencer m
-     , Monomorphize p (Monomorphized p') a
-     , HasPos a
-     , HasTypeHole a
-     )
+     (Monomorphize p (Monomorphized p') a, HasPos a, HasTypeHole a)
   => Subst Type.Type
   -> a
   -> (p' a -> n a)
   -> p a
-  -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized (Annot n) a)
 monomorphizeTrivial subst annot constr =
   monomorphizeMaybe subst Nothing $ Just . withAnnot annot . constr
 
 monomorphizeEmpty ::
-     ( MonadInferencer m
-     , Monomorphize p (Monomorphized (Annot p')) a
-     , HasPos a
-     , HasTypeHole a
-     )
+     (Monomorphize p (Monomorphized (Annot p')) a, HasPos a, HasTypeHole a)
   => Subst Type.Type
   -> p a
-  -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized (Annot n) a)
 monomorphizeEmpty subst = monomorphizeMaybe subst Nothing $ const Nothing
 
 monomorphizeTrivials ::
-     ( MonadInferencer m
-     , Monomorphize p (Monomorphized p') a
-     , HasPos a
-     , HasTypeHole a
-     )
+     (Monomorphize p (Monomorphized p') a, HasPos a, HasTypeHole a)
   => Subst Type.Type
   -> a
   -> ([p' a] -> n a)
   -> [p a]
-  -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized (Annot n) a)
 monomorphizeTrivials = ((. (Just .)) .) . monomorphizeMaybes
 
 ensureJustMonomorphized ::
-     Monad m
-  => a1
-  -> Either a1 (Monomorphized n a2)
-  -> m (Either a1 (Monomorphized n a2))
+     a1
+  -> a1 `Either` Monomorphized n a2 -> Inferencer (a1 `Either` Monomorphized n a2)
 ensureJustMonomorphized err mono = do
   return $ do
     mono' <- mono
@@ -240,29 +226,21 @@ ensureJustMonomorphized err mono = do
       Just _ -> mono
 
 ensuredJustMonomorphize ::
-     ( Monomorphize n1 (Monomorphized n2) a
-     , HasPos a
-     , HasTypeHole a
-     , MonadInferencer m
-     )
+     (Monomorphize n1 (Monomorphized n2) a, HasPos a, HasTypeHole a)
   => MonomorphizeError
   -> Subst Type.Type
   -> n1 a
-  -> m (Either MonomorphizeError (Monomorphized n2 a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized n2 a)
 ensuredJustMonomorphize err subst n =
   monomorphize subst n >>= ensureJustMonomorphized err
 
 monomorphizeMaybes ::
-     ( MonadInferencer m
-     , Monomorphize p (Monomorphized p') a
-     , HasPos a
-     , HasTypeHole a
-     )
+     (Monomorphize p (Monomorphized p') a, HasPos a, HasTypeHole a)
   => Subst Type.Type
   -> a
   -> ([p' a] -> Maybe (n a))
   -> [p a]
-  -> m (Either MonomorphizeError (Monomorphized (Annotation n) a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized (Annot n) a)
 monomorphizeMaybes subst annot constr pars =
   sequence <$>
   traverse (monomorphize subst) pars >>@= \pars' -> do
@@ -273,30 +251,19 @@ monomorphizeMaybes subst annot constr pars =
     return $ monomorphized node' generate' methods' schemes'
 
 monomorphizeMaybe ::
-     ( MonadInferencer m
-     , Monomorphize p (Monomorphized p') a
-     , HasPos a
-     , HasTypeHole a
-     )
+     (Monomorphize p (Monomorphized p') a, HasPos a, HasTypeHole a)
   => Subst Type.Type
   -> Maybe (Annot n a)
   -> (p' a -> Maybe (Annot n a))
   -> p a
-  -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized (Annot n) a)
 monomorphizeMaybe subst a f =
   monomorphizeMaybeWithFailure subst (Right a) (Right . f)
 
 monomorphizeMaybeWithFailure ::
-     ( MonadInferencer m
-     , Monomorphize p (Monomorphized p') a
-     , HasPos a
-     , HasTypeHole a
-     )
+     (Monomorphize p (Monomorphized p') a, HasPos a, HasTypeHole a)
   => Subst Type.Type
-  -> Either MonomorphizeError (Maybe (Annot n a))
-  -> (p' a -> Either MonomorphizeError (Maybe (Annot n a)))
-  -> p a
-  -> m (Either MonomorphizeError (Monomorphized (Annot n) a))
+  -> MonomorphizeError `Either` Maybe (Annot n a) -> (p' a -> MonomorphizeError `Either` Maybe (Annot n a)) -> p a -> Inferencer (MonomorphizeError `Either` Monomorphized (Annot n) a)
 monomorphizeMaybeWithFailure subst a f par =
   monomorphize subst par >>@= \par' ->
     case par' ^. node of
@@ -655,9 +622,8 @@ instance MonomorphizeImpl AST.Type AST.Type a where
       Absurd -> return $ Left undefined -- TODO: all types have to make sense
 
 instantiateType ::
-     MonadInferencer m
-  => Type.Type
-  -> m (MonomorphizeError `Either` Monomorphized (Const Void) a)
+     Type.Type
+  -> Inferencer (MonomorphizeError `Either` Monomorphized (Const Void) a)
 instantiateType =
   \case
     ErrorType {} -> return $ Left undefined -- TODO: encountered error type
@@ -680,11 +646,11 @@ instantiateType =
         VoidType -> succeed mempty
 
 monomorphizePolyType ::
-     (HasPos a, HasTypeHole a, MonadInferencer m)
+     (HasPos a, HasTypeHole a)
   => TypeHandle
   -> TypeHandle
   -> Monomorphized n a
-  -> m (Either MonomorphizeError (Monomorphized Schematized a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized Schematized a)
 monomorphizePolyType scheme inst mono =
   case scheme `Map.lookup` getPolyGenerate (view polyMethods mono) of
     Nothing -> monomorphizePolyTypeInner scheme inst mono
@@ -694,11 +660,11 @@ monomorphizePolyType scheme inst mono =
       return $ first undefined $ oneRight set'
 
 monomorphizePolyTypeInner ::
-     (HasPos a, HasTypeHole a, MonadInferencer m)
+     (HasPos a, HasTypeHole a)
   => TypeHandle
   -> TypeHandle
   -> Monomorphized n a
-  -> m (Either MonomorphizeError (Monomorphized Schematized a))
+  -> Inferencer (MonomorphizeError `Either` Monomorphized Schematized a)
 monomorphizePolyTypeInner scheme inst mono = do
   scheme' <- reconstructOld $ handleId scheme
   inst' <- reconstructOld $ handleId inst

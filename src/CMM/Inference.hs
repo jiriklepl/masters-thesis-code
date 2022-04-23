@@ -11,7 +11,6 @@ import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad (Monad((>>=), return), sequence, when)
-import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
@@ -83,6 +82,7 @@ import safe CMM.Inference.Fact
   , typeUnion
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
+import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MethodTypeHole,
@@ -90,7 +90,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   )
 import safe CMM.Inference.State
   ( Inferencer
-  , MonadInferencer
+  , InferencerState
   , addUnificationErrors
   , classFacts
   , classSchemes
@@ -151,11 +151,9 @@ import safe CMM.Inference.TypeVar
   , predecessor
   )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
-import safe CMM.Inference.HandleCounter
-    ( nextHandleCounter, getHandleCounter )
 
 class FactCheck a where
-  factCheck :: MonadInferencer m => a -> m ()
+  factCheck :: a -> Inferencer ()
 
 instance (Foldable t, FactCheck a) => FactCheck (t a) where
   factCheck = traverse_ factCheck
@@ -183,13 +181,13 @@ instance FactCheck TypeVar where
   factCheck tVar = do
     handlize %= Bimap.tryInsert tVar (initTypeHandle NoTypeAnnot tVar)
 
-elaborate :: MonadInferencer m => PrimType -> m (TypeCompl Type)
+elaborate :: PrimType -> Inferencer (TypeCompl Type)
 elaborate primType = do
   handles <- use handlize
   let oneLevels t = maybe (VarType t) (view typing) (t `Bimap.lookup` handles)
   return $ oneLevels <$> primType
 
-simplify :: MonadInferencer m => Type -> m TypeVar
+simplify :: Type -> Inferencer TypeVar
 simplify =
   \case
     ErrorType _ -> undefined
@@ -208,7 +206,7 @@ simplify =
             return tVar
           Just tVar -> return tVar
 
-pushTyping :: MonadInferencer m => TypeHandle -> TypeHandle -> m ()
+pushTyping :: TypeHandle -> TypeHandle -> Inferencer ()
 pushTyping handle handle' = do
   let t = handle ^. typing
       t' = handle' ^. typing
@@ -224,7 +222,7 @@ pushTyping handle handle' = do
               False -> fixSubs
       safeHandlizeUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
 
-mineAST :: (MonadInferencer m, HasTypeHole a, Foldable n) => n a -> m ()
+mineAST :: (HasTypeHole a, Foldable n) => n a -> Inferencer ()
 mineAST = traverse_ (addHandles . getTypeHole)
   where
     addHandle handle = handlize %= Bimap.insert (handleId handle) handle
@@ -235,12 +233,12 @@ mineAST = traverse_ (addHandles . getTypeHole)
     addHandles (MethodTypeHole handle handle' handle'') =
       addHandle handle *> addHandle handle' *> addHandle handle''
 
-fixClasses :: MonadInferencer m => m ()
+fixClasses :: Inferencer ()
 fixClasses = do
   unifs' <- use unifs
   classFacts %= fmap (Set.map $ apply unifs')
 
-fixAll :: MonadInferencer m => m Bool
+fixAll :: Inferencer Bool
 fixAll = do
   results <- sequence [fixTypize, fixHandlize, fixSubs]
   if or results
@@ -253,11 +251,10 @@ mapFold :: (Ord a, Semigroup b) => [(a, b)] -> Map a b
 mapFold = foldl (flip . uncurry $ Map.insertWith (<>)) Map.empty
 
 fixSubGraph ::
-     MonadInferencer m
-  => Bool
-  -> Lens' Inferencer (Map TypeVar (Set TypeVar))
+     Bool
+  -> Lens' InferencerState (Map TypeVar (Set TypeVar))
   -> Subst TypeVar
-  -> m ()
+  -> Inferencer ()
 fixSubGraph isShallow which subst = do
   let applyUnifs =
         (_1 %~
@@ -276,11 +273,11 @@ fixSubGraph isShallow which subst = do
   which .= Map.filter (not . null) (Map.mapWithKey Set.delete which')
 
 fixBounds ::
-     (MonadInferencer m, Lattice a)
+     Lattice a
   => Bool
-  -> Lens' Inferencer (Map TypeVar (Bounds a))
+  -> Lens' InferencerState (Map TypeVar (Bounds a))
   -> Subst TypeVar
-  -> m ()
+  -> Inferencer ()
 fixBounds isShallow which subst = do
   whichList <-
     uses which $
@@ -292,14 +289,14 @@ fixBounds isShallow which subst = do
     Map.toList
   which .= mapFold whichList
 
-fixSubs :: MonadInferencer m => m Bool
+fixSubs :: Inferencer Bool
 fixSubs = do
   unifs' <- use unifs
   let fixBoth ::
-           (MonadInferencer m, Bounded a, Eq a, Ord (Ordered a), Lattice a)
-        => Lens' Inferencer (Map TypeVar (Set TypeVar))
-        -> Lens' Inferencer (Map TypeVar (Bounds a))
-        -> m (Subst TypeVar)
+           (Bounded a, Eq a, Ord (Ordered a), Lattice a)
+        => Lens' InferencerState (Map TypeVar (Set TypeVar))
+        -> Lens' InferencerState (Map TypeVar (Bounds a))
+        -> Inferencer (Subst TypeVar)
       fixBoth sub bounds = do
         fixSubGraph False sub unifs'
         fixBounds False bounds unifs'
@@ -328,14 +325,12 @@ fixSubs = do
          (_2 . consting %~ apply subst')
 
 unsafeTypizeUpdate ::
-     MonadInferencer m => ((TypeVar, PrimType) -> (TypeVar, PrimType)) -> m ()
+     ((TypeVar, PrimType) -> (TypeVar, PrimType)) -> Inferencer ()
 unsafeTypizeUpdate change =
   typize %= Bimap.fromList . (change <$>) . Bimap.toList
 
 unsafeHandlizeUpdate ::
-     MonadInferencer m
-  => ((TypeVar, TypeHandle) -> (TypeVar, TypeHandle))
-  -> m ()
+     ((TypeVar, TypeHandle) -> (TypeVar, TypeHandle)) -> Inferencer ()
 unsafeHandlizeUpdate change =
   handlize %= Bimap.fromList . (change <$>) . Bimap.toList
 
@@ -344,9 +339,7 @@ isSingleton = (== 1) . Set.size
 
 -- TODO: reduce duplication
 safeHandlizeUpdate ::
-     MonadInferencer m
-  => ((TypeVar, TypeHandle) -> (TypeVar, TypeHandle))
-  -> m Bool
+     ((TypeVar, TypeHandle) -> (TypeVar, TypeHandle)) -> Inferencer Bool
 safeHandlizeUpdate change = do
   handles' <- uses handlize ((change <$>) . Bimap.toList)
   let handlize' = Bimap.fromList handles'
@@ -406,7 +399,7 @@ safeHandlizeUpdate change = do
             (_2 . consting %~ applyShallow cSubst) .
             (_2 . kinding %~ applyShallow kSubst)
 
-fixHandlize :: MonadInferencer m => m Bool
+fixHandlize :: Inferencer Bool
 fixHandlize = uses unifs apply >>= safeHandlizeUpdate
 
 mapCollect :: (Ord a, Ord b) => [(a, b)] -> Map a (Set b)
@@ -419,7 +412,7 @@ onCandidates (candidate:candidates) lookup' database =
     Nothing -> onCandidates candidates lookup' database
 onCandidates [] _ _ = Nothing
 
-fixTypize :: MonadInferencer m => m Bool
+fixTypize :: Inferencer Bool
 fixTypize = do
   types' <- uses unifs (fmap . apply) <*> uses typize Bimap.toList
   let typize' = Bimap.fromList types'
@@ -456,10 +449,10 @@ fixTypize = do
       unifs %= apply subst
       True <$ fixTypize
 
-fixFacts :: MonadInferencer m => Facts -> m Facts
+fixFacts :: Facts -> Inferencer Facts
 fixFacts facts = uses unifs $ flip fmap facts . apply
 
-wrapParent :: MonadInferencer m => FlatFacts -> m a -> m a
+wrapParent :: FlatFacts -> Inferencer a -> Inferencer a
 wrapParent flatFacts wrapped =
   case determineParent flatFacts of
     Just parent -> pushParent parent *> wrapped <* popParent
@@ -480,7 +473,7 @@ reverseFacts = fmap go
     go (ClassFact name t) = ClassConstraint name t
     go _ = undefined -- TODO: error
 
-reduceOne :: MonadInferencer m => Facts -> m (Bool, Facts)
+reduceOne :: Facts -> Inferencer (Bool, Facts)
 reduceOne [] = fixAll $> (False, [])
 reduceOne (fact:facts) =
   case fact of
@@ -592,21 +585,21 @@ reduceOne (fact:facts) =
     continue = continueWith facts
     continueWith = ((_1 .~ True) <$>) . reduceOne
 
-reduceMany :: MonadInferencer m => Facts -> m (Bool, Facts)
+reduceMany :: Facts -> Inferencer (Bool, Facts)
 reduceMany facts = do
   (change, facts') <- reduceOne facts
   if change
     then (_1 .~ True) <$> reduceMany facts'
     else return (False, facts)
 
-reduce :: MonadInferencer m => Facts -> m (Bool, Facts)
+reduce :: Facts -> Inferencer (Bool, Facts)
 reduce facts = do
   (change, facts') <- reduceMany facts
   let (facts'', sccs) = makeCallGraph facts'
   (change', facts''') <- closeSCCs facts'' sccs
   return (change || change', facts''')
 
-minimizeSubs :: MonadInferencer m => TypeVar -> m ()
+minimizeSubs :: TypeVar -> Inferencer ()
 minimizeSubs parent = do
   constings <- uses subConsting transformMap
   constBounds <- use constingBounds
@@ -697,16 +690,16 @@ laundry parent boundsMap subGraph =
     getDepends _ _ = undefined -- TODO: error
 
 minimizeBounds ::
-     (MonadInferencer m, Bounded a)
-  => Lens' Inferencer (Map TypeVar (Bounds a))
+     Bounded a
+  => Lens' InferencerState (Map TypeVar (Bounds a))
   -> TypeVar
-  -> m ()
+  -> Inferencer ()
 minimizeBounds what tVar = do
   low <- uses what (tVar `readLowerBound`)
   what %= Map.insert tVar (low `Bounds` low)
 
 -- TODO: remove parent (implicit)
-freeParented :: MonadState Inferencer m => TypeVar -> m ([TypeVar], [TypeVar])
+freeParented :: TypeVar -> Inferencer ([TypeVar], [TypeVar])
 freeParented parent = do
   (consts, kinds) <- uses handlize $ unzip . fmap mineSubs . Bimap.elems
   subConsts <- use subConsting
@@ -720,14 +713,14 @@ freeParented parent = do
     isFreeParented _ NoType = False
     mineSubs handle = (handle ^. consting, handle ^. kinding)
 
-minimizeFree :: MonadInferencer m => TypeVar -> m ()
+minimizeFree :: TypeVar -> Inferencer ()
 minimizeFree parent = do
   (consts, kinds) <- freeParented parent
   minimizeBounds constingBounds `traverse_` consts
   minimizeBounds kindingBounds `traverse_` kinds
 
 -- TODO: remove parent (implicit)
-floatSubs :: MonadInferencer m => TypeVar -> m ()
+floatSubs :: TypeVar -> Inferencer ()
 floatSubs parent = do
   (consts, kinds) <- (both %~ Set.fromList) <$> freeParented parent
   constBounds <- use constingBounds
@@ -760,14 +753,14 @@ reParent newParent oldParents = go
       | otherwise = tVar
     tVarCase NoType = NoType
 
-refresher :: MonadInferencer m => Set TypeVar -> m (Map TypeVar TypeVar)
+refresher :: Set TypeVar -> Inferencer (Map TypeVar TypeVar)
 refresher tVars =
   sequence $
   Map.fromSet
     (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind tVar)
     tVars
 
-unSchematize :: MonadInferencer m => Facts -> m Facts
+unSchematize :: Facts -> Inferencer Facts
 unSchematize [] = return []
 unSchematize (Fact (InstType (VarType scheme) inst):others) =
   uses schemes (scheme `Map.lookup`) >>= \case
@@ -780,7 +773,7 @@ unSchematize (Fact (InstType (VarType scheme) inst):others) =
 unSchematize (fact:others) = (fact :) <$> unSchematize others
 
 -- TODO: check whether all typings are set (otherwise error)
-schematize :: MonadInferencer m => Facts -> Set TypeVar -> m Facts
+schematize :: Facts -> Set TypeVar -> Inferencer Facts
 schematize facts tVars = do
   parent <- getParent
   x <- Set.toList . Set.unions <$> traverse collectPrimeTVars (Set.toList tVars)
@@ -849,10 +842,7 @@ schematize facts tVars = do
     presentIn where' (key, _) = key `Set.member` where'
 
 closeSCCs ::
-     MonadInferencer m
-  => Facts
-  -> [SCC (Fact, TypeVar, [TypeVar])]
-  -> m (Bool, Facts)
+     Facts -> [SCC (Fact, TypeVar, [TypeVar])] -> Inferencer (Bool, Facts)
 closeSCCs facts [] = return (False, facts)
 closeSCCs facts (scc:others) =
   case scc of
@@ -953,10 +943,10 @@ deduceUnifs handles which = go pairs mempty
         Right (subst', _) -> go others $ subst' `apply` subst
 
 propagateBounds ::
-     (MonadInferencer m, Lattice a, Bounded a)
-  => Lens' Inferencer (Map TypeVar (Bounds a))
-  -> Getter Inferencer (Map TypeVar (Set TypeVar))
-  -> m ()
+     (Lattice a, Bounded a)
+  => Lens' InferencerState (Map TypeVar (Bounds a))
+  -> Getter InferencerState (Map TypeVar (Set TypeVar))
+  -> Inferencer ()
 propagateBounds which by = do
   pairs <- liftA2 (collectPairs Forward) getHandleCounter (use by)
   for_ pairs $ \(v, v') -> do
@@ -966,9 +956,9 @@ propagateBounds which by = do
       traverse_ ((which %=) . Map.insertWith (<>) v' . (upperBound .~ maxBound))
 
 boundsUnifs ::
-     (MonadInferencer m, PartialOrd a, Eq a, Ord (Ordered a), Bounded a)
-  => Getter Inferencer (Map TypeVar (Bounds a))
-  -> m (Subst TypeVar)
+     (PartialOrd a, Eq a, Ord (Ordered a), Bounded a)
+  => Getter InferencerState (Map TypeVar (Bounds a))
+  -> Inferencer (Subst TypeVar)
 boundsUnifs which = do
   whichList <- filter (isTrivialOrAbsurd . view _2) <$> uses which Map.toList
   let trivialGroups =
@@ -987,5 +977,5 @@ boundsUnifs which = do
     go (_:rest) subst = go rest subst
     go [] subst = subst
 
-registerKind :: Text -> m DataKind
+registerKind :: Text -> Inferencer DataKind
 registerKind = undefined
