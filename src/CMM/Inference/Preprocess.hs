@@ -125,7 +125,6 @@ import safe CMM.Inference.Preprocess.State as Infer
   , lookupTCon
   , lookupTVar
   , lookupVar
-  , nextHandleCounter
   , openProc
   , popContext
   , popTopContext
@@ -156,6 +155,7 @@ import safe CMM.Inference.TypeHandle (handleId)
 import safe CMM.Inference.TypeKind (TypeKind(Constraint, GenericType, Star))
 import safe CMM.Inference.TypeVar (TypeVar(NoType, tVarId))
 import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Inference.HandleCounter ( nextHandleCounter )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable

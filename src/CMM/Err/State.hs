@@ -33,7 +33,7 @@ instance Semigroup ErrorState where
 instance Monoid ErrorState where
   mempty = ErrorState mempty
 
-class HasErrorState s a | s -> a where
+class a ~ ErrorState => HasErrorState s a | s -> a where
   errorState :: Lens' s a
 
 makeFieldsNoPrefix ''ErrorState

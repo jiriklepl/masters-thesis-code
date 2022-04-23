@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# OPTIONS_GHC -w #-}
 
 module Main where
 
@@ -51,6 +50,8 @@ import CMM.Monomorphize (Monomorphize(monomorphize))
 import CMM.Monomorphize.Monomorphized as Infer
 import CMM.Parser
 import CMM.Pretty ()
+import safe CMM.Inference.HandleCounter
+    ( HasHandleCounter(handleCounter), setHandleCounter )
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -80,8 +81,8 @@ main = do
   _ <- globalVariables $ unAnnot ast
   -- print $ CMM.Inference.Preprocess.State._facts miner
   inferencer <-
-    (`execStateT` InferState.initInferencer
-                    (view CMM.Inference.Preprocess.State.handleCounter miner)) $ do
+    (`execStateT` InferState.initInferencer) $ do
+      setHandleCounter $ view handleCounter miner
       let fs = head $ view CMM.Inference.Preprocess.State.facts miner
       mineAST mined
       -- liftIO $ print fs

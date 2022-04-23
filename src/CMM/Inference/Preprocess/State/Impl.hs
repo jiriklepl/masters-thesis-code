@@ -3,9 +3,8 @@
 
 module CMM.Inference.Preprocess.State.Impl where
 
-import safe Control.Lens.TH (makeLenses)
+import safe Control.Lens.TH (makeFieldsNoPrefix)
 
-import safe Data.Int (Int)
 import safe Data.Map (Map)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
@@ -14,6 +13,7 @@ import safe CMM.Inference.Fact (Facts)
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
 import safe CMM.Inference.TypeHandle (TypeHandle)
+import safe CMM.Inference.HandleCounter (HasHandleCounter(handleCounter), HandleCounter)
 
 data InferPreprocessor =
   InferPreprocessor
@@ -28,7 +28,7 @@ data InferPreprocessor =
     , _facts :: [Facts]
     , _cSymbols :: [Text]
     , _currentContext :: [Context]
-    , _handleCounter :: Int
+    , _handleCounter :: HandleCounter
     }
 
 initInferPreprocessor :: InferPreprocessor
@@ -48,4 +48,4 @@ initInferPreprocessor =
     , _handleCounter = 0
     }
 
-makeLenses ''InferPreprocessor
+makeFieldsNoPrefix ''InferPreprocessor

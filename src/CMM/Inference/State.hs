@@ -6,14 +6,13 @@ module CMM.Inference.State
   ) where
 
 import safe Control.Applicative (Applicative((<*>)))
-import safe Control.Lens.Getter ((^.), use, uses, view)
-import safe Control.Lens.Setter ((%=), (+=), (<>=))
-import safe Control.Monad (Functor(fmap), Monad((>>), (>>=), return))
+import safe Control.Lens.Getter ((^.), uses, view)
+import safe Control.Lens.Setter ((%=), (<>=))
+import safe Control.Monad (Functor(fmap), Monad((>>=), return))
 import safe Control.Monad.State (MonadState)
 import safe Data.Foldable (fold)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
-import safe Data.Int (Int)
 import safe Data.List (head, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
@@ -52,7 +51,6 @@ import safe CMM.Inference.State.Impl
   , classSchemes
   , constingBounds
   , currentParent
-  , handleCounter
   , handlize
   , initInferencer
   , kindingBounds
@@ -63,14 +61,9 @@ import safe CMM.Inference.State.Impl
   , unifs
   )
 import safe CMM.Inference.Unify.Error (UnificationError)
+import safe CMM.Inference.HandleCounter ( nextHandleCounter )
 
 type MonadInferencer m = MonadState Inferencer m
-
-getHandleCounter :: MonadInferencer m => m Int
-getHandleCounter = use handleCounter
-
-nextHandleCounter :: MonadInferencer m => m Int
-nextHandleCounter = handleCounter += 1 >> use handleCounter
 
 pushParent :: MonadInferencer m => TypeVar -> m ()
 pushParent parent = currentParent %= (parent :)

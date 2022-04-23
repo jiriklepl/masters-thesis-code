@@ -96,6 +96,7 @@ executable Compiler
                        CMM.Inference.DataKind,
                        CMM.Inference.Fact,
                        CMM.Inference.FreeTypeVars,
+                       CMM.Inference.HandleCounter,
                        CMM.Inference.Preprocess,
                        CMM.Inference.Preprocess.ClassData,
                        CMM.Inference.Preprocess.Context,

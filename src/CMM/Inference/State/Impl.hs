@@ -6,7 +6,6 @@ module CMM.Inference.State.Impl where
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
 import safe qualified CMM.Data.Bimap as Bimap
-import safe Data.Int (Int)
 import safe Data.Map (Map)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Set (Set)
@@ -23,6 +22,8 @@ import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
+import CMM.Inference.HandleCounter
+    ( HasHandleCounter(handleCounter), HandleCounter )
 
 data Inferencer =
   Inferencer
@@ -41,7 +42,7 @@ data Inferencer =
     -- | TODO: Handlize
     , _handlize :: Bimap TypeVar TypeHandle
     -- | TODO
-    , _handleCounter :: Int
+    , _handleCounter :: HandleCounter
     -- | TODO
     , _errorState :: ErrorState
     -- | TODO
@@ -55,8 +56,8 @@ data Inferencer =
     }
   deriving (Show)
 
-initInferencer :: Int -> Inferencer
-initInferencer counter =
+initInferencer :: Inferencer
+initInferencer =
   Inferencer
     { _subKinding = mempty
     , _kindingBounds = mempty
@@ -65,7 +66,7 @@ initInferencer counter =
     , _unifs = mempty
     , _typize = Bimap.empty
     , _handlize = Bimap.empty
-    , _handleCounter = counter
+    , _handleCounter = mempty
     , _classSchemes = mempty
     , _classFacts = mempty
     , _errorState = mempty

@@ -103,11 +103,9 @@ import safe CMM.Inference.State
   , getKinding
   , getParent
   , getTyping
-  , handleCounter
   , handlize
   , handlizeTVar
   , kindingBounds
-  , nextHandleCounter
   , popParent
   , pushConstBounds
   , pushKindBounds
@@ -153,6 +151,8 @@ import safe CMM.Inference.TypeVar
   , predecessor
   )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
+import safe CMM.Inference.HandleCounter
+    ( nextHandleCounter, getHandleCounter )
 
 class FactCheck a where
   factCheck :: MonadInferencer m => a -> m ()
@@ -309,7 +309,7 @@ fixSubs = do
         propagateBounds bounds sub
         boundsUnifs bounds >>= go subst
         where
-          subUnifs = liftA2 deduceUnifs (use handleCounter) (use sub)
+          subUnifs = liftA2 deduceUnifs getHandleCounter (use sub)
           go accum subst
             | null subst = return accum
             | otherwise = do
@@ -958,7 +958,7 @@ propagateBounds ::
   -> Getter Inferencer (Map TypeVar (Set TypeVar))
   -> m ()
 propagateBounds which by = do
-  pairs <- liftA2 (collectPairs Forward) (use handleCounter) (use by)
+  pairs <- liftA2 (collectPairs Forward) getHandleCounter (use by)
   for_ pairs $ \(v, v') -> do
     uses which (v' `Map.lookup`) >>=
       traverse_ ((which %=) . Map.insertWith (<>) v . (lowerBound .~ minBound))

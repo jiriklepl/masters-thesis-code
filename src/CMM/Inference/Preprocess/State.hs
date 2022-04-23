@@ -9,16 +9,15 @@ module CMM.Inference.Preprocess.State
 
 import safe Control.Applicative (Applicative(pure), (<|>))
 import safe Control.Lens.Getter ((^.), use, uses)
-import safe Control.Lens.Setter ((%=), (+=), (.=), (<~))
+import safe Control.Lens.Setter ((%=), (.=), (<~))
 import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
-import safe Control.Monad (Functor((<$), fmap), Monad((>>), (>>=), return))
+import safe Control.Monad (Functor((<$), fmap), Monad((>>=), return))
 import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
 import safe Data.Function (($), (.))
 import safe Data.Functor ((<$>))
-import safe Data.Int (Int)
 import safe Data.List (foldr, head, init, last, reverse, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
@@ -78,7 +77,6 @@ import safe CMM.Inference.Preprocess.State.Impl
   , funcElabVariables
   , funcInstVariables
   , funcVariables
-  , handleCounter
   , initInferPreprocessor
   , structMembers
   , typeClasses
@@ -86,6 +84,7 @@ import safe CMM.Inference.Preprocess.State.Impl
   , typeVariables
   , variables
   )
+import safe CMM.Inference.HandleCounter ( nextHandleCounter )
 
 type MonadInferPreprocessor = MonadState InferPreprocessor
 
@@ -407,12 +406,6 @@ freshASTTypeHandle node = freshTypeHandle . TypeAST $ getPos node
 
 freshTypeHelper :: MonadInferPreprocessor m => TypeKind -> m TypeHandle
 freshTypeHelper = freshTypeHandle NoTypeAnnot
-
-getHandleCounter :: MonadInferPreprocessor m => m Int
-getHandleCounter = use handleCounter
-
-nextHandleCounter :: MonadInferPreprocessor m => m Int
-nextHandleCounter = handleCounter += 1 >> getHandleCounter
 
 freshTypeHandle ::
      MonadInferPreprocessor m => TypeAnnot -> TypeKind -> m TypeHandle
