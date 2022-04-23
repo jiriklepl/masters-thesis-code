@@ -2,7 +2,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE Rank2Types #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module CMM.AST.Blockifier where
 
@@ -15,7 +14,7 @@ import safe Control.Monad.State.Lazy (when)
 import safe Data.Bool (Bool(False, True), (||), not)
 import safe Data.Eq (Eq)
 import safe Data.Foldable (Foldable(elem, null), any, concat, traverse_)
-import safe Data.Function (($), (.), flip)
+import safe Data.Function (($), (.))
 import safe Data.Functor (Functor((<$)), ($>), (<$>), fmap)
 import safe Data.Int (Int)
 import safe qualified Data.Map as Map
@@ -23,7 +22,7 @@ import safe Data.Maybe (Maybe(Just, Nothing), maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable(traverse))
-import safe Data.Tuple (fst, snd)
+import safe Data.Tuple (fst)
 import safe GHC.Err (error)
 
 import safe CMM.AST
@@ -97,13 +96,6 @@ import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (addPrefix)
 import safe Data.Map (Map)
-
--- TODO: maybe move this elsewhere
-instance HasBlockAnnot (a, BlockAnnot) where
-  getBlockAnnot = snd
-
-instance WithBlockAnnot a (a, BlockAnnot) where
-  withBlockAnnot = flip (,)
 
 helperName :: Text -> Text
 helperName = addPrefix lrAnalysisPrefix

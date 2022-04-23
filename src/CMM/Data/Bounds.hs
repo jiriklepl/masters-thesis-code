@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 module CMM.Data.Bounds
   ( module CMM.Data.Bounds
@@ -8,20 +7,11 @@ module CMM.Data.Bounds
 
 import safe Data.Bool (Bool)
 import safe Data.Eq (Eq((==)))
-import safe Data.Monoid (Monoid(mempty))
 import safe Data.PartialOrd (PartialOrd((<=), (>), (>=)))
-import safe Data.Semigroup (Semigroup((<>)))
 
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
-import safe CMM.Data.Lattice (Lattice, join, meet)
 
 import safe CMM.Data.Bounds.Impl (Bounds(Bounds), lowerBound, upperBound)
-
-instance Lattice a => Semigroup (Bounds a) where
-  Bounds low high <> Bounds low' high' = join low low' `Bounds` meet high high'
-
-instance (Lattice a, Bounded a) => Monoid (Bounds a) where
-  mempty = minBound `Bounds` maxBound
 
 absurdBounds :: Bounded a => Bounds a
 absurdBounds = maxBound `Bounds` minBound
