@@ -6,6 +6,7 @@
 module CMM.Inference.Preprocess where
 
 import safe Control.Applicative (Applicative((<*), pure), liftA2)
+import safe Control.Lens.Getter ((^.))
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
 import safe Control.Monad (Monad((>>=), return), (>=>), zipWithM_)
@@ -76,6 +77,11 @@ import safe CMM.AST.Variables as AST
   , globalVariables
   , instanceVariables
   , localVariables
+  )
+import safe CMM.AST.Variables.State
+  ( funcInstVariables
+  , funcVariables
+  , typeVariables
   )
 import safe CMM.Inference.BuiltIn as Infer
   ( addressKind
@@ -222,8 +228,10 @@ handleVars types = holeId . getTypeHole <$> types
 
 instance Preprocess Unit a b where
   preprocessImpl _ unit@(Unit topLevels) = do
-    let (vars, fVars, fIVars, tCons, _, tClasses, sMems) = globalVariables unit
-    beginUnit vars fVars fIVars tCons tClasses sMems
+    let collector = globalVariables unit
+        fVars = collector ^. funcVariables
+        fIVars = collector ^. funcInstVariables
+    beginUnit collector
     traverse_ (storeFact . Fact) builtInTypeFacts
     let storeFacts var = do
           storeFact $ constExprConstraint var
@@ -291,8 +299,7 @@ instance Preprocess Decl a b where
 -- TODO: combine with Instance
 instance Preprocess Class a b where
   preprocessImpl _ class'@(Class paraNames paraName methods) = do
-    let (_, _, _, _, tVars, _, _) = classVariables class'
-    pushTypeVariables tVars
+    pushTypeVariables $ classVariables class' ^. typeVariables
     (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
     (constraint, paraName') <- preprocessParaName paraName
     let hole = getTypeHole paraName'
@@ -305,8 +312,7 @@ instance Preprocess Class a b where
 
 instance Preprocess Instance a b where
   preprocessImpl _ instance'@(Instance paraNames paraName methods) = do
-    let (_, _, _, _, tVars, _, _) = instanceVariables instance'
-    pushTypeVariables tVars
+    pushTypeVariables $ instanceVariables instance' ^. typeVariables
     (constraints, paraNames') <- unzip <$> traverse preprocessParaName paraNames
     (constraint, paraName') <- preprocessParaName paraName
     let hole = getTypeHole paraName'
@@ -478,10 +484,8 @@ preprocessProcedureHeader (ProcedureHeader mConv name formals mTypes) = do
 -- TODO: add handle (dependent on the context) to the node
 instance Preprocess Procedure a b where
   preprocessImpl _ procedure@(Procedure header body) = do
-    let (vars, _, _, tCons, tVars, _, _) = localVariables header
-    beginProc (getName procedure) vars tCons tVars
-    let (vars', _, _, tCons', tVars', _, _) = localVariables body
-    openProc vars' tCons' tVars'
+    beginProc (getName procedure) $ localVariables header
+    openProc $ localVariables body
     body' <- preprocess body
     header' <-
       preprocessFinalize (takeAnnot header) $
@@ -491,8 +495,7 @@ instance Preprocess Procedure a b where
 -- TODO: ditto
 instance Preprocess ProcedureDecl a b where
   preprocessImpl _ procedure@(ProcedureDecl header) = do
-    let (vars, _, _, tCons, tVars, _, _) = localVariables header
-    beginProc (getName procedure) vars tCons tVars
+    beginProc (getName procedure) $ localVariables header
     header' <-
       preprocessFinalize (takeAnnot header) $
       preprocessProcedureHeader (unAnnot header)

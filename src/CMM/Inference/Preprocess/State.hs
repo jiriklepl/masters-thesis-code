@@ -69,6 +69,8 @@ import safe CMM.Inference.TypeKind (TypeKind(Star))
 import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
+import safe CMM.AST.Variables.State (CollectorState)
+import safe qualified CMM.AST.Variables.State as CS
 import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.Preprocess.State.Impl
   ( PreprocessorState(PreprocessorState)
@@ -91,26 +93,19 @@ type Preprocessor = State PreprocessorState
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
 
-beginUnit ::
-     Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind, Set Text)
-  -> Map Text (SourcePos, TypeKind)
-  -> Preprocessor ()
-beginUnit vars fVars fIVars tCons tClasses sMems = do
-  variables <~ pure <$> declVars vars
-  funcVariables <~ declVars fVars
-  funcElabVariables <~ declVars fIVars
-  typeConstants <~ pure <$> declVars tCons
-  classHandles <- declVars $ complThd3 <$> tClasses
+beginUnit :: CollectorState -> Preprocessor ()
+beginUnit collector = do
+  variables <~ pure <$> declVars (collector ^. CS.variables)
+  funcVariables <~ declVars (collector ^. CS.funcVariables)
+  funcElabVariables <~ declVars (collector ^. CS.funcInstVariables)
+  typeConstants <~ pure <$> declVars (collector ^. CS.typeConstants)
+  classHandles <- declVars $ complThd3 <$> (collector ^. CS.typeClasses)
   typeClasses .=
     Map.intersectionWith
       (ClassData . SimpleTypeHole)
       classHandles
-      ((^. _3) <$> tClasses)
-  structMembers <~ declVars sMems
+      ((^. _3) <$> (collector ^. CS.typeClasses))
+  structMembers <~ declVars (collector ^. CS.structMembers)
 
 -- | returns `NoType` on failure
 lookupVar :: Text -> Preprocessor TypeHole
@@ -151,18 +146,13 @@ storeVar name handle = do
   vars <- use variables
   storeVarImpl name handle vars
 
-beginProc ::
-     Text
-  -> Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind)
-  -> Preprocessor ()
-beginProc name vars tCons tVars = do
-  vars' <- declVars vars
+beginProc :: Text -> CollectorState -> Preprocessor ()
+beginProc name collector = do
+  vars' <- declVars $ collector ^. CS.variables
   variables %= (vars' :)
-  tCons' <- declVars tCons
+  tCons' <- declVars $ collector ^. CS.typeConstants
   typeConstants %= (tCons' :)
-  tVars' <- declVars tVars
+  tVars' <- declVars $ collector ^. CS.typeVariables
   typeVariables %= reverse . (tVars' :) . reverse
   pushFacts
   currentReturn <- freshTypeHelper Star
@@ -172,17 +162,13 @@ beginProc name vars tCons tVars = do
   handle <- lookupCtxFVar name
   pushContext $ FunctionCtx (name, handle) currentReturn
 
-openProc ::
-     Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind)
-  -> Map Text (SourcePos, TypeKind)
-  -> Preprocessor ()
-openProc vars tCons tVars = do
-  vars' <- declVars vars
+openProc :: CollectorState -> Preprocessor ()
+openProc collector = do
+  vars' <- declVars $ collector ^. CS.variables
   modifyHead variables (vars' <>)
-  tCons' <- declVars tCons
+  tCons' <- declVars $ collector ^. CS.typeConstants
   modifyHead typeConstants (tCons' <>)
-  tVars' <- declVars tVars
+  tVars' <- declVars $ collector ^. CS.typeVariables
   ~(h:t) <- uses typeVariables reverse
   typeVariables .= reverse ((tVars' <> h) : t)
 

@@ -4,19 +4,15 @@
 module CMM.AST.Variables where
 
 import safe Control.Applicative (Applicative((*>), (<*)))
-import safe Control.Lens.Getter ((^.))
-import safe Control.Monad (Monad((>>), return))
-import safe Control.Monad.State (MonadState(get), evalState)
+import safe Control.Monad (Monad(return))
+import safe Control.Monad.State (execState)
 import safe Data.Data (Data(gmapM), Typeable)
 import safe Data.Foldable (Foldable(foldr), traverse_)
 import safe Data.Function (($), (.), flip)
-import safe Data.Functor (Functor((<$), fmap), (<$>))
+import safe Data.Functor (Functor((<$)), (<$>))
 import safe Data.Generics.Aliases (extM)
-import safe Data.Map (Map)
 import safe Data.Maybe (Maybe(Just, Nothing))
 import safe qualified Data.Set as Set
-import safe Data.Set (Set)
-import safe Data.Text (Text)
 import safe Data.Tuple (fst)
 
 import safe CMM.AST
@@ -40,6 +36,7 @@ import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.HasName (getName)
 import safe CMM.AST.Variables.State
   ( Collector
+  , CollectorState
   , addFIVar
   , addFVar
   , addFVarTrivial
@@ -50,43 +47,27 @@ import safe CMM.AST.Variables.State
   , addTVarTrivial
   , addVar
   , addVarTrivial
-  , funcInstVariables
-  , funcVariables
   , initCollector
-  , structMembers
-  , typeClasses
-  , typeConstants
-  , typeVariables
-  , variables
   )
 import safe CMM.Inference.TypeKind
   ( TypeKind((:->), Constraint, GenericType, Star)
   )
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
-type VariablePack
-   = ( Map Text (SourcePos, TypeKind)
-     , Map Text (SourcePos, TypeKind)
-     , Map Text (SourcePos, TypeKind)
-     , Map Text (SourcePos, TypeKind)
-     , Map Text (SourcePos, TypeKind)
-     , Map Text (SourcePos, TypeKind, Set Text)
-     , Map Text (SourcePos, TypeKind))
-
 localVariables ::
-     (Data (n SourcePos), Functor n, HasPos a) => n a -> VariablePack
+     (Data (n SourcePos), Functor n, HasPos a) => n a -> CollectorState
 localVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
     go = addTAutoCases $ addCommonCases $ gmapM go
 
-globalVariables :: HasPos a => Unit a -> VariablePack
+globalVariables :: HasPos a => Unit a -> CollectorState
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
-classVariables :: HasPos a => Class a -> VariablePack
+classVariables :: HasPos a => Class a -> CollectorState
 classVariables class'@(Class _ (Annot (ParaName _ params) _) _) =
   variablesCommon $ do
     traverse_ (`addTVarTrivial` GenericType) params
@@ -95,24 +76,14 @@ classVariables class'@(Class _ (Annot (ParaName _ params) _) _) =
     go :: Data d => d -> Collector d
     go = addProcedureDeclCases $ gmapM go
 
-instanceVariables :: HasPos a => Instance a -> VariablePack
+instanceVariables :: HasPos a => Instance a -> CollectorState
 instanceVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
     go = addTAutoCases $ addProcedureCases $ gmapM go
 
-variablesCommon :: Collector a -> VariablePack
-variablesCommon go = fmap finalize goGet `evalState` initCollector
-  where
-    goGet = go >> get
-    finalize result =
-      ( result ^. variables
-      , result ^. funcVariables
-      , result ^. funcInstVariables
-      , result ^. typeConstants
-      , result ^. typeVariables
-      , result ^. typeClasses
-      , result ^. structMembers)
+variablesCommon :: Collector a -> CollectorState
+variablesCommon = (`execState` initCollector)
 
 infixr 3 *|*
 
