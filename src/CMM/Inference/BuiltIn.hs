@@ -4,6 +4,8 @@ module CMM.Inference.BuiltIn where
 
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
+import safe Data.Bool (otherwise)
+import safe Data.Eq (Eq((==)))
 import safe Data.Function (($))
 import safe Data.Functor ((<$>))
 import safe Data.Int (Int)
@@ -12,11 +14,9 @@ import safe Data.Maybe (Maybe, maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Data.String (String, IsString (fromString))
+import safe Data.String (IsString(fromString), String)
 import safe Data.Text (Text)
 import safe GHC.Err (error, undefined)
-import safe Data.Eq ( Eq((==)) )
-import safe Data.Bool ( otherwise )
 
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Bimap (Bimap)
@@ -122,5 +122,4 @@ getConstType :: String -> TypeCompl a
 getConstType name
   | name == constraintWitness =
     ConstType constraintWitness (Constraint :-> Star) NoType
-  | otherwise =
-    error "(internal) Tried to retrieve a nonexistent type constant"
+  | otherwise = error "(internal) Tried to retrieve a nonexistent type constant"

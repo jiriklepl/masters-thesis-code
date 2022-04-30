@@ -33,7 +33,7 @@ import safe CMM.AST
   , Unit
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
-import safe CMM.AST.HasName (getName, HasName)
+import safe CMM.AST.HasName (HasName, getName)
 import safe CMM.AST.Variables.State
   ( Collector
   , CollectorState
@@ -41,13 +41,14 @@ import safe CMM.AST.Variables.State
   , addFVar
   , addFVarTrivial
   , addSMemTrivial
+  , addTAlias
   , addTClass
   , addTCon
   , addTVar
   , addTVarTrivial
   , addVar
   , addVarTrivial
-  , initCollector, addTAlias
+  , initCollector
   )
 import safe CMM.Inference.TypeKind
   ( TypeKind((:->), Constraint, GenericType, Star)
@@ -67,18 +68,20 @@ globalVariables n = variablesCommon . go $ getPos <$> n
     go :: Data d => d -> Collector d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
-addParaNameTVars :: (HasPos annot, HasName (param annot)) =>
-  Annot (ParaName param) annot
+addParaNameTVars ::
+     (HasPos annot, HasName (param annot))
+  => Annot (ParaName param) annot
   -> Collector ()
 addParaNameTVars (Annot (ParaName _ params) _) =
   traverse_ (`addTVarTrivial` GenericType) params
 
 structVariables :: HasPos a => Struct a -> CollectorState
-structVariables (Struct paraName datums) = variablesCommon $ do
-  traverse_
-    (`addSMemTrivial` Star)
-    [label | label@(Annot DatumLabel {} _) <- datums]
-  addParaNameTVars paraName
+structVariables (Struct paraName datums) =
+  variablesCommon $ do
+    traverse_
+      (`addSMemTrivial` Star)
+      [label | label@(Annot DatumLabel {} _) <- datums]
+    addParaNameTVars paraName
 
 classVariables :: HasPos a => Class a -> CollectorState
 classVariables class'@(Class _ paraName _) =

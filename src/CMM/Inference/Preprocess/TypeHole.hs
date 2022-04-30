@@ -24,12 +24,13 @@ holeHandle = fromMaybe err . safeHoleHandle
     err = error "(Internal) implementation error" -- TODO
 
 safeHoleHandle :: TypeHole -> Maybe TypeHandle
-safeHoleHandle = \case
-  EmptyTypeHole -> Nothing
-  SimpleTypeHole handle -> Just handle
-  LVInstTypeHole handle _ -> Just handle
-  MethodTypeHole handle _ _ -> Just handle
-  MemberTypeHole handle _ _ -> Just handle
+safeHoleHandle =
+  \case
+    EmptyTypeHole -> Nothing
+    SimpleTypeHole handle -> Just handle
+    LVInstTypeHole handle _ -> Just handle
+    MethodTypeHole handle _ _ -> Just handle
+    MemberTypeHole handle _ _ -> Just handle
 
 holeId :: TypeHole -> TypeVar
 holeId = handleId . holeHandle

@@ -7,7 +7,7 @@ module CMM.Monomorphize where
 import safe Prelude
 
 import safe Control.Applicative (Applicative(liftA2), Const, liftA3)
-import safe Control.Lens.Getter ((^.), uses, view, use)
+import safe Control.Lens.Getter ((^.), use, uses, view)
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
 import safe Data.Bifunctor (first)
@@ -56,6 +56,7 @@ import safe CMM.AST.Annot (Annot, takeAnnot, unAnnot, withAnnot)
 import safe CMM.AST.Utils (addTopLevels)
 import safe CMM.Control.Applicative (liftA5)
 import safe CMM.Control.Monad ((>>@=))
+import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Either (oneRight)
 import safe CMM.Data.Nullable (nullVal)
@@ -73,12 +74,13 @@ import safe CMM.Inference.Preprocess.TypeHole
 import safe CMM.Inference.State
   ( Inferencer
   , fromOldName
+  , handlize
   , readConstingBounds
   , readKindingBounds
   , reconstruct
   , reconstructOld
   , schemes
-  , tryGetHandle, handlize
+  , tryGetHandle
   )
 import safe CMM.Inference.Subst (Subst, apply)
 import safe CMM.Inference.Type as Type (Type(ComplType, ErrorType, VarType))
@@ -122,7 +124,6 @@ import safe CMM.Monomorphize.Schematized
   )
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
-import qualified CMM.Data.Bimap as Bimap
 
 data MonomorphizeError =
   FooError
@@ -363,8 +364,7 @@ instance MonomorphizeImpl Import Import a where
 instance MonomorphizeImpl Export Export a where
   monomorphizeImpl = undefined
 
-instance (HasPos a, HasTypeHole a) =>
-         MonomorphizeImpl Datum Datum a where
+instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Datum Datum a where
   monomorphizeImpl subst a datum = do
     s <- use schemes
     x <- fromOldName $ getTypeHoleId a

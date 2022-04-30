@@ -52,19 +52,22 @@ instance Nullable TypeVar where
   nullVal = NoType
 
 instance HasTypeKind TypeVar where
-  getTypeKind = \case
-    NoType {} -> GenericType
-    TypeVar _ kind _ -> kind
-  setTypeKind kind = \case
-    t@NoType {}
-      | kind == GenericType -> NoType {}
-      | otherwise -> setTypeKindInvariantLogicError t kind
-    tVar@TypeVar {} -> tVar {tVarKind = kind}
+  getTypeKind =
+    \case
+      NoType {} -> GenericType
+      TypeVar _ kind _ -> kind
+  setTypeKind kind =
+    \case
+      t@NoType {}
+        | kind == GenericType -> NoType {}
+        | otherwise -> setTypeKindInvariantLogicError t kind
+      tVar@TypeVar {} -> tVar {tVarKind = kind}
 
 familyDepth :: TypeVar -> Int
-familyDepth = \case
-  NoType -> 0
-  TypeVar {tVarParent = parent} -> familyDepth parent + 1
+familyDepth =
+  \case
+    NoType -> 0
+    TypeVar {tVarParent = parent} -> familyDepth parent + 1
 
 predecessor :: TypeVar -> TypeVar -> Bool
 predecessor NoType NoType = True

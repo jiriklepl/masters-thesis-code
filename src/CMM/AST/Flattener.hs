@@ -85,13 +85,14 @@ instance Flatten Unit where
   flatten (Unit topLevels) = Unit $ flatten <$> topLevels
 
 instance Flatten TopLevel where
-  flatten topLevel = case topLevel of
-    TopSection strLit items -> TopSection strLit $ flatten <$> items
-    TopProcedure procedure -> TopProcedure $ flatten procedure
-    TopDecl {} -> topLevel
-    TopClass class' -> TopClass $ flatten class'
-    TopInstance instance' -> TopInstance $ flatten instance'
-    TopStruct {} -> topLevel
+  flatten topLevel =
+    case topLevel of
+      TopSection strLit items -> TopSection strLit $ flatten <$> items
+      TopProcedure procedure -> TopProcedure $ flatten procedure
+      TopDecl {} -> topLevel
+      TopClass class' -> TopClass $ flatten class'
+      TopInstance instance' -> TopInstance $ flatten instance'
+      TopStruct {} -> topLevel
 
 instance Flatten Class where
   flatten (Class paraNames paraName methods) =
@@ -104,12 +105,13 @@ instance Flatten Instance where
 instance FlattenTrivial Struct
 
 instance Flatten Section where
-  flatten = \case
-    SecDecl decl -> SecDecl decl
-    SecProcedure procedure -> SecProcedure $ flatten procedure
-    SecDatum datum -> SecDatum datum
-    SecSpan left right items ->
-      SecSpan (flatten left) (flatten right) (flatten <$> items)
+  flatten =
+    \case
+      SecDecl decl -> SecDecl decl
+      SecProcedure procedure -> SecProcedure $ flatten procedure
+      SecDatum datum -> SecDatum datum
+      SecSpan left right items ->
+        SecSpan (flatten left) (flatten right) (flatten <$> items)
 
 instance FlattenTrivial TargetDirective
 
@@ -176,61 +178,64 @@ brCond cond tName eName a =
     (Just . toBody . toBodyStmt $ trivialGoto a eName)
 
 instance FlattenStmt (Annot Stmt) where
-  flattenStmt stmt@(stmt' `Annot` annot) = case stmt' of
-    LabelStmt n ->
-      return $ toBodyStmt (trivialGoto annot n) : [toBodyStmt stmt]
-    IfStmt cond tBody Nothing -> do
-      num <- show <$> fresh
-      let tName = helperName $ "then_" ++ num
-          fName = helperName $ "fi_" ++ num
-      tTransl <- flattenBodyItems [tBody]
-      pure $
-        toBodyStmt (brCond cond tName fName annot) :
-        (toBodyStmt . withAnnot annot $ LabelStmt tName) :
-        tTransl ++ [toBodyStmt . withAnnot annot $ LabelStmt fName]
-    IfStmt cond tBody (Just eBody) -> do
-      num <- show <$> fresh
-      let tName = helperName $ "then_" ++ num
-          eName = helperName $ "else_" ++ num
-          fName = helperName $ "fi_" ++ num
-      tTransl <- flattenBodyItems [tBody]
-      eTransl <- flattenBodyItems [eBody]
-      pure $
-        toBodyStmt (brCond cond tName eName annot) :
-        (toBodyStmt . withAnnot annot $ LabelStmt tName) :
-        tTransl ++
-        toBodyStmt (trivialGoto annot fName) :
-        (toBodyStmt . withAnnot annot $ LabelStmt eName) :
-        eTransl ++ [toBodyStmt . withAnnot annot $ LabelStmt fName]
-    SwitchStmt expr arms -> do
-      num <- show <$> fresh
-      let endName = helperName $ "switch_" ++ num ++ "_end"
-          caseNames =
-            helperName . (("switch_" ++ num ++ "_") ++) . show <$>
-            take (length arms) [(1 :: Int) ..]
-      armsTransl <-
-        sequence
-          [ ((toBodyStmt . withAnnot a $ LabelStmt caseName) :) .
-          reverse . ((toBodyStmt $ trivialGoto annot endName) :) . reverse <$>
-          flattenBodyItems [body]
-          | (Annot (Arm _ body) a, caseName) <- zip arms caseNames
-          ]
-      let newArms =
-            [ withAnnot a . Arm ranges . toBody . toBodyStmt $
-            trivialGoto a caseName
-            | (Annot (Arm ranges _) a, caseName) <- zip arms caseNames
+  flattenStmt stmt@(stmt' `Annot` annot) =
+    case stmt' of
+      LabelStmt n ->
+        return $ toBodyStmt (trivialGoto annot n) : [toBodyStmt stmt]
+      IfStmt cond tBody Nothing -> do
+        num <- show <$> fresh
+        let tName = helperName $ "then_" ++ num
+            fName = helperName $ "fi_" ++ num
+        tTransl <- flattenBodyItems [tBody]
+        pure $
+          toBodyStmt (brCond cond tName fName annot) :
+          (toBodyStmt . withAnnot annot $ LabelStmt tName) :
+          tTransl ++ [toBodyStmt . withAnnot annot $ LabelStmt fName]
+      IfStmt cond tBody (Just eBody) -> do
+        num <- show <$> fresh
+        let tName = helperName $ "then_" ++ num
+            eName = helperName $ "else_" ++ num
+            fName = helperName $ "fi_" ++ num
+        tTransl <- flattenBodyItems [tBody]
+        eTransl <- flattenBodyItems [eBody]
+        pure $
+          toBodyStmt (brCond cond tName eName annot) :
+          (toBodyStmt . withAnnot annot $ LabelStmt tName) :
+          tTransl ++
+          toBodyStmt (trivialGoto annot fName) :
+          (toBodyStmt . withAnnot annot $ LabelStmt eName) :
+          eTransl ++ [toBodyStmt . withAnnot annot $ LabelStmt fName]
+      SwitchStmt expr arms -> do
+        num <- show <$> fresh
+        let endName = helperName $ "switch_" ++ num ++ "_end"
+            caseNames =
+              helperName . (("switch_" ++ num ++ "_") ++) . show <$>
+              take (length arms) [(1 :: Int) ..]
+        armsTransl <-
+          sequence
+            [ ((toBodyStmt . withAnnot a $ LabelStmt caseName) :) .
+            reverse . ((toBodyStmt $ trivialGoto annot endName) :) . reverse <$>
+            flattenBodyItems [body]
+            | (Annot (Arm _ body) a, caseName) <- zip arms caseNames
             ]
-      pure $
-        toBodyStmt (withAnnot annot $ SwitchStmt expr newArms) :
-        concat armsTransl ++ [toBodyStmt . withAnnot annot $ LabelStmt endName]
-    SpanStmt lExpr rExpr body -> do
-      bodyTransl <- flattenBodyItems [body]
-      pure
-        [ toBodyStmt . withAnnot annot . SpanStmt lExpr rExpr . withAnnot annot $
-          Body bodyTransl
-        ]
-    EmptyStmt -> pure []
-    _ -> pure [toBodyStmt stmt]
+        let newArms =
+              [ withAnnot a . Arm ranges . toBody . toBodyStmt $
+              trivialGoto a caseName
+              | (Annot (Arm ranges _) a, caseName) <- zip arms caseNames
+              ]
+        pure $
+          toBodyStmt (withAnnot annot $ SwitchStmt expr newArms) :
+          concat armsTransl ++
+          [toBodyStmt . withAnnot annot $ LabelStmt endName]
+      SpanStmt lExpr rExpr body -> do
+        bodyTransl <- flattenBodyItems [body]
+        pure
+          [ toBodyStmt .
+            withAnnot annot . SpanStmt lExpr rExpr . withAnnot annot $
+            Body bodyTransl
+          ]
+      EmptyStmt -> pure []
+      _ -> pure [toBodyStmt stmt]
 
 instance Flatten Procedure where
   flatten (Procedure header body) = Procedure (flatten header) (flatten body)

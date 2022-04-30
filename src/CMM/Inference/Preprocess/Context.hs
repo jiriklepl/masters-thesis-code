@@ -21,17 +21,19 @@ data Context
   --- | SectionCtx Text
 
 instance HasName Context where
-  getName = \case
-    GlobalCtx -> undefined -- error
-    ClassCtx (name, _) _ _ -> name
-    FunctionCtx (name, _) _ -> name
-    InstanceCtx (name, _) _ _ -> name
-    StructCtx (name, _) _ -> name
+  getName =
+    \case
+      GlobalCtx -> undefined -- error
+      ClassCtx (name, _) _ _ -> name
+      FunctionCtx (name, _) _ -> name
+      InstanceCtx (name, _) _ _ -> name
+      StructCtx (name, _) _ -> name
 
 instance HasTypeHole Context where
-  getTypeHole = \case
-    GlobalCtx -> EmptyTypeHole
-    ClassCtx (_, handle) _ _ -> handle
-    FunctionCtx (_, handle) _ -> handle
-    InstanceCtx (_, handle) _ _ -> handle
-    StructCtx (_, handle) _ -> handle
+  getTypeHole =
+    \case
+      GlobalCtx -> EmptyTypeHole
+      ClassCtx (_, handle) _ _ -> handle
+      FunctionCtx (_, handle) _ -> handle
+      InstanceCtx (_, handle) _ _ -> handle
+      StructCtx (_, handle) _ -> handle

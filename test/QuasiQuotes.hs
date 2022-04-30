@@ -21,8 +21,9 @@ text =
     }
 
 normalizeNewlines :: String -> String
-normalizeNewlines = \case
-  [] -> []
-  '\r':'\n':cs -> '\n' : normalizeNewlines cs
-  '\r':cs -> '\n' : normalizeNewlines cs
-  c:cs -> c : normalizeNewlines cs
+normalizeNewlines =
+  \case
+    [] -> []
+    '\r':'\n':cs -> '\n' : normalizeNewlines cs
+    '\r':cs -> '\n' : normalizeNewlines cs
+    c:cs -> c : normalizeNewlines cs

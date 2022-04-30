@@ -9,12 +9,14 @@ import safe Data.Function (($))
 import safe Data.Functor (($>))
 
 oneRight :: [Either a b] -> Either [a] b
-oneRight = \case
-  [] -> Left []
-  Left a:others -> first (a :) $ oneRight others
-  Right b:others -> allLeft others $> b
+oneRight =
+  \case
+    [] -> Left []
+    Left a:others -> first (a :) $ oneRight others
+    Right b:others -> allLeft others $> b
   where
-    allLeft = \case
-      Left a:rest -> bimap (a :) (a :) $ allLeft rest
-      Right _:rest -> allLeft rest >>= Left
-      [] -> Right []
+    allLeft =
+      \case
+        Left a:rest -> bimap (a :) (a :) $ allLeft rest
+        Right _:rest -> allLeft rest >>= Left
+        [] -> Right []
