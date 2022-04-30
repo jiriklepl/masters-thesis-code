@@ -11,6 +11,7 @@ import safe Data.Ord (Ord)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
 
+import safe CMM.AST.Annot (Annot, takeAnnot)
 import safe CMM.Data.Nullable (Fallbackable((??)))
 import safe CMM.Inference.TypeCompl (TypeCompl)
 import safe CMM.Inference.TypeKind
@@ -46,6 +47,9 @@ instance HasTypeKind Type where
 
 class ToType a where
   toType :: a -> Type
+
+instance ToType a => ToType (Annot n a) where
+  toType = toType . takeAnnot
 
 instance ToType Type where
   toType = id

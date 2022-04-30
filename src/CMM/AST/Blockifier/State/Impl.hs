@@ -21,18 +21,19 @@ data BlockifierState =
     { _controlFlow :: [(Int, Int)] -- ^ [(from, to)] edges in the control-flow graph
     , _blocksTable :: Map Text Int -- ^ Maps block names to their respective indices
     , _currentBlock :: Maybe Int -- ^ Contains the index of the current block
-    , _currentData :: BlockVars -- ^ Contains information about variables inside the current block
-    , _blockData :: BlockData
-    , _registers :: Map Text SourcePos
-    , _imports :: Map Text SourcePos
-    , _constants :: Map Text SourcePos
-    , _stackLabels :: Map Text SourcePos
-    , _labels :: Map Text SourcePos
-    , _continuations :: Map Text SourcePos
-    , _errorState :: ErrorState
+    , _currentData :: BlockVars -- ^ Contains information for variables in the current block
+    , _blockData :: BlockData -- ^ Contains information for variables in all closed blocks
+    , _registers :: Map Text SourcePos -- ^ `Register` variables valid inside the current scope
+    , _imports :: Map Text SourcePos -- ^ `Import` variables valid inside the current scope
+    , _constants :: Map Text SourcePos -- ^ Constants valid inside the current scope
+    , _stackLabels :: Map Text SourcePos -- ^ Stack labels valid inside the current scope
+    , _labels :: Map Text SourcePos -- ^ Regular labels inside the current scope
+    , _continuations :: Map Text SourcePos -- ^ Continuations inside the current scope
+    , _errorState :: ErrorState -- ^ The current `ErrorState`
     }
   deriving (Show)
 
+-- | initates an empty `BlockifierState`
 initBlockifier :: BlockifierState
 initBlockifier =
   BlockifierState

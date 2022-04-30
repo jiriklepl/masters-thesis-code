@@ -53,12 +53,10 @@ import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
   ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx)
   )
-import safe CMM.Inference.Preprocess.HasTypeHandle (getTypeHandleId)
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, MethodTypeHole, SimpleTypeHole)
   , holeHandle
-  , holeId
   , safeHoleHandle
   )
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
@@ -67,7 +65,11 @@ import safe CMM.Inference.TypeAnnot
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeKind (TypeKind(GenericType, Star))
-import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar, tVarId), noType)
+import safe CMM.Inference.TypeVar
+  ( ToTypeVar(toTypeVar)
+  , TypeVar(NoType, TypeVar, tVarId)
+  , noType
+  )
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
 import safe CMM.AST.Variables.State (CollectorState)
@@ -117,10 +119,11 @@ beginUnit collector = do
   structElabMembers <~ declVars members
   mems <- use structMembers
   mems `for_` \mem -> do
-    a <- handleId <$> freshTypeHelper Star
-    b <- handleId <$> freshTypeHelper Star
+    a <- freshTypeHelper Star
+    b <- freshTypeHelper Star
     let t = makeFunction [AddrType a] $ AddrType b
-    storeFact $ forall (Set.fromList [a, b]) [handleId mem `typeUnion` t] []
+    storeFact $
+      forall (Set.fromList $ toTypeVar <$> [a, b]) [mem `typeUnion` t] []
   memberClasses <~ declVars members
   where
     members = collector ^. CS.structMembers
@@ -176,7 +179,7 @@ storeVar name handle = do
 untrivialize :: Map Text TypeHandle -> Preprocessor ()
 untrivialize tCons =
   Map.toList tCons `for_` \(name', handle) ->
-    storeFact $ handleId handle `typeUnion`
+    storeFact $ handle `typeUnion`
     ComplType (ConstType name' GenericType NoType)
 
 beginProc :: Text -> CollectorState -> Preprocessor ()
@@ -192,9 +195,10 @@ beginProc name collector = do
   typeVariables %= reverse . (tVars :) . reverse
   pushFacts
   currentReturn <- freshTypeHelper Star
-  let returnId = getTypeHandleId currentReturn
   storeFacts
-    [constExprConstraint returnId, tVarId returnId `tupleKind` returnId]
+    [ constExprConstraint currentReturn
+    , tVarId (handleId currentReturn) `tupleKind` currentReturn
+    ]
   handle <- lookupCtxFVar name
   pushContext $ FunctionCtx (name, handle) currentReturn
 
@@ -272,7 +276,7 @@ storeProc name fs x = do
   uses currentContext head >>= \case
     GlobalCtx -> do
       hole <- lookupFVar name
-      storeFact $ forall tVars [holeId hole `typeUnion` t] fs
+      storeFact $ forall tVars [hole `typeUnion` t] fs
       return hole
     ClassCtx _ classConstraint' _ ->
       storeElaboratedProc tVars $
@@ -291,7 +295,7 @@ storeProc name fs x = do
       handle <- holeHandle <$> lookupCtxFVar name
       fHandle <- holeHandle <$> lookupFVar name
       eHandle <- holeHandle <$> lookupFEVar name
-      iHandle <- getTypeHandleId <$> freshTypeHelper Star
+      iHandle <- freshTypeHelper Star
       classConstraint' <- getCtxClassConstraint
       let eType =
             makeFunction
@@ -299,18 +303,15 @@ storeProc name fs x = do
                 snd classConstraint'
               ]
               t
-          instFact = Fact $ handleId eHandle `instType` iHandle
+          instFact = Fact $ eHandle `instType` iHandle
           unionFact = Fact $ iHandle `typeUnion` eType
       uses currentContext head >>= \case
         ClassCtx {} -> do
-          storeFact $
-            forall tVars [getTypeHandleId eHandle `typeUnion` eType] facts'
-          storeFact $
-            forall tVars [handleId handle `typeUnion` t] [instFact, unionFact]
+          storeFact $ forall tVars [eHandle `typeUnion` eType] facts'
+          storeFact $ forall tVars [handle `typeUnion` t] [instFact, unionFact]
           return $ SimpleTypeHole handle
         _ -> do
-          storeFact . forall tVars [handleId handle `typeUnion` t] $ instFact :
-            unionFact :
+          storeFact . forall tVars [handle `typeUnion` t] $ instFact : unionFact :
             facts'
           return $ MethodTypeHole handle fHandle eHandle
 
@@ -328,9 +329,7 @@ popTypeVariables = do
 
 collectTVars :: Preprocessor (Set TypeVar)
 collectTVars =
-  uses
-    typeVariables
-    (Set.fromList . (getTypeHandleId <$>) . Map.elems . Map.unions)
+  uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
 
 -- TODO
 pushStruct :: (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
@@ -391,7 +390,7 @@ storeTVar name handle = use typeVariables >>= storeVarImpl name handle
 storeVarImpl ::
      (ToType a, Ord k) => k -> a -> [Map k TypeHandle] -> Preprocessor ()
 storeVarImpl name handle vars =
-  storeFact $ holeId (lookupVarImpl name vars) `typeUnion` handle
+  storeFact $ lookupVarImpl name vars `typeUnion` handle
 
 -- | Stores the given `fact` to the state monad
 class StoreFact a where

@@ -22,8 +22,9 @@ data BlockAnnot
   | NoBlock -- ^ No block information about node annotated by this
   deriving (Eq, Show, Data)
 
+-- | A class of types that contain a `BlockAnnot`
 class HasBlockAnnot a where
-  getBlockAnnot :: a -> BlockAnnot
+  getBlockAnnot :: a -> BlockAnnot -- ^ retrieves a `BlockAnnot`
 
 instance HasBlockAnnot BlockAnnot where
   getBlockAnnot = id

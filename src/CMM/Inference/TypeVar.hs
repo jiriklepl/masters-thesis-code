@@ -5,11 +5,12 @@ module CMM.Inference.TypeVar where
 import safe Data.Bool (Bool(False, True), otherwise)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
-import safe Data.Function (id)
+import safe Data.Function ((.), id)
 import safe Data.Int (Int)
 import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Text.Show (Show)
 
+import safe CMM.AST.Annot (Annot, takeAnnot)
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Data.Num (Num((+)))
 import safe CMM.Inference.TypeKind
@@ -30,8 +31,17 @@ data TypeVar
 class FromTypeVar a where
   fromTypeVar :: TypeVar -> a
 
+class ToTypeVar a where
+  toTypeVar :: a -> TypeVar
+
+instance ToTypeVar a => ToTypeVar (Annot n a) where
+  toTypeVar = toTypeVar . takeAnnot
+
 instance FromTypeVar TypeVar where
   fromTypeVar = id
+
+instance ToTypeVar TypeVar where
+  toTypeVar = id
 
 instance Eq TypeVar where
   NoType == NoType = True

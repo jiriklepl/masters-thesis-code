@@ -8,13 +8,14 @@ import safe Control.Lens.TH (makeLenses)
 import safe Data.Bool ((&&))
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
+import safe Data.Function ((.))
 import safe Data.Monoid ((<>))
 import safe Data.Ord (Ord(compare))
 import safe Text.Show (Show)
 
-import safe CMM.Inference.Type (Type(VarType))
+import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeAnnot (TypeAnnot)
-import safe CMM.Inference.TypeVar (TypeVar)
+import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
 
 data TypeHandle =
   TypeHandle
@@ -41,6 +42,12 @@ instance Ord TypeHandle where
                                                                              , _kinding = k'
                                                                              } =
     compare t t' <> compare c c' <> compare k k'
+
+instance ToType TypeHandle where
+  toType = toType . handleId
+
+instance ToTypeVar TypeHandle where
+  toTypeVar = toTypeVar . handleId
 
 initTypeHandle :: TypeAnnot -> TypeVar -> TypeHandle
 initTypeHandle annotation tVar =

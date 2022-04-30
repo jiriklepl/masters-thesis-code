@@ -7,8 +7,9 @@ import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe)
 import safe GHC.Err (error)
 import safe Text.Show (Show)
 
+import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
-import safe CMM.Inference.TypeVar (TypeVar)
+import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
 
 data TypeHole
   = EmptyTypeHole
@@ -17,6 +18,12 @@ data TypeHole
   | MethodTypeHole !TypeHandle !TypeHandle !TypeHandle
   | MemberTypeHole !TypeHandle ![TypeHandle] ![TypeHandle]
   deriving (Show)
+
+instance ToType TypeHole where
+  toType = toType . holeHandle
+
+instance ToTypeVar TypeHole where
+  toTypeVar = toTypeVar . holeHandle
 
 holeHandle :: TypeHole -> TypeHandle
 holeHandle = fromMaybe err . safeHoleHandle
