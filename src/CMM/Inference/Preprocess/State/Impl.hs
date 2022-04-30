@@ -24,10 +24,14 @@ data PreprocessorState =
     , _funcVariables :: Map Text TypeHandle
     , _funcInstVariables :: Map Text [TypeHandle]
     , _funcElabVariables :: Map Text TypeHandle
+    , _typeAliases :: [Map Text TypeHandle]
     , _typeConstants :: [Map Text TypeHandle]
     , _typeVariables :: [Map Text TypeHandle]
     , _typeClasses :: Map Text ClassData
     , _structMembers :: Map Text TypeHandle
+    , _structInstMembers :: Map Text [TypeHandle]
+    , _structElabMembers :: Map Text TypeHandle
+    , _memberClasses :: Map Text TypeHandle
     , _facts :: [Facts]
     , _cSymbols :: [Text]
     , _currentContext :: [Context]
@@ -41,10 +45,14 @@ initPreprocessor =
     , _funcVariables = mempty
     , _funcInstVariables = mempty
     , _funcElabVariables = mempty
+    , _typeAliases = [mempty]
     , _typeConstants = [mempty]
     , _typeVariables = [mempty]
     , _typeClasses = mempty
     , _structMembers = mempty
+    , _structInstMembers = mempty
+    , _structElabMembers = mempty
+    , _memberClasses = mempty
     , _facts = [mempty]
     , _cSymbols = mempty
     , _currentContext = [GlobalCtx]

@@ -1,1 +1,2 @@
 packages: *.cabal vendor/*/*.cabal
+tests: True

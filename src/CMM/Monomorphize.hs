@@ -7,7 +7,7 @@ module CMM.Monomorphize where
 import safe Prelude
 
 import safe Control.Applicative (Applicative(liftA2), Const, liftA3)
-import safe Control.Lens.Getter ((^.), uses, view)
+import safe Control.Lens.Getter ((^.), uses, view, use)
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
 import safe Data.Bifunctor (first)
@@ -78,7 +78,7 @@ import safe CMM.Inference.State
   , reconstruct
   , reconstructOld
   , schemes
-  , tryGetHandle
+  , tryGetHandle, handlize
   )
 import safe CMM.Inference.Subst (Subst, apply)
 import safe CMM.Inference.Type as Type (Type(ComplType, ErrorType, VarType))
@@ -122,6 +122,7 @@ import safe CMM.Monomorphize.Schematized
   )
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
+import qualified CMM.Data.Bimap as Bimap
 
 data MonomorphizeError =
   FooError
@@ -362,8 +363,13 @@ instance MonomorphizeImpl Import Import a where
 instance MonomorphizeImpl Export Export a where
   monomorphizeImpl = undefined
 
-instance MonomorphizeImpl Datum Datum a where
-  monomorphizeImpl = undefined
+instance (HasPos a, HasTypeHole a) =>
+         MonomorphizeImpl Datum Datum a where
+  monomorphizeImpl subst a datum = do
+    s <- use schemes
+    x <- fromOldName $ getTypeHoleId a
+    ~(Just y) <- uses handlize (x `Bimap.lookup`)
+    error $ show (y ^. typing) <> "\n" <> show s
 
 succeed :: Applicative f => a -> f (Either err a)
 succeed = pure . Right
@@ -371,7 +377,7 @@ succeed = pure . Right
 instance (HasPos a, HasTypeHole a) =>
          MonomorphizeImpl Procedure Procedure a where
   monomorphizeImpl subst a procedure@(Procedure header body) = do
-    schemeName <- fromOldName (getTypeHoleId a)
+    schemeName <- fromOldName $ getTypeHoleId a
     addProcedure <-
       uses schemes (schemeName `Map.lookup`) <&> \case
         Nothing -> undefined -- TODO: logic error

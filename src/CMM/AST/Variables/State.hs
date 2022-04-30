@@ -35,6 +35,7 @@ import safe CMM.AST.Variables.State.Impl
   , funcVariables
   , initCollector
   , structMembers
+  , typeAliases
   , typeClasses
   , typeConstants
   , typeVariables
@@ -68,6 +69,12 @@ addTCon = addVarImpl typeConstants duplicateTypeConstant
 
 addTConTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
 addTConTrivial n tKind = n <$ addTCon n tKind
+
+addTAlias :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+addTAlias = addVarImpl typeAliases duplicateTypeConstant
+
+addTAliasTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+addTAliasTrivial n tKind = n <$ addTAlias n tKind
 
 addTVar :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
 addTVar = addVarImpl typeVariables duplicateTypeVariable

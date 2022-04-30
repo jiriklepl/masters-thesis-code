@@ -18,7 +18,7 @@ import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
 import safe Data.Function (($), (.))
 import safe Data.Functor ((<$>))
-import safe Data.List (foldr, head, init, last, reverse, tail)
+import safe Data.List (head, init, last, reverse, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Nothing), fromMaybe, maybe)
@@ -29,10 +29,11 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Tuple (snd, uncurry)
 import safe GHC.Err (error)
+import safe Data.Foldable ( Foldable(foldr), for_, traverse_ )
 
 import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.Data.Tuple (complThd3)
-import safe CMM.Inference.BuiltIn (getConstType)
+import safe CMM.Inference.BuiltIn (getConstType, constraintWitness)
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
@@ -50,7 +51,7 @@ import safe CMM.Inference.Fact
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
-  ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx)
+  ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx)
   )
 import safe CMM.Inference.Preprocess.HasTypeHandle (getTypeHandleId)
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
@@ -65,8 +66,8 @@ import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
-import safe CMM.Inference.TypeKind (TypeKind(Star))
-import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId), noType)
+import safe CMM.Inference.TypeKind (TypeKind(Star, GenericType))
+import safe CMM.Inference.TypeVar (TypeVar(TypeVar, tVarId, NoType), noType)
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
 import safe CMM.AST.Variables.State (CollectorState)
@@ -82,11 +83,16 @@ import safe CMM.Inference.Preprocess.State.Impl
   , funcVariables
   , initPreprocessor
   , structMembers
+  , typeAliases
   , typeClasses
   , typeConstants
   , typeVariables
   , variables
+  , structInstMembers
+  , structElabMembers
+  , memberClasses
   )
+import safe CMM.Inference.TypeCompl ( TypeCompl(AddrType, ConstType) )
 
 type Preprocessor = State PreprocessorState
 
@@ -98,14 +104,26 @@ beginUnit collector = do
   variables <~ pure <$> declVars (collector ^. CS.variables)
   funcVariables <~ declVars (collector ^. CS.funcVariables)
   funcElabVariables <~ declVars (collector ^. CS.funcInstVariables)
-  typeConstants <~ pure <$> declVars (collector ^. CS.typeConstants)
+  tCons <- declVars $ collector ^. CS.typeConstants
+  untrivialize tCons
+  typeConstants .= pure tCons
   classHandles <- declVars $ complThd3 <$> (collector ^. CS.typeClasses)
   typeClasses .=
     Map.intersectionWith
       (ClassData . SimpleTypeHole)
       classHandles
       ((^. _3) <$> (collector ^. CS.typeClasses))
-  structMembers <~ declVars (collector ^. CS.structMembers)
+  structMembers <~ declVars members
+  structElabMembers <~ declVars members
+  mems <- use structMembers
+  mems `for_` \mem -> do
+    a <- handleId <$> freshTypeHelper Star
+    b <- handleId <$> freshTypeHelper Star
+    let t = makeFunction [AddrType a] $ AddrType b
+    storeFact $ forall (Set.fromList [a, b]) [handleId mem `typeUnion` t]
+      []
+  memberClasses <~ declVars members
+  where members = collector ^. CS.structMembers
 
 -- | returns `NoType` on failure
 lookupVar :: Text -> Preprocessor TypeHole
@@ -113,6 +131,15 @@ lookupVar name = lookupVarImpl name <$> use variables
 
 lookupFVar :: Text -> Preprocessor TypeHole
 lookupFVar name = lookupVarImpl name <$> uses funcVariables pure
+
+lookupSMem :: Text -> Preprocessor TypeHole
+lookupSMem name = lookupVarImpl name <$> uses structMembers pure
+
+lookupSIMem :: Text -> Preprocessor TypeHole
+lookupSIMem name = do
+  handle <- freshTypeHelper Star
+  structInstMembers %= Map.adjust (handle :) name
+  return $ SimpleTypeHole handle
 
 lookupFIVar :: Text -> Preprocessor TypeHole
 lookupFIVar name = do
@@ -146,19 +173,29 @@ storeVar name handle = do
   vars <- use variables
   storeVarImpl name handle vars
 
+untrivialize :: Map Text TypeHandle -> Preprocessor ()
+untrivialize tCons =
+  Map.toList tCons `for_` \(name', handle) ->
+    storeFact $ handleId handle `typeUnion` ComplType (ConstType name' GenericType NoType)
+
 beginProc :: Text -> CollectorState -> Preprocessor ()
 beginProc name collector = do
-  vars' <- declVars $ collector ^. CS.variables
-  variables %= (vars' :)
-  tCons' <- declVars $ collector ^. CS.typeConstants
-  typeConstants %= (tCons' :)
-  tVars' <- declVars $ collector ^. CS.typeVariables
-  typeVariables %= reverse . (tVars' :) . reverse
+  vars <- declVars $ collector ^. CS.variables
+  variables %= (vars :)
+  tCons <- declVars $ collector ^. CS.typeConstants
+  untrivialize tCons
+  typeConstants %= (tCons :)
+  tAliases <- declVars $ collector ^. CS.typeAliases
+  typeAliases %= (tAliases :)
+  tVars <- declVars $ collector ^. CS.typeVariables
+  typeVariables %= reverse . (tVars :) . reverse
   pushFacts
   currentReturn <- freshTypeHelper Star
   let returnId = getTypeHandleId currentReturn
-  storeFact $ constExprConstraint returnId
-  storeFact $ tVarId returnId `tupleKind` returnId
+  storeFacts
+    [ constExprConstraint returnId
+    , tVarId returnId `tupleKind` returnId
+    ]
   handle <- lookupCtxFVar name
   pushContext $ FunctionCtx (name, handle) currentReturn
 
@@ -181,8 +218,7 @@ endProc = do
   variables %= tail
   typeConstants %= tail
   typeVariables %= init
-  ~(h:t) <- use facts
-  facts .= t
+  h <- popTopFacts
   currentReturn <- getCurrentReturn
   (h, currentReturn) <$ popContext
 
@@ -194,19 +230,22 @@ poppedGlobalCtxError =
 lookupCtxFVar :: Text -> Preprocessor TypeHole
 lookupCtxFVar name = use currentContext >>= go
   where
-    go (GlobalCtx:_) = lookupFVar name
-    go (ClassCtx {}:_) = lookupFVar name
-    go (InstanceCtx {}:_) = lookupFIVar name
-    go (FunctionCtx (name', handle) _:others)
-      | name == name' = return handle
-      | otherwise = go others
-    go [] = poppedGlobalCtxError
+    go = \case
+      ClassCtx {}:_ -> lookupFVar name
+      FunctionCtx (name', handle) _:others
+        | name == name' -> return handle
+        | otherwise -> go others
+      GlobalCtx:_ -> lookupFVar name
+      InstanceCtx {}:_ -> lookupFIVar name
+      StructCtx {}:_ -> lookupFVar name
+      [] -> poppedGlobalCtxError
 
 getCurrentReturn :: Preprocessor TypeHole
 getCurrentReturn = uses currentContext (go . head)
   where
-    go (FunctionCtx _ handle) = SimpleTypeHole handle
-    go _ = noCurrentReturn
+    go = \case
+      FunctionCtx _ handle -> SimpleTypeHole handle
+      _ -> noCurrentReturn
 
 getCtxName :: Preprocessor Text
 getCtxName = uses currentContext (getName . head)
@@ -217,11 +256,13 @@ getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)
 getCtxClassConstraint :: Preprocessor (Text, Type)
 getCtxClassConstraint = uses currentContext go
   where
-    go (GlobalCtx:_) = (mempty, noType)
-    go (ClassCtx _ classConstraint' _:_) = classConstraint'
-    go (InstanceCtx _ classConstraint' _:_) = classConstraint'
-    go (FunctionCtx {}:others) = go others
-    go [] = poppedGlobalCtxError
+    go = \case
+      GlobalCtx:_ -> (mempty, noType)
+      ClassCtx _ classConstraint' _:_ -> classConstraint'
+      InstanceCtx _ classConstraint' _:_ -> classConstraint'
+      FunctionCtx {}:others -> go others
+      StructCtx {}:others -> go others
+      [] -> poppedGlobalCtxError
 
 storeProc :: ToType a => Text -> Facts -> a -> Preprocessor TypeHole
 storeProc name fs x = do
@@ -239,8 +280,10 @@ storeProc name fs x = do
       storeElaboratedProc tVars $ Fact (uncurry classFact classConstraint') :
       (Fact . uncurry classFact <$> superConstraints) <>
       fs
-    FunctionCtx {} -> error "(internal) Illegal local function encountered." -- TODO: reword this (consolidate)
+    FunctionCtx {} ->  goIllegal
+    StructCtx {} ->  goIllegal
   where
+    goIllegal = error "(internal) Illegal local function encountered." -- TODO: reword this (consolidate)
     t = toType x
     storeElaboratedProc tVars facts' = do
       handle <- holeHandle <$> lookupCtxFVar name
@@ -250,7 +293,7 @@ storeProc name fs x = do
       classConstraint' <- getCtxClassConstraint
       let eType =
             makeFunction
-              [ toType $ ComplType (getConstType "constraintWitness") `makeApplication`
+              [ toType $ ComplType (getConstType constraintWitness) `makeApplication`
                 snd classConstraint'
               ]
               t
@@ -287,6 +330,13 @@ collectTVars =
     typeVariables
     (Set.fromList . (getTypeHandleId <$>) . Map.elems . Map.unions)
 
+-- TODO
+pushStruct ::
+     (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
+pushStruct handle mainHandle = do
+  tVars <- collectTVars
+  pushContext $ StructCtx handle mainHandle
+
 pushClass ::
      (Text, TypeHole) -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
 pushClass handle mainHandle supHandles -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
@@ -318,9 +368,15 @@ pushContext :: Context -> Preprocessor ()
 pushContext = (currentContext %=) . (:)
 
 popTopContext :: Preprocessor Context
-popTopContext = do
-  ~(h:t) <- use currentContext
-  currentContext .= t
+popTopContext = popTop currentContext
+
+popTopFacts :: Preprocessor Facts
+popTopFacts = popTop facts
+
+popTop :: Lens' PreprocessorState [t] -> Preprocessor t
+popTop from = do
+  ~(h:t) <- use from
+  from .= t
   return h
 
 -- | Stores the given type variable `handle` under the given `name` to the state monad
@@ -345,6 +401,9 @@ instance StoreFact (FlatFact Type) where
 
 instance StoreFact Fact where
   storeFact = pushToHead facts
+
+storeFacts :: (Foldable f, StoreFact t) => f t -> Preprocessor ()
+storeFacts = traverse_ storeFact
 
 pushToHead :: MonadState s m => Lens' s [[a]] -> a -> m ()
 pushToHead place = modifyHead place . (:)

@@ -32,31 +32,37 @@ instance EnsureNode (Annot n) n where
   ensureNode = unAnnot
 
 getExprLVName :: Annot Expr a -> Maybe Text
-getExprLVName (Annot (LVExpr (Annot (LVName n) _)) _) = Just $ getName n
-getExprLVName (Annot (ParExpr expr) _) = getExprLVName expr
-getExprLVName Annot {} = Nothing
+getExprLVName = \case
+  LVExpr (LVName n `Annot` _) `Annot` _ -> Just $ getName n
+  ParExpr expr `Annot` _ -> getExprLVName expr
+  Annot {} -> Nothing
 
 -- | Returns Nothing on failure
 class GetTrivialGotoTarget n where
   getTrivialGotoTarget :: n -> Maybe Text
 
 instance GetTrivialGotoTarget (n a) => GetTrivialGotoTarget (Annot n a) where
-  getTrivialGotoTarget (Annot n _) = getTrivialGotoTarget n
+  getTrivialGotoTarget = \case
+    Annot n _ -> getTrivialGotoTarget n
 
 instance GetTrivialGotoTarget (Arm a) where
-  getTrivialGotoTarget (Arm _ body) = getTrivialGotoTarget body
+  getTrivialGotoTarget = \case
+    Arm _ body -> getTrivialGotoTarget body
 
 instance GetTrivialGotoTarget (BodyItem a) where
-  getTrivialGotoTarget (BodyStmt stmt) = getTrivialGotoTarget stmt
-  getTrivialGotoTarget _ = Nothing
+  getTrivialGotoTarget = \case
+    BodyStmt stmt -> getTrivialGotoTarget stmt
+    _ -> Nothing
 
 instance GetTrivialGotoTarget (Body a) where
-  getTrivialGotoTarget (Body [bodyItem]) = getTrivialGotoTarget bodyItem
-  getTrivialGotoTarget _ = Nothing
+  getTrivialGotoTarget = \case
+    Body [bodyItem] -> getTrivialGotoTarget bodyItem
+    _ -> Nothing
 
 instance GetTrivialGotoTarget (Stmt a) where
-  getTrivialGotoTarget (GotoStmt expr _) = getExprLVName expr
-  getTrivialGotoTarget _ = Nothing
+  getTrivialGotoTarget = \case
+    GotoStmt expr _ -> getExprLVName expr
+    _ -> Nothing
 
 addTopLevel :: Annot TopLevel a -> Annot Unit a -> Annot Unit a
 addTopLevel topLevel (Unit topLevels `Annot` a) =

@@ -29,32 +29,32 @@ import safe CMM.Inference.TypeVar (TypeVar(NoType))
 
 data InferencerState =
   InferencerState
-    -- | Maps variables to their respective superKinding variables (forms a graph)
     { _subKinding :: Map TypeVar (Set TypeVar)
-    -- | Maps variables to their respective superKinding variables (forms a graph)
+    -- ^ Maps variables to their respective superKinding variables (forms a graph)
     , _kindingBounds :: Map TypeVar (Bounds DataKind)
-    -- | Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
+    -- ^ Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
     , _subConsting :: Map TypeVar (Set TypeVar)
-    -- | Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
+    -- ^ Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
     , _constingBounds :: Map TypeVar (Bounds Constness)
-    -- | TODO: Unifs
+    -- ^ TODO: Unifs
     , _unifs :: Map TypeVar TypeVar
-    -- | TODO: Typize
+    -- ^ TODO: Typize
     , _typize :: Bimap TypeVar PrimType
-    -- | TODO: Handlize
+    -- ^ TODO: Handlize
     , _handlize :: Bimap TypeVar TypeHandle
-    -- | TODO
+    -- ^ Maps variables to their respective superKinding variables (forms a graph)
     , _handleCounter :: HandleCounter
-    -- | TODO
+    -- ^ TODO
     , _errorState :: ErrorState
-    -- | TODO
+    -- ^ TODO
     , _classSchemes :: Map Text (Scheme Type, [Scheme Type])
-    -- | TODO
+    -- ^ TODO
     , _classFacts :: Map Text (Set TypeVar)
-    -- | TODO
+    -- ^ TODO
     , _schemes :: Map TypeVar (Scheme Type)
-    -- | TODO
+    -- ^ TODO
     , _currentParent :: [TypeVar]
+    -- ^ TODO
     }
   deriving (Show)
 

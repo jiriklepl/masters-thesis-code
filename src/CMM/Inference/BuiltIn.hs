@@ -12,9 +12,11 @@ import safe Data.Maybe (Maybe, maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Data.String (String)
+import safe Data.String (String, IsString (fromString))
 import safe Data.Text (Text)
 import safe GHC.Err (error, undefined)
+import safe Data.Eq ( Eq((==)) )
+import safe Data.Bool ( otherwise )
 
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Bimap (Bimap)
@@ -46,8 +48,8 @@ builtInKinds :: Bimap Text (Ordered DataKind)
 builtInKinds =
   Bimap.fromList $
   (_2 %~ Ordered) <$>
-  [ ("!unstorable", Unstorable)
-  , ("!generic", GenericData)
+  [ (fromString $ builtInPrefix <> "unstorable", Unstorable)
+  , (fromString $ builtInPrefix <> "!generic", GenericData)
   , ("address", addressKind)
   , ("float", floatKind)
   , ("bool", boolKind)
@@ -110,8 +112,15 @@ builtInTypeFacts = (kindFact <$> types) <> (constFact <$> types)
     kindFact primType = GenericData `kindConstraint` (primType :: PrimType)
     constFact primType = regularExprConstraint (primType :: PrimType)
 
+builtInPrefix :: IsString a => a
+builtInPrefix = "!"
+
+constraintWitness :: (IsString a) => a
+constraintWitness = fromString $ builtInPrefix <> "constraintWitness"
+
 getConstType :: String -> TypeCompl a
-getConstType "constraintWitness" =
-  ConstType "constraintWitness" (Constraint :-> Star) NoType
-getConstType _ =
-  error "(internal) Tried to retrieve a nonexistent type constant"
+getConstType name
+  | name == constraintWitness =
+    ConstType constraintWitness (Constraint :-> Star) NoType
+  | otherwise =
+    error "(internal) Tried to retrieve a nonexistent type constant"

@@ -190,12 +190,14 @@ instance NeverReturns (n a) => NeverReturns [n a] where
   neverReturns = any neverReturns
 
 instance NeverReturns (CallAnnot a) where
-  neverReturns (FlowAnnot flow) = neverReturns flow
-  neverReturns AliasAnnot {} = False
+  neverReturns = \case
+    FlowAnnot flow -> neverReturns flow
+    AliasAnnot {} -> False
 
 instance NeverReturns (Flow a) where
-  neverReturns NeverReturns = True
-  neverReturns _ = False
+  neverReturns = \case
+    NeverReturns -> True
+    _ -> False
 
 class GetTargetNames n t | n -> t where
   getTargetNames :: n -> t
@@ -204,18 +206,21 @@ instance GetTargetNames (n a) b => GetTargetNames (Annot n a) b where
   getTargetNames (Annot n _) = getTargetNames n
 
 instance GetTargetNames (Body a) (Maybe [Text]) where
-  getTargetNames (Body [bodyItem]) = getTargetNames bodyItem
-  getTargetNames _ = error "Does not have targets"
+  getTargetNames = \case
+    Body [bodyItem] -> getTargetNames bodyItem
+    _ -> error "Does not have targets"
 
 instance GetTargetNames (BodyItem a) (Maybe [Text]) where
-  getTargetNames (BodyStmt stmt) = getTargetNames stmt
-  getTargetNames _ = error "Does not have targets"
+  getTargetNames = \case
+    BodyStmt stmt -> getTargetNames stmt
+    _ -> error "Does not have targets"
 
 instance GetTargetNames (Stmt a) (Maybe [Text]) where
-  getTargetNames (GotoStmt _ mTargets) = getTargetNames <$> mTargets
-  getTargetNames (CallStmt _ _ _ _ mTargets _) = getTargetNames <$> mTargets
-  getTargetNames (JumpStmt _ _ _ mTargets) = getTargetNames <$> mTargets
-  getTargetNames _ = error "Does not have targets"
+  getTargetNames = \case
+    GotoStmt _ mTargets -> getTargetNames <$> mTargets
+    CallStmt _ _ _ _ mTargets _ -> getTargetNames <$> mTargets
+    JumpStmt _ _ _ mTargets -> getTargetNames <$> mTargets
+    _ -> error "Does not have targets"
 
 instance GetTargetNames (Targets a) [Text] where
   getTargetNames (Targets names) = getName <$> names
@@ -259,8 +264,9 @@ instance GetMetadata t (n a) => GetMetadata t (Annot n a) where
   getMetadata t (Annot n _) = getMetadata t n
 
 instance GetMetadata DeclaresVars (Decl a) where
-  getMetadata t (RegDecl _ regs) = getMetadata t regs
-  getMetadata _ _ = []
+  getMetadata t = \case
+    RegDecl _ regs -> getMetadata t regs
+    _ -> []
 
 instance GetMetadata DeclaresVars (Registers a) where
   getMetadata _ (Registers _ _ nameStrLits) = getName . fst <$> nameStrLits
@@ -270,98 +276,112 @@ instance (GetMetadata t (BodyItem a), MetadataType t) =>
   getMetadata t (Body bodyItems) = getMetadata t bodyItems
 
 instance GetMetadata ReadsVars (BodyItem a) where
-  getMetadata t (BodyStmt stmt) = getMetadata t stmt
-  getMetadata _ _ = []
+  getMetadata t = \case
+    BodyStmt stmt -> getMetadata t stmt
+    _ -> []
 
 instance GetMetadata WritesVars (BodyItem a) where
-  getMetadata t (BodyStmt stmt) = getMetadata t stmt
-  getMetadata _ _ = []
+  getMetadata t = \case
+    BodyStmt stmt -> getMetadata t stmt
+    _ -> []
 
 instance GetMetadata WritesVars (Formal a) where
   getMetadata _ formal = [getName formal]
 
 instance GetMetadata DeclaresVars (BodyItem a) where
-  getMetadata t (BodyDecl stackDecl) = getMetadata t stackDecl
-  getMetadata _ BodyStackDecl {} = []
-  getMetadata t (BodyStmt stmt) = getMetadata t stmt
+  getMetadata t = \case
+    BodyDecl stackDecl -> getMetadata t stackDecl
+    BodyStackDecl {} -> []
+    BodyStmt stmt -> getMetadata t stmt
 
 instance GetMetadata ReadsVars (Actual a) where
   getMetadata t (Actual _ expr) = getMetadata t expr
 
 instance GetMetadata ReadsVars (Stmt a) where
-  getMetadata _ EmptyStmt = []
-  getMetadata t (IfStmt expr tBody eBody) =
-    getMetadata t expr <> getMetadata t tBody <> getMetadata t eBody
-  getMetadata t (SwitchStmt expr arms) =
-    getMetadata t expr <> getMetadata t arms
-  getMetadata t (SpanStmt key value body) =
-    getMetadata t key <> getMetadata t value <> getMetadata t body
-  getMetadata t (AssignStmt _ exprs) = getMetadata t exprs
-  getMetadata t (PrimOpStmt _ _ actuals _) = getMetadata t actuals
-  getMetadata t (CallStmt _ _ expr actuals _ _) =
-    getMetadata t expr <> getMetadata t actuals
-  getMetadata t (JumpStmt _ expr actuals _) =
-    getMetadata t expr <> getMetadata t actuals
-  getMetadata t (ReturnStmt _ _ actuals) = getMetadata t actuals
-  getMetadata _ LabelStmt {} = []
-  getMetadata _ ContStmt {} = []
-  getMetadata t (GotoStmt expr _) = getMetadata t expr
-  getMetadata t (CutToStmt expr actuals _) =
-    getMetadata t expr <> getMetadata t actuals
+  getMetadata t = \case
+    EmptyStmt -> []
+    IfStmt expr tBody eBody ->
+      getMetadata t expr <> getMetadata t tBody <> getMetadata t eBody
+    SwitchStmt expr arms ->
+      getMetadata t expr <> getMetadata t arms
+    SpanStmt key value body ->
+      getMetadata t key <> getMetadata t value <> getMetadata t body
+    AssignStmt _ exprs -> getMetadata t exprs
+    PrimOpStmt _ _ actuals _ -> getMetadata t actuals
+    CallStmt _ _ expr actuals _ _ ->
+      getMetadata t expr <> getMetadata t actuals
+    JumpStmt _ expr actuals _ ->
+      getMetadata t expr <> getMetadata t actuals
+    ReturnStmt _ _ actuals -> getMetadata t actuals
+    LabelStmt {} -> []
+    ContStmt {} -> []
+    GotoStmt expr _ -> getMetadata t expr
+    CutToStmt expr actuals _ ->
+      getMetadata t expr <> getMetadata t actuals
 
 instance GetMetadata WritesVars (Stmt a) where
-  getMetadata t (IfStmt _ tBody eBody) =
-    getMetadata t tBody <> getMetadata t eBody
-  getMetadata t (SwitchStmt _ arms) = getMetadata t arms
-  getMetadata t (SpanStmt _ _ body) = getMetadata t body
-  getMetadata t (AssignStmt lvalues _) = getMetadata t lvalues
-  getMetadata _ (PrimOpStmt name _ _ _) = [getName name]
-  getMetadata t (CallStmt kindNames _ _ _ _ _) = getMetadata t kindNames
-  getMetadata t (ContStmt _ kindNames) = getMetadata t kindNames
-  getMetadata _ _ = []
+  getMetadata t = \case
+    IfStmt _ tBody eBody ->
+      getMetadata t tBody <> getMetadata t eBody
+    SwitchStmt _ arms -> getMetadata t arms
+    SpanStmt _ _ body -> getMetadata t body
+    AssignStmt lvalues _ -> getMetadata t lvalues
+    PrimOpStmt name _ _ _ -> [getName name]
+    CallStmt kindNames _ _ _ _ _ -> getMetadata t kindNames
+    ContStmt _ kindNames -> getMetadata t kindNames
+    _ -> []
 
 instance GetMetadata DeclaresVars (Stmt a) where
-  getMetadata t (IfStmt _ tBody eBody) =
-    getMetadata t tBody <> getMetadata t eBody
-  getMetadata t (SwitchStmt _ arms) = getMetadata t arms
-  getMetadata t (SpanStmt _ _ body) = getMetadata t body
-  getMetadata _ _ = []
+  getMetadata t = \case
+    IfStmt _ tBody eBody ->
+      getMetadata t tBody <> getMetadata t eBody
+    SwitchStmt _ arms -> getMetadata t arms
+    SpanStmt _ _ body -> getMetadata t body
+    _ -> []
 
 instance GetMetadata WritesVars (KindName a) where
-  getMetadata _ kindName = [getName kindName]
+  getMetadata _ = \case
+    kindName -> [getName kindName]
 
 instance GetMetadata ReadsVars (LValue a) where
-  getMetadata _ (LVName name) = [getName name]
-  getMetadata t (LVRef _ expr _) = getMetadata t expr
+  getMetadata t = \case
+    LVName name -> [getName name]
+    LVRef _ expr _ -> getMetadata t expr
 
 instance GetMetadata WritesVars (LValue a) where
-  getMetadata _ (LVName name) = [getName name]
-  getMetadata _ LVRef {} = []
+  getMetadata _ = \case
+    LVName name -> [getName name]
+    LVRef {} -> []
 
 instance GetMetadata ReadsVars (Expr a) where
-  getMetadata _ LitExpr {} = []
-  getMetadata t (LVExpr lvalue) = getMetadata t lvalue
-  getMetadata t (ParExpr expr) = getMetadata t expr
-  getMetadata t (BinOpExpr _ left right) =
-    getMetadata t left <> getMetadata t right
-  getMetadata t (ComExpr expr) = getMetadata t expr
-  getMetadata t (NegExpr expr) = getMetadata t expr
-  getMetadata t (MemberExpr expr _) = getMetadata t expr -- TODO: check whether this is correctus
-  getMetadata t (InfixExpr _ left right) =
-    getMetadata t left <> getMetadata t right
-  getMetadata t (PrefixExpr _ actuals) = getMetadata t actuals
+  getMetadata t = \case
+    LitExpr {} -> []
+    LVExpr lvalue -> getMetadata t lvalue
+    ParExpr expr -> getMetadata t expr
+    BinOpExpr _ left right ->
+      getMetadata t left <> getMetadata t right
+    ComExpr expr -> getMetadata t expr
+    NegExpr expr -> getMetadata t expr
+    MemberExpr expr _ -> getMetadata t expr -- TODO: check whether this is correctus
+    InfixExpr _ left right ->
+      getMetadata t left <> getMetadata t right
+    PrefixExpr _ actuals -> getMetadata t actuals
 
 instance GetMetadata ReadsVars (Arm a) where
-  getMetadata t (Arm ranges body) = getMetadata t ranges <> getMetadata t body
+  getMetadata t = \case
+    Arm ranges body -> getMetadata t ranges <> getMetadata t body
 
 instance GetMetadata ReadsVars (Range a) where
-  getMetadata t (Range left right) = getMetadata t left <> getMetadata t right
+  getMetadata t = \case
+    Range left right -> getMetadata t left <> getMetadata t right
 
 instance GetMetadata WritesVars (Arm a) where
-  getMetadata t (Arm _ body) = getMetadata t body
+  getMetadata t = \case
+    Arm _ body -> getMetadata t body
 
 instance GetMetadata DeclaresVars (Arm a) where
-  getMetadata t (Arm _ body) = getMetadata t body
+  getMetadata t = \case
+    Arm _ body -> getMetadata t body
 
 class Blockify n a b where
   blockify :: (WithBlockAnnot a b, HasPos a) => n a -> Blockifier (n b)
@@ -389,9 +409,10 @@ instance {-# OVERLAPPABLE #-} ASTmap BlockifyHint n a b =>
     withAnnot (withBlockAnnot NoBlock a) <$> astMapM BlockifyHint blockify' n
 
 instance Blockify (Annot Datum) a b where
-  blockify datum@(Annot DatumLabel {} _) =
-    storeSymbol stackLabels DatumLabelSymbol datum $> noBlockAnnots datum
-  blockify datum@(Annot _ _) = return $ noBlockAnnots datum
+  blockify datum@(datum' `Annot` _) = case datum' of
+    DatumLabel {}  ->
+      storeSymbol stackLabels DatumLabelSymbol datum $> noBlockAnnots datum
+    _ -> return $ noBlockAnnots datum
 
 blockifyProcedureHeader ::
      (HasPos a, WithBlockAnnot a b)
@@ -446,23 +467,24 @@ constructBlockified constr a n = do
   return . withAnnot (withBlockAnnot (getBlockAnnot n') a) $ constr n'
 
 instance Blockify (Annot BodyItem) a b where
-  blockify (BodyStmt stmt `Annot` a) = constructBlockified BodyStmt a stmt
-  blockify (BodyDecl decl `Annot` a) = constructBlockified BodyDecl a decl
-  blockify (BodyStackDecl stackDecl `Annot` a) =
-    constructBlockified BodyStackDecl a stackDecl
+  blockify (item `Annot` a) = case item of
+    BodyStmt stmt -> constructBlockified BodyStmt a stmt
+    BodyDecl decl -> constructBlockified BodyDecl a decl
+    BodyStackDecl stackDecl -> constructBlockified BodyStackDecl a stackDecl
 
 instance Blockify (Annot StackDecl) a b where
   blockify (StackDecl datums `Annot` a) =
     withNoBlockAnnot a . StackDecl <$> traverse blockify datums
 
 instance Blockify (Annot Decl) a b where
-  blockify (RegDecl invar regs `Annot` a) =
-    constructBlockified (RegDecl invar) a regs
-  blockify (ImportDecl imports' `Annot` a) =
-    withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
-  blockify decl@(Annot ConstDecl {} _) =
-    storeSymbol constants ConstDeclSymbol decl $> noBlockAnnots decl
-  blockify decl@(Annot _ _) = return $ noBlockAnnots decl
+  blockify decl@(decl' `Annot` a) = case decl' of
+    RegDecl invar regs ->
+      constructBlockified (RegDecl invar) a regs
+    ImportDecl imports' ->
+      withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
+    ConstDecl {} ->
+      storeSymbol constants ConstDeclSymbol decl $> noBlockAnnots decl
+    _ -> return $ noBlockAnnots decl
 
 instance Blockify (Annot Import) a b where
   blockify import'@(Annot Import {} _) =
@@ -491,57 +513,58 @@ storeSymbol symbolMap symbolName node = do
     else symbolMap .= Map.insert (getName node) (getPos node) symbols'
 
 instance Blockify (Annot Stmt) a b where
-  blockify stmt@(Annot LabelStmt {} _) = do
-    addControlFlow $ getName stmt -- a possible fallthrough
-    storeSymbol labels LabelSymbol stmt
-    blockifyLabelStmt stmt
-  blockify stmt@(Annot ContStmt {} _) = do
-    storeSymbol continuations ContSymbol stmt
-    blockIsSet >>= (`when` registerASTError stmt (continuationFallthrough stmt))
-    blockifyLabelStmt stmt <* registerWrites stmt
-  blockify stmt@(GotoStmt expr _ `Annot` _) = do
-    case (getExprLVName expr, getTargetNames stmt) of
-      (Nothing, Just targets@(_:_)) -> traverse_ addControlFlow targets
-      (Just name, Just targets@(_:_)) ->
-        if name `elem` targets
-          then addControlFlow name
-          else traverse_ addControlFlow targets
-      (Just name, _) -> addControlFlow name
-      (Nothing, _) -> registerASTError stmt GotoWithoutTargets
-    registerReads stmt *> addBlockAnnot stmt <* unsetBlock
-  blockify (Annot CutToStmt {} _) =
-    error "'Cut to' statements are not currently implemented" -- TODO: implement `cut to` statements
-  blockify stmt@(Annot ReturnStmt {} _) =
-    registerReads stmt *> addBlockAnnot stmt <* unsetBlock
-  blockify stmt@(Annot JumpStmt {} _) =
-    registerReads stmt *> addBlockAnnot stmt <* unsetBlock
-  blockify stmt@(Annot EmptyStmt {} _) =
-    addBlockAnnot stmt -- This should be completely redundant, included just for completeness
-  blockify stmt@(Annot AssignStmt {} _) =
-    registerReadsWrites stmt *> addBlockAnnot stmt
-  blockify stmt@(Annot PrimOpStmt {} _) -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
-   = registerReadsWrites stmt *> addBlockAnnot stmt
-  blockify stmt@(IfStmt _ tBody mEBody `Annot` _) = do
-    case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
-      (Just left, Just (Just right)) -> do
-        addControlFlow left
-        addControlFlow right
-      (Just left, Nothing) -> do
-        addControlFlow left
-      _ -> flatteningError stmt
-    addBlockAnnot stmt <* unsetBlock
-  blockify stmt@(SwitchStmt _ arms `Annot` _) = do
-    case traverse getTrivialGotoTarget arms of
-      Just names -> traverse_ addControlFlow names
-      Nothing -> flatteningError stmt
-    addBlockAnnot stmt <* unsetBlock
-  blockify (SpanStmt key value body `Annot` a) =
-    withNoBlockAnnot a . SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
-    blockify body
-  blockify stmt@(CallStmt _ _ _ _ _ callAnnots `Annot` _) -- TODO: implement `cut to` statements
-   =
-    registerReadsWrites stmt *> addBlockAnnot stmt <*
-    when (neverReturns callAnnots) unsetBlock
+  blockify stmt@(stmt' `Annot` a) = case stmt' of
+    LabelStmt {} -> do
+      addControlFlow $ getName stmt -- a possible fallthrough
+      storeSymbol labels LabelSymbol stmt
+      blockifyLabelStmt stmt
+    ContStmt {} -> do
+      storeSymbol continuations ContSymbol stmt
+      blockIsSet >>= (`when` registerASTError stmt (continuationFallthrough stmt))
+      blockifyLabelStmt stmt <* registerWrites stmt
+    GotoStmt expr _ -> do
+      case (getExprLVName expr, getTargetNames stmt) of
+        (Nothing, Just targets@(_:_)) -> traverse_ addControlFlow targets
+        (Just name, Just targets@(_:_)) ->
+          if name `elem` targets
+            then addControlFlow name
+            else traverse_ addControlFlow targets
+        (Just name, _) -> addControlFlow name
+        (Nothing, _) -> registerASTError stmt GotoWithoutTargets
+      registerReads stmt *> addBlockAnnot stmt <* unsetBlock
+    CutToStmt {} ->
+      error "'Cut to' statements are not currently implemented" -- TODO: implement `cut to` statements
+    ReturnStmt {} ->
+      registerReads stmt *> addBlockAnnot stmt <* unsetBlock
+    JumpStmt {} ->
+      registerReads stmt *> addBlockAnnot stmt <* unsetBlock
+    EmptyStmt {} ->
+      addBlockAnnot stmt -- This should be completely redundant, included just for completeness
+    AssignStmt {} ->
+      registerReadsWrites stmt *> addBlockAnnot stmt
+    PrimOpStmt {} -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
+      -> registerReadsWrites stmt *> addBlockAnnot stmt
+    IfStmt _ tBody mEBody -> do
+      case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
+        (Just left, Just (Just right)) -> do
+          addControlFlow left
+          addControlFlow right
+        (Just left, Nothing) -> do
+          addControlFlow left
+        _ -> flatteningError stmt
+      addBlockAnnot stmt <* unsetBlock
+    SwitchStmt _ arms -> do
+      case traverse getTrivialGotoTarget arms of
+        Just names -> traverse_ addControlFlow names
+        Nothing -> flatteningError stmt
+      addBlockAnnot stmt <* unsetBlock
+    SpanStmt key value body ->
+      withNoBlockAnnot a . SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
+        blockify body
+    CallStmt _ _ _ _ _ callAnnots -- TODO: implement `cut to` statements
+      ->
+        registerReadsWrites stmt *> addBlockAnnot stmt <*
+        when (neverReturns callAnnots) unsetBlock
 
 -- This is here just for completeness
 flatteningError :: HasPos n => n -> Blockifier ()

@@ -86,7 +86,7 @@ import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MethodTypeHole,
-         SimpleTypeHole)
+         SimpleTypeHole, MemberTypeHole)
   )
 import safe CMM.Inference.State
   ( Inferencer
@@ -226,12 +226,15 @@ mineAST :: (HasTypeHole a, Foldable n) => n a -> Inferencer ()
 mineAST = traverse_ (addHandles . getTypeHole)
   where
     addHandle handle = handlize %= Bimap.insert (handleId handle) handle
-    addHandles EmptyTypeHole = return ()
-    addHandles (SimpleTypeHole handle) = addHandle handle
-    addHandles (LVInstTypeHole handle hole) =
-      addHandle handle *> addHandles hole
-    addHandles (MethodTypeHole handle handle' handle'') =
-      addHandle handle *> addHandle handle' *> addHandle handle''
+    addHandles = \case
+      EmptyTypeHole -> return ()
+      SimpleTypeHole handle -> addHandle handle
+      LVInstTypeHole handle hole ->
+        addHandle handle *> addHandles hole
+      MethodTypeHole handle handle' handle'' ->
+        addHandle handle *> addHandle handle' *> addHandle handle''
+      MemberTypeHole handle handles handles' ->
+        addHandle handle *> traverse_ addHandle handles *> traverse_ addHandle handles'
 
 fixClasses :: Inferencer ()
 fixClasses = do

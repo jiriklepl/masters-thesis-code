@@ -61,9 +61,9 @@ main = do
   contents <- TS.getContents
   let tokens' = either undefined id $ parse tokenize contents
   let ast = either undefined id $ parse unit tokens'
-  let flattened = flatten ast
+  -- let flattened = flatten ast
   let (mined, miner) = runState (preprocess ast) initPreprocessor
-  let (_, _) = runState (blockify flattened) B.initBlockifier
+  -- let (_, _) = runState (blockify flattened) B.initBlockifier
   -- let translated =
   --       ppllvm $
   --       flip

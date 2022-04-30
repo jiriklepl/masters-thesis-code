@@ -20,6 +20,7 @@ data CollectorState =
     , _funcVariables :: Map Text (SourcePos, TypeKind)
     , _funcInstVariables :: Map Text (SourcePos, TypeKind)
     , _typeConstants :: Map Text (SourcePos, TypeKind)
+    , _typeAliases :: Map Text (SourcePos, TypeKind)
     , _typeVariables :: Map Text (SourcePos, TypeKind)
     , _typeClasses :: Map Text (SourcePos, TypeKind, Set Text) {- method decls -}
     , _structMembers :: Map Text (SourcePos, TypeKind)
@@ -33,6 +34,7 @@ initCollector =
     , _funcVariables = mempty
     , _funcInstVariables = mempty
     , _typeConstants = mempty
+    , _typeAliases = mempty
     , _typeVariables = mempty
     , _typeClasses = mempty
     , _structMembers = mempty

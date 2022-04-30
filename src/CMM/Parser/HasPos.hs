@@ -12,8 +12,8 @@ import safe Text.Megaparsec.Pos (SourcePos)
 import safe CMM.AST.Annot (Annot, takeAnnot)
 
 class HasPos a
-  -- | Retrieves a SourcePos annotation from the given variable
   where
+  -- | Retrieves a SourcePos annotation from the given variable
   getPos :: a -> SourcePos
 
 instance HasPos SourcePos where

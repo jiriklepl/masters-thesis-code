@@ -12,20 +12,24 @@ import safe CMM.AST.HasName (HasName(getName))
 import safe CMM.Err.IsError (IsError)
 
 data VariablesError
-  = DuplicateVariable Text
-  | DuplicateTypeVariable Text
+  = DuplicateFunctionVariable Text
+  | DuplicateTypeAlias Text
   | DuplicateTypeConstant Text
-  | DuplicateFunctionVariable Text
+  | DuplicateTypeVariable Text
+  | DuplicateVariable Text
   deriving (Show, Eq, IsError)
 
-duplicateVariable :: HasName n => n -> VariablesError
-duplicateVariable = DuplicateVariable . getName
+duplicateFunctionVariable :: HasName n => n -> VariablesError
+duplicateFunctionVariable = DuplicateFunctionVariable . getName
 
-duplicateTypeVariable :: HasName n => n -> VariablesError
-duplicateTypeVariable = DuplicateTypeVariable . getName
+duplicateTypeAlias :: HasName n => n -> VariablesError
+duplicateTypeAlias = DuplicateTypeAlias . getName
 
 duplicateTypeConstant :: HasName n => n -> VariablesError
 duplicateTypeConstant = DuplicateTypeConstant . getName
 
-duplicateFunctionVariable :: HasName n => n -> VariablesError
-duplicateFunctionVariable = DuplicateFunctionVariable . getName
+duplicateTypeVariable :: HasName n => n -> VariablesError
+duplicateTypeVariable = DuplicateTypeVariable . getName
+
+duplicateVariable :: HasName n => n -> VariablesError
+duplicateVariable = DuplicateVariable . getName

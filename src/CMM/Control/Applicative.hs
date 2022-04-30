@@ -20,6 +20,11 @@ liftA5 ::
   -> f g
 liftA5 f a b c d e = liftA4 f a b c d <*> e
 
+infixl 4 <:>
+
+(<:>) :: Applicative f => f a -> f [a] -> f [a]
+(<:>) = liftA2 (:)
+
 liftA6 ::
      Applicative f
   => (a -> b -> c -> d -> e -> g -> h)

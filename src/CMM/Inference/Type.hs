@@ -3,12 +3,13 @@
 module CMM.Inference.Type where
 
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
+import safe Data.Eq (Eq ((==)))
 import safe Data.Function (($), (.), id)
 import safe Data.Functor (Functor(fmap))
 import safe Data.Ord (Ord)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
+import safe Data.Bool ( otherwise )
 
 import safe CMM.Data.Nullable (Fallbackable((??)))
 import safe CMM.Inference.TypeCompl (TypeCompl)
@@ -30,13 +31,16 @@ instance Fallbackable Type where
   a ?? _ = a
 
 instance HasTypeKind Type where
-  getTypeKind ErrorType {} = GenericType
-  getTypeKind (VarType t) = getTypeKind t
-  getTypeKind (ComplType t) = getTypeKind t
-  setTypeKind GenericType err@ErrorType {} = err
-  setTypeKind kind err@ErrorType {} = setTypeKindInvariantLogicError err kind
-  setTypeKind kind (VarType t) = VarType $ setTypeKind kind t
-  setTypeKind kind (ComplType t) = ComplType $ setTypeKind kind t
+  getTypeKind = \case
+    ErrorType {} -> GenericType
+    VarType t -> getTypeKind t
+    ComplType t -> getTypeKind t
+  setTypeKind kind = \case
+    err@ErrorType {}
+      | kind == GenericType -> err
+      | otherwise -> setTypeKindInvariantLogicError err kind
+    VarType t -> VarType $ setTypeKind kind t
+    ComplType t -> ComplType $ setTypeKind kind t
 
 class ToType a where
   toType :: a -> Type
