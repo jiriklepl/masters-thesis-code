@@ -133,8 +133,8 @@ executable Compiler
                        CMM.Warnings
   build-depends:       bimap ^>= 0.4.0,
                        lens >=5.0.1 && <5.2,
-                       llvm-hs-pure ^>=9.0.0,
-                       llvm-hs-pretty ^>=0.9.0.0,
+                       llvm-hs-pure ^>=12.0.0,
+                       llvm-hs-pretty ^>=12.0.0,
                        mtl ^>=2.2.2,
                        partial-order ^>=0.2.0.0,
                        syb ^>=0.7.2.1,

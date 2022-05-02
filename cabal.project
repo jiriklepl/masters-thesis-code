@@ -1,2 +1,2 @@
-packages: *.cabal vendor/*/*.cabal
+packages: *.cabal vendor/*/*.cabal vendor/llvm-hs/*/*.cabal
 tests: True
