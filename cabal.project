@@ -1,2 +1,4 @@
 packages: *.cabal vendor/*/*.cabal vendor/llvm-hs/*/*.cabal
+documentation: True
 tests: True
+haddock-all: True

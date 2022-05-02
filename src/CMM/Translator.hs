@@ -34,8 +34,8 @@ import safe qualified LLVM.AST.IntegerPredicate as L
 import safe qualified LLVM.AST.Name as L
 import safe qualified LLVM.AST.Operand as L
 import safe qualified LLVM.AST.Type as L
-import safe qualified LLVM.AST.Typed as L
-import safe qualified LLVM.IRBuilder.Constant as L
+import qualified LLVM.AST.Typed as L
+import qualified LLVM.IRBuilder.Constant as L
 import qualified LLVM.IRBuilder.Instruction as L
 import qualified LLVM.IRBuilder.Module as L
 import qualified LLVM.IRBuilder.Monad as L
