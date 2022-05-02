@@ -242,8 +242,8 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
         LeOp -> L.icmp L.ULE
   translate (Annot (ComExpr expr) _) = do
     expr' <- translate expr
-    case L.typeOf expr' of
-      L.IntegerType bits -> L.xor expr' . L.ConstantOperand $ L.Int bits (-1)
+    L.typeOf expr' >>= \case
+      Right (L.IntegerType bits) -> L.xor expr' . L.ConstantOperand $ L.Int bits (-1)
       _ -> error "Cannot create a binary complement to a non-int"
   translate (Annot (NegExpr expr) _) = translate expr >>= L.icmp L.EQ (L.bit 0)
 
