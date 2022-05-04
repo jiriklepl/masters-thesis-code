@@ -71,7 +71,7 @@ import safe CMM.AST.Annot as AST
   , unAnnot
   , withAnnot
   )
-import safe CMM.AST.HasName as AST (HasName(getName))
+import safe CMM.AST.GetName as AST (GetName(getName))
 import safe CMM.AST.Maps as AST (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Variables as AST
   ( classVariables
@@ -442,7 +442,7 @@ instance Preprocess ParaType a b where
     return (SimpleTypeHole handle, ParaType type'' types'')
 
 maybeKindUnif ::
-     (ToType t, ToType t', HasName n) => Maybe n -> t -> t' -> Preprocessor ()
+     (ToType t, ToType t', GetName n) => Maybe n -> t -> t' -> Preprocessor ()
 maybeKindUnif mKind derived base =
   case mKind of
     Nothing -> storeFact $ derived `typeUnion` base

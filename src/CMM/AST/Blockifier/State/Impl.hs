@@ -16,6 +16,7 @@ import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Parser.HasPos (SourcePos)
 
+-- | Contains various data used by `Blockifier`
 data BlockifierState =
   BlockifierState
     { _controlFlow :: [(Int, Int)] -- ^ [(from, to)] edges in the control-flow graph
@@ -33,7 +34,7 @@ data BlockifierState =
     }
   deriving (Show)
 
--- | initates an empty `BlockifierState`
+-- | Initiates an empty `BlockifierState`
 initBlockifier :: BlockifierState
 initBlockifier =
   BlockifierState

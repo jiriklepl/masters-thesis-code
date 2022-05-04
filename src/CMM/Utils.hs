@@ -13,12 +13,15 @@ import safe Data.String (IsString)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
 
+-- | Adds a layer prefix to a name
 addPrefix :: Text -> Text -> Text
 addPrefix prefix text = prefix <> T.cons ':' text
 
+-- | Retrieves the layer prefix prepended to the given name
 getPrefix :: Text -> Text
 getPrefix = T.takeWhile (/= ':')
 
+-- | Checks whether the given name has a layer prefix
 hasPrefix :: Text -> Bool
 hasPrefix = isJust . T.find (== ':')
 

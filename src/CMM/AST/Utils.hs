@@ -20,7 +20,7 @@ import safe CMM.AST
   , Unit(Unit)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), unAnnot, withAnnot)
-import safe CMM.AST.HasName (getName)
+import safe CMM.AST.GetName (getName)
 
 class EnsureNode n' n where
   ensureNode :: n' a -> n a

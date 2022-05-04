@@ -17,7 +17,7 @@ import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 
-import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
@@ -46,11 +46,13 @@ import Control.Lens.Type (Lens')
 
 type Collector = State CollectorState
 
-addVar :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+-- | adds a regular variable to the `Collector`
+addVar :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
 addVar = addVarImpl variables duplicateVariable
 
+-- | template for the functions that add variables to the `Collector`
 addVarImpl ::
-     (HasPos n, HasName n)
+     (HasPos n, GetName n)
   => Lens' CollectorState (Map.Map Text (SourcePos, b))
   -> (n -> VariablesError)
   -> n
@@ -61,56 +63,71 @@ addVarImpl place err node tKind = do
     True -> registerASTError node $ err node
     False -> place %= Map.insert (getName node) (getPos node, tKind)
 
-addVarTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+-- | adds a regular variable to the `Collector` and return the given node
+addVarTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n
 addVarTrivial n tKind = n <$ addVar n tKind
 
-addTCon :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+-- | adds a type constant to the `Collector`
+addTCon :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
 addTCon = addVarImpl typeConstants duplicateTypeConstant
 
-addTConTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+-- | adds a type constant to the `Collector` and return the given node
+addTConTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n
 addTConTrivial n tKind = n <$ addTCon n tKind
 
-addTAlias :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+-- | adds a type alias to the `Collector`
+addTAlias :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
 addTAlias = addVarImpl typeAliases duplicateTypeConstant
 
-addTAliasTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+-- | adds a type alias to the `Collector` and return the given node
+addTAliasTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n
 addTAliasTrivial n tKind = n <$ addTAlias n tKind
 
-addTVar :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+-- | adds a type variable to the `Collector`
+addTVar :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
 addTVar = addVarImpl typeVariables duplicateTypeVariable
 
-addTVarTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+-- | adds a type variable to the `Collector` and return the given node
+addTVarTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n
 addTVarTrivial n tKind = n <$ addTVar n tKind
 
-addFVar :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+-- | adds a function to the `Collector`
+addFVar :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
 addFVar = addVarImpl funcVariables duplicateFunctionVariable
 
-addFVarTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+-- | adds a function to the `Collector` and return the given node
+addFVarTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n
 addFVarTrivial n tKind = n <$ addFVar n tKind
 
-addFIVar :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+-- | adds a function instance to the `Collector`
+addFIVar :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
 addFIVar = addVarImpl funcInstVariables duplicateFunctionVariable
 
-addFIVarTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+-- | adds a function instance to the `Collector` and return the given node
+addFIVarTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n
 addFIVarTrivial n tKind = n <$ addFVar n tKind
 
-addTClass :: (HasPos n, HasName n) => n -> TypeKind -> Set Text -> Collector ()
+-- | adds a type class to the `Collector`
+addTClass :: (HasPos n, GetName n) => n -> TypeKind -> Set Text -> Collector ()
 addTClass node tKind methods = do
   uses typeClasses (getName node `Map.member`) >>=
     flip
       unless
       (typeClasses %= Map.insert (getName node) (getPos node, tKind, methods))
 
+-- | adds a type class to the `Collector` and return the given node
 addTClassTrivial ::
-     (HasPos n, HasName n) => n -> TypeKind -> Set Text -> Collector n
+     (HasPos n, GetName n) => n -> TypeKind -> Set Text -> Collector n
 addTClassTrivial n tKind methods = n <$ addTClass n tKind methods
 
-addSMem :: (HasPos n, HasName n) => n -> TypeKind -> Collector ()
+-- | adds a struct  to the `Collector`
+addSMem :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
 addSMem node tKind = do
   uses structMembers (getName node `Map.member`) >>=
     flip
       unless
       (structMembers %= Map.insert (getName node) (getPos node, tKind))
 
-addSMemTrivial :: (HasPos n, HasName n) => n -> TypeKind -> Collector n
+-- | adds a struct  to the `Collector` and return the given node
+addSMemTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n
 addSMemTrivial n tKind = n <$ addSMem n tKind

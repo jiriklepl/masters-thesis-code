@@ -45,7 +45,7 @@ import safe Prettyprinter
 import safe CMM.AST
 import safe CMM.AST.Annot
 import safe CMM.AST.BlockAnnot
-import safe CMM.AST.HasName
+import safe CMM.AST.GetName
 import safe CMM.AST.Utils
 import safe CMM.Lens
 import safe CMM.Parser.HasPos
@@ -64,10 +64,10 @@ type OutVar = (Text, Int, L.Operand)
 
 type OutVars = [OutVar]
 
-translateName :: HasName n => n -> L.Name
+translateName :: GetName n => n -> L.Name
 translateName = L.mkName . T.unpack . getName
 
-translateParName :: HasName n => n -> L.ParameterName
+translateParName :: GetName n => n -> L.ParameterName
 translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
 
 -- TODO: maybe change the name to `endBlock` or something...

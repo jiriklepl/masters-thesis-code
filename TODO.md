@@ -36,7 +36,7 @@
         - [ ] State
       - [ ] Blockifier
       - [ ] Flattener
-      - [ ] HasName
+      - [ ] GetName
       - [ ] Maps
       - [ ] Utils
       - [ ] Variables
@@ -58,7 +58,6 @@
     - [ ] Translator
       - [ ] State
     - [ ] Utils
-    - [x] Warnings
 
   - [ ] ParserTest
   - [ ] QuasiQuotes

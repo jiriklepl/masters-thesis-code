@@ -10,7 +10,7 @@ import safe Data.Ord (Ord)
 import safe Text.Show (Show)
 
 data Ordered a where
-  Ordered :: forall a . Ord (Ordered a) => { unOrdered :: a} -> Ordered a
+  Ordered :: Ord (Ordered a) => { unOrdered :: a} -> Ordered a
 
 deriving instance Show a => Show (Ordered a)
 

@@ -80,7 +80,7 @@ import safe CMM.AST.Blockifier.State
   , registers
   , stackLabels
   )
-import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.AST.Maps (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Utils
   ( GetTrivialGotoTarget(getTrivialGotoTarget)
@@ -512,11 +512,11 @@ instance Blockify (Annot Registers) a b where
 instance Blockify (Annot Formal) a b where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
-storeRegister :: (HasName n, HasPos n) => n -> Blockifier ()
+storeRegister :: (GetName n, HasPos n) => n -> Blockifier ()
 storeRegister = storeSymbol registers RegisterSymbol
 
 storeSymbol ::
-     (HasName n, HasPos n)
+     (GetName n, HasPos n)
   => Lens BlockifierState BlockifierState (Map Text SourcePos) (Map Text SourcePos)
   -> SymbolType
   -> n

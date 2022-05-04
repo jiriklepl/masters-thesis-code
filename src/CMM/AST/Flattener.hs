@@ -1,13 +1,13 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module CMM.AST.Flattener where
 
 import safe Control.Applicative (Applicative(pure), liftA2)
-import safe Control.Monad (Functor(fmap), Monad(return), sequence)
+import safe Control.Monad (Monad(return), sequence)
 import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
-import safe Data.Function (($), (.), flip, id)
+import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
 import safe Data.Int (Int)
 import safe Data.List ((++), concat, length, reverse, take, zip)
@@ -18,112 +18,35 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe GHC.Err (error)
 import safe Text.Show (Show(show))
+import safe Data.Data ( Data(gmapT), Typeable )
 
 import safe CMM.AST
-  ( Actual
-  , Alias
-  , Arm(Arm)
-  , Asserts
+  ( Arm(Arm)
   , Body(Body)
   , BodyItem(BodyDecl, BodyStackDecl, BodyStmt)
-  , CallAnnot
-  , Class(Class)
-  , Export
   , Expr(LVExpr)
-  , Flow
-  , Formal
-  , Import
-  , Init
-  , Instance(Instance)
-  , KindName
   , LValue(LVName)
-  , Lit
   , Name(Name)
-  , ParaType
-  , Pragma
-  , Procedure(Procedure)
-  , ProcedureDecl(ProcedureDecl)
-  , ProcedureHeader(ProcedureHeader)
-  , Range
-  , Registers
-  , Section(SecDatum, SecDecl, SecProcedure, SecSpan)
-  , Size
   , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt)
-  , Struct
-  , TargetDirective
-  , Targets
-  , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
-         TopStruct)
-  , Type
-  , Unit(Unit)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Data.Num (Num((+)))
 import safe CMM.Utils (addPrefix)
+import safe CMM.Data.Generics ( (*|*) )
 
-class Flatten n where
-  flatten :: n a -> n a
-  flatten = id
-
-class Functor n =>
-      FlattenTrivial n
-
+flatten :: forall a n . (Data (n a), Typeable a) => n a -> n a
+flatten = go
+  where
+    go :: forall d . Data d => d -> d
+    go = flattenBody *|* gmapT go
+    flattenBody :: Body a -> Body a
+    flattenBody (Body bodyItems) = Body $ evalState (flattenBodyItems bodyItems) 0
 
 helperName :: String -> Name a
 helperName = Name . addPrefix flattenerPrefix . T.pack
 
 flattenerPrefix :: Text
 flattenerPrefix = "F"
-
-instance Flatten n => Flatten (Annot n) where
-  flatten (Annot n a) = Annot (flatten n) a
-
-deriving instance {-# OVERLAPPABLE #-}
-         FlattenTrivial n => Flatten n
-
-instance Flatten Unit where
-  flatten (Unit topLevels) = Unit $ flatten <$> topLevels
-
-instance Flatten TopLevel where
-  flatten topLevel =
-    case topLevel of
-      TopSection strLit items -> TopSection strLit $ flatten <$> items
-      TopProcedure procedure -> TopProcedure $ flatten procedure
-      TopDecl {} -> topLevel
-      TopClass class' -> TopClass $ flatten class'
-      TopInstance instance' -> TopInstance $ flatten instance'
-      TopStruct {} -> topLevel
-
-instance Flatten Class where
-  flatten (Class paraNames paraName methods) =
-    Class paraNames paraName $ flatten <$> methods
-
-instance Flatten Instance where
-  flatten (Instance paraNames paraName methods) =
-    Instance paraNames paraName $ flatten <$> methods
-
-instance FlattenTrivial Struct
-
-instance Flatten Section where
-  flatten =
-    \case
-      SecDecl decl -> SecDecl decl
-      SecProcedure procedure -> SecProcedure $ flatten procedure
-      SecDatum datum -> SecDatum datum
-      SecSpan left right items ->
-        SecSpan (flatten left) (flatten right) (flatten <$> items)
-
-instance FlattenTrivial TargetDirective
-
-instance FlattenTrivial Import
-
-instance FlattenTrivial Export
-
-instance FlattenTrivial Init
-
-instance FlattenTrivial Registers
-
-instance FlattenTrivial Size
 
 fresh :: MonadState Int m => m Int
 fresh = do
@@ -133,9 +56,6 @@ fresh = do
 
 class FlattenBodyItems n where
   flattenBodyItems :: MonadState Int m => [n a] -> m [Annot BodyItem a]
-
-instance Flatten Body where
-  flatten (Body bodyItems) = Body $ evalState (flattenBodyItems bodyItems) 0
 
 instance FlattenBodyItems (Annot Body) where
   flattenBodyItems [] = pure []
@@ -154,7 +74,7 @@ instance FlattenBodyItems (Annot BodyItem) where
   flattenBodyItems (stmt:bodyItems) =
     liftA2 (<>) (flattenStmt stmt) (flattenBodyItems bodyItems)
 
-instance {-# OVERLAPPING #-} FlattenStmt (Annot BodyItem) where
+instance FlattenStmt (Annot BodyItem) where
   flattenStmt (Annot (BodyStmt stmt) _) = flattenStmt stmt
   flattenStmt _ = error "Not a statement"
 
@@ -236,52 +156,3 @@ instance FlattenStmt (Annot Stmt) where
           ]
       EmptyStmt -> pure []
       _ -> pure [toBodyStmt stmt]
-
-instance Flatten Procedure where
-  flatten (Procedure header body) = Procedure (flatten header) (flatten body)
-
-instance Flatten ProcedureDecl where
-  flatten (ProcedureDecl header) = ProcedureDecl $ flatten header
-
-instance Flatten ProcedureHeader where
-  flatten (ProcedureHeader mConv name formals mType) =
-    ProcedureHeader
-      mConv
-      (flatten name)
-      (flatten <$> formals)
-      (fmap flatten <$> mType)
-
-instance FlattenTrivial Formal
-
-instance FlattenTrivial Actual
-
-instance FlattenTrivial KindName
-
-instance Flatten Arm where
-  flatten (Arm ranges body) = Arm (flatten <$> ranges) (flatten body)
-
-instance FlattenTrivial Range
-
-instance FlattenTrivial LValue
-
-instance FlattenTrivial Flow
-
-instance FlattenTrivial Alias
-
-instance FlattenTrivial CallAnnot
-
-instance FlattenTrivial Targets
-
-instance FlattenTrivial Expr
-
-instance FlattenTrivial Lit
-
-instance FlattenTrivial Type
-
-instance FlattenTrivial ParaType
-
-instance FlattenTrivial Asserts
-
-instance FlattenTrivial Name
-
-instance FlattenTrivial Pragma

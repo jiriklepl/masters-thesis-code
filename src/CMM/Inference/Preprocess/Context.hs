@@ -6,7 +6,7 @@ import safe Data.Text (Text)
 
 import safe GHC.Err (undefined)
 
-import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole (TypeHole(EmptyTypeHole))
 import safe CMM.Inference.Type (Type)
@@ -20,7 +20,7 @@ data Context
   | StructCtx (Text, TypeHole) (Text, Type)
   --- | SectionCtx Text
 
-instance HasName Context where
+instance GetName Context where
   getName =
     \case
       GlobalCtx -> undefined -- error

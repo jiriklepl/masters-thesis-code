@@ -6,11 +6,10 @@ module CMM.AST.Variables where
 import safe Control.Applicative (Applicative((*>), (<*)))
 import safe Control.Monad (Monad(return))
 import safe Control.Monad.State (execState)
-import safe Data.Data (Data(gmapM), Typeable)
+import safe Data.Data (Data(gmapM))
 import safe Data.Foldable (Foldable(foldr), traverse_)
-import safe Data.Function (($), (.), flip)
+import safe Data.Function (($), (.))
 import safe Data.Functor (Functor((<$)), (<$>))
-import safe Data.Generics.Aliases (extM)
 import safe Data.Maybe (Maybe(Just, Nothing))
 import safe qualified Data.Set as Set
 import safe Data.Tuple (fst)
@@ -33,7 +32,7 @@ import safe CMM.AST
   , Unit
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
-import safe CMM.AST.HasName (HasName, getName)
+import safe CMM.AST.GetName (GetName, getName)
 import safe CMM.AST.Variables.State
   ( Collector
   , CollectorState
@@ -54,6 +53,7 @@ import safe CMM.Inference.TypeKind
   ( TypeKind((:->), Constraint, GenericType, Star)
   )
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
+import safe CMM.Data.Generics ( (<*|*>) )
 
 localVariables ::
      (Data (n SourcePos), Functor n, HasPos a) => n a -> CollectorState
@@ -69,7 +69,7 @@ globalVariables n = variablesCommon . go $ getPos <$> n
     go = addGlobalCases $ addCommonCases $ gmapM go
 
 addParaNameTVars ::
-     (HasPos annot, HasName (param annot))
+     (HasPos annot, GetName (param annot))
   => Annot (ParaName param) annot
   -> Collector ()
 addParaNameTVars (Annot (ParaName _ params) _) =
@@ -101,13 +101,6 @@ instanceVariables n = variablesCommon . go $ getPos <$> n
 variablesCommon :: Collector a -> CollectorState
 variablesCommon = (`execState` initCollector)
 
-infixr 3 *|*
-
--- | An alias of flipped `extM`. Its behavior resembles that of the `<|>` method of `Alternative`, including the evaluation order (but mind the infixr fixity).
-(*|*) ::
-     (Monad m, Typeable a, Typeable b) => (b -> m b) -> (a -> m a) -> a -> m a
-(*|*) = flip extM
-
 type CasesAdder m a
    = Data a =>
        (forall d. Data d =>
@@ -115,7 +108,7 @@ type CasesAdder m a
 
 addCommonCases :: CasesAdder m a
 addCommonCases go =
-  goFormal *|* goDecl *|* goImport *|* goRegisters *|* goDatum *|* goStmt *|* go
+  goFormal <*|*> goDecl <*|*> goImport <*|*> goRegisters <*|*> goDatum <*|*> goStmt <*|*> go
   where
     goFormal =
       \case
@@ -145,7 +138,7 @@ addCommonCases go =
 
 addGlobalCases :: CasesAdder m a
 addGlobalCases go =
-  goClass *|* goInstance *|* goStruct *|* goSection *|* goProcedure *|* go
+  goClass <*|*> goInstance <*|*> goStruct <*|*> goSection <*|*> goProcedure <*|*> go
   where
     goClass =
       \case
@@ -182,7 +175,7 @@ addGlobalCases go =
     goSectionItems = addSectionCases $ addCommonCases $ gmapM goSectionItems
 
 addSectionCases :: CasesAdder m a
-addSectionCases go = goProcedure *|* go
+addSectionCases go = goProcedure <*|*> go
   where
     goProcedure =
       \case
@@ -192,7 +185,7 @@ addSectionCases go = goProcedure *|* go
     goLabels = addLabelCases $ gmapM goLabels
 
 addProcedureDeclCases :: CasesAdder m a
-addProcedureDeclCases go = goProcedureDecl *|* go
+addProcedureDeclCases go = goProcedureDecl <*|*> go
   where
     goProcedureDecl =
       \case
@@ -200,7 +193,7 @@ addProcedureDeclCases go = goProcedureDecl *|* go
           addFVarTrivial procedureDecl Star
 
 addProcedureCases :: CasesAdder m a
-addProcedureCases go = goProcedure *|* go
+addProcedureCases go = goProcedure <*|*> go
   where
     goProcedure =
       \case
@@ -208,7 +201,7 @@ addProcedureCases go = goProcedure *|* go
           addFVarTrivial procedureDecl Star
 
 addLabelCases :: CasesAdder m a
-addLabelCases go = goStmt *|* goDatum *|* go
+addLabelCases go = goStmt <*|*> goDatum <*|*> go
   where
     goStmt =
       \case
@@ -220,7 +213,7 @@ addLabelCases go = goStmt *|* goDatum *|* go
         datum -> gmapM go datum
 
 addTAutoCases :: CasesAdder m a
-addTAutoCases go = goTAuto *|* go
+addTAutoCases go = goTAuto <*|*> go
   where
     goTAuto =
       \case

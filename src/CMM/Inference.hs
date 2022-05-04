@@ -391,7 +391,7 @@ safeHandlizeUpdate change = do
       case performForgotten of
         Left errs -> do
           addUnificationErrors errs
-          return False -- TODO: error
+          return False
         Right (tSubst, cSubst, kSubst, subst) -> do
           unifs %= apply subst
           fixSubGraph True subConsting cSubst

@@ -8,10 +8,11 @@ import safe Data.Function ((.))
 import safe Data.Text (Text)
 import safe Text.Show (Show)
 
-import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.AST.Variables.SymbolType (SymbolType)
 import safe CMM.Err.IsError (IsError)
 
+-- | The errors used by the `Blockifier`
 data BlockifierError
   = UnreachableLabels [Text] -- ^ List of unreachable labels in a certain function
   | UnreachableContinuations [Text] -- ^ List of unreachable continuations in a certain function
@@ -23,10 +24,10 @@ data BlockifierError
   | FlatteningInconsistency -- TODO: print "Compilation internal failure in the flattening phase"
   deriving (Show, Eq, IsError)
 
--- | `DuplicateSymbol` generalized over inputs in `HasName`
-duplicateSymbol :: HasName n => SymbolType -> n -> BlockifierError
+-- | `DuplicateSymbol` generalized over inputs in `GetName`
+duplicateSymbol :: GetName n => SymbolType -> n -> BlockifierError
 duplicateSymbol s = DuplicateSymbol s . getName
 
--- | `ContinuationFallthrough` generalized over inputs in `HasName`
-continuationFallthrough :: HasName n => n -> BlockifierError
+-- | `ContinuationFallthrough` generalized over inputs in `GetName`
+continuationFallthrough :: GetName n => n -> BlockifierError
 continuationFallthrough = ContinuationFallthrough . getName

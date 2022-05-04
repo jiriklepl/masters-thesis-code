@@ -31,7 +31,7 @@ import safe Data.Text (Text)
 import safe Data.Tuple (snd, uncurry)
 import safe GHC.Err (error)
 
-import safe CMM.AST.HasName (HasName(getName))
+import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Data.Tuple (complThd3)
 import safe CMM.Inference.BuiltIn (constraintWitness, getConstType)
 import safe CMM.Inference.Fact

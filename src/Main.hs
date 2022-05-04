@@ -15,7 +15,10 @@ import qualified Data.Text.IO as TS
 -- import qualified Data.Map as Map
 -- import Control.Lens
 -- import Data.Text as T
-import safe System.IO (IO, putStrLn)
+-- import qualified Data.Map as Map
+-- import Control.Lens
+-- import Data.Text as T
+import safe System.IO (IO, putStrLn, print)
 
 -- import Data.Tuple
 import Text.Megaparsec hiding (parse)
@@ -62,6 +65,7 @@ main = do
   let tokens' = either undefined id $ parse tokenize contents
   let ast = either undefined id $ parse unit tokens'
   -- let flattened = flatten ast
+  -- print $ pretty flattened
   let (mined, miner) = runState (preprocess ast) initPreprocessor
   -- let (_, _) = runState (blockify flattened) B.initBlockifier
   -- let translated =

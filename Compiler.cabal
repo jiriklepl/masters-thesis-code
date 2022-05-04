@@ -60,7 +60,7 @@ executable Compiler
                        CMM.AST.Blockifier.State.Impl,
                        CMM.AST.BlockAnnot,
                        CMM.AST.Flattener,
-                       CMM.AST.HasName,
+                       CMM.AST.GetName,
                        CMM.AST.Maps,
                        CMM.AST.Utils,
                        CMM.AST.Variables,
@@ -78,6 +78,7 @@ executable Compiler
                        CMM.Data.Either,
                        CMM.Data.Float,
                        CMM.Data.Function,
+                       CMM.Data.Generics,
                        CMM.Data.Lattice,
                        CMM.Data.List,
                        CMM.Data.Nullable,
@@ -129,8 +130,7 @@ executable Compiler
                        CMM.Pretty,
                        CMM.Translator,
                        CMM.Translator.State,
-                       CMM.Utils,
-                       CMM.Warnings
+                       CMM.Utils
   build-depends:       bimap ^>= 0.4.0,
                        lens >=5.0.1 && <5.2,
                        llvm-hs-pure ^>=12.0.0,
@@ -146,7 +146,7 @@ Test-Suite parser-testsuite
   main-is:             ParserTest.hs
   other-modules:       CMM.AST,
                        CMM.AST.Annot,
-                       CMM.AST.HasName,
+                       CMM.AST.GetName,
                        CMM.AST.Utils,
                        CMM.Control.Applicative,
                        CMM.Data.Float,
@@ -156,7 +156,6 @@ Test-Suite parser-testsuite
                        CMM.Parser.HasPos,
                        CMM.Pretty,
                        CMM.Utils,
-                       CMM.Warnings,
                        QuasiQuotes
   build-depends:       template-haskell >=2.16.0.0 && <2.19.0.0,
                        HUnit,

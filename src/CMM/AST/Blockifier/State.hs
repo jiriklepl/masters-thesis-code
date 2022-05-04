@@ -25,8 +25,10 @@ import safe CMM.AST.Blockifier.State.Impl
   , stackLabels
   )
 
+-- | Type constructor for blockifier function return types
 type Blockifier = State BlockifierState
 
+-- | Resets `Blockifier` between different functions
 clearBlockifier :: Blockifier ()
 clearBlockifier = do
   labels .= mempty
