@@ -8,6 +8,12 @@ import safe Control.Lens.TH (makeFieldsNoPrefix)
 import safe Data.Map (Map)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
+import safe Control.Monad.State ( State )
+import safe Data.Maybe ( Maybe, maybe )
+import safe Data.List ( head )
+import safe Data.Function ( (.) )
+import safe Data.Functor ( (<$>) )
+import safe Control.Lens.Getter ( uses )
 
 import safe CMM.Inference.Fact (Facts)
 import safe CMM.Inference.HandleCounter
@@ -16,7 +22,12 @@ import safe CMM.Inference.HandleCounter
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
-import safe CMM.Inference.TypeHandle (TypeHandle)
+import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
+import safe CMM.Inference.TypeVar ( noType )
+import safe CMM.Inference.Preprocess.TypeHole ( safeHoleHandle )
+import safe CMM.Inference.Preprocess.HasTypeHole
+    ( HasTypeHole(getTypeHole) )
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
 
 data PreprocessorState =
   PreprocessorState
@@ -30,7 +41,6 @@ data PreprocessorState =
     , _typeClasses :: Map Text ClassData
     , _structMembers :: Map Text TypeHandle
     , _structInstMembers :: Map Text [TypeHandle]
-    , _structElabMembers :: Map Text TypeHandle
     , _memberClasses :: Map Text TypeHandle
     , _facts :: [Facts]
     , _cSymbols :: [Text]
@@ -51,7 +61,6 @@ initPreprocessor =
     , _typeClasses = mempty
     , _structMembers = mempty
     , _structInstMembers = mempty
-    , _structElabMembers = mempty
     , _memberClasses = mempty
     , _facts = [mempty]
     , _cSymbols = mempty
@@ -60,3 +69,11 @@ initPreprocessor =
     }
 
 makeFieldsNoPrefix ''PreprocessorState
+
+type Preprocessor = State PreprocessorState
+
+instance GetParent Preprocessor where
+  getParent = maybe noType handleId <$> getCtxHandle
+
+getCtxHandle :: Preprocessor (Maybe TypeHandle)
+getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)

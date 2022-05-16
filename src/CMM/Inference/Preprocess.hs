@@ -3,6 +3,7 @@
 
 -- TODO: add kinds and constnesses where they make sense
 -- TODO: all types of things inside procedures should be subtypes of the return type
+-- TODO: StackDecl?
 module CMM.Inference.Preprocess where
 
 import safe Control.Applicative (Applicative((<*), pure), liftA2)
@@ -12,11 +13,11 @@ import safe Control.Lens.Tuple (_2)
 import safe Control.Monad (Monad((>>=), return), (>=>), zipWithM, zipWithM_)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (for_, traverse_)
+import safe Data.Foldable (for_, traverse_, Foldable (foldl'))
 import safe Data.Function (($), (.))
-import safe Data.Functor (Functor(fmap), (<$>), (<&>))
+import safe Data.Functor (Functor(fmap), (<$>), (<&>), (<$))
 import safe Data.Int (Int)
-import safe Data.List (elem, foldl, head, unzip, zip)
+import safe Data.List (elem, head, unzip, zip)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), fromJust)
 import safe Data.Monoid ((<>))
@@ -62,7 +63,7 @@ import safe CMM.AST as AST
   , Struct(Struct)
   , Targets
   , Type(TAuto, TBits, TName, TPar)
-  , Unit(Unit)
+  , Unit(Unit), StackDecl (StackDecl)
   )
 import safe CMM.AST.Annot as AST
   ( Annot
@@ -83,7 +84,7 @@ import safe CMM.AST.Variables as AST
 import safe CMM.AST.Variables.State
   ( funcInstVariables
   , funcVariables
-  , typeVariables
+  , typeVariables, structMembers
   )
 import safe CMM.Control.Applicative ((<:>))
 import safe CMM.Inference.BuiltIn as Infer
@@ -111,14 +112,14 @@ import safe CMM.Inference.Fact as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint
+  , unstorableConstraint, NestedFact (Fact)
   )
 import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.Preprocess.Context (Context(StructCtx))
 import safe CMM.Inference.Preprocess.HasTypeHole
   ( HasTypeHole(getTypeHole)
   , WithTypeHole(withTypeHole)
-  , getTypeHoleId
+  , getTypeHoleId, getSafeTypeHoleId
   )
 import safe CMM.Inference.Preprocess.State as Infer
   ( Preprocessor
@@ -128,7 +129,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   , currentContext
   , endProc
   , freshASTTypeHandle
-  , freshNamedTypeHandle
+  , freshNamedASTTypeHandle
   , freshTypeHelper
   , getCurrentReturn
   , lookupClass
@@ -159,7 +160,7 @@ import safe CMM.Inference.Preprocess.State as Infer
   )
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         SimpleTypeHole)
+         SimpleTypeHole, MethodTypeHole)
   , holeHandle
   )
 import safe CMM.Inference.Type as Infer
@@ -244,6 +245,7 @@ instance Preprocess Unit a b where
     let collector = globalVariables unit
         fVars = collector ^. funcVariables
         fIVars = collector ^. funcInstVariables
+        sMems = collector ^. structMembers
     beginUnit collector
     storeFacts builtInTypeFacts
     -- TODO: rename this
@@ -254,6 +256,7 @@ instance Preprocess Unit a b where
             ]
     for_ (Map.keys fIVars) $ lookupFIVar >=> storeFacts'
     for_ (Map.keys fVars) $ lookupFVar >=> storeFacts'
+    for_ (Map.keys sMems) $ lookupSMem >=> storeFacts'
     (EmptyTypeHole, ) . Unit <$> preprocessT topLevels
 
 instance Preprocess Section a b where
@@ -300,7 +303,7 @@ instance Preprocess Decl a b where
         return $ ConstDecl Nothing (preprocessTrivial name) expr'
       -- the constant is typed explicitly
       ConstDecl (Just type') name expr -> do
-        handle <- lookupVar (getName name)
+        handle <- lookupVar name
         expr' <- preprocess expr
         type'' <- preprocess type'
         storeFacts
@@ -322,13 +325,8 @@ instance Preprocess Struct a b where
     (constraint, paraName') <- preprocessParaName lookupTCon Star paraName
     let hole = getTypeHole paraName'
     pushStruct (getName paraName, hole) (getName paraName, constraint)
-    datumResults <- preprocessDatums [] datums
-    datums' <-
-      zipWithM
-        preprocessFinalize
-        (takeAnnot <$> datums)
-        (return <$> datumResults)
-    return (EmptyTypeHole, Struct paraName' datums')
+    datums' <- preprocessDatums datums
+    (hole, Struct paraName' datums') <$ popContext <* popTypeVariables
 
 instance Preprocess Class a b where
   preprocessImpl _ class'@(Class paraNames paraName methods) = do
@@ -371,7 +369,7 @@ class Preprocess param a b =>
 
 instance PreprocessParam Name a b where
   preprocessParam name = do
-    handle <- lookupTVar $ getName name
+    handle <- lookupTVar name
     return $ withTypeHole handle <$> name
 
 instance PreprocessParam AST.Type a b where
@@ -387,9 +385,9 @@ preprocessParaName looker kind (Annot (ParaName name params) annot) = do
   let name' = preprocessTrivial name
   params' <- traverse preprocessParam params
   class' <- looker $ getName name'
-  handle <- freshNamedTypeHandle (getName name) annot kind
+  handle <- freshNamedASTTypeHandle (getName name) annot kind
   let constraint =
-        foldl
+        foldl'
           ((toType .) . AppType)
           (toType class')
           (toType . getTypeHole <$> params')
@@ -401,33 +399,32 @@ preprocessParaName looker kind (Annot (ParaName name params) annot) = do
 
 instance Preprocess Import a b where
   preprocessImpl _ import'@Import {} = do
-    handle <- lookupVar (getName import')
+    handle <- lookupVar import'
     purePreprocess handle import'
 
 instance Preprocess Export a b where
   preprocessImpl _ export@Export {} = do
-    handle <- lookupVar (getName export)
+    handle <- lookupVar export
     purePreprocess handle export
 
 instance Preprocess AST.Type a b where
-  preprocessImpl annot =
-    \case
-      tBits@(TBits int) -> do
-        handle <- freshASTTypeHandle annot Star
-        storeFact $ handle `typeUnion` ComplType (TBitsType int)
-        purePreprocess (SimpleTypeHole handle) tBits
-      tName@(TName name) -> do
-        hole <- lookupTCon (getName name)
-        purePreprocess hole tName
-      tAuto@(TAuto Nothing) -> do
-        handle <- freshASTTypeHandle annot Star -- TODO:, really Star?
-        purePreprocess (SimpleTypeHole handle) tAuto
-      tAuto@(TAuto (Just name)) -> do
-        hole <- lookupTVar (getName name)
-        purePreprocess hole tAuto
-      TPar parType -> do
-        parType' <- preprocess parType
-        return (getTypeHole parType', TPar parType')
+  preprocessImpl annot t = case t of
+    TBits int -> do
+      handle <- freshASTTypeHandle annot Star
+      storeFact $ handle `typeUnion` ComplType (TBitsType int)
+      purePreprocess (SimpleTypeHole handle) t
+    TName name -> do
+      hole <- lookupTCon name
+      purePreprocess hole t
+    TAuto Nothing -> do
+      handle <- freshASTTypeHandle annot Star -- TODO:, really Star?
+      purePreprocess (SimpleTypeHole handle) t
+    TAuto (Just name) -> do
+      hole <- lookupTVar name
+      purePreprocess hole t
+    TPar parType -> do
+      parType' <- preprocess parType
+      return (getTypeHole parType', TPar parType')
 
 instance Preprocess ParaType a b where
   preprocessImpl annot (ParaType type' types') = do
@@ -435,7 +432,7 @@ instance Preprocess ParaType a b where
     types'' <- traverse preprocess types'
     handle <- freshASTTypeHandle annot GenericType -- TODO: determine the kind
     storeFact $ handle `typeUnion`
-      foldl
+      foldl'
         ((toType .) . AppType)
         (toType $ getTypeHoleId type'')
         (toType . getTypeHoleId <$> types'')
@@ -444,10 +441,9 @@ instance Preprocess ParaType a b where
 maybeKindUnif ::
      (ToType t, ToType t', GetName n) => Maybe n -> t -> t' -> Preprocessor ()
 maybeKindUnif mKind derived base =
-  case mKind of
-    Nothing -> storeFact $ derived `typeUnion` base
+  storeFacts $ case mKind of
+    Nothing -> [derived `typeUnion` base]
     Just kind ->
-      storeFacts
         [ derived `typeConstraint` base
         , derived `subConst` base
         , base `subConst` derived
@@ -459,7 +455,7 @@ instance Preprocess Registers a b where
     type'' <- preprocess type'
     let typeType = getTypeHoleId type''
         go name mStrLit = do
-          hole <- lookupVar (getName name)
+          hole <- lookupVar name
           maybeKindUnif mKind hole typeType
           case mStrLit of
             Nothing -> return (withTypeHole hole <$> name, Nothing)
@@ -487,12 +483,19 @@ instance FormalNames (ProcedureDecl a) where
 instance FormalNames (Procedure a) where
   formalNames (Procedure header _) = formalNames header
 
+preprocessHeader :: (WithTypeHole a b, HasPos a) =>
+  Annot ProcedureHeader a
+  -> Preprocessor (Annot ProcedureHeader b)
+preprocessHeader header =
+  preprocessFinalize (takeAnnot header) $
+  preprocessProcedureHeaderImpl (unAnnot header)
+
 -- TODO: consult conventions with man
-preprocessProcedureHeader ::
+preprocessProcedureHeaderImpl ::
      (WithTypeHole a b, HasPos a)
   => ProcedureHeader a
   -> Preprocessor (TypeHole, ProcedureHeader b)
-preprocessProcedureHeader (ProcedureHeader mConv name formals mTypes) = do
+preprocessProcedureHeaderImpl (ProcedureHeader mConv name formals mTypes) = do
   formals' <- doOutsideCtx $ preprocessT formals
   mTypes' <- doOutsideCtx $ traverse (traverse preprocess) mTypes
   let formalTypes = getTypeHole <$> formals'
@@ -527,26 +530,25 @@ instance Preprocess Procedure a b where
     beginProc (getName procedure) $ localVariables header
     openProc $ localVariables body
     body' <- preprocess body
-    header' <-
-      preprocessFinalize (takeAnnot header) $
-      preprocessProcedureHeader (unAnnot header)
+    header' <- preprocessHeader header
     return (getTypeHole header', Procedure header' body')
 
 -- TODO: ditto
 instance Preprocess ProcedureDecl a b where
   preprocessImpl _ procedure@(ProcedureDecl header) = do
     beginProc (getName procedure) $ localVariables header
-    header' <-
-      preprocessFinalize (takeAnnot header) $
-      preprocessProcedureHeader (unAnnot header)
-    return (EmptyTypeHole, ProcedureDecl header')
+    (EmptyTypeHole,) . ProcedureDecl <$> preprocessHeader header
 
 instance Preprocess Formal a b where
   preprocessImpl _ (Formal mKind invar type' name) = do
-    hole <- lookupVar (getName name)
+    hole <- lookupVar name
     type'' <- preprocess type'
     maybeKindUnif mKind hole (getTypeHoleId type'')
     return (hole, Formal mKind invar type'' (preprocessTrivial name))
+
+instance Preprocess StackDecl a b where
+  preprocessImpl _ (StackDecl datums) =
+    (EmptyTypeHole,) . StackDecl <$> preprocessDatums datums
 
 instance Preprocess Stmt a b where
   preprocessImpl _ =
@@ -581,18 +583,18 @@ instance Preprocess Stmt a b where
           exprTypes
         return (EmptyTypeHole, AssignStmt lvalues' exprs')
       PrimOpStmt {} -> undefined
-      (CallStmt names mConv expr actuals mTargets annots) -- TODO: this is just a placeholder
+      CallStmt names mConv expr actuals mTargets annots -- TODO: this is just a placeholder
        -> do
         retTypes <-
-          traverse
-            (\name -> handleId <$> freshNamedTypeHandle (getName name) name Star)
-            names
+          names
+          `for`
+            \name -> handleId <$> freshNamedASTTypeHandle (getName name) name Star
         argTypes <-
-          traverse
-            (\(num, actual) ->
+          zip [0 :: Int ..] actuals
+          `for`
+            \(num, actual) ->
                handleId <$>
-               freshNamedTypeHandle (T.pack $ "actual" <> show num) actual Star)
-            (zip [0 :: Int ..] actuals)
+               freshNamedASTTypeHandle (T.pack $ "actual" <> show num) actual Star
         names' <- preprocessT names
         expr' <- preprocess expr
         actuals' <- preprocessT actuals
@@ -618,7 +620,7 @@ instance Preprocess Stmt a b where
         return (EmptyTypeHole, ReturnStmt mConv Nothing actuals')
       ReturnStmt {} -> undefined
       label@LabelStmt {} -> do
-        hole <- lookupVar (getName label)
+        hole <- lookupVar label
         storeFacts
           [ addressKind `kindConstraint` hole
           , hole `typeConstraint` ComplType LabelType
@@ -643,8 +645,8 @@ doOutsideCtx action = popTopContext >>= (action <*) . pushContext
 -- TODO: this seems wrong
 instance Preprocess KindName a b where
   preprocessImpl annot (KindName mKind name) = do
-    nameType <- lookupVar (getName name)
-    handle <- freshNamedTypeHandle (getName name) annot Star
+    nameType <- lookupVar name
+    handle <- freshNamedASTTypeHandle (getName name) annot Star
     maybeKindUnif mKind handle nameType
     return (SimpleTypeHole handle, KindName mKind (preprocessTrivial name))
 
@@ -661,7 +663,7 @@ instance Preprocess Lit a b where
       case lit of
         LitInt {} -> integerKind
         LitFloat {} -> floatKind
-        LitChar {} -> integerKind -- TODO: check this one? but probably correctus
+        LitChar {} -> integerKind -- TODO: check this one? but probably correct
     storeFact $ constExprConstraint handle
     purePreprocess (SimpleTypeHole handle) lit
 
@@ -696,35 +698,44 @@ instance Preprocess Init a b where
         storeFact $ handle `typeConstraint` ComplType c
         purePreprocess (SimpleTypeHole handle) strInit
 
-preprocessDatums ::
-     (HasPos n, WithTypeHole n a)
+
+preprocessDatums :: (WithTypeHole a b, HasPos a) => [Annot Datum a] -> Preprocessor [Annot Datum b]
+preprocessDatums datums = do
+  datumResults <- preprocessDatumsImpl [] datums
+  zipWithM
+    preprocessFinalize
+    (takeAnnot <$> datums)
+    (return <$> datumResults)
+
+preprocessDatumsImpl ::
+     (HasPos a, WithTypeHole a b)
   => [TypeHole]
-  -> [Annotation Datum n]
-  -> Preprocessor [(TypeHole, Datum a)]
-preprocessDatums _ [] = return [] -- TODO: continue from here
-preprocessDatums cache ((Annot datum annot):others) =
+  -> [Annotation Datum a]
+  -> Preprocessor [(TypeHole, Datum b)]
+preprocessDatumsImpl _ [] = return [] -- TODO: continue from here
+preprocessDatumsImpl cache ((Annot datum annot):others) =
   case datum of
     DatumLabel name -> do
       hole <-
         uses currentContext head >>= \case
           StructCtx {} -> do
-            hole <- lookupSIMem $ getName name
-            mem <- lookupSMem $ getName name
+            hole <- lookupSIMem name
+            mem <- lookupSMem name
             return $ MemberTypeHole (holeHandle hole) [holeHandle mem] []
           _ -> do
             tVar <- handleId <$> freshTypeHelper Star
-            hole <- lookupVar $ getName name
+            hole <- lookupVar name
             storeFacts
               [ addressKind `kindConstraint` hole
-              , hole `typeConstraint` AddrType (VarType tVar)
+              , hole `typeUnion` AddrType (VarType tVar)
               ]
             return hole
-      purePreprocess hole datum <:> preprocessDatums (hole : cache) others
+      purePreprocess hole datum <:> preprocessDatumsImpl (hole : cache) others
     DatumAlign _ -> do
-      purePreprocess EmptyTypeHole datum <:> preprocessDatums [] others
+      purePreprocess EmptyTypeHole datum <:> preprocessDatumsImpl [] others
     Datum type' mSize mInit -> do
       uses currentContext head >>= \case
-        StructCtx _ structConstraint -> do
+        StructCtx (_, sHole) structConstraint -> do
           tVars <- collectTVars
           handle <- freshASTTypeHandle annot Star
           pushFacts
@@ -734,17 +745,20 @@ preprocessDatums cache ((Annot datum annot):others) =
           let t =
                 makeFunction [toType . AddrType $ snd structConstraint] $
                 toType hole
+              funcFact = tVarId (toTypeVar handle) `functionKind` t
+              constExprFact = constExprConstraint t
               cache' =
                 cache <&> \case
                   MemberTypeHole iMem [mem] [] -> (iMem, mem)
                   _ -> undefined -- TODO: logic error
-              hole' = MemberTypeHole handle `uncurry` unzip cache'
-          storeFact $ forall tVars [handle `typeUnion` t] fs
-          ((hole', datum') :) <$> preprocessDatums [] others
+              hole' = MemberTypeHole (holeHandle sHole) `uncurry` unzip cache'
+          storeFact . forall tVars [handle `typeUnion` t] $
+            Fact funcFact : Fact constExprFact : fs
+          ((hole', datum') :) <$> preprocessDatumsImpl [] others
         _ -> do
           result@(hole, _) <- goGeneral
           unionizeTypes $ hole : cache
-          (result :) <$> preprocessDatums [] others
+          (result :) <$> preprocessDatumsImpl [] others
       where goGeneral = do
               handle <- freshASTTypeHandle annot Star
               type'' <- preprocess type'
@@ -762,7 +776,7 @@ preprocessDatums cache ((Annot datum annot):others) =
               return (SimpleTypeHole handle, Datum type'' mSize' mInit')
 
 instance Preprocess Datum a b where
-  preprocessImpl a datum = head <$> preprocessDatums [] [datum `Annot` a]
+  preprocessImpl a datum = head <$> preprocessDatumsImpl [] [datum `Annot` a]
 
 instance Preprocess Size a b where
   preprocessImpl _ =
@@ -778,39 +792,67 @@ instance Preprocess LValue a b where
   preprocessImpl annot =
     \case
       lvName@LVName {} -> do
-        lookupFVar (getName lvName) >>= \schemeHole ->
-          case schemeHole of
-            EmptyTypeHole ->
-              lookupVar (getName lvName) >>= (`purePreprocess` lvName)
-            scheme -> do
-              inst <- freshNamedTypeHandle (getName lvName) annot Star
-              handle <- freshNamedTypeHandle (getName lvName) annot Star
-              storeFacts
-                [ scheme `instType` inst
-                , handle `typeUnion` AddrType inst
-                , constExprConstraint handle
-                , constExprConstraint inst
-                , addressKind `kindConstraint` handle
-                , tVarId (toTypeVar inst) `functionKind` inst
-                ]
-              purePreprocess (LVInstTypeHole handle schemeHole) lvName
+        lookupFVar lvName >>= \case
+          EmptyTypeHole ->
+            lookupVar lvName >>= (`purePreprocess` lvName)
+          scheme -> do
+            inst <- freshNamedASTTypeHandle (getName lvName) annot Star
+            handle <- freshNamedASTTypeHandle (getName lvName) annot Star
+            storeFacts
+              [ scheme `instType` inst
+              , handle `typeUnion` AddrType inst
+              , constExprConstraint handle
+              , constExprConstraint inst
+              , addressKind `kindConstraint` handle
+              , tVarId (toTypeVar inst) `functionKind` inst
+              ]
+            purePreprocess (LVInstTypeHole handle scheme) lvName
     -- TODO: is there a constraint on expr? probably yes -> consult with the man
-      LVRef type' expr mAsserts -> do
+      LVRef Nothing expr mAsserts -> do
+        expr' <- preprocess expr
+        handle <- freshASTTypeHandle annot Star
+        let mAsserts' = (withTypeHole EmptyTypeHole <$>) <$> mAsserts
+        storeFacts
+          [ getTypeHole expr' `typeUnion` AddrType handle
+          , addressKind `minKindConstraint` getTypeHole expr'
+          ]
+        return (SimpleTypeHole handle, LVRef Nothing expr' mAsserts')
+      LVRef (Just type') expr mAsserts -> do
         type'' <- preprocess type'
         expr' <- preprocess expr
         let mAsserts' = (withTypeHole EmptyTypeHole <$>) <$> mAsserts
         storeFact $ addressKind `minKindConstraint` getTypeHole expr'
-        return (getTypeHole type'', LVRef type'' expr' mAsserts')
+        return (getTypeHole type'', LVRef (Just type'') expr' mAsserts')
 
 instance Preprocess Expr a b where
-  preprocessImpl _ -- TODO: this is just ugly
-   =
+  preprocessImpl annot = -- TODO: this is just ugly
     \case
-      MemberExpr expr field -> undefined
+      MemberExpr struct field ->
+        lookupSMem field >>= \case
+          EmptyTypeHole -> undefined -- TODO: very bad
+          scheme -> do
+            struct' <- preprocess struct
+            inst <- freshNamedASTTypeHandle (getName field) annot Star
+            handle <- freshNamedASTTypeHandle (getName field) annot Star
+            argType <- freshNamedASTTypeHandle (getName field) annot Star
+            retType <- freshNamedASTTypeHandle (getName field) annot Star
+            storeFacts
+              [ scheme `instType` inst
+              , inst `typeUnion` makeFunction [argType] retType
+              , constExprConstraint $ AddrType inst
+              , addressKind `kindConstraint` AddrType inst
+              , constExprConstraint inst
+              , tVarId (toTypeVar inst) `functionKind` inst
+              , argType `subType` getTypeHole struct'
+              , addressKind `kindConstraint` getTypeHole struct'
+              , retType `subType` handle
+              , addressKind `kindConstraint` handle
+              ]
+            return (MethodTypeHole handle (holeHandle scheme) inst, MemberExpr struct' $ preprocessTrivial field)
       ParExpr expr -> ParExpr `preprocessInherit` expr
       LVExpr lvalue -> LVExpr `preprocessInherit` lvalue
       BinOpExpr op left right -- TODO: implement correctly, this is just a placeholder
-       -> do
+        -> do
         handle <- freshTypeHelper Star
         operator <- freshTypeHelper Star
         left' <- preprocess left
@@ -820,16 +862,16 @@ instance Preprocess Expr a b where
         storeFact $ operator `typeUnion`
           makeFunction [holeHandle leftType, holeHandle rightType] handle
         storeFact $ tVarId (toTypeVar operator) `functionKind` operator
-        if op `elem` [EqOp, NeqOp, GtOp, LtOp, GeOp, LeOp]
-          then storeFacts
-                 [ leftType `typeConstraint` rightType
-                 , handle `subConst` leftType
-                 , handle `subConst` rightType
-                 , handle `typeConstraint` ComplType BoolType
-                 , boolKind `kindConstraint` handle
-                 ]
-          else storeFacts
-                 [handle `subType` leftType, handle `subType` rightType]
+        storeFacts $ if op `elem` [EqOp, NeqOp, GtOp, LtOp, GeOp, LeOp]
+          then
+            [ leftType `typeConstraint` rightType
+            , handle `subConst` leftType
+            , handle `subConst` rightType
+            , handle `typeConstraint` ComplType BoolType
+            , boolKind `kindConstraint` handle
+            ]
+          else
+            [handle `subType` leftType, handle `subType` rightType]
       -- TODO: add constraint dependent on the operator
         return (SimpleTypeHole handle, BinOpExpr op left' right')
       NegExpr expr -> NegExpr `preprocessInherit` expr -- TODO: add constraint dependent on the operator
@@ -845,7 +887,7 @@ instance Preprocess Expr a b where
             return type''
         return (litType, LitExpr lit' mType')
       PrefixExpr name actuals -- TODO: fix this
-       -> do
+        -> do
         handle <- freshTypeHelper Star
         tupleType <- freshTypeHelper Star
         argType <- freshTypeHelper Star

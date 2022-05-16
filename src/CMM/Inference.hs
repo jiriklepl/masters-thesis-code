@@ -15,7 +15,7 @@ import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
 import safe Data.Eq (Eq((/=), (==)))
-import safe Data.Foldable (Foldable, for_, traverse_)
+import safe Data.Foldable (Foldable (foldl'), for_, traverse_)
 import safe Data.Function (($), (.), flip, id)
 import safe Data.Functor (Functor((<$), fmap), ($>), (<$>), (<&>), void)
 import safe Data.Generics.Aliases (extT)
@@ -27,7 +27,6 @@ import safe Data.List
   , any
   , concat
   , filter
-  , foldl
   , foldr
   , head
   , null
@@ -48,7 +47,7 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (snd, swap, uncurry)
-import safe GHC.Err (undefined)
+import safe GHC.Err (undefined, error)
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
@@ -101,7 +100,6 @@ import safe CMM.Inference.State
   , getConsting
   , getHandle
   , getKinding
-  , getParent
   , getTyping
   , handlize
   , handlizeTVar
@@ -151,6 +149,7 @@ import safe CMM.Inference.TypeVar
   , predecessor
   )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -159,16 +158,18 @@ instance (Foldable t, FactCheck a) => FactCheck (t a) where
   factCheck = traverse_ factCheck
 
 instance {-# OVERLAPPING #-} FactCheck (TypeCompl Type) where
-  factCheck (TupleType ts) = factCheck ts
-  factCheck (FunctionType ts t) = factCheck ts *> factCheck t
-  factCheck (AppType t t') = factCheck t *> factCheck t'
-  factCheck (AddrType t) = factCheck t
-  factCheck _ = return ()
+  factCheck = \case
+    TupleType ts -> factCheck ts
+    FunctionType ts t -> factCheck ts *> factCheck t
+    AppType t t' -> factCheck t *> factCheck t'
+    AddrType t -> factCheck t
+    _ -> return ()
 
 instance FactCheck Type where
-  factCheck (VarType t) = factCheck t
-  factCheck (ComplType t) = factCheck t
-  factCheck _ = return ()
+  factCheck = \case
+    VarType t -> factCheck t
+    ComplType t -> factCheck t
+    _ -> return ()
 
 instance {-# OVERLAPPING #-} FactCheck Fact where
   factCheck fact =
@@ -184,8 +185,8 @@ instance FactCheck TypeVar where
 elaborate :: PrimType -> Inferencer (TypeCompl Type)
 elaborate primType = do
   handles <- use handlize
-  let oneLevels t = maybe (VarType t) (view typing) (t `Bimap.lookup` handles)
-  return $ oneLevels <$> primType
+  let oneLevel t = maybe (VarType t) (view typing) (t `Bimap.lookup` handles)
+  return $ oneLevel <$> primType
 
 simplify :: Type -> Inferencer TypeVar
 simplify =
@@ -252,7 +253,7 @@ fixAll = do
     else return False
 
 mapFold :: (Ord a, Semigroup b) => [(a, b)] -> Map a b
-mapFold = foldl (flip . uncurry $ Map.insertWith (<>)) Map.empty
+mapFold = foldl' (flip . uncurry $ Map.insertWith (<>)) Map.empty
 
 fixSubGraph ::
      Bool
@@ -887,8 +888,9 @@ closeSCCs facts (scc:others) =
       fact' <- uses unifs (`apply` fact)
       (Fact fact' :) <$> unSchematize fs
     transformFact _ = undefined
-    getParents [] = []
-    getParents ((_, tVar, _):rest) = tVar : getParents rest
+    getParents = \case
+      [] -> []
+      (_, tVar, _):rest -> tVar : getParents rest
 
 makeCallGraph :: Facts -> (Facts, [SCC (Fact, TypeVar, [TypeVar])])
 makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
@@ -897,6 +899,7 @@ makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
       case fact of
         NestedFact (_ :. [Union (VarType tVar) _] :=> fs) ->
           _2 %~ ((fact, tVar, foldr out [] fs) :)
+        NestedFact (_ :. [Union {}] :=> _) -> undefined -- TODO: logic error
         _ -> _1 %~ (fact :)
     out fact =
       case fact of
@@ -907,9 +910,12 @@ makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
 collectCounts :: Facts -> Subst Int
 collectCounts = foldr countIn mempty
   where
-    countIn (NestedFact (_ :. [Union (VarType tVar) _] :=> _)) =
-      Map.insertWith (+) tVar 1
-    countIn _ = id
+    countIn = \case
+      NestedFact (_ :. [Union (VarType tVar) _] :=> _) ->
+        Map.insertWith (+) tVar 1
+      NestedFact (_ :. [Union {}] :=> _) ->
+        undefined -- TODO: logic error
+      _ -> id
 
 data Way
   = Forward

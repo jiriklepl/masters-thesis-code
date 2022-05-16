@@ -24,7 +24,6 @@ import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Nothing), fromMaybe, maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
-import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
@@ -33,7 +32,7 @@ import safe GHC.Err (error)
 
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Data.Tuple (complThd3)
-import safe CMM.Inference.BuiltIn (constraintWitness, getConstType)
+import safe CMM.Inference.BuiltIn (constraintWitness, getConstType, getDataKind, addressKind)
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
@@ -47,7 +46,7 @@ import safe CMM.Inference.Fact
   , makeApplication
   , makeFunction
   , tupleKind
-  , typeUnion
+  , typeUnion, kindConstraint, regularExprConstraint, subConst
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
@@ -61,20 +60,20 @@ import safe CMM.Inference.Preprocess.TypeHole
   )
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
 import safe CMM.Inference.TypeAnnot
-  ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST)
+  ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST, TypeNamed)
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeKind (TypeKind(GenericType, Star))
 import safe CMM.Inference.TypeVar
   ( ToTypeVar(toTypeVar)
   , TypeVar(NoType, TypeVar, tVarId)
-  , noType
+  , noType, typeVarIdLast
   )
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
 import safe CMM.AST.Variables.State (CollectorState)
 import safe qualified CMM.AST.Variables.State as CS
-import safe CMM.Inference.HandleCounter (nextHandleCounter)
+import safe CMM.Inference.HandleCounter (nextHandleCounter, HasHandleCounter, HandleCounter, freshAnnotatedTypeHelperWithParent)
 import safe CMM.Inference.Preprocess.State.Impl
   ( PreprocessorState(PreprocessorState)
   , cSymbols
@@ -85,18 +84,16 @@ import safe CMM.Inference.Preprocess.State.Impl
   , funcVariables
   , initPreprocessor
   , memberClasses
-  , structElabMembers
   , structInstMembers
   , structMembers
   , typeAliases
   , typeClasses
   , typeConstants
   , typeVariables
-  , variables
+  , variables, Preprocessor
   )
 import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, ConstType))
-
-type Preprocessor = State PreprocessorState
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
@@ -115,60 +112,66 @@ beginUnit collector = do
       (ClassData . SimpleTypeHole)
       classHandles
       ((^. _3) <$> (collector ^. CS.typeClasses))
-  structMembers <~ declVars members
-  structElabMembers <~ declVars members
-  mems <- use structMembers
-  mems `for_` \mem -> do
-    a <- freshTypeHelper Star
-    b <- freshTypeHelper Star
-    let t = makeFunction [AddrType a] $ AddrType b
-    storeFact $
-      forall (Set.fromList $ toTypeVar <$> [a, b]) [mem `typeUnion` t] []
   memberClasses <~ declVars members
+  mems <- declVars members
+  structMembers .= mems
+  mems `for_` \mem -> do
+    let
+      mId = handleId mem
+      makeVar = freshAnnotatedTypeHelperWithParent NoTypeAnnot Star NoType
+    a <- makeVar
+    b <- makeVar
+    let t = makeFunction [a] $ b
+    storeFact $
+      forall (Set.fromList $ toTypeVar <$> [a, b]) [mem `typeUnion` t]
+        [ Fact $ addressKind `kindConstraint` a
+        , Fact $ addressKind `kindConstraint` b
+        , Fact $ b `subConst` a
+        ]
   where
     members = collector ^. CS.structMembers
 
 -- | returns `NoType` on failure
-lookupVar :: Text -> Preprocessor TypeHole
-lookupVar name = lookupVarImpl name <$> use variables
+lookupVar :: GetName n => n -> Preprocessor TypeHole
+lookupVar named = lookupVarImpl named <$> use variables
 
-lookupFVar :: Text -> Preprocessor TypeHole
-lookupFVar name = lookupVarImpl name <$> uses funcVariables pure
+lookupFVar :: GetName n => n -> Preprocessor TypeHole
+lookupFVar named = lookupVarImpl named <$> uses funcVariables pure
 
-lookupSMem :: Text -> Preprocessor TypeHole
-lookupSMem name = lookupVarImpl name <$> uses structMembers pure
+lookupSMem :: GetName n => n -> Preprocessor TypeHole
+lookupSMem named = lookupVarImpl named <$> uses structMembers pure
 
-lookupSIMem :: Text -> Preprocessor TypeHole
-lookupSIMem name = do
+lookupSIMem :: GetName n => n -> Preprocessor TypeHole
+lookupSIMem named = do
   handle <- freshTypeHelper Star
-  structInstMembers %= Map.adjust (handle :) name
+  structInstMembers %= Map.adjust (handle :) (getName named)
   return $ SimpleTypeHole handle
 
-lookupFIVar :: Text -> Preprocessor TypeHole
-lookupFIVar name = do
+lookupFIVar :: GetName n => n -> Preprocessor TypeHole
+lookupFIVar named = do
   handle <- freshTypeHelper Star
-  funcInstVariables %= Map.adjust (handle :) name
+  funcInstVariables %= Map.adjust (handle :) (getName named)
   return $ SimpleTypeHole handle
 
-lookupFEVar :: Text -> Preprocessor TypeHole
-lookupFEVar name = lookupVarImpl name <$> uses funcElabVariables pure
+lookupFEVar :: GetName n => n -> Preprocessor TypeHole
+lookupFEVar named = lookupVarImpl named <$> uses funcElabVariables pure
 
-lookupProc :: Text -> Preprocessor (Maybe TypeHole)
-lookupProc = uses variables . fmap (fmap SimpleTypeHole) . (. last) . Map.lookup
+lookupProc :: GetName n => n -> Preprocessor (Maybe TypeHole)
+lookupProc = uses variables . fmap (fmap SimpleTypeHole) . (. last) . Map.lookup . getName
 
-lookupTCon :: Text -> Preprocessor TypeHole
-lookupTCon name = lookupVarImpl name <$> use typeConstants
+lookupTCon :: GetName n => n -> Preprocessor TypeHole
+lookupTCon named = lookupVarImpl named <$> use typeConstants
 
-lookupTVar :: Text -> Preprocessor TypeHole
-lookupTVar name = lookupVarImpl name <$> use typeVariables
+lookupTVar :: GetName n => n -> Preprocessor TypeHole
+lookupTVar named = lookupVarImpl named <$> use typeVariables
 
-lookupClass :: Text -> Preprocessor TypeHole
-lookupClass name =
-  uses typeClasses $ maybe EmptyTypeHole (^. classHole) . (name `Map.lookup`)
+lookupClass :: GetName n => n -> Preprocessor TypeHole
+lookupClass named =
+  uses typeClasses $ maybe EmptyTypeHole (^. classHole) . (getName named `Map.lookup`)
 
-lookupVarImpl :: Ord k => k -> [Map k TypeHandle] -> TypeHole
-lookupVarImpl name vars =
-  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $ (name `Map.lookup`) <$>
+lookupVarImpl :: GetName n => n -> [Map Text TypeHandle] -> TypeHole
+lookupVarImpl named vars =
+  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $ (getName named `Map.lookup`) <$>
   vars
 
 storeVar :: Text -> Type -> Preprocessor ()
@@ -179,16 +182,16 @@ storeVar name handle = do
 untrivialize :: Map Text TypeHandle -> Preprocessor ()
 untrivialize tCons =
   Map.toList tCons `for_` \(name', handle) ->
-    storeFact $ handle `typeUnion`
-    ComplType (ConstType name' GenericType NoType)
+    storeFacts
+      [ handle `typeUnion`
+        ComplType (ConstType name' GenericType NoType)
+      , getDataKind "" `kindConstraint` handle
+      ]
 
 beginProc :: Text -> CollectorState -> Preprocessor ()
 beginProc name collector = do
   vars <- declVars $ collector ^. CS.variables
   variables %= (vars :)
-  tCons <- declVars $ collector ^. CS.typeConstants
-  untrivialize tCons
-  typeConstants %= (tCons :)
   tAliases <- declVars $ collector ^. CS.typeAliases
   typeAliases %= (tAliases :)
   tVars <- declVars $ collector ^. CS.typeVariables
@@ -206,20 +209,17 @@ openProc :: CollectorState -> Preprocessor ()
 openProc collector = do
   vars' <- declVars $ collector ^. CS.variables
   modifyHead variables (vars' <>)
-  tCons' <- declVars $ collector ^. CS.typeConstants
-  modifyHead typeConstants (tCons' <>)
   tVars' <- declVars $ collector ^. CS.typeVariables
   ~(h:t) <- uses typeVariables reverse
   typeVariables .= reverse ((tVars' <> h) : t)
 
 declVars :: Map Text (SourcePos, TypeKind) -> Preprocessor (Map Text TypeHandle)
 declVars =
-  Map.traverseWithKey (\name (pos, kind) -> freshNamedTypeHandle name pos kind)
+  Map.traverseWithKey (\name (pos, kind) -> freshNamedASTTypeHandle name pos kind)
 
 endProc :: Preprocessor (Facts, TypeHole)
 endProc = do
   variables %= tail
-  typeConstants %= tail
   typeVariables %= init
   h <- popTopFacts
   currentReturn <- getCurrentReturn
@@ -254,9 +254,6 @@ getCurrentReturn = uses currentContext (go . head)
 
 getCtxName :: Preprocessor Text
 getCtxName = uses currentContext (getName . head)
-
-getCtxHandle :: Preprocessor (Maybe TypeHandle)
-getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)
 
 getCtxClassConstraint :: Preprocessor (Text, Type)
 getCtxClassConstraint = uses currentContext go
@@ -336,6 +333,7 @@ pushStruct :: (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
 pushStruct handle mainHandle = do
   tVars <- collectTVars
   pushContext $ StructCtx handle mainHandle
+  storeFact $ forall tVars [snd handle `typeUnion` snd mainHandle] []
 
 pushClass ::
      (Text, TypeHole) -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
@@ -388,9 +386,9 @@ storeTVar :: ToType a => Text -> a -> Preprocessor ()
 storeTVar name handle = use typeVariables >>= storeVarImpl name handle
 
 storeVarImpl ::
-     (ToType a, Ord k) => k -> a -> [Map k TypeHandle] -> Preprocessor ()
-storeVarImpl name handle vars =
-  storeFact $ lookupVarImpl name vars `typeUnion` handle
+     (ToType a, GetName n) => n -> a -> [Map Text TypeHandle] -> Preprocessor ()
+storeVarImpl named handle vars =
+  storeFact $ lookupVarImpl named vars `typeUnion` handle
 
 -- | Stores the given `fact` to the state monad
 class StoreFact a where
@@ -414,22 +412,30 @@ modifyHead place action = do
   place .= action h : t
 
 -- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
-freshNamedTypeHandle ::
+freshNamedASTTypeHandle ::
      HasPos n => Text -> n -> TypeKind -> Preprocessor TypeHandle
-freshNamedTypeHandle name node =
-  freshTypeHandle . TypeNamedAST name $ getPos node
+freshNamedASTTypeHandle name node =
+  freshAnnotatedTypeHelper . TypeNamedAST name $ getPos node
+
+freshNamedTypeHandle ::
+     Text -> TypeKind -> Preprocessor TypeHandle
+freshNamedTypeHandle name =
+  freshAnnotatedTypeHelper $ TypeNamed name
+
+freshNamedNodeTypeHandle ::
+     (HasPos n, GetName n) => n -> TypeKind -> Preprocessor TypeHandle
+freshNamedNodeTypeHandle node =
+  freshAnnotatedTypeHelper . TypeNamedAST (getName node) $ getPos node
 
 freshASTTypeHandle :: HasPos n => n -> TypeKind -> Preprocessor TypeHandle
-freshASTTypeHandle node = freshTypeHandle . TypeAST $ getPos node
+freshASTTypeHandle node = freshAnnotatedTypeHelper . TypeAST $ getPos node
 
 freshTypeHelper :: TypeKind -> Preprocessor TypeHandle
-freshTypeHelper = freshTypeHandle NoTypeAnnot
+freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
-freshTypeHandle :: TypeAnnot -> TypeKind -> Preprocessor TypeHandle
-freshTypeHandle annot tKind = do
-  parent <- fmap handleId <$> getCtxHandle
-  initTypeHandle annot . (\int -> TypeVar int tKind $ fromMaybe noType parent) <$>
-    nextHandleCounter
+freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Preprocessor TypeHandle
+freshAnnotatedTypeHelper annot tKind = do
+  getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
 
 storeCSymbol :: Text -> Preprocessor ()
 storeCSymbol = (cSymbols %=) . (:)

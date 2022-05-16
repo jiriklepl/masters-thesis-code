@@ -37,15 +37,15 @@ import safe CMM.Inference.TypeHandle
   , consting
   , initTypeHandle
   , kinding
-  , typing
+  , typing, handleId
   )
 import safe CMM.Inference.TypeKind (TypeKind)
-import safe CMM.Inference.TypeVar (TypeVar(TypeVar))
+import safe CMM.Inference.TypeVar (TypeVar(TypeVar), typeVarIdLast)
 
 import safe CMM.Err.Error (Error(Error))
 import safe CMM.Err.Severity (Severity(ErrorLevel))
 import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
-import safe CMM.Inference.HandleCounter (nextHandleCounter)
+import safe CMM.Inference.HandleCounter (nextHandleCounter, freshAnnotatedTypeHelperWithParent)
 import safe CMM.Inference.State.Impl
   ( InferencerState(InferencerState)
   , classFacts
@@ -59,17 +59,13 @@ import safe CMM.Inference.State.Impl
   , subConsting
   , subKinding
   , typize
-  , unifs
+  , unifs, Inferencer
   )
 import safe CMM.Inference.Unify.Error (UnificationError)
-
-type Inferencer m = State InferencerState m
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
 
 pushParent :: TypeVar -> Inferencer ()
 pushParent parent = currentParent %= (parent :)
-
-getParent :: Inferencer TypeVar
-getParent = uses currentParent head
 
 popParent :: Inferencer ()
 popParent = currentParent %= tail
@@ -78,14 +74,10 @@ freshTypeHelper :: TypeKind -> Inferencer TypeVar
 freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
 freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Inferencer TypeVar
-freshAnnotatedTypeHelper annot tKind =
-  getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
-
-freshAnnotatedTypeHelperWithParent ::
-     TypeAnnot -> TypeKind -> TypeVar -> Inferencer TypeVar
-freshAnnotatedTypeHelperWithParent annot tKind parent = do
-  tVar <- (\counter -> TypeVar counter tKind parent) <$> nextHandleCounter
-  handlize %= Bimap.insert tVar (initTypeHandle annot tVar)
+freshAnnotatedTypeHelper annot tKind = do
+  handle <- getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
+  let tVar = handleId handle
+  handlize %= Bimap.insert tVar handle
   return tVar
 
 getHandle :: TypeVar -> Inferencer TypeHandle

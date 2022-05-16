@@ -110,6 +110,21 @@ maybeSpacedR = maybe mempty ((<> space) . pretty)
 darrow :: Doc ann
 darrow = "=>"
 
+arrow :: Doc ann
+arrow = "->"
+
+bquote :: Doc ann
+bquote = "`"
+
+bquotes :: Doc ann -> Doc ann
+bquotes = enclose bquote bquote
+
+ddot :: Doc ann
+ddot = ".."
+
+dcolon :: Doc ann
+dcolon = "::"
+
 ifTrue :: Monoid a => Bool -> a -> a
 ifTrue bool x =
   if bool
@@ -163,28 +178,27 @@ instance Pretty (Decl a) where
         "target" <+> hsep (pretty <$> targetDirectives) <> semi
 
 instance Pretty (Class a) where
-  pretty =
-    \case
+  pretty class' =
+    "class" <+> case class' of
       Class [] paraName methods ->
-        "class" <+> pretty paraName <+> bracesBlock methods
+        pretty paraName <+> bracesBlock methods
       Class paraNames paraName methods ->
-        "class" <+>
         commaPretty paraNames <+>
         darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Instance a) where
-  pretty =
-    \case
+  pretty instance' =
+    "instance" <+> case instance' of
       Instance [] paraName methods ->
-        "instance" <+> pretty paraName <+> bracesBlock methods
+        pretty paraName <+> bracesBlock methods
       Instance paraNames paraName methods ->
-        "instance" <+>
         commaPretty paraNames <+>
         darrow <+> pretty paraName <+> bracesBlock methods
 
 instance Pretty (Struct a) where
-  pretty (Struct paraName datums) =
-    "struct" <+> pretty paraName <+> bracesBlock datums
+  pretty = \case
+    Struct paraName datums ->
+      "struct" <+> pretty paraName <+> bracesBlock datums
 
 instance Pretty (param a) => Pretty (ParaName param a) where
   pretty =
@@ -240,18 +254,21 @@ instance Pretty (Init a) where
       Str16Init string -> "unicode" <> parens (dquotes $ pretty string)
 
 instance Pretty (Registers a) where
-  pretty (Registers mKind type_ nameStringPairs) =
-    maybeSpacedR mKind <> pretty type_ <+>
-    commaSep
-      [ pretty name <> maybe mempty ((space <>) . (equals <+>) . pretty) mString
-      | (name, mString) <- nameStringPairs
-      ]
+  pretty = \case
+    Registers mKind type_ nameStringPairs ->
+      maybeSpacedR mKind <> pretty type_ <+>
+      commaSep
+        [ pretty name <> maybe mempty ((space <>) . (equals <+>) . pretty) mString
+        | (name, mString) <- nameStringPairs
+        ]
 
 instance Pretty (Size a) where
-  pretty (Size mExpr) = brackets $ maybe mempty pretty mExpr
+  pretty = \case
+    Size mExpr -> brackets $ maybe mempty pretty mExpr
 
 instance Pretty (Body a) where
-  pretty (Body bodyItems) = bracesBlock bodyItems
+  pretty = \case
+    Body bodyItems -> bracesBlock bodyItems
 
 instance Pretty (BodyItem a) where
   pretty =
@@ -261,34 +278,41 @@ instance Pretty (BodyItem a) where
       BodyStmt stmt -> pretty stmt
 
 instance Pretty (Procedure a) where
-  pretty (Procedure header body) = pretty header <+> pretty body
+  pretty = \case
+    Procedure header body -> pretty header <+> pretty body
 
 instance Pretty (ProcedureDecl a) where
-  pretty (ProcedureDecl header) = pretty header <> semi
+  pretty = \case
+    ProcedureDecl header -> pretty header <> semi
 
 instance Pretty (ProcedureHeader a) where
-  pretty (ProcedureHeader mConv name formals mTypes) =
-    maybeSpacedR mConv <> pretty name <> parens (commaPretty formals) <> ending
-    where
-      ending =
-        case mTypes of
-          Nothing -> mempty
-          Just [] -> mempty <+> "->"
-          Just types -> mempty <+> "->" <+> commaPretty types
+  pretty = \case
+    ProcedureHeader mConv name formals mTypes ->
+      maybeSpacedR mConv <> pretty name <> parens (commaPretty formals) <> ending
+      where
+        ending =
+          case mTypes of
+            Nothing -> mempty
+            Just [] -> mempty <+> arrow
+            Just types -> mempty <+> arrow <+> commaPretty types
 
 instance Pretty (Formal a) where
-  pretty (Formal mKind invar type_ name) =
-    maybeSpacedR mKind <> ifTrue invar ("invariant" <> space) <> pretty type_ <+>
-    pretty name
+  pretty = \case
+    Formal mKind invar type_ name ->
+      maybeSpacedR mKind <> ifTrue invar ("invariant" <> space) <> pretty type_ <+>
+      pretty name
 
 instance Pretty (Actual a) where
-  pretty (Actual mKind expr) = maybeSpacedR mKind <> pretty expr
+  pretty = \case
+    Actual mKind expr -> maybeSpacedR mKind <> pretty expr
 
 instance Pretty Kind where
-  pretty (Kind string) = pretty string
+  pretty = \case
+    Kind string -> pretty string
 
 instance Pretty (StackDecl a) where
-  pretty (StackDecl datums) = "stackdata" <+> bracesBlock datums
+  pretty = \case
+    StackDecl datums -> "stackdata" <+> bracesBlock datums
 
 instance Pretty (Stmt a) where
   pretty stmt =
@@ -339,17 +363,19 @@ instance Pretty (Stmt a) where
         parens (commaPretty actuals) <> hsep (pretty <$> flows) <> semi
 
 instance Pretty (KindName a) where
-  pretty (KindName mKind name) = maybeSpacedR mKind <> pretty name
+  pretty = \case
+    KindName mKind name -> maybeSpacedR mKind <> pretty name
 
 instance Pretty (Arm a) where
-  pretty (Arm ranges body) =
-    "case" <+> commaPretty ranges <> colon <+> pretty body
+  pretty = \case
+    Arm ranges body ->
+      "case" <+> commaPretty ranges <> colon <+> pretty body
 
 instance Pretty (Range a) where
   pretty =
     \case
       Range left Nothing -> pretty left
-      Range left (Just right) -> pretty left <+> ".." <+> pretty right
+      Range left (Just right) -> pretty left <+> ddot <+> pretty right
 
 instance Pretty (LValue a) where
   pretty =
@@ -391,33 +417,35 @@ instance Pretty (Expr a) where
   pretty =
     \case
       LitExpr lit mType ->
-        pretty lit <> maybe mempty ((space <>) . ("::" <+>) . pretty) mType
+        pretty lit <> maybe mempty ((space <>) . (dcolon <+>) . pretty) mType
       LVExpr lvalue -> pretty lvalue
       ParExpr expr -> parens $ pretty expr
       BinOpExpr op left right -> pretty left <+> prettyOp op <+> pretty right
-        where prettyOp AddOp = "+"
-              prettyOp SubOp = "-"
-              prettyOp MulOp = "*"
-              prettyOp DivOp = "/"
-              prettyOp ModOp = "%"
-              prettyOp AndOp = "&"
-              prettyOp OrOp = "|"
-              prettyOp XorOp = "^"
-              prettyOp ShLOp = "<<"
-              prettyOp ShROp = ">>"
-              prettyOp EqOp = "=="
-              prettyOp NeqOp = "!="
-              prettyOp GtOp = ">"
-              prettyOp LtOp = "<"
-              prettyOp GeOp = ">="
-              prettyOp LeOp = "<="
       ComExpr expr -> "~" <> pretty expr
       NegExpr expr -> "-" <> pretty expr
       InfixExpr name left right ->
-        pretty left <+> "`" <> pretty name <> "`" <+> pretty right
+        pretty left <+> bquotes (pretty name) <+> pretty right
       PrefixExpr name actuals ->
         "%" <> pretty name <> parens (commaPretty actuals)
-      MemberExpr expr field -> pretty expr <> "->" <> pretty field
+      MemberExpr expr field -> pretty expr <> arrow <> pretty field
+    where
+      prettyOp = \case
+        AddOp -> "+"
+        SubOp -> "-"
+        MulOp -> "*"
+        DivOp -> "/"
+        ModOp -> "%"
+        AndOp -> "&"
+        OrOp -> "|"
+        XorOp -> "^"
+        ShLOp -> "<<"
+        ShROp -> ">>"
+        EqOp -> "=="
+        NeqOp -> "!="
+        GtOp -> ">"
+        LtOp -> "<"
+        GeOp -> ">="
+        LeOp -> "<="
 
 instance Pretty (Lit a) where
   pretty =

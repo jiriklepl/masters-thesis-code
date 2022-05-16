@@ -6,6 +6,7 @@ import safe Data.Function ((.))
 import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe)
 import safe GHC.Err (error)
 import safe Text.Show (Show)
+import safe Data.Functor ( Functor(fmap) )
 
 import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
@@ -41,3 +42,6 @@ safeHoleHandle =
 
 holeId :: TypeHole -> TypeVar
 holeId = handleId . holeHandle
+
+safeHoleId :: TypeHole -> Maybe TypeVar
+safeHoleId = fmap handleId . safeHoleHandle

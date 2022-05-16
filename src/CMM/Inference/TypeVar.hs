@@ -28,6 +28,9 @@ data TypeVar
       }
   deriving (Show, Data)
 
+typeVarIdLast :: TypeKind -> TypeVar -> Int -> TypeVar
+typeVarIdLast kind parent int = TypeVar int kind parent
+
 class FromTypeVar a where
   fromTypeVar :: TypeVar -> a
 

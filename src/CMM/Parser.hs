@@ -546,7 +546,7 @@ lvalue = withSourcePos $ try lvRef <|> lvName
 
 lvRef :: ULocParser LValue
 lvRef =
-  liftA3 LVRef type' (symbol L.LBracket *> expr) (optional asserts) <*
+  liftA3 LVRef (optional type') (symbol L.LBracket *> expr) (optional asserts) <*
   symbol L.RBracket
 
 lvName :: ULocParser LValue

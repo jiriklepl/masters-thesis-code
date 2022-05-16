@@ -88,7 +88,7 @@ unifyLax tVar@TypeVar {} tVar'@TypeVar {}
 unifyLax tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
 unifyMany ::
-     (Unify a b1, Apply a b2, Apply (Map TypeVar b2) b1)
+     (Unify a b1, Apply a b2, Apply (Map TypeVar b2) b1, Apply b2 b2)
   => [UnificationError]
   -> [a]
   -> [a]
@@ -97,7 +97,8 @@ unifyMany msg = go mempty
   where
     go subst (x:xs) (y:ys) = do
       (subst', z) <- apply subst x `unify` apply subst y
-      (_2 %~ (z :)) <$> go (subst' `apply` subst) xs ys
+      (subst'', zs) <- go (subst' `apply` subst) xs ys
+      return (subst'' `apply` subst, apply subst'' z : zs)
     go subst [] [] = pure (subst, [])
     go _ _ _ = Left msg
 
@@ -122,11 +123,11 @@ unifyCompl t t' =
     (FunctionType args ret, FunctionType args' ret') -> do
       (subst, args'') <- unifyMany msg args args'
       (subst', ret'') <- apply subst ret `unify` apply subst ret'
-      return (subst' `apply` subst, FunctionType args'' ret'')
+      return (subst' `apply` subst, FunctionType (apply subst' <$> args'') ret'')
     (AppType app arg, AppType app' arg') -> do
       (subst, app'') <- app `unify` app'
       (subst', arg'') <- apply subst arg `unify` apply subst arg'
-      return (subst' `apply` subst, AppType app'' arg'')
+      return (subst' `apply` subst, AppType (subst' `apply` app'') arg'')
     (AddrType addr, AddrType addr') -> (_2 %~ AddrType) <$> unify addr addr'
     _
       | t == t' -> return (mempty, t)
@@ -138,12 +139,12 @@ instance Unify PrimType TypeVar where
   unify = unifyCompl
 
 instance Unify Type Type where
-  unify (ErrorType text) (ErrorType text') =
+  ErrorType text `unify` ErrorType text' =
     Left [GotErrorType text, GotErrorType text']
-  unify (ErrorType text) _ = Left [GotErrorType text]
-  unify _ (ErrorType text) = Left [GotErrorType text]
-  unify t t'
+  ErrorType text `unify` _ = Left [GotErrorType text]
+  _ `unify` ErrorType text = Left [GotErrorType text]
+  t `unify` t'
     | t == t' = Right (mempty, t)
-  unify (VarType tVar) t' = bind tVar t'
-  unify t (VarType tVar') = bind tVar' t
-  unify (ComplType t) (ComplType t') = (_2 %~ ComplType) <$> unifyCompl t t'
+  VarType tVar `unify` t' = bind tVar t'
+  t `unify` VarType tVar' = bind tVar' t
+  ComplType t `unify` ComplType t' = (_2 %~ ComplType) <$> unifyCompl t t'

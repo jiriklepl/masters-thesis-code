@@ -11,6 +11,9 @@ import safe Data.Monoid (Monoid(mempty))
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
+import safe Control.Monad.State ( State )
+import safe Control.Lens.Getter ( uses )
+import safe Data.List ( head )
 
 import safe CMM.Data.Bimap (Bimap)
 import safe CMM.Data.Bounds (Bounds)
@@ -26,6 +29,7 @@ import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
+import CMM.Inference.GetParent ( GetParent(getParent) )
 
 data InferencerState =
   InferencerState
@@ -80,3 +84,8 @@ globalTVar :: TypeVar
 globalTVar = NoType
 
 makeFieldsNoPrefix ''InferencerState
+
+type Inferencer = State InferencerState
+
+instance GetParent Inferencer where
+  getParent = uses currentParent head

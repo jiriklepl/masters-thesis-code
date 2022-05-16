@@ -22,7 +22,8 @@ data TypeAnnot
   = NoTypeAnnot
   | TypeInst TypeVar
   | TypeAST SourcePos
-  | TypeNamedAST Text SourcePos
+  | TypeNamed Text
+  | TypeNamedAST Text SourcePos -- TODO: delete this one
   | TypeBuiltIn Text
   | MultiAnnot (Set TypeAnnot)
   deriving (Eq, Ord, Show, Data)

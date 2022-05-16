@@ -6,7 +6,7 @@ module CMM.AST.Flattener where
 
 import safe Control.Applicative (Applicative(pure), liftA2)
 import safe Control.Monad (Monad(return), sequence)
-import safe Control.Monad.State.Lazy (MonadState(get, put), evalState)
+import safe Control.Monad.State (get, put, evalState, State)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
 import safe Data.Int (Int)
@@ -34,6 +34,7 @@ import safe CMM.Data.Num (Num((+)))
 import safe CMM.Utils (addPrefix)
 import safe CMM.Data.Generics ( (*|*) )
 
+-- | Flattens the given AST node, more specifically nested blocks
 flatten :: forall a n . (Data (n a), Typeable a) => n a -> n a
 flatten = go
   where
@@ -42,20 +43,22 @@ flatten = go
     flattenBody :: Body a -> Body a
     flattenBody (Body bodyItems) = Body $ evalState (flattenBodyItems bodyItems) 0
 
+-- | Creates a `Name` from a `String` with `flattenerPrefix`
 helperName :: String -> Name a
 helperName = Name . addPrefix flattenerPrefix . T.pack
 
 flattenerPrefix :: Text
 flattenerPrefix = "F"
 
-fresh :: MonadState Int m => m Int
+-- | Generates a fresh integer
+fresh :: State Int Int
 fresh = do
   num <- get
   put $ num + 1
   return num
 
 class FlattenBodyItems n where
-  flattenBodyItems :: MonadState Int m => [n a] -> m [Annot BodyItem a]
+  flattenBodyItems :: [n a] -> State Int [Annot BodyItem a]
 
 instance FlattenBodyItems (Annot Body) where
   flattenBodyItems [] = pure []
@@ -63,7 +66,7 @@ instance FlattenBodyItems (Annot Body) where
     liftA2 (++) (flattenBodyItems bodyItems) (flattenBodyItems bodies)
 
 class FlattenStmt n where
-  flattenStmt :: MonadState Int m => n a -> m [Annot BodyItem a]
+  flattenStmt ::  n a -> State Int [Annot BodyItem a]
 
 instance FlattenBodyItems (Annot BodyItem) where
   flattenBodyItems [] = pure []

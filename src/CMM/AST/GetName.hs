@@ -2,7 +2,7 @@
 
 module CMM.AST.GetName where
 
-import safe Data.Function (($))
+import safe Data.Function (($), id)
 import safe Data.List ((++))
 import safe Data.Maybe (Maybe(Just))
 import safe Data.Text (Text)
@@ -38,6 +38,9 @@ import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
 class GetName n where
   getName :: n -> Text
+
+instance GetName Text where
+  getName = id
 
 instance GetName (Name a) where
   getName =

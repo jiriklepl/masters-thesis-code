@@ -308,7 +308,7 @@ instance (ASTmapCTX3 hint a b Asserts Expr Type, Space hint a b Name) =>
   astMapM _ f =
     \case
       LVName a -> LVName <$> f a
-      LVRef a b c -> liftA3 LVRef (f a) (f b) (traverse f c)
+      LVRef a b c -> liftA3 LVRef (traverse f a) (f b) (traverse f c)
 
 instance ASTmapCTX1 hint a b Name => ASTmap hint Flow a b where
   astMapM _ f =

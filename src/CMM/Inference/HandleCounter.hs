@@ -9,6 +9,13 @@ import safe Control.Monad (Monad((>>)))
 import safe Control.Monad.State (MonadState)
 import safe Data.Int (Int)
 import safe Data.Monoid (Sum(getSum))
+import safe Data.Function ( (.) )
+import safe Data.Functor ( (<$>) )
+
+import safe CMM.Inference.TypeAnnot ( TypeAnnot )
+import safe CMM.Inference.TypeKind ( TypeKind )
+import safe CMM.Inference.TypeVar ( TypeVar, typeVarIdLast )
+import safe CMM.Inference.TypeHandle ( initTypeHandle, TypeHandle )
 
 type HandleCounter = Sum Int
 
@@ -27,3 +34,9 @@ setHandleCounter counter = handleCounter .= counter
 
 nextHandleCounter :: (MonadState s m, HasHandleCounter s a) => m Int
 nextHandleCounter = handleCounter += 1 >> getHandleCounter
+
+freshAnnotatedTypeHelperWithParent :: (MonadState s m,
+ HasHandleCounter s HandleCounter) =>
+  TypeAnnot -> TypeKind -> TypeVar -> m TypeHandle
+freshAnnotatedTypeHelperWithParent annot tKind parent =
+  initTypeHandle annot . typeVarIdLast tKind parent <$> nextHandleCounter

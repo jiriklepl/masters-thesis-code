@@ -105,6 +105,9 @@ cradle:
     - path: "src/CMM/Data/Tuple.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Data/Zippable.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Err/Error.hs"
       component: "Compiler:exe:Compiler"
 
@@ -136,6 +139,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/FreeTypeVars.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/GetParent.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/HandleCounter.hs"
