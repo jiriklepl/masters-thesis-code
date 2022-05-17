@@ -7,7 +7,7 @@ import safe Control.Lens.TH (makeLenses)
 
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Setter ((.~), (%~))
-import safe Control.Lens.Tuple
+import safe Control.Lens.Tuple ( Field1(_1), Field2(_2) )
 import Data.Eq (Eq)
 import Data.Foldable (Foldable(foldMap))
 import Data.Function (($), (.))
@@ -28,10 +28,10 @@ import Text.Show (Show)
 import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Type (Type)
-import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
+import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Monomorphize.Schematized (Schematized)
-import CMM.Inference.Subst
-import CMM.Inference.TypeVar
+import safe CMM.Inference.Subst ( Apply(apply) )
+import safe CMM.Inference.TypeVar ( TypeVar )
 
 newtype PolyGenerate =
   PolyGenerate

@@ -3,7 +3,6 @@
 
 -- TODO: add kinds and constnesses where they make sense
 -- TODO: all types of things inside procedures should be subtypes of the return type
--- TODO: StackDecl?
 module CMM.Inference.Preprocess where
 
 import safe Control.Applicative (Applicative((<*), pure), liftA2)
@@ -119,7 +118,7 @@ import safe CMM.Inference.Preprocess.Context (Context(StructCtx))
 import safe CMM.Inference.Preprocess.HasTypeHole
   ( HasTypeHole(getTypeHole)
   , WithTypeHole(withTypeHole)
-  , getTypeHoleId, getSafeTypeHoleId
+  , getTypeHoleId
   )
 import safe CMM.Inference.Preprocess.State as Infer
   ( Preprocessor

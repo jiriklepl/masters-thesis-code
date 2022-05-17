@@ -47,7 +47,7 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (snd, swap, uncurry)
-import safe GHC.Err (undefined, error)
+import safe GHC.Err (undefined)
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))

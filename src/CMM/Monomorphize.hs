@@ -15,7 +15,7 @@ import safe Data.Foldable (fold)
 import safe Data.Function ((&))
 import safe Data.Functor ((<&>))
 import safe qualified Data.Map as Map
-import safe Data.Maybe (catMaybes, fromJust)
+import safe Data.Maybe (catMaybes, fromJust, fromMaybe)
 import safe qualified Data.PartialOrd as PartialOrd
 import safe qualified Data.Set as Set
 import safe Data.Traversable (for)
@@ -58,7 +58,7 @@ import safe CMM.Control.Applicative (liftA5)
 import safe CMM.Control.Monad ((>>@=))
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Either (oneRight)
-import safe CMM.Data.Nullable (nullVal)
+import safe CMM.Data.Nullable (nullVal, Fallbackable ((??)))
 import safe CMM.Data.Tuple (submergeTuple)
 import safe CMM.Inference (simplify)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
@@ -646,7 +646,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Expr Expr a where
       InfixExpr {} -> undefined
       PrefixExpr {} -> undefined
       MemberExpr expr' field -> case getTypeHole a of
-        MethodTypeHole handle scheme inst ->
+        MethodTypeHole _ scheme inst ->
           getTypeHandleIdPolyKind subst scheme >>= \case
             Poly -> do
               expr'' <- monomorphize subst expr'
@@ -713,29 +713,63 @@ monomorphizePolyType ::
   -> Monomorphized n a
   -> Inferencer (MonomorphizeError `Either` Monomorphized Schematized a)
 monomorphizePolyType scheme inst mono =
-  case scheme `Map.lookup` getPolyMethods (view polyMethods mono) of
-    Nothing -> monomorphizePolyTypeInner scheme inst mono
-    Just set -> do
+  fromMaybe fallback $ monomorphizeMethod scheme inst mono ?? monomorphizeField (handleId scheme) (handleId inst) mono
+  where fallback = monomorphizeMethodInner scheme inst mono
+
+monomorphizeMethod :: (HasPos a, HasTypeHole a) =>
+  TypeHandle
+  -> TypeHandle
+  -> Monomorphized n a
+  -> Maybe (Inferencer
+      (MonomorphizeError `Either` Monomorphized Schematized a))
+monomorphizeMethod scheme inst mono =
+  go <$> Map.lookup scheme (getPolyMethods $ view polyMethods mono)
+  where
+    go set = do
       set' <-
-        Set.toList set `for` \item -> monomorphizePolyTypeInner item inst mono
+        Set.toList set `for` \item -> monomorphizeMethodInner item inst mono
       return $ first undefined $ oneRight set'
 
-monomorphizePolyTypeInner ::
+monomorphizeField :: (HasPos a, HasTypeHole a) =>
+  TypeVar
+  -> TypeVar
+  -> Monomorphized n a
+  -> Maybe (Inferencer
+      (MonomorphizeError `Either` Monomorphized Schematized a))
+monomorphizeField scheme inst mono =
+  go <$> Map.lookup scheme (getPolyData $ view polyData mono)
+  where
+    go map = do
+      map' <-
+        Map.toList map `for` \(item, struct) -> monomorphizeFieldInner item inst struct mono
+      return $ first undefined $ oneRight map'
+
+monomorphizeFieldInner ::
+     (HasPos a, HasTypeHole a)
+  => TypeVar
+  -> TypeVar
+  -> TypeVar
+  -> Monomorphized n a
+  -> Inferencer (MonomorphizeError `Either` Monomorphized Schematized a)
+monomorphizeFieldInner scheme inst struct mono = do
+  scheme' <- reconstructOld scheme
+  inst' <- reconstructOld inst
+  error $ show scheme <> "\n" <> show inst <> "\n" <> show scheme' <> "\n" <> show inst'
+
+monomorphizeMethodInner ::
      (HasPos a, HasTypeHole a)
   => TypeHandle
   -> TypeHandle
   -> Monomorphized n a
   -> Inferencer (MonomorphizeError `Either` Monomorphized Schematized a)
-monomorphizePolyTypeInner scheme inst mono = do
+monomorphizeMethodInner scheme inst mono = do
   scheme' <- reconstructOld $ handleId scheme
   inst' <- reconstructOld $ handleId inst
   case ComplType (AddrType scheme') `unify` inst' of
     Left err -> do
       unifs' <- use unifs
-      let x = getPolyData $ view polyData (renewPolyData unifs' mono)
-      let y = view polySchemes mono
-      z <- reconstructOld (TypeVar  9 Star NoType) >>= simplify >>= getHandle
-      return $ Left $ error (show x <> "\n" <> show (void y) <> "\n" <> show scheme' <> "\n" <> show z <> "\n" <> show inst')
+      let x = view polyData $ renewPolyData unifs' mono
+      return $ Left $ error (show scheme <> "\n" <> show inst <> "\n" <> show x <> "\n" <> show scheme' <> "\n" <> show inst')
     Right (subst, _) ->
       case scheme `Map.lookup` view polySchemes mono of
         Just (_, schematized) ->

@@ -9,11 +9,10 @@ import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%=), (<>=))
 import safe Control.Monad (Functor(fmap), Monad((>>=), return))
-import safe Control.Monad.State (State)
 import safe Data.Foldable (fold)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
-import safe Data.List (head, tail)
+import safe Data.List (tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
@@ -40,12 +39,12 @@ import safe CMM.Inference.TypeHandle
   , typing, handleId
   )
 import safe CMM.Inference.TypeKind (TypeKind)
-import safe CMM.Inference.TypeVar (TypeVar(TypeVar), typeVarIdLast)
+import safe CMM.Inference.TypeVar (TypeVar)
 
 import safe CMM.Err.Error (Error(Error))
 import safe CMM.Err.Severity (Severity(ErrorLevel))
 import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
-import safe CMM.Inference.HandleCounter (nextHandleCounter, freshAnnotatedTypeHelperWithParent)
+import safe CMM.Inference.HandleCounter (freshAnnotatedTypeHelperWithParent)
 import safe CMM.Inference.State.Impl
   ( InferencerState(InferencerState)
   , classFacts

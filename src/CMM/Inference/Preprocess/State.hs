@@ -13,7 +13,7 @@ import safe Control.Lens.Setter ((%=), (.=), (<~))
 import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad (Functor((<$), fmap), Monad((>>=), return))
-import safe Control.Monad.State.Lazy (MonadState, State)
+import safe Control.Monad.State.Lazy (MonadState)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (Foldable(foldr), for_, traverse_)
@@ -22,7 +22,7 @@ import safe Data.Functor ((<$>))
 import safe Data.List (head, init, last, reverse, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Nothing), fromMaybe, maybe)
+import safe Data.Maybe (Maybe(Nothing), maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
@@ -46,34 +46,32 @@ import safe CMM.Inference.Fact
   , makeApplication
   , makeFunction
   , tupleKind
-  , typeUnion, kindConstraint, regularExprConstraint, subConst
+  , typeUnion, kindConstraint, subConst
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
   ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx)
   )
-import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, MethodTypeHole, SimpleTypeHole)
   , holeHandle
-  , safeHoleHandle
+
   )
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
 import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST, TypeNamed)
   )
-import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
+import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeKind (TypeKind(GenericType, Star))
 import safe CMM.Inference.TypeVar
   ( ToTypeVar(toTypeVar)
-  , TypeVar(NoType, TypeVar, tVarId)
-  , noType, typeVarIdLast
+
+  , noType, TypeVar (NoType, tVarId)
   )
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
-
 import safe CMM.AST.Variables.State (CollectorState)
 import safe qualified CMM.AST.Variables.State as CS
-import safe CMM.Inference.HandleCounter (nextHandleCounter, HasHandleCounter, HandleCounter, freshAnnotatedTypeHelperWithParent)
+import safe CMM.Inference.HandleCounter (freshAnnotatedTypeHelperWithParent)
 import safe CMM.Inference.Preprocess.State.Impl
   ( PreprocessorState(PreprocessorState)
   , cSymbols
@@ -92,7 +90,7 @@ import safe CMM.Inference.Preprocess.State.Impl
   , typeVariables
   , variables, Preprocessor
   )
-import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, ConstType))
+import safe CMM.Inference.TypeCompl (TypeCompl(ConstType))
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
 
 noCurrentReturn :: TypeHole
@@ -116,12 +114,9 @@ beginUnit collector = do
   mems <- declVars members
   structMembers .= mems
   mems `for_` \mem -> do
-    let
-      mId = handleId mem
-      makeVar = freshAnnotatedTypeHelperWithParent NoTypeAnnot Star NoType
-    a <- makeVar
-    b <- makeVar
-    let t = makeFunction [a] $ b
+    a <- freshTypeHelper Star
+    b <- freshTypeHelper Star
+    let t = makeFunction [a] b
     storeFact $
       forall (Set.fromList $ toTypeVar <$> [a, b]) [mem `typeUnion` t]
         [ Fact $ addressKind `kindConstraint` a
