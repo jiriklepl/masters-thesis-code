@@ -1,4 +1,3 @@
-
 @ECHO OFF
 
 MKDIR examples\out 2>nul
