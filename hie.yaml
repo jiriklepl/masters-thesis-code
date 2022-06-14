@@ -102,7 +102,13 @@ cradle:
     - path: "src/CMM/Data/OrderedBounds.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Data/Trilean.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Data/Tuple.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Data/Way.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Data/Zippable.hs"

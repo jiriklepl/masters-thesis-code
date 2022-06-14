@@ -12,24 +12,12 @@
 		},
 		"files.insertFinalNewline": true,
 		"files.trimTrailingWhitespace": true,
-		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--(\\s*\\|)?)\\s*($TAGS)|^\\s*- \\[( |~)\\]|undefined)",
+		"todo-tree.regex.regex": "((//|#|<!--|;|/\\*|^|--(\\s*\\|)?)\\s*[|^]?\\s*($TAGS)|^\\s*- \\[( |~)\\]|undefined)",
 		"todo-tree.general.tags": [
 			"BUG",
 			"HACK",
 			"FIXME",
 			"TODO"
-		],
-		"bracketPairColorizer.consecutivePairColors": [
-			"()",
-			"[]",
-			"{}",
-			[
-				"Khaki",
-				"Orchid",
-				"LightSkyBlue",
-				"darkorange"
-			],
-			"Red"
 		],
 		"cSpell.words": [
 			"accum",
@@ -60,6 +48,7 @@
 			"Datas",
 			"dcolon",
 			"ddot",
+			"Deps",
 			"deref",
 			"dioid",
 			"dquotes",
@@ -118,6 +107,7 @@
 			"subtyping",
 			"succ",
 			"targs",
+			"Trilean",
 			"Trivials",
 			"typize",
 			"udiv",
