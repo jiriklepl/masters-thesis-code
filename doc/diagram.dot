@@ -1,38 +1,50 @@
 digraph {
     node [style="filled"]
 
-    subgraph ends {
-        node [shape="ellipse"]
+    subgraph terminals {
+        node [shape="ellipse", fillcolor="lightblue"]
 
-        Source [fillcolor="lightblue"]
-        LLVM [fillcolor="lightblue"]
+        Source [label="CHMMM source"]
+        LLVM [label="LLVM code"]
     }
 
     subgraph data {
         node [shape="parallelogram"]
 
-        AST [fillcolor="lightgreen"]
-        Facts [label="Type facts", fillcolor="lightgreen"]
-        Variables [label="Variables", fillcolor="lightgreen"]
-        ASTTypeHandles [label="AST\nwith type handles", fillcolor="lightgreen"]
-        Judgments [label="Type Judgments", fillcolor="lightgreen"]
-        FlatAST [label="Flat AST", fillcolor="lightgreen"]
-        BlockifiedAST [label="Blockified AST", fillcolor="lightgreen"]
-        BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow", fillcolor="lightgreen"]
-        MonoAST [label="Monomophized AST", fillcolor="yellow"]
+        subgraph greenData {
+            node [fillcolor="lightgreen"]
+
+            AST
+            Facts [label="Type facts"]
+            Variables [label="Variables"]
+            ASTTypeHoles [label="AST\nwith type holes"]
+            Judgments [label="Type Judgments"]
+            FlatAST [label="Flat AST"]
+            BlockifiedAST [label="Blockified AST"]
+            BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow"]
+        }
+
+        MonoAST [label="Monomorphized AST", fillcolor="yellow"]
     }
 
     subgraph components {
         node [shape="component"]
 
-        Parser [fillcolor="lightgreen"]
-        Flattener [fillcolor="lightgreen"]
-        InferPre [label="Type inference\npreprocessing", fillcolor="lightgreen"]
-        VariableMining [label="Variables collection", fillcolor="lightgreen"]
+        subgraph greenComponents {
+            node [fillcolor="lightgreen"]
+
+            FunDepSimpl [label="Functional dependencies\nsimplifier"]
+            AnnotMining  [label="Annotation mining"]
+            Parser
+            Flattener
+            InferPre [label="Type inference\npreprocessing"]
+            VariableMining [label="Variables collection\n(repeated)"]
+            Blockifier
+            FlowAnalysis [label="Flow analysis"]
+        }
+
         Infer [label="Type inference", fillcolor="yellow"]
-        Blockifier [fillcolor="lightgreen"]
-        FlowAnalysis [label="Flow analysis", fillcolor="lightgreen"]
-        Monomorphization [fillcolor="orange"]
+        Monomorphization [fillcolor="yellow"]
         Translator [fillcolor="yellow"]
     }
 
@@ -43,7 +55,9 @@ digraph {
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
     AST -> VariableMining -> Variables -> InferPre
-    AST -> InferPre -> { Facts ASTTypeHandles } -> Infer -> Judgments -> Monomorphization
+    AST -> InferPre -> { Facts ASTTypeHoles }
+    Facts -> { FunDepSimpl AnnotMining }
+    { FunDepSimpl ASTTypeHoles AnnotMining } -> Infer -> Judgments -> Monomorphization
     FlatAST -> Blockifier -> BlockifiedAST
     BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
     BlockifiedASTAnnots -> Monomorphization -> MonoAST
