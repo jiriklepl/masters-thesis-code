@@ -43,9 +43,13 @@ digraph {
             FlowAnalysis [label="Flow analysis"]
         }
 
-        Infer [label="Type inference", fillcolor="yellow"]
-        Monomorphization [fillcolor="yellow"]
-        Translator [fillcolor="yellow"]
+        subgraph yellowComponents {
+            node [fillcolor="yellow"]
+
+            Infer [label="Type inference"]
+            Monomorphization
+            Translator
+        }
     }
 
     subgraph decisions {
