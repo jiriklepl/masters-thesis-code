@@ -147,6 +147,9 @@ cradle:
     - path: "src/CMM/Inference/FreeTypeVars.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Inference/FunDeps.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Inference/GetParent.hs"
       component: "Compiler:exe:Compiler"
 
