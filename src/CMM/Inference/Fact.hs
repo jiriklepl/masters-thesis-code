@@ -26,6 +26,7 @@ import safe CMM.Inference.TypeCompl
   )
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind, setTypeKind))
 import safe CMM.Inference.TypeVar (TypeVar)
+import safe CMM.Data.Trilean ( Trilean )
 
 infix 6 :=>
 
@@ -47,23 +48,41 @@ instance HasTypeKind a => HasTypeKind (Scheme a) where
   getTypeKind (_ :. t) = getTypeKind t
   setTypeKind kind (tVars :. t) = tVars :. setTypeKind kind t
 
+-- | Flat fact is a non-nested fact that specifies some constraints on type inference
 data FlatFact a
-  = SubType a a -- supertype; subtype
-  | Union a a -- binds the type to a type
-  | ClassUnion a a -- binds the type to a type
-  | InstanceUnion a a -- binds the type to a type
-  | Typing a a -- states that the type follows a certain typing
-  | KindBounds (Bounds (Ordered DataKind)) a -- lower bound on the kind of the type variable
-  | ConstnessBounds (Bounds Constness) a -- lower bound on the constness of the type variable
-  | OnRegister Text a -- states that the type variable stores its data to a certain register
-  | SubKind a a -- superKind; subKind
-  | SubConst a a -- superConst; subConst
-  | InstType a a -- polytype; monotype
+  = SubType a a
+  -- ^ TODO supertype; subtype
+  | Union a a
+  -- ^ TODO binds the type to a type
+  | ClassUnion a a
+  -- ^ TODO binds the type to a type
+  | InstanceUnion a a
+  -- ^ TODO binds the type to a type
+  | Typing a a
+  -- ^ states that the type follows a certain typing
+  | KindBounds (Bounds (Ordered DataKind)) a
+  -- ^ lower bound on the kind of the type variable
+  | ConstnessBounds (Bounds Constness) a
+  -- ^ lower bound on the constness of the type variable
+  | OnRegister Text a
+  -- ^ states that the type variable stores its data to a certain register
+  | SubKind a a
+  -- ^ TODO superKind; subKind
+  | SubConst a a
+  -- ^ TODO superConst; subConst
+  | InstType a a
+  -- ^ TODO polytype; monotype
   | ClassConstraint Text a
+  -- ^ TODO
   | ClassFact Text a
+  -- ^ TODO
   | ClassDetermine Text a
+  -- ^ TODO
+  | ClassFunDeps Text [[Trilean]]
+  -- ^ False = from, True = to, Unknown = invariant
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data)
 
+-- | A nested fact that specifies constraints on type inference, typically used for schemes
 data NestedFact a
   = Fact (FlatFact a)
   | NestedFact (Scheme [NestedFact a])

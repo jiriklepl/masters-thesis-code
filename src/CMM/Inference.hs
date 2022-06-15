@@ -150,6 +150,7 @@ import safe CMM.Inference.TypeVar
   )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
+import safe CMM.Data.Way ( Way(Backward, Forward, Both) )
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -535,7 +536,7 @@ reduceOne (fact:facts) =
              (apply subst <$> facts')) <>
             facts
     Fact (ClassDetermine name t) ->
-      uses classFacts (name `Map.lookup`) >>= \case
+      uses classFacts (name `Map.lookup`) >>= \case -- TODO: Map.lookup perhaps too strong
         Nothing -> skip
         Just tVars -> do
           tVar <- simplify t
@@ -917,10 +918,6 @@ collectCounts = foldr countIn mempty
         undefined -- TODO: logic error
       _ -> id
 
-data Way
-  = Forward
-  | Both
-
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]
 collectPairs way handles from = pairs <&> both %~ \i -> varMap Map.! i
   where
@@ -933,11 +930,12 @@ collectPairs way handles from = pairs <&> both %~ \i -> varMap Map.! i
     pairs =
       case way of
         Forward -> [(v, v') | v <- vs, v' <- vs, v /= v', Graph.path graph v v']
+        Backward -> [(v, v') | v <- vs, v' <- vs, v /= v', Graph.path graph v' v]
         Both ->
           [ (v, v')
           | v <- vs
           , v' <- vs
-          , v < v'
+          , v < v' -- this is to prevent duplication
           , Graph.path graph v v'
           , Graph.path graph v' v
           ]

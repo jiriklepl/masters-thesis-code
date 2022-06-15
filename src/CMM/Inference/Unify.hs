@@ -6,10 +6,10 @@ import safe Control.Applicative (Applicative(pure), (<$>))
 import safe Control.Lens ((%~))
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad (Functor(fmap), Monad(return))
-import safe Data.Bool (not, otherwise)
-import safe Data.Either (Either(Left, Right))
+import safe Data.Bool (not, otherwise, Bool)
+import safe Data.Either (Either(Left, Right), isRight)
 import safe Data.Eq (Eq((/=), (==)))
-import safe Data.Function ((.))
+import safe Data.Function ((.), ($), flip)
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
 import safe Data.Maybe (Maybe(Just, Nothing))
@@ -40,29 +40,53 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Unify.Error
   ( UnificationError(BadKind, GotErrorType, Mismatch, Occurs)
   )
+import safe CMM.Data.Way (Way(Backward, Both, Forward), otherWay)
+
+unify :: Unify a b =>
+     a
+  -> a
+  -> Either [UnificationError] (Subst b, a)
+unify = unifyDirected Both
+
+unifiable :: Unify a b => a -> a -> Bool
+unifiable = (isRight .) . unify
+
+instanceOf :: Unify a b => a -> a -> Bool
+inst `instanceOf` scheme = isRight $ unifyDirected Forward inst scheme
+
+schemeOf :: Unify a b => a -> a -> Bool
+schemeOf = flip instanceOf
+
+-- | unifies two type variables ignoring their type kinds
+unifyLax :: TypeVar
+  -> TypeVar
+  -> Either [UnificationError] (Map TypeVar TypeVar, TypeVar)
+unifyLax = unifyLaxDirected Both
 
 class Unify a b | a -> b where
-  unify :: a -> a -> Either [UnificationError] (Subst b, a)
+  unifyDirected :: Way -> a -> a -> Either [UnificationError] (Subst b, a)
 
-bind :: TypeVar -> Type -> Either [UnificationError] (Subst Type, Type)
-bind tVar@TypeVar {} (VarType tVar') =
-  (_1 %~ fmap toType) . (_2 %~ toType) <$> unify tVar tVar'
-bind tVar@TypeVar {} t'
+bind :: Way -> TypeVar -> Type -> Either [UnificationError] (Subst Type, Type)
+bind Backward tVar t' = Left [toType tVar `unifyMismatch` t']
+bind way tVar@TypeVar {} (VarType tVar') =
+  (_1 %~ fmap toType) . (_2 %~ toType) <$> unifyDirected way tVar tVar'
+bind _ tVar@TypeVar {} t'
   | not (tVar `Set.member` freeTypeVars t') =
     if matchKind tVar t'
       then Right (Map.singleton tVar t', t')
       else Left [BadKind (VarType tVar) t']
   | otherwise = Left [Occurs tVar t']
-bind tVar t = Left [toType tVar `unifyMismatch` t]
+bind _ tVar t' = Left [toType tVar `unifyMismatch` t']
 
 unifyMismatch :: Type -> Type -> UnificationError
 unifyMismatch = Mismatch "Types are not unifiable"
 
 instance Unify TypeVar TypeVar where
-  unify tVar@TypeVar {tVarKind = kind} tVar'@TypeVar {tVarKind = kind'}
+  unifyDirected way tVar@TypeVar {tVarKind = kind} tVar'@TypeVar {tVarKind = kind'}
     | not (matchKind tVar tVar') = Left [BadKind (VarType tVar) (VarType tVar')]
-    | otherwise = improve <$> tVar `unifyLax` tVar'
+    | otherwise = improve <$> tVar `unifyLax'` tVar'
     where
+      unifyLax' = unifyLaxDirected way
       kind'' = kind `combineTypeKind` kind'
       improve pair@(subst, tVar''@TypeVar {tVarKind = kind'''})
         | kind''' /= kind'' =
@@ -71,32 +95,40 @@ instance Unify TypeVar TypeVar where
               , tVar''')
         | otherwise = pair
       improve (_, NoType) = undefined -- TODO: logic error
-  unify tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
+  unifyDirected _ tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
-unifyLax ::
-     TypeVar
+unifyLaxDirected ::
+     Way
+  -> TypeVar
   -> TypeVar
   -> Either [UnificationError] (Map TypeVar TypeVar, TypeVar)
-unifyLax tVar@TypeVar {} tVar'@TypeVar {}
+unifyLaxDirected way tVar@TypeVar {} tVar'@TypeVar {}
+  | way == Forward = forward
+  | way == Backward = backward
   | tVar == tVar' = Right (mempty, tVar')
   | familyDepth tVar > familyDepth tVar' =
-    Right (Map.singleton tVar tVar', tVar')
+    forward
   | familyDepth tVar < familyDepth tVar' =
-    Right (Map.singleton tVar' tVar, tVar)
-  | tVar > tVar' = Right (Map.singleton tVar tVar', tVar')
-  | otherwise = Right (Map.singleton tVar' tVar, tVar)
-unifyLax tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
+    backward
+  | tVar > tVar' = forward
+  | otherwise = backward
+  where
+    forward = Right (Map.singleton tVar tVar', tVar')
+    backward = Right (Map.singleton tVar' tVar, tVar)
+unifyLaxDirected _ tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
 unifyMany ::
      (Unify a b1, Apply a b2, Apply (Map TypeVar b2) b1, Apply b2 b2)
-  => [UnificationError]
+  => Way
+  -> [UnificationError]
   -> [a]
   -> [a]
   -> Either [UnificationError] (Map TypeVar b2, [a])
-unifyMany msg = go mempty
+unifyMany way msg = go mempty
   where
+    unify' = unifyDirected way
     go subst (x:xs) (y:ys) = do
-      (subst', z) <- apply subst x `unify` apply subst y
+      (subst', z) <- apply subst x `unify'` apply subst y
       (subst'', zs) <- go (subst' `apply` subst) xs ys
       return (subst'' `apply` subst, apply subst'' z : zs)
     go subst [] [] = pure (subst, [])
@@ -114,37 +146,39 @@ unifyFold = go mempty
 
 unifyCompl ::
      (Apply b b, Apply a b, Unify a b, Eq a, ToType a)
-  => TypeCompl a
+  => Way
+  -> TypeCompl a
   -> TypeCompl a
   -> Either [UnificationError] (Map TypeVar b, TypeCompl a)
-unifyCompl t t' =
-  case (t, t') of
-    (TupleType ts, TupleType ts') -> (_2 %~ TupleType) <$> unifyMany msg ts ts'
-    (FunctionType args ret, FunctionType args' ret') -> do
-      (subst, args'') <- unifyMany msg args args'
-      (subst', ret'') <- apply subst ret `unify` apply subst ret'
+unifyCompl way t t'
+  | TupleType ts <- t, TupleType ts' <- t' = (_2 %~ TupleType) <$> ts `unifyMany'` ts'
+  | FunctionType args ret <- t,  FunctionType args' ret' <- t' = do
+      (subst, args'') <- args `unifyMany'` args'
+      (subst', ret'') <- apply subst ret `unify'` apply subst ret'
       return (subst' `apply` subst, FunctionType (apply subst' <$> args'') ret'')
-    (AppType app arg, AppType app' arg') -> do
-      (subst, app'') <- app `unify` app'
-      (subst', arg'') <- apply subst arg `unify` apply subst arg'
+  | AppType app arg <- t, AppType app' arg' <- t' = do
+      (subst, app'') <- app `unify'` app'
+      (subst', arg'') <- apply subst arg `unify'` apply subst arg'
       return (subst' `apply` subst, AppType (subst' `apply` app'') arg'')
-    (AddrType addr, AddrType addr') -> (_2 %~ AddrType) <$> unify addr addr'
-    _
-      | t == t' -> return (mempty, t)
-      | otherwise -> Left msg
+  | AddrType addr <- t, AddrType addr' <- t' = (_2 %~ AddrType) <$> unify' addr addr'
+  | t == t' = return (mempty, t)
+  | otherwise = Left msg
   where
+    unifyMany' = unifyMany way msg
+    unify' = unifyDirected way
     msg = [toType t `unifyMismatch` toType t']
 
 instance Unify PrimType TypeVar where
-  unify = unifyCompl
+  unifyDirected = unifyCompl
 
 instance Unify Type Type where
-  ErrorType text `unify` ErrorType text' =
-    Left [GotErrorType text, GotErrorType text']
-  ErrorType text `unify` _ = Left [GotErrorType text]
-  _ `unify` ErrorType text = Left [GotErrorType text]
-  t `unify` t'
+  unifyDirected way t t'
+    | ErrorType text <- t, ErrorType text' <- t' =
+      Left [GotErrorType text, GotErrorType text']
+    | ErrorType text <- t = Left [GotErrorType text]
+    | ErrorType text <- t' = Left [GotErrorType text]
     | t == t' = Right (mempty, t)
-  VarType tVar `unify` t' = bind tVar t'
-  t `unify` VarType tVar' = bind tVar' t
-  ComplType t `unify` ComplType t' = (_2 %~ ComplType) <$> unifyCompl t t'
+    | way /= Backward, VarType tVar <- t = bind way tVar t'
+    | way /= Forward, VarType tVar' <- t' = bind (otherWay way) tVar' t
+    | ComplType tCompl <- t,  ComplType tCompl' <- t' = (_2 %~ ComplType) <$> unifyCompl way tCompl tCompl'
+    | otherwise = Left [t `unifyMismatch` t']

@@ -11,7 +11,7 @@ import safe Data.Ord (Ord)
 import safe Data.Traversable (Traversable)
 import safe Text.Show (Show)
 
--- | Annotation used as a wrapper for nodes, can contain `SourcePos`, for example
+-- | Annotation used as a wrapper for nodes, can contain 'SourcePos', for example
 data Annotation node annot =
   Annot (node annot) annot
   deriving (Show, Foldable, Traversable, Functor, Data)
@@ -20,7 +20,7 @@ deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
 
 deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
 
--- | see `Annotation`
+-- | see 'Annotation'
 type Annot = Annotation
 
 -- | Annotates a node with the given annotation

@@ -21,7 +21,7 @@ import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Scheme)
-import CMM.Inference.HandleCounter
+import safe CMM.Inference.HandleCounter
   ( HandleCounter
   , HasHandleCounter(handleCounter)
   )
@@ -29,7 +29,8 @@ import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import CMM.Inference.GetParent ( GetParent(getParent) )
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
+import safe CMM.Data.Trilean ( Trilean )
 
 data InferencerState =
   InferencerState
@@ -55,6 +56,10 @@ data InferencerState =
     -- ^ TODO
     , _classFacts :: Map Text (Set TypeVar)
     -- ^ TODO
+    , _funDeps :: Map Text [[Trilean]]
+    -- ^ TODO
+    , _funFacts :: Map (Text, [Trilean]) (Scheme Type)
+    -- ^ TODO
     , _schemes :: Map TypeVar (Scheme Type)
     -- ^ TODO
     , _currentParent :: [TypeVar]
@@ -75,6 +80,8 @@ initInferencer =
     , _handleCounter = mempty
     , _classSchemes = mempty
     , _classFacts = mempty
+    , _funDeps = mempty
+    , _funFacts = mempty
     , _errorState = mempty
     , _schemes = mempty
     , _currentParent = [globalTVar]
