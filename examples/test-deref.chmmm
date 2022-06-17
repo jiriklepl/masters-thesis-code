@@ -1,0 +1,6 @@
+f (x) -> bits32 {
+    auto y;
+    y = [x];
+
+    return (y);
+}
