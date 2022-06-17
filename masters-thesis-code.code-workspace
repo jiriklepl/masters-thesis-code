@@ -94,6 +94,7 @@
 			"polytype",
 			"ppllvm",
 			"preds",
+			"prepended",
 			"preprocess",
 			"prettyprinter",
 			"regs",

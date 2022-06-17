@@ -75,6 +75,7 @@ executable Compiler
                        CMM.Data.Bounded,
                        CMM.Data.Bounds,
                        CMM.Data.Bounds.Impl,
+                       CMM.Data.Church,
                        CMM.Data.Dioid,
                        CMM.Data.Either,
                        CMM.Data.Float,
