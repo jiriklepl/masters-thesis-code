@@ -384,7 +384,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Datum Datum a where
   monomorphizeImpl subst a datum = case datum of
     Datum {} -> do
       case getTypeHole a of
-        MemberTypeHole struct insts schemes' ->
+        MemberTypeHole struct _ insts schemes' ->
           getTypeHandleIdPolyKind subst (holeHandle $ getTypeHole a) >>= \case
             Absurd -> undefined
             _ -> do
@@ -394,7 +394,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Datum Datum a where
           getTypeHandleIdPolyKind subst handle >>= \case
             Mono -> succeed success
             Poly -> undefined
-            Absurd -> error . show $ getPos a
+            Absurd -> error . show $ getPos a -- TODO
         _ -> undefined -- TODO this
     _ -> succeed success
     where
@@ -752,8 +752,8 @@ monomorphizeFieldInner ::
   -> Monomorphized n a
   -> Inferencer (MonomorphizeError `Either` Monomorphized Schematized a)
 monomorphizeFieldInner scheme inst struct mono = do
-  scheme' <- reconstructOld scheme
-  inst' <- reconstructOld inst
+  scheme' <- fromOldName scheme >>= getTyping
+  inst' <- fromOldName inst >>= getTyping
   error $ show scheme <> "\n" <> show inst <> "\n" <> show scheme' <> "\n" <> show inst'
 
 monomorphizeMethodInner ::

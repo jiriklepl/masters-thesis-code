@@ -58,7 +58,7 @@ data InferencerState =
     -- ^ TODO
     , _funDeps :: Map Text [[Trilean]]
     -- ^ TODO
-    , _funFacts :: Map (Text, [Trilean]) (Scheme Type)
+    , _funFacts :: Map Text [Scheme Type]
     -- ^ TODO
     , _schemes :: Map TypeVar (Scheme Type)
     -- ^ TODO

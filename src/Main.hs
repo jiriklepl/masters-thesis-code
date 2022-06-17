@@ -6,7 +6,7 @@ import Control.Lens.Getter (view)
 import Control.Monad.State as State (Monad(return), runState)
 import Data.Either (Either(..), either)
 import Data.Function (($), (.), id)
-import Data.List (head)
+import Data.List (head, reverse)
 import Data.Monoid (Monoid(mempty))
 import GHC.Err (undefined)
 
@@ -87,7 +87,7 @@ main = do
   let (msg, inferencer) =
         (`runState` InferState.initInferencer) $ do
           setHandleCounter $ view handleCounter miner
-          let fs = head $ view CMM.Inference.Preprocess.State.facts miner
+          let fs = reverse . head $ view CMM.Inference.Preprocess.State.facts miner
           mineAST mined
         -- liftIO $ print fs
           void $ reduce fs

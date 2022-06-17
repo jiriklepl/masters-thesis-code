@@ -10,10 +10,11 @@ import safe Data.Functor (Functor(fmap))
 import safe Data.Ord (Ord)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
+import safe Data.List ( foldl', reverse )
 
 import safe CMM.AST.Annot (Annot, takeAnnot)
 import safe CMM.Data.Nullable (Fallbackable((??)))
-import safe CMM.Inference.TypeCompl (TypeCompl)
+import safe CMM.Inference.TypeCompl (TypeCompl (AppType))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
   , TypeKind(GenericType)
@@ -62,3 +63,18 @@ instance ToType TypeVar where
 
 instance ToType a => ToType (TypeCompl a) where
   toType = ComplType . fmap toType
+
+makeAppType :: ToType a => a -> a -> Type
+makeAppType f a = ComplType $ toType f `AppType` toType a
+
+foldApp :: [Type] -> Type
+foldApp = \case
+  t:ts -> foldl' ((ComplType .) . AppType) t ts
+  [] -> ErrorType "Illegal type fold"
+
+unfoldApp :: Type -> [Type]
+unfoldApp = reverse . go
+  where
+    go = \case
+      ComplType (AppType l r) -> r : go l
+      t -> [t]

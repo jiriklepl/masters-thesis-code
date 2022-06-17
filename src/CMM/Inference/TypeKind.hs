@@ -15,6 +15,8 @@ import safe Text.Show (Show(show))
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Utils (backQuote)
 
+infixr 6 :->
+
 data TypeKind
   = Star
   | Constraint

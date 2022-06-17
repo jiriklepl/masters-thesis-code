@@ -1,26 +1,30 @@
 {-# LANGUAGE Safe #-}
 
 module CMM.Inference.FunDeps where
-import safe Data.Bool (Bool, bool, otherwise)
+import safe Data.Bool (Bool, otherwise, bool)
 import safe qualified Data.Bool as B
-import safe CMM.Data.Trilean (Trilean, trilean, toBool, fromBool)
+import safe Data.Foldable ( or )
+import safe Data.Function ( ($), (.), const, id )
+import safe Data.Functor ( Functor(fmap), (<$>) )
+import safe Data.List ( (++), sortOn, zipWith )
+import safe Data.Tuple ()
+import safe Data.Tuple.Extra ( first3, thd3 )
+import safe Data.Eq ( Eq((==)) )
+import safe Data.Int ( Int )
+
+import safe CMM.Data.Num ( Num((-)) )
+import safe CMM.Data.Trilean (Trilean, trilean)
 import safe qualified CMM.Data.Trilean as T
-import Data.Foldable
-import Data.Function
-import Data.Functor
-import Data.List
-import Data.Tuple
-import Data.Tuple.Extra
-import CMM.Data.List
-import Data.Eq
-import CMM.Data.Num
-import Data.Int
+import safe CMM.Data.List ( count )
 
 subsetOf :: [Bool] -> [Bool] -> Bool
 subsetOf (B.True:_) (B.False:_) = B.False
 subsetOf (_:rest) (_:others) = subsetOf rest others
 subsetOf [] _ = B.True
 subsetOf xs [] = B.not $ or xs
+
+combineRules :: [Trilean] -> [Trilean] -> [Trilean]
+combineRules = zipWith (T.||)
 
 ruleFrom :: Functor f => f Trilean -> f Bool
 ruleFrom =
@@ -97,18 +101,29 @@ weaken (rule:rules) bonus
   | ruleTo rule `subsetOf` closure' = weaken rules bonus
   | otherwise = weaken rules (rule:bonus)
   where
-    closure' = closure rules (ruleFrom rule)
+    closure' = closure (rules ++ bonus) (ruleFrom rule)
 
 compose :: [[Trilean]] -> [[Trilean]]
 compose (rule:rules@(otherRule:otherRules))
   | ruleFrom rule == ruleFrom otherRule =
-    compose $ zipWith (T.||) rule otherRule : otherRules
+    compose $ combineRules rule otherRule : otherRules
   | otherwise = rule : compose rules
 compose rules = rules
 
-funDepsSimplify :: [[Trilean]] -> [[Trilean]]
-funDepsSimplify original = compose sorted
+generalize :: [[Trilean]] -> [[Trilean]] -> [[Trilean]]
+generalize [] bonus = bonus
+generalize allRules@(rule:rules) bonus
+  | newTo `subsetOf` ruleTo rule = go rule
+  | otherwise = go $ fmap (bool T.False T.True) newTo `combineRules` rule
   where
+    go = generalize rules . (:bonus)
+    newTo = zipWith (B.&&) closure' (B.not <$> ruleFrom rule)
+    closure' = closure (allRules ++ bonus) (ruleFrom rule)
+
+funDepsSimplify :: [[Trilean]] -> [[Trilean]]
+funDepsSimplify original = generalize composed []
+  where
+    composed = compose sorted
     sorted = sortOn onFrom weakened
     onFrom = (trilean T.False T.Unknown T.Unknown <$>)
     weakened = weaken strengthened []

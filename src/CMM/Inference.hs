@@ -16,7 +16,7 @@ import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
 import safe Data.Eq (Eq((/=), (==)))
 import safe Data.Foldable (Foldable (foldl'), for_, traverse_)
-import safe Data.Function (($), (.), flip, id)
+import safe Data.Function (($), (.), flip, id, const)
 import safe Data.Functor (Functor((<$), fmap), ($>), (<$>), (<&>), void)
 import safe Data.Generics.Aliases (extT)
 import safe Data.Graph (SCC(AcyclicSCC, CyclicSCC), stronglyConnCompR)
@@ -33,7 +33,7 @@ import safe Data.List
   , or
   , partition
   , unzip
-  , zip
+  , zip, zip3, zipWith
   )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
@@ -45,9 +45,10 @@ import safe Data.Semigroup (Semigroup((<>)))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Traversable (Traversable(traverse))
+import safe Data.Traversable (Traversable(traverse), for)
 import safe Data.Tuple (snd, swap, uncurry)
-import safe GHC.Err (undefined)
+import safe Data.String (fromString)
+import safe GHC.Err (undefined, error)
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
@@ -70,7 +71,7 @@ import safe CMM.Inference.Fact
   , Facts
   , FlatFact(ClassConstraint, ClassDetermine, ClassFact,
          ConstnessBounds, InstType, KindBounds, OnRegister, SubConst,
-         SubKind, SubType, Typing, Union)
+         SubKind, SubType, Typing, Union, ClassFunDeps)
   , FlatFacts
   , NestedFact(Fact, NestedFact)
   , Qual((:=>))
@@ -78,7 +79,7 @@ import safe CMM.Inference.Fact
   , subConst
   , subKind
   , typeConstraint
-  , typeUnion
+  , typeUnion, classConstraint
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
@@ -118,7 +119,7 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
-  , unifs
+  , unifs, addFunDeps, fieldClassPrefix, funDeps, funFacts, trileanSeq
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -128,7 +129,7 @@ import safe CMM.Inference.Subst
   )
 import safe CMM.Inference.Type
   ( ToType(toType)
-  , Type(ComplType, ErrorType, VarType)
+  , Type(ComplType, ErrorType, VarType), unfoldApp, foldApp
   )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
 import safe CMM.Inference.TypeCompl
@@ -143,14 +144,22 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeKind (getTypeKind)
+import safe CMM.Inference.TypeKind (getTypeKind, TypeKind (GenericType))
 import safe CMM.Inference.TypeVar
   ( TypeVar(NoType, TypeVar, tVarId, tVarParent)
   , predecessor
   )
-import safe CMM.Inference.Unify (unify, unifyFold, unifyLax)
+import safe CMM.Inference.Unify (unify, unifyFold, unifyLax, instanceOf)
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import safe CMM.Data.Way ( Way(Backward, Forward, Both) )
+import safe CMM.Utils
+    ( addPrefix, getPrefix, hasPrefix, splitName )
+
+
+import safe Text.Show ( Show(show) )
+import CMM.Inference.FunDeps
+import qualified CMM.Data.Trilean as T
+import CMM.Data.Trilean (trilean)
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -235,7 +244,7 @@ mineAST = traverse_ (addHandles . getTypeHole)
         LVInstTypeHole handle hole -> addHandle handle *> addHandles hole
         MethodTypeHole handle handle' handle'' ->
           addHandle handle *> addHandle handle' *> addHandle handle''
-        MemberTypeHole handle handles handles' ->
+        MemberTypeHole handle _ handles handles' ->
           addHandle handle *> traverse_ addHandle handles *>
           traverse_ addHandle handles'
 
@@ -513,17 +522,41 @@ reduceOne (fact:facts) =
         Right (subst, _) -> unifs %= (subst `apply`)
       _ <- fixAll
       fixFacts facts >>= continueWith
-    Fact (ClassConstraint name t) ->
-      uses classSchemes (name `Map.lookup`) >>= \case
-        Nothing -> skip
-        Just (tVars :. facts' :=> tVar', _) -> do
-          tVar <- simplify t
-          subst <- refresher tVars
-          continueWith $
-            (Fact <$> ClassDetermine name (toType tVar) :
-             typeUnion tVar (subst `apply` tVar') :
-             (apply subst <$> facts')) <>
-            facts
+    Fact (ClassConstraint name t)
+      | hasPrefix name, getPrefix name == fieldClassPrefix ->
+        uses funDeps (name `Map.lookup`) >>= \case
+          Nothing -> undefined -- TODO: logic error
+          Just rules -> continueWith $ fmap go rules <> facts
+            where go rule = Fact $ classConstraint (fromString (trileanSeq rule) `addPrefix` name) t
+      | (_:s:_:_) <- splitName name, s == fieldClassPrefix ->
+        uses funFacts (name `Map.lookup`) >>= \case
+          Nothing -> skip
+          Just schemes' -> do
+            tVar <- simplify t
+            tType <- getTyping tVar
+            let
+              go = \case
+                (tVars :. fs :=> t'):others
+                  | tType `instanceOf` t' -> do
+                    subst <- refresher tVars
+                    let freshT = subst `apply` t'
+                        newFacts = typeUnion tVar freshT : (apply subst <$> fs)
+                    continueWith $ fmap Fact newFacts <> facts
+                  | otherwise -> go others
+                [] -> skipWith . Fact $ classConstraint name tVar
+            go schemes'
+          Just _ -> undefined -- TODO: logic error
+      | otherwise ->
+        uses classSchemes (name `Map.lookup`) >>= \case
+          Nothing -> skip
+          Just (tVars :. facts' :=> tVar', _) -> do
+            tVar <- simplify t
+            subst <- refresher tVars
+            continueWith $
+              (Fact <$> ClassDetermine name (toType tVar) :
+              typeUnion tVar (subst `apply` tVar') :
+              (apply subst <$> facts')) <>
+              facts
     Fact (ClassFact name t) ->
       uses classSchemes (name `Map.lookup`) >>= \case
         Nothing -> skip
@@ -565,26 +598,49 @@ reduceOne (fact:facts) =
           name
           (tVars' :. flattenFacts nesteds :=> t', mempty) -- TODO: error
       continue
-    NestedFact (tVars :. [ClassFact name t] :=> nesteds) -> do
-      uses classSchemes (name `Map.lookup`) >>= \case
-        Nothing -> skip
-        Just (scheme@(tVars'' :. facts'' :=> t''), consts) -> do
-          t' <- uses unifs (`apply` t)
-          tVars' <- uses unifs $ (`Set.map` tVars) . apply
-          subst <- refresher tVars''
-          classSchemes %=
-            Map.insert
-              name
-              (scheme, (tVars' :. flattenFacts nesteds :=> t') : consts)
-          continueWith $
-            (Fact <$> typeUnion t' (subst `apply` t'') : flattenFacts nesteds <>
-             reverseFacts (apply subst <$> facts'')) <>
-            facts
+    NestedFact (tVars :. [ClassFact name t] :=> nesteds)
+      | hasPrefix name, getPrefix name == fieldClassPrefix -> do
+        uses funDeps (name `Map.lookup`) >>= \case
+           Nothing -> skip
+           Just rules -> do
+            traverse_ go rules
+            continue
+            where
+              class': args = unfoldApp t
+              go rule = do
+                  tVars' <- const (freshTypeHelperWithHandle GenericType) `traverse` rule
+                  let t' = foldApp $
+                        class' : zipWith
+                          (uncurry chooseArg)
+                          (zip args (toType <$> tVars'))
+                          rule
+                      fs = zipWith typeUnion tVars' args
+                  funFacts %= Map.insertWith (<>) (fromString (trileanSeq rule) `addPrefix` name) [Set.fromList tVars' :. fs :=> t']
+              chooseArg arg tVar = trilean arg tVar tVar
+      | otherwise -> do
+        uses classSchemes (name `Map.lookup`) >>= \case
+          Nothing -> skip
+          Just (scheme@(tVars'' :. facts'' :=> t''), consts) -> do
+            t' <- uses unifs (`apply` t)
+            tVars' <- uses unifs $ (`Set.map` tVars) . apply
+            subst <- refresher tVars''
+            classSchemes %=
+              Map.insert
+                name
+                (scheme, (tVars' :. flattenFacts nesteds :=> t') : consts)
+            continueWith $
+              (Fact <$> typeUnion t' (subst `apply` t'') : flattenFacts nesteds <>
+              reverseFacts (apply subst <$> facts'')) <>
+              facts
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceOne nesteds
       (_1 %~ (|| changed)) <$>
         skipWith (NestedFact (tVars :. facts' :=> nesteds'))
-    Fact _ -> skip
+    Fact InstType {} -> skip
+    Fact (ClassFunDeps name rules) -> do
+      addFunDeps name rules
+      continue
+    Fact _ -> error $ "unknown fact: " <> show fact --TODO
   where
     skip = skipWith fact
     skipWith fact' = (_2 %~ (fact' :)) <$> reduceOne facts

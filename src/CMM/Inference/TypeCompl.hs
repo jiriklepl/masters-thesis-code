@@ -122,4 +122,17 @@ toLam =
     NoType -> undefined -- logic error
     TypeVar int kind parent -> LamType int kind parent
 
+-- | Transforms the two given `Type`s into a function `Type`
+makeFunction :: [a] -> a -> TypeCompl a
+makeFunction = FunctionType
+
+-- | Transforms the given list of `Type`s into a tuple `Type` (there are special cases for an empty list and for a singleton)
+makeTuple :: [a] -> TypeCompl a
+makeTuple = TupleType
+
+infixl `makeApplication`
+
+makeApplication :: a -> a -> TypeCompl a
+makeApplication = AppType
+
 type PrimType = TypeCompl TypeVar

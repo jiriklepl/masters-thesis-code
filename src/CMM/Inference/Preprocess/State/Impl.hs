@@ -41,7 +41,6 @@ data PreprocessorState =
     , _typeClasses :: Map Text ClassData
     , _structMembers :: Map Text TypeHandle
     , _structInstMembers :: Map Text [TypeHandle]
-    , _memberClasses :: Map Text TypeHandle
     , _facts :: [Facts]
     , _cSymbols :: [Text]
     , _currentContext :: [Context]
@@ -61,7 +60,6 @@ initPreprocessor =
     , _typeClasses = mempty
     , _structMembers = mempty
     , _structInstMembers = mempty
-    , _memberClasses = mempty
     , _facts = [mempty]
     , _cSymbols = mempty
     , _currentContext = [GlobalCtx]

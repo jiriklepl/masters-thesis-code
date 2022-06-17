@@ -28,6 +28,8 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Tuple (snd, uncurry)
+import safe Data.Bifunctor ( Bifunctor(bimap, second) )
+
 import safe GHC.Err (error)
 
 import safe CMM.AST.GetName (GetName(getName))
@@ -36,17 +38,13 @@ import safe CMM.Inference.BuiltIn (constraintWitness, getConstType, getDataKind,
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
-  , FlatFact
+  , FlatFact (ClassFunDeps)
   , NestedFact(Fact)
-  , classConstraint
-  , classFact
   , constExprConstraint
   , forall
   , instType
-  , makeApplication
-  , makeFunction
   , tupleKind
-  , typeUnion, kindConstraint, subConst
+  , typeUnion, kindConstraint, subConst, classFact, classConstraint
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
@@ -62,7 +60,7 @@ import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST, TypeNamed)
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
-import safe CMM.Inference.TypeKind (TypeKind(GenericType, Star))
+import safe CMM.Inference.TypeKind (TypeKind(GenericType, Star, (:->), Constraint))
 import safe CMM.Inference.TypeVar
   ( ToTypeVar(toTypeVar)
 
@@ -72,6 +70,11 @@ import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 import safe CMM.AST.Variables.State (CollectorState)
 import safe qualified CMM.AST.Variables.State as CS
 import safe CMM.Inference.HandleCounter (freshAnnotatedTypeHelperWithParent)
+import safe CMM.Inference.TypeCompl (TypeCompl(ConstType), makeFunction, makeApplication)
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
+import safe qualified CMM.Data.Trilean as T
+import safe CMM.Inference.State (fieldClassHelper)
+
 import safe CMM.Inference.Preprocess.State.Impl
   ( PreprocessorState(PreprocessorState)
   , cSymbols
@@ -81,7 +84,6 @@ import safe CMM.Inference.Preprocess.State.Impl
   , funcInstVariables
   , funcVariables
   , initPreprocessor
-  , memberClasses
   , structInstMembers
   , structMembers
   , typeAliases
@@ -90,8 +92,6 @@ import safe CMM.Inference.Preprocess.State.Impl
   , typeVariables
   , variables, Preprocessor
   )
-import safe CMM.Inference.TypeCompl (TypeCompl(ConstType))
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
@@ -110,7 +110,12 @@ beginUnit collector = do
       (ClassData . SimpleTypeHole)
       classHandles
       ((^. _3) <$> (collector ^. CS.typeClasses))
-  memberClasses <~ declVars members
+  memberClasses <-
+    declVars . Map.fromAscList $ bimap fieldClassHelper (second $ \_ -> Star :-> Star :-> Constraint) <$> Map.toAscList members
+  let memberClassData = (`ClassData` mempty) . SimpleTypeHole <$> memberClasses
+  typeClasses %= (`Map.union` memberClassData)
+  Map.keys memberClasses `for_` \name ->
+    storeFact (ClassFunDeps name [[T.False, T.True]] :: FlatFact Type)
   mems <- declVars members
   structMembers .= mems
   mems `for_` \mem -> do
@@ -319,6 +324,7 @@ popTypeVariables :: Preprocessor ()
 popTypeVariables = do
   typeVariables %= init
 
+-- TODO: renew in all context where used
 collectTVars :: Preprocessor (Set TypeVar)
 collectTVars =
   uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
@@ -389,8 +395,8 @@ storeVarImpl named handle vars =
 class StoreFact a where
   storeFact :: a -> Preprocessor ()
 
-instance StoreFact (FlatFact Type) where
-  storeFact fact = pushToHead facts $ Fact fact
+instance ToType a => StoreFact (FlatFact a) where
+  storeFact fact = pushToHead facts . Fact $ toType <$> fact
 
 instance StoreFact Fact where
   storeFact = pushToHead facts

@@ -20,7 +20,7 @@ import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Inference.Constness (Constness(ConstExpr, LinkExpr, Regular))
 import safe CMM.Inference.DataKind (DataKind(FunctionKind, TupleKind))
-import safe CMM.Inference.Type (ToType(toType), Type)
+import safe CMM.Inference.Type (ToType(toType), Type (ComplType))
 import safe CMM.Inference.TypeCompl
   ( TypeCompl(AppType, FunctionType, TupleType)
   )
@@ -79,7 +79,7 @@ data FlatFact a
   | ClassDetermine Text a
   -- ^ TODO
   | ClassFunDeps Text [[Trilean]]
-  -- ^ False = from, True = to, Unknown = invariant
+  -- ^ TODO: False = from, True = to, Unknown = invariant
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data)
 
 -- | A nested fact that specifies constraints on type inference, typically used for schemes
@@ -93,17 +93,6 @@ type FlatFacts = [FlatFact Type]
 type Fact = NestedFact Type
 
 type Facts = [Fact]
-
--- | Transforms the two given `Type`s into a function `Type`
-makeFunction :: [a] -> a -> TypeCompl a
-makeFunction = FunctionType
-
--- | Transforms the given list of `Type`s into a tuple `Type` (there are special cases for an empty list and for a singleton)
-makeTuple :: [a] -> TypeCompl a
-makeTuple = TupleType
-
-makeApplication :: a -> a -> TypeCompl a
-makeApplication = AppType
 
 forall :: Set TypeVar -> FlatFacts -> Facts -> Fact
 forall s fs f

@@ -15,12 +15,15 @@ import safe Data.Functor ((<$>))
 import safe Data.List (tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
+import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe, isJust)
 import safe Data.Monoid ((<>))
 import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Traversable (Traversable(traverse))
+import safe Data.Text (Text)
+import safe Data.Bool ( Bool )
+import safe Data.String ( String )
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
@@ -40,13 +43,20 @@ import safe CMM.Inference.TypeHandle
   )
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar)
-
 import safe CMM.Err.Error (Error(Error))
 import safe CMM.Err.Severity (Severity(ErrorLevel))
 import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
 import safe CMM.Inference.HandleCounter (freshAnnotatedTypeHelperWithParent)
+import safe CMM.Inference.Unify.Error (UnificationError)
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
+import safe CMM.Data.Trilean ( Trilean, trilean )
+import safe CMM.Inference.FunDeps ( funDepsSimplify )
+import safe CMM.Utils ( addPrefix )
+
 import safe CMM.Inference.State.Impl
   ( InferencerState(InferencerState)
+  , funDeps
+  , funFacts
   , classFacts
   , classSchemes
   , constingBounds
@@ -58,10 +68,19 @@ import safe CMM.Inference.State.Impl
   , subConsting
   , subKinding
   , typize
-  , unifs, Inferencer
+  , unifs, Inferencer, funDeps
   )
-import safe CMM.Inference.Unify.Error (UnificationError)
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
+
+fieldClassHelper :: Text -> Text
+fieldClassHelper = addPrefix fieldClassPrefix
+
+fieldClassPrefix :: Text
+fieldClassPrefix = "HasField"
+
+trileanSeq :: [Trilean] -> String
+trileanSeq = \case
+  t:others -> trilean 'F' 'U' 'T' t : trileanSeq others
+  [] -> []
 
 pushParent :: TypeVar -> Inferencer ()
 pushParent parent = currentParent %= (parent :)
@@ -137,6 +156,16 @@ pushSubConst handle handle' =
 pushKindBounds :: TypeHandle -> Bounds DataKind -> Inferencer ()
 pushKindBounds handle bounds =
   kindingBounds %= Map.insertWith (<>) (handle ^. kinding) bounds
+
+addFunDeps :: Text -> [[Trilean]] -> Inferencer ()
+addFunDeps name rules =
+  funDeps %= Map.insert name (funDepsSimplify rules)
+
+hasFunDeps :: Text -> Inferencer Bool
+hasFunDeps = fmap isJust . getFunDeps
+
+getFunDeps :: Text -> Inferencer (Maybe [[Trilean]])
+getFunDeps = uses funDeps . Map.lookup
 
 pushConstBounds :: TypeHandle -> Bounds Constness -> Inferencer ()
 pushConstBounds handle bounds =

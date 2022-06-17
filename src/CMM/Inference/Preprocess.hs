@@ -12,11 +12,11 @@ import safe Control.Lens.Tuple (_2)
 import safe Control.Monad (Monad((>>=), return), (>=>), zipWithM, zipWithM_)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (for_, traverse_, Foldable (foldl'))
+import safe Data.Foldable (for_, traverse_, Foldable (foldl'), concat)
 import safe Data.Function (($), (.))
 import safe Data.Functor (Functor(fmap), (<$>), (<&>), (<$))
 import safe Data.Int (Int)
-import safe Data.List (elem, head, unzip, zip)
+import safe Data.List (elem, head, unzip, zip, unzip3)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), fromJust)
 import safe Data.Monoid ((<>))
@@ -26,6 +26,7 @@ import safe Data.Traversable (Traversable(traverse), for)
 import safe Data.Tuple (snd, uncurry)
 import safe GHC.Err (undefined)
 import safe Text.Show (Show(show))
+import safe Data.Tuple.Extra (fst3, uncurry3)
 
 import safe CMM.AST as AST
   ( Actual(Actual)
@@ -102,8 +103,6 @@ import safe CMM.Inference.Fact as Infer
   , instType
   , kindConstraint
   , linkExprConstraint
-  , makeFunction
-  , makeTuple
   , minKindConstraint
   , registerConstraint
   , regularExprConstraint
@@ -111,7 +110,7 @@ import safe CMM.Inference.Fact as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint, NestedFact (Fact)
+  , unstorableConstraint, NestedFact (Fact), classConstraint, classFact
   )
 import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.Preprocess.Context (Context(StructCtx))
@@ -159,21 +158,22 @@ import safe CMM.Inference.Preprocess.State as Infer
   )
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         SimpleTypeHole, MethodTypeHole)
-  , holeHandle
+         SimpleTypeHole, MethodTypeHole, NamedTypeHole)
+  , holeHandle, holeName
   )
 import safe CMM.Inference.Type as Infer
   ( ToType(toType)
-  , Type(ComplType, VarType)
+  , Type(ComplType, VarType), makeAppType
   )
 import safe CMM.Inference.TypeCompl
   ( TypeCompl(AddrType, AppType, BoolType, LabelType, String16Type,
-          StringType, TBitsType, TupleType)
+          StringType, TBitsType, TupleType), makeTuple, makeFunction
   )
 import safe CMM.Inference.TypeHandle (handleId)
 import safe CMM.Inference.TypeKind (TypeKind(Constraint, GenericType, Star))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar(tVarId))
 import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Inference.State (fieldClassHelper)
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -697,7 +697,6 @@ instance Preprocess Init a b where
         storeFact $ handle `typeConstraint` ComplType c
         purePreprocess (SimpleTypeHole handle) strInit
 
-
 preprocessDatums :: (WithTypeHole a b, HasPos a) => [Annot Datum a] -> Preprocessor [Annot Datum b]
 preprocessDatums datums = do
   datumResults <- preprocessDatumsImpl [] datums
@@ -720,7 +719,9 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
           StructCtx {} -> do
             hole <- lookupSIMem name
             mem <- lookupSMem name
-            return $ MemberTypeHole (holeHandle hole) [holeHandle mem] []
+            let name' = fieldClassHelper $ getName name
+            classHole <- lookupClass name'
+            return $ MemberTypeHole (holeHandle hole) [holeHandle classHole `NamedTypeHole` name'] [holeHandle mem] []
           _ -> do
             tVar <- handleId <$> freshTypeHelper Star
             hole <- lookupVar name
@@ -736,23 +737,32 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
       uses currentContext head >>= \case
         StructCtx (_, sHole) structConstraint -> do
           tVars <- collectTVars
-          handle <- freshASTTypeHandle annot Star
+          -- handle <- freshASTTypeHandle annot Star
           pushFacts
           (hole, datum') <- goGeneral
           fs <- popTopFacts
-          unionizeTypes $ handle : (holeHandle <$> cache)
+          -- unionizeTypes $ handle : (holeHandle <$> cache)
           let t =
                 makeFunction [toType . AddrType $ snd structConstraint] $
                 toType hole
-              funcFact = tVarId (toTypeVar handle) `functionKind` t
-              constExprFact = constExprConstraint t
+              funcFact h = Fact $ tVarId (toTypeVar h) `functionKind` t
+              constExprFact = Fact $ constExprConstraint t
               cache' =
                 cache <&> \case
-                  MemberTypeHole iMem [mem] [] -> (iMem, mem)
+                  MemberTypeHole iMem [hole''] [mem] [] -> (hole'', iMem, mem)
                   _ -> undefined -- TODO: logic error
-              hole' = MemberTypeHole (holeHandle sHole) `uncurry` unzip cache'
-          storeFact . forall tVars [handle `typeUnion` t] $
-            Fact funcFact : Fact constExprFact : fs
+              hole' = MemberTypeHole (holeHandle sHole) `uncurry3` unzip3 cache'
+              scheme (MemberTypeHole h [NamedTypeHole classHandle name] _ _ ) =
+                [ forall tVars [h `typeUnion` t] $
+                    classC : funcFact h : constExprFact : fs
+                , forall tVars [classF] []
+                ]
+                where
+                  classC = Fact $ classConstraint name constraint
+                  classF = classFact name constraint
+                  constraint = toType classHandle `makeAppType` snd structConstraint  `makeAppType` toType hole
+              scheme _ = undefined -- TODO: logic error
+          storeFacts . concat $ scheme <$> cache
           ((hole', datum') :) <$> preprocessDatumsImpl [] others
         _ -> do
           result@(hole, _) <- goGeneral
