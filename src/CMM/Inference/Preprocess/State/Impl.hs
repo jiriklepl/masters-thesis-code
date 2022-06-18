@@ -24,15 +24,13 @@ import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeVar ( noType )
-import safe CMM.Inference.Preprocess.TypeHole ( safeHoleHandle )
-import safe CMM.Inference.Preprocess.HasTypeHole
-    ( HasTypeHole(getTypeHole) )
+import safe CMM.Inference.Preprocess.TypeHole ( safeHoleHandle, HasTypeHole(getTypeHole) )
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import qualified Data.Map as Map
 import safe CMM.Inference.Refresh (Refresher(refresher))
 import safe CMM.Parser.HasPos (HasPos (getPos))
 import safe CMM.Inference.TypeKind
-    ( HasTypeKind(getTypeKind), TypeKind )
+    ( HasTypeKind(getTypeKind), TypeKind (Star, GenericType) )
 import safe CMM.AST.GetName (GetName (getName))
 import safe CMM.Inference.TypeAnnot
     ( TypeAnnot(TypeInst, NoTypeAnnot, TypeNamed, TypeNamedAST,
@@ -113,6 +111,21 @@ freshASTTypeHandle node = freshAnnotatedTypeHelper . TypeAST $ getPos node
 
 freshTypeHelper :: TypeKind -> Preprocessor TypeHandle
 freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
+
+freshNamedASTStar :: HasPos n => Text -> n -> Preprocessor TypeHandle
+freshNamedASTStar name node = freshNamedASTTypeHandle name node Star
+
+freshASTStar :: HasPos n => n -> Preprocessor TypeHandle
+freshASTStar = (`freshASTTypeHandle` Star)
+
+freshASTGeneric :: HasPos n => n -> Preprocessor TypeHandle
+freshASTGeneric = (`freshASTTypeHandle` GenericType)
+
+freshStar :: Preprocessor TypeHandle
+freshStar = freshTypeHelper Star
+
+freshGeneric :: Preprocessor TypeHandle
+freshGeneric = freshTypeHelper GenericType
 
 freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Preprocessor TypeHandle
 freshAnnotatedTypeHelper annot tKind = do

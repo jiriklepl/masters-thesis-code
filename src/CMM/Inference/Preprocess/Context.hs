@@ -7,8 +7,7 @@ import safe Data.Text (Text)
 import safe GHC.Err (undefined)
 
 import safe CMM.AST.GetName (GetName(getName))
-import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
-import safe CMM.Inference.Preprocess.TypeHole (TypeHole(EmptyTypeHole))
+import safe CMM.Inference.Preprocess.TypeHole (TypeHole(EmptyTypeHole), HasTypeHole(getTypeHole))
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 

@@ -75,6 +75,11 @@ import safe CMM.Inference.Preprocess.State.Impl
   , cSymbols
   , currentContext
   , facts
+  , freshStar
+  , freshASTStar
+  , freshASTGeneric
+  , freshNamedASTStar
+  , freshGeneric
   , funcElabVariables
   , funcInstVariables
   , funcVariables

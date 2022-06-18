@@ -135,4 +135,7 @@ infixl `makeApplication`
 makeApplication :: a -> a -> TypeCompl a
 makeApplication = AppType
 
+makeAddress :: a -> TypeCompl a
+makeAddress = AddrType
+
 type PrimType = TypeCompl TypeVar

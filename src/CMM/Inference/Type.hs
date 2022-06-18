@@ -11,10 +11,10 @@ import safe Data.Ord (Ord)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
 import safe Data.List ( foldl', reverse )
+import safe Data.Int ( Int )
 
-import safe CMM.AST.Annot (Annot, takeAnnot)
 import safe CMM.Data.Nullable (Fallbackable((??)))
-import safe CMM.Inference.TypeCompl (TypeCompl (AppType))
+import safe CMM.Inference.TypeCompl (TypeCompl (AppType, AddrType, TBitsType))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
   , TypeKind(GenericType)
@@ -49,9 +49,6 @@ instance HasTypeKind Type where
 class ToType a where
   toType :: a -> Type
 
-instance ToType a => ToType (Annot n a) where
-  toType = toType . takeAnnot
-
 instance ToType Type where
   toType = id
 
@@ -66,6 +63,12 @@ instance ToType a => ToType (TypeCompl a) where
 
 makeAppType :: ToType a => a -> a -> Type
 makeAppType f a = ComplType $ toType f `AppType` toType a
+
+makeAddrType :: ToType a => a -> Type
+makeAddrType = ComplType . AddrType . toType
+
+makeTBitsType :: Int -> Type
+makeTBitsType = ComplType . TBitsType
 
 foldApp :: [Type] -> Type
 foldApp = \case

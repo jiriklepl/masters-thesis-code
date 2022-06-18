@@ -171,7 +171,7 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/HasTypeHandle.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/Preprocess/HasTypeHole.hs"
+    - path: "src/CMM/Inference/Preprocess/WithTypeHole.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Preprocess/TypeHole.hs"

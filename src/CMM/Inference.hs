@@ -84,10 +84,9 @@ import safe CMM.Inference.Fact
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
-import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         MethodTypeHole, SimpleTypeHole, NamedTypeHole)
+         MethodTypeHole, SimpleTypeHole, NamedTypeHole), HasTypeHole(getTypeHole)
   )
 import safe CMM.Inference.State
   ( Inferencer

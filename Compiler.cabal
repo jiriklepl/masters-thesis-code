@@ -109,7 +109,7 @@ executable Compiler
                        CMM.Inference.Preprocess.ClassData,
                        CMM.Inference.Preprocess.Context,
                        CMM.Inference.Preprocess.HasTypeHandle,
-                       CMM.Inference.Preprocess.HasTypeHole,
+                       CMM.Inference.Preprocess.WithTypeHole,
                        CMM.Inference.Preprocess.TypeHole,
                        CMM.Inference.Preprocess.State,
                        CMM.Inference.Preprocess.State.Impl,

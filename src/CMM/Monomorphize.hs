@@ -62,13 +62,10 @@ import safe CMM.Data.Nullable (nullVal, Fallbackable ((??)))
 import safe CMM.Data.Tuple (submergeTuple)
 import safe CMM.Inference (simplify)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.Preprocess.HasTypeHole
-  ( HasTypeHole(getTypeHole)
-  , getTypeHoleId
-  )
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(LVInstTypeHole, MethodTypeHole, SimpleTypeHole, MemberTypeHole)
-  , holeHandle
+  , holeHandle, HasTypeHole(getTypeHole)
+  , getTypeHoleId
   )
 import safe CMM.Inference.State
   ( Inferencer
@@ -116,7 +113,7 @@ import safe CMM.Monomorphize.Monomorphized
   , withMaybeNode
   , withNode, foldGetData, addMethod, PolyMethods (getPolyMethods), addData, polyData, PolyData (getPolyData), renewPolyData
   )
-import safe CMM.Monomorphize.PolyKind (PolyKind(Absurd, Mono, Poly))
+import safe CMM.Monomorphize.PolyKind (PolyKind(Absurd, Mono, Poly), Absurdity (AbsurdConst, AbsurdKind))
 import safe CMM.Monomorphize.Schematized
   ( Schematized(FuncScheme, StructScheme)
   , schematized2topLevel
@@ -168,7 +165,7 @@ constnessPolyKind tVar = go <$> readConstingBounds tVar
           then Mono
           else Poly
         EQ -> Mono
-        GT -> Absurd
+        GT -> Absurd AbsurdConst
 
 kindingPolyKind :: TypeVar -> Inferencer PolyKind
 kindingPolyKind tVar = go <$> readKindingBounds tVar
@@ -178,7 +175,7 @@ kindingPolyKind tVar = go <$> readKindingBounds tVar
         then if high PartialOrd.<= low
                then Mono
                else Poly
-        else Absurd
+        else Absurd AbsurdKind
 
 typePolyKind :: Subst Type.Type -> TypeVar -> Inferencer PolyKind
 typePolyKind subst tVar =
@@ -386,7 +383,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Datum Datum a where
       case getTypeHole a of
         MemberTypeHole struct _ insts schemes' ->
           getTypeHandleIdPolyKind subst (holeHandle $ getTypeHole a) >>= \case
-            Absurd -> undefined
+            Absurd absurdity -> error $ show absurdity
             _ -> do
               let addDatas = zip (handleId <$> schemes') (handleId <$> insts) <&> uncurry (addData $ handleId struct)
               succeed $ applyAll addDatas success
@@ -394,7 +391,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Datum Datum a where
           getTypeHandleIdPolyKind subst handle >>= \case
             Mono -> succeed success
             Poly -> undefined
-            Absurd -> error . show $ getPos a -- TODO
+            Absurd {} -> error . show $ getPos a -- TODO
         _ -> undefined -- TODO this
     _ -> succeed success
     where
@@ -434,7 +431,7 @@ instance (HasPos a, HasTypeHole a) =>
             let meta = unNode header'' <> unNode body''
             return $ withMaybeNode procedure' meta
         Poly -> succeed nullVal
-        Absurd -> return $ Left undefined
+        Absurd {} -> return $ Left undefined
 
 instance MonomorphizeImpl ProcedureHeader ProcedureHeader a where
   monomorphizeImpl _ a header =
@@ -545,7 +542,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Stmt Stmt a where
         getTypeHandleIdPolyKind subst (holeHandle $ getTypeHole a) >>= \case
           Mono -> succeed $ withNode annotatedStmt nullVal
           Poly -> return $ Left undefined -- TODO: local label cannot be a polytype
-          Absurd -> return $ Left undefined -- TODO: local label cannot have an illegal type
+          Absurd {} -> return $ Left undefined -- TODO: local label cannot have an illegal type
       ContStmt _ _ -> undefined
       GotoStmt expr targets -> do
         expr' <- ensuredJustMonomorphize undefined subst expr
@@ -573,7 +570,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl LValue LValue a where
       Poly -> do
         -- error . show $ () <$ lValue -- TODO: lValue cannot be a polytype
         succeed $ withNode (withAnnot a lValue) nullVal
-      Absurd -> return $ Left undefined -- TODO: lValue cannot have an illegal type
+      Absurd {} -> return $ Left undefined -- TODO: lValue cannot have an illegal type
       Mono ->
         case lValue of
           LVName _ ->
@@ -588,7 +585,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl LValue LValue a where
                           nullVal &
                           addGenerate (holeHandle scheme) handle
                     succeed $ withNode (withAnnot a lValue) meta
-                  Absurd -> return $ Left undefined
+                  Absurd {} -> return $ Left undefined
               _ -> return $ Left undefined
           LVRef mType expr mAsserts -> do
             mType' <-
@@ -667,7 +664,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Expr Expr a where
                             addGenerate scheme inst
                           memExpr = withAnnot a . (`MemberExpr` field) <$> getNode expr'''
                       return $ withMaybeNode memExpr meta
-            Absurd -> undefined -- TODO: logic error
+            Absurd {} -> undefined -- TODO: logic error
         _ -> undefined -- TODO: logic error
 
 instance MonomorphizeImpl Lit Lit a where
@@ -680,7 +677,7 @@ instance MonomorphizeImpl AST.Type AST.Type a where
         type'' <- reconstructOld (getTypeHoleId a) >>= instantiateType
         return $ (monomorphizedTrivial . Just $ withAnnot a type') <$ type''
       Poly -> return $ Left undefined -- TODO: the type has to be concrete
-      Absurd -> return $ Left undefined -- TODO: all types have to make sense
+      Absurd {} -> return $ Left undefined -- TODO: all types have to make sense
 
 instantiateType ::
      Type.Type

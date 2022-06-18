@@ -2,16 +2,18 @@
 
 module CMM.Inference.Preprocess.TypeHole where
 
-import safe Data.Function ((.))
+import safe Data.Function ((.), id)
 import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe)
 import safe GHC.Err (error)
 import safe Text.Show (Show)
 import safe Data.Functor ( Functor(fmap) )
 import Data.Text (Text)
 
-import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
+import safe CMM.Inference.Type ( ToType (toType) )
+import safe Control.Lens.Getter ( view )
+import safe Control.Lens.Tuple ( _2 )
 
 data TypeHole
   = EmptyTypeHole
@@ -22,11 +24,29 @@ data TypeHole
   | MemberTypeHole !TypeHandle ![TypeHole] ![TypeHandle] ![TypeHandle]
   deriving (Show)
 
+class HasTypeHole a where
+  getTypeHole :: a -> TypeHole
+
+instance HasTypeHole TypeHole where
+  getTypeHole = id
+
+instance HasTypeHole (a, TypeHole) where
+  getTypeHole = view _2
+
+instance HasTypeHole (a, TypeHole, b) where
+  getTypeHole = view _2
+
 instance ToType TypeHole where
   toType = toType . holeHandle
 
 instance ToTypeVar TypeHole where
   toTypeVar = toTypeVar . holeHandle
+
+getTypeHoleId :: HasTypeHole a => a -> TypeVar
+getTypeHoleId = holeId . getTypeHole
+
+getSafeTypeHoleId :: HasTypeHole a => a -> Maybe TypeVar
+getSafeTypeHoleId = safeHoleId . getTypeHole
 
 holeHandle :: TypeHole -> TypeHandle
 holeHandle = fromMaybe err . safeHoleHandle

@@ -11,6 +11,11 @@ import safe Data.Ord (Ord)
 import safe Data.Traversable (Traversable)
 import safe Text.Show (Show)
 
+import safe CMM.Inference.Preprocess.TypeHole ( HasTypeHole (getTypeHole) )
+import safe CMM.Inference.Type ( ToType (toType) )
+import safe CMM.Inference.TypeVar ( ToTypeVar (toTypeVar) )
+import safe CMM.Parser.HasPos ( HasPos (getPos) )
+
 -- | Annotation used as a wrapper for nodes, can contain 'SourcePos', for example
 data Annotation node annot =
   Annot (node annot) annot
@@ -19,6 +24,19 @@ data Annotation node annot =
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
 
 deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
+
+
+instance HasTypeHole a => HasTypeHole (Annot n a) where
+  getTypeHole = getTypeHole . takeAnnot
+
+instance HasTypeHole a => ToType (Annot n a) where
+  toType = toType . getTypeHole
+
+instance HasPos a => HasPos (Annot n a) where
+  getPos = getPos . takeAnnot
+
+instance ToTypeVar a => ToTypeVar (Annot n a) where
+  toTypeVar = toTypeVar . takeAnnot
 
 -- | see 'Annotation'
 type Annot = Annotation
