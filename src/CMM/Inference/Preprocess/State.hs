@@ -13,7 +13,7 @@ import safe Control.Lens.Setter ((%=), (.=), (<~))
 import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad (Functor((<$), fmap), Monad((>>=), return))
-import safe Control.Monad.State.Lazy (MonadState)
+import safe Control.Monad.State (MonadState)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (Foldable(foldr), for_, traverse_)
@@ -56,9 +56,6 @@ import safe CMM.Inference.Preprocess.TypeHole
 
   )
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
-import safe CMM.Inference.TypeAnnot
-  ( TypeAnnot(NoTypeAnnot, TypeAST, TypeNamedAST, TypeNamed)
-  )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeKind (TypeKind(GenericType, Star, (:->), Constraint))
 import safe CMM.Inference.TypeVar
@@ -66,12 +63,10 @@ import safe CMM.Inference.TypeVar
 
   , noType, TypeVar (NoType, tVarId)
   )
-import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
+import safe CMM.Parser.HasPos (SourcePos)
 import safe CMM.AST.Variables.State (CollectorState)
 import safe qualified CMM.AST.Variables.State as CS
-import safe CMM.Inference.HandleCounter (freshAnnotatedTypeHelperWithParent)
 import safe CMM.Inference.TypeCompl (TypeCompl(ConstType), makeFunction, makeApplication)
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import safe qualified CMM.Data.Trilean as T
 import safe CMM.Inference.State (fieldClassHelper)
 
@@ -84,13 +79,14 @@ import safe CMM.Inference.Preprocess.State.Impl
   , funcInstVariables
   , funcVariables
   , initPreprocessor
+  , freshASTTypeHandle
   , structInstMembers
   , structMembers
   , typeAliases
   , typeClasses
   , typeConstants
   , typeVariables
-  , variables, Preprocessor
+  , variables, Preprocessor, freshTypeHelper, freshNamedASTTypeHandle
   )
 
 noCurrentReturn :: TypeHole
@@ -411,32 +407,6 @@ modifyHead :: MonadState s m => Lens' s [a] -> (a -> a) -> m ()
 modifyHead place action = do
   ~(h:t) <- use place
   place .= action h : t
-
--- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
-freshNamedASTTypeHandle ::
-     HasPos n => Text -> n -> TypeKind -> Preprocessor TypeHandle
-freshNamedASTTypeHandle name node =
-  freshAnnotatedTypeHelper . TypeNamedAST name $ getPos node
-
-freshNamedTypeHandle ::
-     Text -> TypeKind -> Preprocessor TypeHandle
-freshNamedTypeHandle name =
-  freshAnnotatedTypeHelper $ TypeNamed name
-
-freshNamedNodeTypeHandle ::
-     (HasPos n, GetName n) => n -> TypeKind -> Preprocessor TypeHandle
-freshNamedNodeTypeHandle node =
-  freshAnnotatedTypeHelper . TypeNamedAST (getName node) $ getPos node
-
-freshASTTypeHandle :: HasPos n => n -> TypeKind -> Preprocessor TypeHandle
-freshASTTypeHandle node = freshAnnotatedTypeHelper . TypeAST $ getPos node
-
-freshTypeHelper :: TypeKind -> Preprocessor TypeHandle
-freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
-
-freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Preprocessor TypeHandle
-freshAnnotatedTypeHelper annot tKind = do
-  getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
 
 storeCSymbol :: Text -> Preprocessor ()
 storeCSymbol = (cSymbols %=) . (:)

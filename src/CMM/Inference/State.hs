@@ -33,28 +33,25 @@ import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Subst (apply)
 import safe CMM.Inference.Type (Type(ComplType, VarType))
-import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
-  , initTypeHandle
   , kinding
-  , typing, handleId
+  , typing
   )
-import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Err.Error (Error(Error))
 import safe CMM.Err.Severity (Severity(ErrorLevel))
 import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
-import safe CMM.Inference.HandleCounter (freshAnnotatedTypeHelperWithParent)
 import safe CMM.Inference.Unify.Error (UnificationError)
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import safe CMM.Data.Trilean ( Trilean, trilean )
 import safe CMM.Inference.FunDeps ( funDepsSimplify )
 import safe CMM.Utils ( addPrefix )
 
 import safe CMM.Inference.State.Impl
   ( InferencerState(InferencerState)
+  , freshAnnotatedTypeHelper
+  , freshTypeHelperWithHandle
   , funDeps
   , funFacts
   , classFacts
@@ -62,6 +59,7 @@ import safe CMM.Inference.State.Impl
   , constingBounds
   , currentParent
   , handlize
+  , handlizeTVar
   , initInferencer
   , kindingBounds
   , schemes
@@ -87,16 +85,6 @@ pushParent parent = currentParent %= (parent :)
 
 popParent :: Inferencer ()
 popParent = currentParent %= tail
-
-freshTypeHelper :: TypeKind -> Inferencer TypeVar
-freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
-
-freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Inferencer TypeVar
-freshAnnotatedTypeHelper annot tKind = do
-  handle <- getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
-  let tVar = handleId handle
-  handlize %= Bimap.insert tVar handle
-  return tVar
 
 getHandle :: TypeVar -> Inferencer TypeHandle
 getHandle = fmap fromJust . tryGetHandle
@@ -135,11 +123,6 @@ collectPrimeTVars tVar =
     Just primType -> fold <$> traverse collectPrimeTVars primType
     Nothing -> return $ Set.singleton tVar
 
-handlizeTVar :: TypeVar -> Inferencer TypeVar
-handlizeTVar tVar = do
-  handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
-  return tVar
-
 infix 6 `insertEdge`
 
 insertEdge :: Ord a => a -> a -> Map a (Set a) -> Map a (Set a)
@@ -173,9 +156,6 @@ pushConstBounds handle bounds =
 
 registerScheme :: TypeVar -> Scheme Type -> Inferencer ()
 registerScheme tVar scheme = schemes %= Map.insert tVar scheme
-
-freshTypeHelperWithHandle :: TypeKind -> Inferencer TypeVar
-freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar
 
 fromOldName :: TypeVar -> Inferencer TypeVar
 fromOldName tVar = uses unifs (`apply` tVar)

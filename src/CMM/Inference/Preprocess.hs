@@ -24,9 +24,9 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe Data.Traversable (Traversable(traverse), for)
 import safe Data.Tuple (snd, uncurry)
-import safe GHC.Err (undefined)
+import safe GHC.Err (undefined, error)
 import safe Text.Show (Show(show))
-import safe Data.Tuple.Extra (fst3, uncurry3)
+import safe Data.Tuple.Extra (uncurry3)
 
 import safe CMM.AST as AST
   ( Actual(Actual)
@@ -126,7 +126,6 @@ import safe CMM.Inference.Preprocess.State as Infer
   , collectTVars
   , currentContext
   , endProc
-  , freshASTTypeHandle
   , freshNamedASTTypeHandle
   , freshTypeHelper
   , getCurrentReturn
@@ -154,16 +153,16 @@ import safe CMM.Inference.Preprocess.State as Infer
   , storeFacts
   , storeProc
   , storeTCon
-  , storeVar
+  , storeVar, freshASTTypeHandle
   )
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
          SimpleTypeHole, MethodTypeHole, NamedTypeHole)
-  , holeHandle, holeName
+  , holeHandle
   )
 import safe CMM.Inference.Type as Infer
   ( ToType(toType)
-  , Type(ComplType, VarType), makeAppType
+  , Type(ComplType, VarType), makeAppType, foldApp
   )
 import safe CMM.Inference.TypeCompl
   ( TypeCompl(AddrType, AppType, BoolType, LabelType, String16Type,
@@ -174,6 +173,7 @@ import safe CMM.Inference.TypeKind (TypeKind(Constraint, GenericType, Star))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar(tVarId))
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Inference.State (fieldClassHelper)
+import safe CMM.Inference.Refresh ( refreshNestedFact )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -752,17 +752,18 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                   MemberTypeHole iMem [hole''] [mem] [] -> (hole'', iMem, mem)
                   _ -> undefined -- TODO: logic error
               hole' = MemberTypeHole (holeHandle sHole) `uncurry3` unzip3 cache'
-              scheme (MemberTypeHole h [NamedTypeHole classHandle name] _ _ ) =
-                [ forall tVars [h `typeUnion` t] $
-                    classC : funcFact h : constExprFact : fs
-                , forall tVars [classF] []
-                ]
+              scheme (MemberTypeHole h [NamedTypeHole classHandle name] _ _ ) = do
+                method <- refreshNestedFact . forall tVars [h `typeUnion` t] $
+                  classC : funcFact h : constExprFact : fs
+                fact <- refreshNestedFact $ forall tVars [classF] []
+                return [method, fact]
                 where
                   classC = Fact $ classConstraint name constraint
                   classF = classFact name constraint
-                  constraint = toType classHandle `makeAppType` snd structConstraint  `makeAppType` toType hole
+                  constraint = foldApp [toType classHandle, snd structConstraint, toType hole]
               scheme _ = undefined -- TODO: logic error
-          storeFacts . concat $ scheme <$> cache
+          schemes <- traverse scheme cache
+          storeFacts $ concat schemes
           ((hole', datum') :) <$> preprocessDatumsImpl [] others
         _ -> do
           result@(hole, _) <- goGeneral

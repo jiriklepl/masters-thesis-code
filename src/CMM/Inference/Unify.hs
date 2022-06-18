@@ -52,7 +52,7 @@ unifiable :: Unify a b => a -> a -> Bool
 unifiable = (isRight .) . unify
 
 instanceOf :: Unify a b => a -> a -> Bool
-inst `instanceOf` scheme = isRight $ unifyDirected Forward inst scheme
+inst `instanceOf` scheme = isRight $ unifyDirected Backward inst scheme
 
 schemeOf :: Unify a b => a -> a -> Bool
 schemeOf = flip instanceOf

@@ -18,7 +18,6 @@ import safe Data.Eq (Eq((/=), (==)))
 import safe Data.Foldable (Foldable (foldl'), for_, traverse_)
 import safe Data.Function (($), (.), flip, id, const)
 import safe Data.Functor (Functor((<$), fmap), ($>), (<$>), (<&>), void)
-import safe Data.Generics.Aliases (extT)
 import safe Data.Graph (SCC(AcyclicSCC, CyclicSCC), stronglyConnCompR)
 import safe qualified Data.Graph as Graph
 import safe Data.Int (Int)
@@ -33,7 +32,7 @@ import safe Data.List
   , or
   , partition
   , unzip
-  , zip, zip3, zipWith
+  , zip, zipWith
   )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
@@ -45,9 +44,11 @@ import safe Data.Semigroup (Semigroup((<>)))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Traversable (Traversable(traverse), for)
+import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (snd, swap, uncurry)
 import safe Data.String (fromString)
+import safe Text.Show (Show(show))
+import safe CMM.Data.Generics ((*|*))
 import safe GHC.Err (undefined, error)
 
 import safe qualified CMM.Data.Bimap as Bimap
@@ -86,7 +87,7 @@ import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
 import safe CMM.Inference.Preprocess.HasTypeHole (HasTypeHole(getTypeHole))
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         MethodTypeHole, SimpleTypeHole)
+         MethodTypeHole, SimpleTypeHole, NamedTypeHole)
   )
 import safe CMM.Inference.State
   ( Inferencer
@@ -96,7 +97,6 @@ import safe CMM.Inference.State
   , classSchemes
   , collectPrimeTVars
   , constingBounds
-  , freshAnnotatedTypeHelper
   , freshTypeHelperWithHandle
   , getConsting
   , getHandle
@@ -131,7 +131,7 @@ import safe CMM.Inference.Type
   ( ToType(toType)
   , Type(ComplType, ErrorType, VarType), unfoldApp, foldApp
   )
-import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
+import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 import safe CMM.Inference.TypeCompl
   ( PrimType
   , TypeCompl(AddrType, AppType, FunctionType, TupleType)
@@ -154,12 +154,8 @@ import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import safe CMM.Data.Way ( Way(Backward, Forward, Both) )
 import safe CMM.Utils
     ( addPrefix, getPrefix, hasPrefix, splitName )
-
-
-import safe Text.Show ( Show(show) )
-import CMM.Inference.FunDeps
-import qualified CMM.Data.Trilean as T
-import CMM.Data.Trilean (trilean)
+import safe CMM.Data.Trilean (trilean)
+import safe CMM.Inference.Refresh ( Refresher(refresher) )
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -240,6 +236,7 @@ mineAST = traverse_ (addHandles . getTypeHole)
     addHandles =
       \case
         EmptyTypeHole -> return ()
+        NamedTypeHole handle _ -> addHandle handle
         SimpleTypeHole handle -> addHandle handle
         LVInstTypeHole handle hole -> addHandle handle *> addHandles hole
         MethodTypeHole handle handle' handle'' ->
@@ -545,7 +542,6 @@ reduceOne (fact:facts) =
                   | otherwise -> go others
                 [] -> skipWith . Fact $ classConstraint name tVar
             go schemes'
-          Just _ -> undefined -- TODO: logic error
       | otherwise ->
         uses classSchemes (name `Map.lookup`) >>= \case
           Nothing -> skip
@@ -809,18 +805,11 @@ reParent newParent oldParents
 reParent newParent oldParents = go
   where
     go :: Data d => d -> d
-    go = gmapT go `extT` tVarCase
+    go = tVarCase *|* gmapT go
     tVarCase tVar@TypeVar {tVarParent = parent}
       | parent `Set.member` oldParents = tVar {tVarParent = newParent}
       | otherwise = tVar
     tVarCase NoType = NoType
-
-refresher :: Set TypeVar -> Inferencer (Map TypeVar TypeVar)
-refresher tVars =
-  sequence $
-  Map.fromSet
-    (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind tVar)
-    tVars
 
 unSchematize :: Facts -> Inferencer Facts
 unSchematize [] = return []

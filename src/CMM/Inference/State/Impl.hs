@@ -14,6 +14,10 @@ import safe Text.Show (Show)
 import safe Control.Monad.State ( State )
 import safe Control.Lens.Getter ( uses )
 import safe Data.List ( head )
+import safe qualified Data.Map as Map
+import safe Control.Monad ( Monad(return, (>>=)), sequence )
+import safe Data.Function ( ($) )
+import safe Control.Lens.Setter ( (%=) )
 
 import safe CMM.Data.Bimap (Bimap)
 import safe CMM.Data.Bounds (Bounds)
@@ -23,14 +27,18 @@ import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.HandleCounter
   ( HandleCounter
-  , HasHandleCounter(handleCounter)
+  , HasHandleCounter(handleCounter), freshAnnotatedTypeHelperWithParent
   )
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (PrimType)
-import safe CMM.Inference.TypeHandle (TypeHandle)
+import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import safe CMM.Data.Trilean ( Trilean )
+import safe CMM.Inference.Refresh ( Refresher(refresher) )
+import safe CMM.Inference.TypeAnnot ( TypeAnnot(TypeInst, NoTypeAnnot) )
+import safe CMM.Inference.TypeKind
+    ( HasTypeKind(getTypeKind), TypeKind )
 
 data InferencerState =
   InferencerState
@@ -96,3 +104,28 @@ type Inferencer = State InferencerState
 
 instance GetParent Inferencer where
   getParent = uses currentParent head
+
+instance Refresher Inferencer where
+  refresher tVars =
+    sequence $
+    Map.fromSet
+      (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind tVar)
+      tVars
+
+freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Inferencer TypeVar
+freshAnnotatedTypeHelper annot tKind = do
+  handle <- getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
+  let tVar = handleId handle
+  handlize %= Bimap.insert tVar handle
+  return tVar
+
+freshTypeHelper :: TypeKind -> Inferencer TypeVar
+freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
+
+freshTypeHelperWithHandle :: TypeKind -> Inferencer TypeVar
+freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar
+
+handlizeTVar :: TypeVar -> Inferencer TypeVar
+handlizeTVar tVar = do
+  handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
+  return tVar

@@ -183,6 +183,9 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/State/Impl.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Inference/Refresh.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Inference/State.hs"
       component: "Compiler:exe:Compiler"
 

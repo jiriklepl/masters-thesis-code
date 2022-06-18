@@ -113,6 +113,7 @@ executable Compiler
                        CMM.Inference.Preprocess.TypeHole,
                        CMM.Inference.Preprocess.State,
                        CMM.Inference.Preprocess.State.Impl,
+                       CMM.Inference.Refresh,
                        CMM.Inference.State,
                        CMM.Inference.State.Impl,
                        CMM.Inference.Subst,

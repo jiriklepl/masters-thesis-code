@@ -10,19 +10,22 @@ import safe Data.Data (Data(gmapT), Typeable)
 import safe Data.Foldable (Foldable(foldr, null))
 import safe Data.Function (($), (.))
 import safe Data.Functor ((<$>))
-import safe Data.Generics.Aliases (extT)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (fromMaybe, maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
 
-import safe CMM.Inference.Fact (Fact, FlatFact)
+import safe CMM.Inference.Fact (Fact, FlatFact, NestedFact, Scheme ((:.)), Qual)
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar, tVarParent))
+import safe CMM.Data.Generics ( (*|*) )
 
 type Subst = Map TypeVar
+
+schemeNCase :: Apply (Qual n) b => Subst b -> Scheme n -> Scheme n
+schemeNCase subst (tVars :. qN) = tVars :. (Map.withoutKeys subst tVars `apply` qN)
 
 class (ToType b, Typeable b, Data a, TypeCase b) =>
       Apply a b
@@ -31,7 +34,11 @@ class (ToType b, Typeable b, Data a, TypeCase b) =>
   apply subst = go
     where
       go :: Data d => d -> d
-      go = gmapT go `extT` typeCase subst go
+      go = typeCase subst go *|* schemeFactCase *|* schemeTypeCase *|* gmapT go
+      schemeTypeCase :: Scheme Type -> Scheme Type
+      schemeTypeCase = schemeNCase subst
+      schemeFactCase :: Scheme Fact -> Scheme Fact
+      schemeFactCase = schemeNCase subst
 
 class (ToType b, Typeable b, Data a, TypeCaseShallow b) =>
       ApplyShallow a b
@@ -40,7 +47,7 @@ class (ToType b, Typeable b, Data a, TypeCaseShallow b) =>
   applyShallow subst = go
     where
       go :: Data d => d -> d
-      go = gmapT go `extT` typeCaseShallow subst go
+      go = typeCaseShallow subst go *|* gmapT go
 
 class TypeCase b where
   typeCase ::
@@ -85,13 +92,17 @@ instance (ToType b, Typeable b, TypeCase b) => Apply TypeVar b
 instance (ToType b, Typeable b, TypeCaseShallow b) =>
          ApplyShallow TypeVar b
 
-instance (ToType b, Typeable b, TypeCase b) => Apply Type b
-
-instance (ToType b, Typeable b, TypeCase b) => Apply Fact b
-
-instance (ToType b, Typeable b, TypeCase b) => Apply (FlatFact Type) b
+instance Apply n b => Apply [n] b
 
 instance (ToType b, Typeable b, TypeCase b) => Apply PrimType b
+
+instance (ToType b, Typeable b, TypeCase b) => Apply Type b
+instance (ToType b, Typeable b, TypeCase b) => Apply (Qual Type) b
+
+instance Apply n b => Apply (NestedFact n) b
+instance (ToType b, Typeable b, TypeCase b) => Apply (Qual Fact) b
+instance (ToType b, Typeable b, TypeCase b) => Apply (FlatFact Type) b
+
 
 instance Apply b b => Apply (Map TypeVar b) b where
   subst' `apply` subst
