@@ -118,7 +118,7 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
-  , unifs, addFunDeps, fieldClassPrefix, funDeps, funFacts, trileanSeq
+  , unifs, addFunDeps, fieldClassPrefix, funDeps, funFacts, trileanSeq, collectPrimeTVarsAll
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -428,7 +428,7 @@ fixTypize = do
   types' <- uses unifs (fmap . apply) <*> uses typize Bimap.toList
   let typize' = Bimap.fromList types'
       collapsedKeys = mapCollect types'
-      collapsedValues = mapCollect (swap <$> types')
+      collapsedValues = mapCollect $ swap <$> types'
     -- TODO: reduce duplication; consider continuing despite errors
       goValues [] subst = return subst
       goValues ((primType:primType':primTypes):others) subst =
@@ -471,6 +471,11 @@ wrapParent flatFacts wrapped =
   where
     determineParent [VarType tVar `Union` _] = Just tVar
     determineParent _ = undefined
+
+unwrapParent :: Inferencer a -> Inferencer a
+unwrapParent unwrapped = do
+  parent <- getParent
+  popParent *> unwrapped <* pushParent parent
 
 flattenFacts :: [NestedFact Type] -> FlatFacts
 flattenFacts = fmap go
@@ -532,13 +537,15 @@ reduceOne (fact:facts) =
             tType <- getTyping tVar
             let
               go = \case
-                (tVars :. fs :=> t'):others
-                  | tType `instanceOf` t' -> do
-                    subst <- refresher tVars
-                    let freshT = subst `apply` t'
-                        newFacts = typeUnion tVar freshT : (apply subst <$> fs)
-                    continueWith $ fmap Fact newFacts <> facts
-                  | otherwise -> go others
+                (tVars :. fs :=> t'):others -> do
+                  tVar' <- simplify t'
+                  tType' <- getTyping tVar'
+                  if tType `instanceOf` tType' then do
+                      subst <- refresher tVars
+                      let freshT = subst `apply` t'
+                          newFacts = typeConstraint tVar freshT : (apply subst <$> fs)
+                      continueWith $ fmap Fact newFacts <> facts
+                  else go others
                 [] -> skipWith . Fact $ classConstraint name tVar
             go schemes'
       | otherwise ->
@@ -603,7 +610,7 @@ reduceOne (fact:facts) =
             where
               class': args = unfoldApp t
               go rule = do
-                  tVars' <- const (freshTypeHelperWithHandle GenericType) `traverse` rule
+                  tVars' <- const (freshTypeHelperWithHandle GenericType) `traverse` args
                   let t' = foldApp $
                         class' : zipWith
                           (uncurry chooseArg)
@@ -826,7 +833,7 @@ unSchematize (fact:others) = (fact :) <$> unSchematize others
 schematize :: Facts -> Set TypeVar -> Inferencer Facts
 schematize facts tVars = do
   parent <- getParent
-  x <- Set.toList . Set.unions <$> traverse collectPrimeTVars (Set.toList tVars)
+  x <- Set.toList . Set.unions <$> traverse collectPrimeTVarsAll (Set.toList tVars)
   constings <- Set.fromList <$> traverse getConsting x
   kindings <- Set.fromList <$> traverse getKinding x
   -- TODO: leave out trivial
@@ -869,7 +876,7 @@ schematize facts tVars = do
     let scheme =
           Set.filter
             ((`Set.member` freeTypeVars t) `fOr` parentedBy parent)
-            (freeTypeVars facts') :.
+            (freeTypeVars facts' <> freeTypeVars t) :.
           facts' :=>
           t
     registerScheme tVar scheme
@@ -877,15 +884,18 @@ schematize facts tVars = do
   where
     translateSubs _ _ _ [] = return []
     translateSubs bounds subConstr boundsConstr ((tVar, limits):others) = do
-      let facts' =
-            (\tVar' -> toType tVar `subConstr` toType tVar') <$>
+      t <- reconstruct tVar
+      facts' <-
+            (\tVar' -> do
+              t' <- reconstruct tVar'
+              return $ t `subConstr` t') `traverse`
             Set.toList limits
-          translateOthers =
+      let  translateOthers =
             (facts' <>) <$> translateSubs bounds subConstr boundsConstr others
       uses bounds (tVar `Map.lookup`) >>= \case
         Nothing -> translateOthers
         Just bounds' ->
-          (boundsConstr bounds' (toType tVar) :) <$> translateOthers
+          (boundsConstr bounds' t :) <$> translateOthers
     keyParentedBy parent (key, _) = tVarParent key == parent
     parentedBy parent TypeVar {tVarParent = par} = parent == par
     parentedBy _ _ = False

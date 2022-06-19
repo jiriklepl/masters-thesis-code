@@ -110,7 +110,7 @@ import safe CMM.Inference.Fact as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint, NestedFact (Fact), classConstraint, classFact
+  , unstorableConstraint, NestedFact (Fact), classConstraint, classFact, maxKindConstraint
   )
 import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.Preprocess.Context (Context(StructCtx))
@@ -734,13 +734,15 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                 toType hole
               funcFact h = Fact $ tVarId (toTypeVar h) `functionKind` t
               constExprFact = Fact $ constExprConstraint t
+              structAddrFact = Fact $  addressKind `kindConstraint`makeAddrType (snd structConstraint)
+              fieldAddrFact = Fact $ addressKind `kindConstraint` makeAddrType hole
               cache' =
                 cache <&> \case
                   MemberTypeHole iMem [hole''] [mem] [] -> (hole'', iMem, mem)
                   _ -> undefined -- TODO: logic error
               hole' = MemberTypeHole (holeHandle sHole) `uncurry3` unzip3 cache'
               scheme (MemberTypeHole h [NamedTypeHole classHandle name] _ _ ) = do
-                method <- refreshNestedFact . forall tVars [h `typeUnion` t] $ funcFact h : constExprFact : fs
+                method <- refreshNestedFact . forall tVars [h `typeUnion` t] $ structAddrFact : fieldAddrFact : funcFact h : constExprFact : fs
                 fact <- refreshNestedFact $ forall tVars [classF] []
                 return [method, fact]
                 where
@@ -807,6 +809,7 @@ instance Preprocess LValue a b where
         let mAsserts' = (withTypeHole EmptyTypeHole <$>) <$> mAsserts
         storeFacts
           [ expr' `typeUnion` makeAddrType handle
+          , handle `subConst` expr'
           , addressKind `minKindConstraint` expr'
           ]
         return (SimpleTypeHole handle, LVRef Nothing expr' mAsserts')
@@ -835,14 +838,13 @@ instance Preprocess Expr a b where
               [ scheme `instType` inst
               , inst `typeUnion` makeFunction [argType] retType
               , classConstraint name $ foldApp [toType classHole, toType argType, toType retType]
-              , constExprConstraint $ makeAddrType inst
-              , addressKind `kindConstraint` makeAddrType inst
               , constExprConstraint inst
-              , tVarId (toTypeVar inst) `functionKind` inst
-              , argType `subType` struct'
               , addressKind `kindConstraint` struct'
+              , handle `subConst` struct'
               , retType `subType` handle
+              , tVarId (toTypeVar inst) `functionKind` inst
               , addressKind `kindConstraint` handle
+              , argType `subType` struct'
               ]
             return (MethodTypeHole handle (holeHandle scheme) inst, MemberExpr struct' $ preprocessTrivial field)
             where

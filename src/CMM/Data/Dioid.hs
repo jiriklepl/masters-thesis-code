@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 module CMM.Data.Dioid where
 

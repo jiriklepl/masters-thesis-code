@@ -46,10 +46,12 @@ common common-options
                        -Wunused-packages
   build-depends:       base >= 4.13 && < 4.17,
                        containers ^>=0.6.4.1,
+                       extra ^>=1.7.10,
+                       lens >=5.0.1 && <5.2,
                        megaparsec ^>=9.0.1,
                        prettyprinter ^>=1.7.1,
-                       text ^>=1.2.4.0,
-                       extra ^>=1.7.10,
+                       text ^>=1.2.4.0
+
 executable Compiler
   import:              common-options
   main-is:             Main.hs
@@ -130,7 +132,7 @@ executable Compiler
                        CMM.Monomorphize,
                        CMM.Monomorphize.Mangle,
                        CMM.Monomorphize.Monomorphized,
-                       CMM.Monomorphize.PolyKind,
+                       CMM.Monomorphize.Polytypeness,
                        CMM.Monomorphize.Schematized,
                        CMM.Parser,
                        CMM.Parser.ASTError,
@@ -140,12 +142,11 @@ executable Compiler
                        CMM.Translator.State,
                        CMM.Utils
   build-depends:       bimap ^>= 0.4.0,
-                       lens >=5.0.1 && <5.2,
-                       llvm-hs-pure ^>=12.0.0,
                        llvm-hs-pretty ^>=12.0.0,
+                       llvm-hs-pure ^>=12.0.0,
                        mtl ^>=2.2.2,
                        partial-order ^>=0.2.0.0,
-                       syb ^>=0.7.2.1,
+                       syb ^>=0.7.2.1
   hs-source-dirs:      src
 
 Test-Suite parser-testsuite

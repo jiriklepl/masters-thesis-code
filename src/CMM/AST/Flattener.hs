@@ -1,6 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 module CMM.AST.Flattener where
 

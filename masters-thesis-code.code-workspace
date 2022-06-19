@@ -92,6 +92,7 @@
 			"parens",
 			"pointersize",
 			"polytype",
+			"Polytypeness",
 			"ppllvm",
 			"preds",
 			"prepended",

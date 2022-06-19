@@ -12,7 +12,7 @@ import safe Control.Monad (Functor(fmap), Monad((>>=), return))
 import safe Data.Foldable (fold)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
-import safe Data.List (tail)
+import safe Data.List (tail, head)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe, isJust)
@@ -83,6 +83,9 @@ trileanSeq = \case
 pushParent :: TypeVar -> Inferencer ()
 pushParent parent = currentParent %= (parent :)
 
+getParent :: Inferencer TypeVar
+getParent = uses currentParent head
+
 popParent :: Inferencer ()
 popParent = currentParent %= tail
 
@@ -121,6 +124,12 @@ collectPrimeTVars :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVars tVar =
   uses typize (Bimap.lookup tVar) >>= \case
     Just primType -> fold <$> traverse collectPrimeTVars primType
+    Nothing -> return $ Set.singleton tVar
+
+collectPrimeTVarsAll :: TypeVar -> Inferencer (Set TypeVar)
+collectPrimeTVarsAll tVar =
+  uses typize (Bimap.lookup tVar) >>= \case
+    Just primType -> Set.insert tVar . fold <$> traverse collectPrimeTVarsAll primType
     Nothing -> return $ Set.singleton tVar
 
 infix 6 `insertEdge`

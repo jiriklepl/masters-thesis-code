@@ -1,5 +1,4 @@
 {-# LANGUAGE Safe #-}
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module CMM.AST.Utils where
 
@@ -9,8 +8,7 @@ import safe Data.Maybe (Maybe(Just, Nothing))
 import safe Data.Text (Text)
 
 import safe CMM.AST
-  ( ASTNode
-  , Arm(Arm)
+  ( Arm(Arm)
   , Body(Body)
   , BodyItem(BodyStmt)
   , Expr(LVExpr, ParExpr)
@@ -25,7 +23,7 @@ import safe CMM.AST.GetName (getName)
 class EnsureNode n' n where
   ensureNode :: n' a -> n a
 
-instance ASTNode n => EnsureNode n n where
+instance EnsureNode n n where
   ensureNode = id
 
 instance EnsureNode (Annot n) n where

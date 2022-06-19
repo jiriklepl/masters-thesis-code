@@ -234,7 +234,7 @@ cradle:
     - path: "src/CMM/Monomorphize/Monomorphized.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Monomorphize/PolyKind.hs"
+    - path: "src/CMM/Monomorphize/Polytypeness.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Schematized.hs"

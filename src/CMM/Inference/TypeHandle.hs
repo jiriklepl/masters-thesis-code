@@ -37,11 +37,12 @@ instance Eq TypeHandle where
     t == t' && c == c' && k == k'
 
 instance Ord TypeHandle where
-  TypeHandle {_typing = t, _consting = c, _kinding = k} `compare` TypeHandle { _typing = t'
+  TypeHandle {_identifier = i, _typing = t, _consting = c, _kinding = k} `compare` TypeHandle { _identifier = i'
+                                                                             , _typing = t'
                                                                              , _consting = c'
                                                                              , _kinding = k'
                                                                              } =
-    compare t t' <> compare c c' <> compare k k'
+    compare i i' <> compare t t' <> compare c c' <> compare k k'
 
 instance ToType TypeHandle where
   toType = toType . handleId

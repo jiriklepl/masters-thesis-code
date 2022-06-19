@@ -44,7 +44,7 @@ import safe CMM.Inference.Fact
   , forall
   , instType
   , tupleKind
-  , typeUnion, kindConstraint, subConst, classFact, classConstraint
+  , typeUnion, kindConstraint, subConst, classFact, classConstraint, minKindConstraint, maxKindConstraint, regularExprConstraint
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
@@ -57,7 +57,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   )
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
-import safe CMM.Inference.TypeKind (TypeKind(GenericType, Star, (:->), Constraint))
+import safe CMM.Inference.TypeKind (TypeKind(Star, (:->), Constraint), HasTypeKind (getTypeKind))
 import safe CMM.Inference.TypeVar
   ( ToTypeVar(toTypeVar)
 
@@ -93,6 +93,7 @@ import safe CMM.Inference.Preprocess.State.Impl
   , typeVariables
   , variables, Preprocessor, freshTypeHelper, freshNamedASTTypeHandle
   )
+import CMM.Inference.DataKind
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
@@ -185,8 +186,8 @@ untrivialize tCons =
   Map.toList tCons `for_` \(name', handle) ->
     storeFacts
       [ handle `typeUnion`
-        ComplType (ConstType name' GenericType NoType)
-      , getDataKind "" `kindConstraint` handle
+        ComplType (ConstType name' (getTypeKind $ handleId handle) NoType)
+      , getDataKind "" `minKindConstraint` handle
       ]
 
 beginProc :: Text -> CollectorState -> Preprocessor ()
@@ -335,7 +336,7 @@ pushStruct :: (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
 pushStruct handle mainHandle = do
   tVars <- collectTVars
   pushContext $ StructCtx handle mainHandle
-  storeFact $ forall tVars [snd handle `typeUnion` snd mainHandle] []
+  storeFact $ forall tVars [snd handle `typeUnion` snd mainHandle] [Fact . regularExprConstraint $ snd mainHandle]
 
 pushClass ::
      (Text, TypeHole) -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()

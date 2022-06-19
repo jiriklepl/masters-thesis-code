@@ -372,7 +372,7 @@ instance GetMetadata ReadsVars (Expr a) where
       BinOpExpr _ left right -> getMetadata t left <> getMetadata t right
       ComExpr expr -> getMetadata t expr
       NegExpr expr -> getMetadata t expr
-      MemberExpr expr _ -> getMetadata t expr -- TODO: check whether this is correctus
+      MemberExpr expr _ -> getMetadata t expr -- TODO: check whether this is correct
       InfixExpr _ left right -> getMetadata t left <> getMetadata t right
       PrefixExpr _ actuals -> getMetadata t actuals
 
