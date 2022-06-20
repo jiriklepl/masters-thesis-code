@@ -11,43 +11,50 @@ import safe Data.Function ( ($) )
 import safe Data.Bool
 
 import safe CMM.Data.Nullable (Fallbackable((??)))
+import CMM.Inference.DataKind
+import CMM.Data.Bounds
+import CMM.Inference.Constness
+import CMM.Inference.TypeVar
+import Data.Set
+import Control.Applicative
+import CMM.Inference.Type
 
 data Absurdity
-  = Absurdity { absurdKind :: Bool, absurdConst :: Bool }
-  deriving (Eq, Ord, Show)
+  = Absurdity { absurdKind :: [(TypeVar, Bounds DataKind)], absurdConst :: [(TypeVar, Bounds Constness)] }
+  deriving (Eq, Show)
 
 instance Semigroup Absurdity where
   Absurdity {absurdKind = kind, absurdConst = const} <> Absurdity {absurdKind = kind', absurdConst = const'} =
-    Absurdity{absurdKind = kind || kind', absurdConst = const || const'}
+    Absurdity{absurdKind = kind <> kind', absurdConst = const <> const'}
 
-kindAbsurdity :: Polytypeness
-kindAbsurdity = Absurd $ Absurdity {absurdKind = True, absurdConst = False}
+kindAbsurdity :: TypeVar -> Bounds DataKind -> Polytypeness
+kindAbsurdity tVar bounds = Absurd $ Absurdity {absurdKind = pure (tVar, bounds), absurdConst = mempty}
 
-constAbsurdity :: Polytypeness
-constAbsurdity = Absurd $ Absurdity {absurdKind = False, absurdConst = True}
+constAbsurdity :: TypeVar -> Bounds Constness -> Polytypeness
+constAbsurdity tVar bounds = Absurd $ Absurdity {absurdKind = mempty, absurdConst = pure (tVar, bounds)}
 
 data PolyWhat
-  = PolyWhat {polyKind :: Bool, polyConst :: Bool, polyType :: Bool}
-  deriving (Eq, Ord, Show)
+  = PolyWhat {polyKind :: [(TypeVar, Bounds DataKind)], polyConst :: [(TypeVar, Bounds Constness)], polyType :: [(Type, Set TypeVar)]}
+  deriving (Eq, Show)
 
 instance Semigroup PolyWhat where
   PolyWhat {polyKind = kind, polyConst = const, polyType = typ} <> PolyWhat {polyKind = kind', polyConst = const', polyType = typ'} =
-    PolyWhat {polyKind = kind || kind', polyConst = const || const', polyType = typ || typ'}
+    PolyWhat {polyKind = kind <> kind', polyConst = const <> const', polyType = typ <> typ'}
 
-kindPolymorphism :: Polytypeness
-kindPolymorphism = Poly $ PolyWhat {polyKind = True, polyConst = False, polyType = False}
+kindPolymorphism :: TypeVar -> Bounds DataKind -> Polytypeness
+kindPolymorphism tVar bounds = Poly $ PolyWhat {polyKind = pure (tVar, bounds), polyConst = mempty, polyType = mempty}
 
-constPolymorphism :: Polytypeness
-constPolymorphism = Poly $ PolyWhat {polyKind = False, polyConst = True, polyType = False}
+constPolymorphism :: TypeVar -> Bounds Constness -> Polytypeness
+constPolymorphism tVar bounds = Poly $ PolyWhat {polyKind = mempty, polyConst = pure (tVar, bounds), polyType = mempty}
 
-typePolymorphism :: Polytypeness
-typePolymorphism = Poly $ PolyWhat {polyKind = False, polyConst = False, polyType = True}
+typePolymorphism :: Type -> Set TypeVar -> Polytypeness
+typePolymorphism t tVars = Poly $ PolyWhat {polyKind = mempty, polyConst = mempty, polyType = pure (t, tVars)}
 
 data Polytypeness
   = Mono
   | Poly PolyWhat
   | Absurd Absurdity
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Show)
 
 instance Semigroup Polytypeness where
   Absurd l <> Absurd r = Absurd $ l <> r

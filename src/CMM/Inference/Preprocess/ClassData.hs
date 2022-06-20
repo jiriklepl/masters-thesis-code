@@ -7,6 +7,7 @@ import safe Control.Lens.TH (makeLenses)
 
 import safe Data.Set (Set)
 import safe Data.Text (Text)
+import safe Data.Data ( Data )
 
 import safe CMM.Inference.Preprocess.TypeHole (TypeHole)
 
@@ -15,6 +16,7 @@ data ClassData =
     { _classHole :: TypeHole
     , _methodDecls :: Set Text
     }
+    deriving (Data)
 
 initClassData :: TypeHole -> Set Text -> ClassData
 initClassData handle decls =

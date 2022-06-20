@@ -10,10 +10,12 @@ import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
 import safe Control.Monad.State ( State, sequence, Monad ((>>=)) )
 import safe Data.Maybe ( Maybe, maybe )
-import safe Data.List ( head )
+import safe Data.List ( head, tail )
 import safe Data.Function ( (.), ($) )
 import safe Data.Functor ( (<$>), Functor (fmap) )
 import safe Control.Lens.Getter ( uses )
+import safe Control.Lens.Setter ( (%=) )
+import safe Data.Data ( Data )
 
 import safe CMM.Inference.Fact (Facts)
 import safe CMM.Inference.HandleCounter
@@ -23,7 +25,7 @@ import safe CMM.Inference.HandleCounter
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
-import safe CMM.Inference.TypeVar ( noType )
+import safe CMM.Inference.TypeVar ( TypeVar (NoType) )
 import safe CMM.Inference.Preprocess.TypeHole ( safeHoleHandle, HasTypeHole(getTypeHole) )
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import qualified Data.Map as Map
@@ -52,7 +54,9 @@ data PreprocessorState =
     , _cSymbols :: [Text]
     , _currentContext :: [Context]
     , _handleCounter :: HandleCounter
+    , _currentParent :: [TypeVar]
     }
+    deriving (Data)
 
 initPreprocessor :: PreprocessorState
 initPreprocessor =
@@ -71,14 +75,16 @@ initPreprocessor =
     , _cSymbols = mempty
     , _currentContext = [GlobalCtx]
     , _handleCounter = 0
+    , _currentParent = [NoType]
     }
 
 makeFieldsNoPrefix ''PreprocessorState
 
 type Preprocessor = State PreprocessorState
 
-instance GetParent Preprocessor where
-  getParent = maybe noType handleId <$> getCtxHandle
+instance GetParent Preprocessor TypeVar where
+  getParent = uses currentParent head
+
 
 instance Refresher Preprocessor where
   refresher tVars =

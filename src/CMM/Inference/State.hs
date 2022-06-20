@@ -83,9 +83,6 @@ trileanSeq = \case
 pushParent :: TypeVar -> Inferencer ()
 pushParent parent = currentParent %= (parent :)
 
-getParent :: Inferencer TypeVar
-getParent = uses currentParent head
-
 popParent :: Inferencer ()
 popParent = currentParent %= tail
 

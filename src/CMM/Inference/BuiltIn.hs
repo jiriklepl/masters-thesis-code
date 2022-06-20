@@ -27,7 +27,7 @@ import safe CMM.Inference.Fact
   ( Facts
   , FlatFacts
   , kindConstraint
-  , regularExprConstraint
+  , regularExprConstraint, constExprConstraint
   )
 import safe CMM.Inference.Type as Infer (Type)
 import safe CMM.Inference.TypeCompl
@@ -96,9 +96,9 @@ builtInContext :: Facts
 builtInContext = [] -- undefined
 
 builtInTypeFacts :: FlatFacts
-builtInTypeFacts = (kindFact <$> types) <> (constFact <$> types)
+builtInTypeFacts = (kindFact <$> abstractTypes) <> (constFact <$> abstractTypes)
   where
-    types =
+    abstractTypes =
       [ LabelType
       , StringType
       , String16Type

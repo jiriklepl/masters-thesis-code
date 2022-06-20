@@ -10,7 +10,7 @@ import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Monad (Monad((>>=), return), sequence, when)
+import safe Control.Monad (Monad((>>=), return), sequence, when, zipWithM)
 import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
@@ -32,11 +32,11 @@ import safe Data.List
   , or
   , partition
   , unzip
-  , zip, zipWith
+  , zip, zipWith, zip3
   )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe)
+import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe, catMaybes)
 import safe Data.Monoid (Monoid(mappend, mconcat, mempty))
 import safe Data.Ord (Ord((<), (>)))
 import safe Data.PartialOrd (PartialOrd)
@@ -48,7 +48,7 @@ import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (snd, swap, uncurry)
 import safe Data.String (fromString)
 import safe Text.Show (Show(show))
-import safe CMM.Data.Generics ((*|*))
+import safe Data.Tuple.Extra (dupe)
 import safe GHC.Err (undefined, error)
 
 import safe qualified CMM.Data.Bimap as Bimap
@@ -60,19 +60,20 @@ import safe CMM.Data.Bounds
   , normalizeAbsurd
   , upperBound
   )
-import safe CMM.Data.Function (fOr)
+import safe CMM.Data.Function (fOr, fAnd)
 import safe CMM.Data.Lattice (Lattice)
 import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Data.Num (Num((+)))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.OrderedBounds ()
 import safe CMM.Inference.DataKind (DataKind)
+import safe CMM.Data.Generics ((*|*))
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
   , FlatFact(ClassConstraint, ClassDetermine, ClassFact,
          ConstnessBounds, InstType, KindBounds, OnRegister, SubConst,
-         SubKind, SubType, Typing, Union, ClassFunDeps)
+         SubKind, SubType, Typing, Union, ClassFunDeps, ConstUnion, KindUnion)
   , FlatFacts
   , NestedFact(Fact, NestedFact)
   , Qual((:=>))
@@ -80,7 +81,7 @@ import safe CMM.Inference.Fact
   , subConst
   , subKind
   , typeConstraint
-  , typeUnion, classConstraint
+  , typeUnion, classConstraint, constUnion, kindUnion
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
@@ -143,10 +144,10 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeKind (getTypeKind, TypeKind (GenericType))
+import safe CMM.Inference.TypeKind (getTypeKind, TypeKind (GenericType, Star))
 import safe CMM.Inference.TypeVar
   ( TypeVar(NoType, TypeVar, tVarId, tVarParent)
-  , predecessor
+  , predecessor, overLeaf
   )
 import safe CMM.Inference.Unify (unify, unifyFold, unifyLax, instanceOf)
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
@@ -500,6 +501,10 @@ reduceOne (fact:facts) =
         Fact (tVar `typeConstraint` tVar') :
         Fact (tVar `subConst` tVar') :
         facts
+    Fact (KindUnion t t') -> do
+      tVar <- simplify t
+      tVar' <- simplify t'
+      continueWith $ Fact (tVar `subKind` tVar') : Fact (tVar' `subKind` tVar) : facts
     Fact (SubKind t t') -> do
       handle <- simplify t >>= getHandle
       handle' <- simplify t' >>= getHandle
@@ -510,6 +515,10 @@ reduceOne (fact:facts) =
       handle' <- simplify t' >>= getHandle
       pushSubConst handle handle'
       continue
+    Fact (ConstUnion t t') -> do
+      tVar <- simplify t
+      tVar' <- simplify t'
+      continueWith $ Fact (tVar `subConst` tVar') : Fact (tVar' `subConst` tVar) : facts
     Fact (Typing t t') -> do
       handle <- simplify t >>= getHandle
       handle' <- simplify t' >>= getHandle
@@ -663,15 +672,17 @@ reduce facts = do
   (change', facts''') <- closeSCCs facts'' sccs
   return (change || change', facts''')
 
-minimizeSubs :: TypeVar -> Inferencer ()
-minimizeSubs parent = do
-  constings <- uses subConsting transformMap
+minimizeSubs :: TypeVar -> Set TypeVar -> Inferencer ()
+minimizeSubs parent pTypeVars = do
+  pTypeConstings <- fmap Set.fromList . traverse getConsting $ Set.toList pTypeVars
+  pTypeKindings <- fmap Set.fromList . traverse getKinding $ Set.toList pTypeVars
+  constings <- uses subConsting (transformMap pTypeConstings)
   constBounds <- use constingBounds
-  kindings <- uses subKinding transformMap
+  kindings <- uses subKinding (transformMap pTypeKindings)
   kindBounds <- use kindingBounds
-  let (cSubsts, cRest) = laundry parent constBounds constings
+  let (cSubsts, cRest) = laundry parent pTypeConstings constBounds constings
       cSubst = foldTVarSubsts cSubsts
-      (kSubsts, kRest) = laundry parent kindBounds kindings
+      (kSubsts, kRest) = laundry parent pTypeKindings kindBounds kindings
       kSubst = foldTVarSubsts kSubsts
   fixSubGraph True subConsting cSubst
   fixBounds True constingBounds cSubst
@@ -691,10 +702,10 @@ minimizeSubs parent = do
     safeHandlizeUpdate
       ((_2 . consting %~ apply cSubst) . (_2 . kinding %~ apply kSubst))
   where
-    transformMap =
-      Map.toList . fmap (Set.filter setFilter) . Map.filterWithKey mapFilter
-    setFilter = predecessor parent . tVarParent
-    mapFilter from _ = tVarParent from == parent
+    transformMap pTypeIngs =
+      Map.toList . fmap (Set.filter (setFilter pTypeIngs)) . Map.filterWithKey (mapFilter pTypeIngs)
+    setFilter pTypeIngs = predecessor parent . tVarParent `fOr` (`Set.member` pTypeIngs) `fOr` (`Set.member` pTypeVars)
+    mapFilter pTypeIngs from _ = tVarParent from == parent && not (from `Set.member` pTypeIngs)
 
 laundry ::
      ( Bounded a
@@ -705,10 +716,11 @@ laundry ::
      , Nullable (f ((Ordered a, Set TypeVar), TypeVar))
      )
   => TypeVar
+  -> Set TypeVar
   -> Map TypeVar (Bounds a)
   -> [(TypeVar, Set TypeVar)]
   -> ([Map TypeVar TypeVar], [f ((Ordered a, Set TypeVar), TypeVar)])
-laundry parent boundsMap subGraph =
+laundry parent pTypeIngs boundsMap subGraph =
   let scc =
         Graph.stronglyConnCompR $
         (\(from, to) -> (from `readBoundsFrom` boundsMap, from, Set.toList to)) <$>
@@ -735,16 +747,16 @@ laundry parent boundsMap subGraph =
         Right (subst, Just tVar) = unifyFold $ Set.toList tVars
     getDepends [] acc = acc
     getDepends (Graph.AcyclicSCC (bounds, tVar, tVars):others) acc
-      | tVarParent tVar == parent =
+      | tVarParent tVar == parent  =
         getDepends others $
         Map.insert tVar (bounds, mconcat (getLimits <$> tVars)) acc
       | otherwise = getDepends others acc
       where
         getLimits tVar'
-          | tVarParent tVar' == parent =
+          | tVarParent tVar' == parent && not (tVar' `Set.member` pTypeIngs)=
             Set.filter relevant . view _2 . fromMaybe (mempty, mempty) $ tVar' `Map.lookup`
             acc
-          | parent `predecessor` tVarParent tVar' =
+          | parent `predecessor` tVarParent tVar' || not (tVar' `Set.member` pTypeIngs) =
             if relevant tVar'
               then Set.singleton tVar'
               else mempty
@@ -763,30 +775,32 @@ minimizeBounds what tVar = do
   what %= Map.insert tVar (low `Bounds` low)
 
 -- TODO: remove parent (implicit)
-freeParented :: TypeVar -> Inferencer ([TypeVar], [TypeVar])
-freeParented parent = do
+freeParented :: TypeVar -> Set TypeVar -> Inferencer ([TypeVar], [TypeVar])
+freeParented parent ts = do
   (consts, kinds) <- uses handlize $ unzip . fmap mineSubs . Bimap.elems
   subConsts <- use subConsting
   subKinds <- use subKinding
+  tConsts <- fmap Set.fromList . traverse getConsting $ Set.toList ts
+  tKinds <- fmap Set.fromList . traverse getKinding $ Set.toList ts
   return
-    ( filter (isFreeParented subConsts) consts
-    , filter (isFreeParented subKinds) kinds)
+    ( filter (isFreeParented tConsts subConsts) consts
+    , filter (isFreeParented tKinds subKinds) kinds)
   where
-    isFreeParented with tVar@TypeVar {} =
-      not (tVar `Map.member` with) && tVarParent tVar == parent
-    isFreeParented _ NoType = False
+    isFreeParented tIngs with tVar@TypeVar {} =
+      not (tVar `Map.member` with) && tVarParent tVar == parent && not (tVar `Set.member` tIngs)
+    isFreeParented _ _ NoType = False
     mineSubs handle = (handle ^. consting, handle ^. kinding)
 
-minimizeFree :: TypeVar -> Inferencer ()
-minimizeFree parent = do
-  (consts, kinds) <- freeParented parent
+minimizeFree :: TypeVar -> Set TypeVar -> Inferencer ()
+minimizeFree parent ts = do
+  (consts, kinds) <- freeParented parent ts
   minimizeBounds constingBounds `traverse_` consts
   minimizeBounds kindingBounds `traverse_` kinds
 
 -- TODO: remove parent (implicit)
-floatSubs :: TypeVar -> Inferencer ()
-floatSubs parent = do
-  (consts, kinds) <- (both %~ Set.fromList) <$> freeParented parent
+floatSubs :: TypeVar -> Set TypeVar -> Inferencer ()
+floatSubs parent ts = do
+  (consts, kinds) <- (both %~ Set.fromList) <$> freeParented parent ts
   constBounds <- use constingBounds
   kindBounds <- use kindingBounds
   Set.intersection consts kinds `for_` \tVar -> do
@@ -834,19 +848,32 @@ schematize :: Facts -> Set TypeVar -> Inferencer Facts
 schematize facts tVars = do
   parent <- getParent
   x <- Set.toList . Set.unions <$> traverse collectPrimeTVarsAll (Set.toList tVars)
-  constings <- Set.fromList <$> traverse getConsting x
-  kindings <- Set.fromList <$> traverse getKinding x
+  reX <- traverse reconstruct x
+  constings <- traverse getConsting x
+  kindings <- traverse getKinding x
   -- TODO: leave out trivial
-  typings <- zip x <$> traverse getTyping x
+  typings <- liftA2 (zip3 x) (traverse reconstruct x) (traverse getTyping x)
+  let toTrivialDeps = fmap (\x -> (x, Set.singleton x))
   subConsts <-
-    uses subConsting $ filter (keyParentedBy parent `fOr` presentIn constings) .
-    Map.toList
+    uses subConsting $ filter (keyParentedBy parent `fOr` presentIn constings `fOr` presentIn (Set.toList tVars)) .
+    (toTrivialDeps constings <>) . Map.toList
   subKinds <-
-    uses subKinding $ filter (keyParentedBy parent `fOr` presentIn kindings) .
-    Map.toList
-  constFacts <- translateSubs constingBounds SubConst ConstnessBounds subConsts
+    uses subKinding $ filter (keyParentedBy parent `fOr` presentIn kindings `fOr` presentIn (Set.toList tVars)) .
+    (toTrivialDeps kindings <>) . Map.toList
+  let constingsSubst = Map.fromList $ zip constings reX
+      constingFacts =
+        [ constUnion t' t
+        | (t', t) <- zip (constingsSubst `apply` fmap toType constings) reX
+        , t' /= t]
+      kindingsSubst = Map.fromList $ zip kindings reX
+      kindingFacts =
+        [ kindUnion t' t
+        | (t', t) <- zip (kindingsSubst `apply` fmap toType kindings) reX
+        , t' /= t]
+  -- when (tVars == Set.fromList [TypeVar 2 Star NoType]) . error $ show constingsSubst <> "\n" <> show kindingsSubst
+  constFacts <- translateSubs constingBounds constingsSubst SubConst ConstnessBounds subConsts
   kindFacts <-
-    translateSubs kindingBounds SubKind (KindBounds . fmap Ordered) subKinds
+    translateSubs kindingBounds kindingsSubst SubKind (KindBounds . fmap Ordered) subKinds
   (determineFacts, factsRest) <-
     do let elaborate' t = do
              tVar <- simplify t
@@ -860,46 +887,48 @@ schematize facts tVars = do
        (factPairs, others) <- construct facts
        let (filtered, rest) =
              partition
-               (any ((`Set.member` Set.fromList x) `fOr` parentedBy parent) .
+               (any ((`Set.member` Set.fromList x) `fOr` parentedBy parent `fOr` (`Set.member` tVars)) .
                 freeTypeVars .
                 view _1)
                factPairs
        return (view _2 <$> filtered, (Fact . view _2 <$> rest) <> others)
   let typingFacts =
-        [ fact
-        | fact@(Union t t') <- uncurry typeConstraint <$> typings
-        , t /= t'
+        [ typeConstraint t t'
+        | (t, t'', t') <- typings
+        , let useFilter = (`Set.member` freeTypeVars t'') `fOr` parentedBy parent
+        , toType t /= t'
+        , useFilter t
         ]
-      facts' = typingFacts <> determineFacts <> constFacts <> kindFacts
+      facts' = typingFacts <> determineFacts <> constingFacts <> constFacts <> kindingFacts <> kindFacts
   tVars `for_` \tVar -> do
     t <- reconstruct tVar
     let scheme =
           Set.filter
-            ((`Set.member` freeTypeVars t) `fOr` parentedBy parent)
+            ((`Set.member` freeTypeVars t) `fOr` parentedBy parent `fOr` (`Set.member` tVars))
             (freeTypeVars facts' <> freeTypeVars t) :.
           facts' :=>
           t
     registerScheme tVar scheme
   return factsRest
   where
-    translateSubs _ _ _ [] = return []
-    translateSubs bounds subConstr boundsConstr ((tVar, limits):others) = do
-      t <- reconstruct tVar
+    translateSubs _ _ _ _ [] = return []
+    translateSubs bounds reconstructor subConstr boundsConstr ((tVar, limits):others) = do
+      t <- return $ reconstructor `apply` toType tVar
+      let limits' = filter (/= tVar) $ Set.toList limits
       facts' <-
             (\tVar' -> do
-              t' <- reconstruct tVar'
-              return $ t `subConstr` t') `traverse`
-            Set.toList limits
-      let  translateOthers =
-            (facts' <>) <$> translateSubs bounds subConstr boundsConstr others
+              t' <- return $ reconstructor `apply` toType tVar'
+              return $ t `subConstr` t') `traverse` limits'
+      let translateOthers =
+            translateSubs bounds reconstructor subConstr boundsConstr others
       uses bounds (tVar `Map.lookup`) >>= \case
         Nothing -> translateOthers
         Just bounds' ->
-          (boundsConstr bounds' t :) <$> translateOthers
-    keyParentedBy parent (key, _) = tVarParent key == parent
-    parentedBy parent TypeVar {tVarParent = par} = parent == par
+          (boundsConstr bounds' t :) . (facts' <>) <$> translateOthers
+    keyParentedBy parent (key, _) = parent `overLeaf` tVarParent key
+    parentedBy parent TypeVar {tVarParent = par} = parent `overLeaf` par
     parentedBy _ _ = False
-    presentIn where' (key, _) = key `Set.member` where'
+    presentIn where' (key, _) = key `Set.member` Set.fromList where'
 
 closeSCCs ::
      Facts -> [SCC (Fact, TypeVar, [TypeVar])] -> Inferencer (Bool, Facts)
@@ -926,12 +955,15 @@ closeSCCs facts (scc:others) =
         traverse transformFact (fmap rePar trios) >>= reduceMany .
         (<> fmap rePar facts) .
         concat
-      minimizeSubs parent
-      minimizeFree parent
+      parents' <- uses unifs ((<$> parents) . apply)
+      x <- Set.unions <$> collectPrimeTVarsAll  `traverse` parents'
+      --  error $ show x
+      minimizeSubs parent x
+      minimizeFree parent x
       _ <- fixAll
       parent' <- uses unifs (`apply` parent)
       popParent *> pushParent parent'
-      floatSubs parent'
+      floatSubs parent' x
       _ <- fixAll
       parent'' <- uses unifs (`apply` parent)
       popParent *> pushParent parent''
@@ -1011,11 +1043,11 @@ propagateBounds ::
   -> Inferencer ()
 propagateBounds which by = do
   pairs <- liftA2 (collectPairs Forward) getHandleCounter (use by)
-  for_ pairs $ \(v, v') -> do
-    uses which (v' `Map.lookup`) >>=
-      traverse_ ((which %=) . Map.insertWith (<>) v . (lowerBound .~ minBound))
-    uses which (v `Map.lookup`) >>=
-      traverse_ ((which %=) . Map.insertWith (<>) v' . (upperBound .~ maxBound))
+  for_ pairs $ \(sup, sub) -> do
+    uses which (sub `Map.lookup`) >>=
+      traverse_ ((which %=) . Map.insertWith (<>) sup . (upperBound .~ maxBound))
+    uses which (sup `Map.lookup`) >>=
+      traverse_ ((which %=) . Map.insertWith (<>) sub . (lowerBound .~ minBound))
 
 boundsUnifs ::
      (PartialOrd a, Eq a, Ord (Ordered a), Bounded a)

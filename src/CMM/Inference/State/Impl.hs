@@ -102,7 +102,7 @@ makeFieldsNoPrefix ''InferencerState
 
 type Inferencer = State InferencerState
 
-instance GetParent Inferencer where
+instance GetParent Inferencer TypeVar where
   getParent = uses currentParent head
 
 instance Refresher Inferencer where

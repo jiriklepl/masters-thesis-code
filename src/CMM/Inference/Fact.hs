@@ -65,8 +65,10 @@ data FlatFact a
   -- ^ states that the type variable stores its data to a certain register
   | SubKind a a
   -- ^ TODO superKind; subKind
+  | KindUnion a a
   | SubConst a a
   -- ^ TODO superConst; subConst
+  | ConstUnion a a
   | InstType a a
   -- ^ TODO polytype; monotype
   | ClassConstraint Text a
@@ -119,8 +121,14 @@ subType t t' = toType t `SubType` toType t'
 subKind :: (ToType a, ToType b) => a -> b -> FlatFact Type
 subKind t t' = toType t `SubKind` toType t'
 
+kindUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
+kindUnion t t' = toType t `KindUnion` toType t'
+
 subConst :: (ToType a, ToType b) => a -> b -> FlatFact Type
 subConst t t' = toType t `SubConst` toType t'
+
+constUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
+constUnion t t' = toType t `ConstUnion` toType t'
 
 -- | States that the given `TypeVar` type variable is instantiated into another `TypeVar` type variable
 instType :: (ToType a, ToType b) => a -> b -> FlatFact Type

@@ -4,6 +4,7 @@ module CMM.Inference.Preprocess.TypeHole where
 
 import safe Data.Function ((.), id)
 import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe)
+import safe Data.Data ( Data )
 import safe GHC.Err (error)
 import safe Text.Show (Show)
 import safe Data.Functor ( Functor(fmap) )
@@ -22,7 +23,7 @@ data TypeHole
   | LVInstTypeHole !TypeHandle !TypeHole
   | MethodTypeHole !TypeHandle !TypeHandle !TypeHandle
   | MemberTypeHole !TypeHandle ![TypeHole] ![TypeHandle] ![TypeHandle]
-  deriving (Show)
+  deriving (Show, Data)
 
 class HasTypeHole a where
   getTypeHole :: a -> TypeHole

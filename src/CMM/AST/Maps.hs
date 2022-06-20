@@ -58,7 +58,7 @@ import safe CMM.AST
   , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
          TopStruct)
   , Type(TAuto, TBits, TName, TPar)
-  , Unit(Unit)
+  , Unit(Unit), SemiFormal (SemiFormal)
   )
 import safe CMM.AST.Annot (Annot)
 import safe CMM.Control.Applicative (liftA4, liftA6)
@@ -229,7 +229,7 @@ instance ASTmapCTX1 hint a b ProcedureHeader =>
     \case
       ProcedureDecl a -> ProcedureDecl <$> f a
 
-instance (ASTmapCTX2 hint a b Formal Type, Space hint a b Name) =>
+instance (ASTmapCTX3 hint a b Formal Type SemiFormal, Space hint a b Name) =>
          ASTmap hint ProcedureHeader a b where
   astMapM _ f =
     \case
@@ -245,6 +245,12 @@ instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
   astMapM _ f =
     \case
       Formal a b c d -> liftA2 (Formal a b) (f c) (f d)
+
+instance (ASTmapCTX1 hint a b Type) =>
+         ASTmap hint SemiFormal a b where
+  astMapM _ f =
+    \case
+      SemiFormal a b -> SemiFormal a <$> f b
 
 instance ASTmapCTX1 hint a b Expr => ASTmap hint Actual a b where
   astMapM _ f =

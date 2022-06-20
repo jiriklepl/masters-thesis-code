@@ -88,7 +88,7 @@ import safe CMM.AST
   , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
          TopStruct)
   , Type(TAuto, TBits, TName, TPar)
-  , Unit(Unit)
+  , Unit(Unit), SemiFormal (SemiFormal)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
@@ -168,8 +168,8 @@ instance Pretty (Decl a) where
       ConstDecl mType name expr ->
         "const" <+>
         maybeSpacedR mType <> pretty name <+> equals <+> pretty expr <> semi
-      TypedefDecl type_ names ->
-        "typedef" <+> pretty type_ <+> commaPretty names <> semi
+      TypedefDecl type' names ->
+        "typedef" <+> pretty type' <+> commaPretty names <> semi
       RegDecl invar registers ->
         ifTrue invar ("invariant" <> space) <> pretty registers <> semi
       PragmaDecl name pragma ->
@@ -242,8 +242,8 @@ instance Pretty (Datum a) where
     \case
       DatumLabel name -> pretty name <> colon
       DatumAlign int -> "align" <+> pretty int <> semi
-      Datum type_ mSize mInit ->
-        pretty type_ <>
+      Datum type' mSize mInit ->
+        pretty type' <>
         maybe mempty pretty mSize <> maybe mempty pretty mInit <> semi
 
 instance Pretty (Init a) where
@@ -255,8 +255,8 @@ instance Pretty (Init a) where
 
 instance Pretty (Registers a) where
   pretty = \case
-    Registers mKind type_ nameStringPairs ->
-      maybeSpacedR mKind <> pretty type_ <+>
+    Registers mKind type' nameStringPairs ->
+      maybeSpacedR mKind <> pretty type' <+>
       commaSep
         [ pretty name <> maybe mempty ((space <>) . (equals <+>) . pretty) mString
         | (name, mString) <- nameStringPairs
@@ -298,9 +298,14 @@ instance Pretty (ProcedureHeader a) where
 
 instance Pretty (Formal a) where
   pretty = \case
-    Formal mKind invar type_ name ->
-      maybeSpacedR mKind <> ifTrue invar ("invariant" <> space) <> pretty type_ <+>
+    Formal mKind invar type' name ->
+      maybeSpacedR mKind <> ifTrue invar ("invariant" <> space) <> pretty type' <+>
       pretty name
+
+instance Pretty (SemiFormal a) where
+  pretty = \case
+    SemiFormal mKind type' ->
+      maybeSpacedR mKind <> pretty type'
 
 instance Pretty (Actual a) where
   pretty = \case
@@ -381,8 +386,8 @@ instance Pretty (LValue a) where
   pretty =
     \case
       LVName name -> pretty name
-      LVRef type_ expr mAsserts ->
-        pretty type_ <>
+      LVRef type' expr mAsserts ->
+        pretty type' <>
         brackets
           (pretty expr <>
            maybe mempty (\asserts -> space <> pretty asserts) mAsserts)

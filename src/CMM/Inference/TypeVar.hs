@@ -5,7 +5,7 @@ module CMM.Inference.TypeVar where
 import safe Data.Bool (Bool(False, True), otherwise)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
-import safe Data.Function (id)
+import safe Data.Function (id, const)
 import safe Data.Int (Int)
 import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Text.Show (Show)
@@ -84,6 +84,14 @@ predecessor NoType _ = False
 predecessor whose@TypeVar {tVarParent = parent} who
   | whose == who = True
   | otherwise = predecessor parent who
+
+overLeaf :: TypeVar -> TypeVar -> Bool
+overLeaf NoType = const False
+overLeaf x = \case
+  NoType -> False
+  leaf
+    | x == leaf -> True
+    | otherwise -> x `overLeaf` tVarParent leaf
 
 noType :: FromTypeVar a => a
 noType = fromTypeVar NoType

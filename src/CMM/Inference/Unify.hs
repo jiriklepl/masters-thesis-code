@@ -54,8 +54,8 @@ unifiable = (isRight .) . unify
 instanceOf :: Unify a b => a -> a -> Bool
 inst `instanceOf` scheme = isRight $ unifyDirected Backward inst scheme
 
-instantiateTo :: Unify a b => a -> a -> Either [UnificationError] (Subst b, a)
-instantiateTo = unifyDirected Backward
+instantiateFrom :: Unify a b => a -> a -> Either [UnificationError] (Subst b, a)
+instantiateFrom = unifyDirected Backward
 
 schemeOf :: Unify a b => a -> a -> Bool
 schemeOf = flip instanceOf

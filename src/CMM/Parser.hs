@@ -86,7 +86,7 @@ import safe CMM.AST
   , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
          TopStruct)
   , Type(TAuto, TBits, TName, TPar)
-  , Unit(Unit)
+  , Unit(Unit), SemiFormal (SemiFormal)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
@@ -350,13 +350,16 @@ procedureHeader =
     (optional convention)
     identifier
     formals
-    (optional $ symbol L.Arr *> sepEndBy type' comma)
+    (optional $ symbol L.Arr *> sepEndBy semiFormal comma)
 
 procedure :: SourceParser Procedure
 procedure = withSourcePos $ liftA2 Procedure procedureHeader body
 
 formal :: SourceParser Formal
 formal = withSourcePos $ liftA4 Formal mKind invariant type' identifier
+
+semiFormal :: SourceParser SemiFormal
+semiFormal = withSourcePos $ liftA2 SemiFormal mKind  type'
 
 formals :: Parser [Annot Formal SourcePos]
 formals = parens $ formal `sepEndBy` comma

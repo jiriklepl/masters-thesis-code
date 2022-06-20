@@ -16,11 +16,12 @@ import safe Data.Function (($), flip)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
+import safe Control.Lens.Type (Lens')
 
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
-import safe CMM.Pretty ()
+import safe CMM.Parser.ASTError (registerASTError)
 
 import safe CMM.AST.Variables.Error
   ( VariablesError
@@ -41,8 +42,6 @@ import safe CMM.AST.Variables.State.Impl
   , typeVariables
   , variables
   )
-import safe CMM.Parser.ASTError (registerASTError)
-import Control.Lens.Type (Lens')
 
 type Collector = State CollectorState
 

@@ -161,7 +161,7 @@ newtype ProcedureDecl a =
 deriving instance Eq (ProcedureDecl ())
 
 data ProcedureHeader a =
-  ProcedureHeader (Maybe Conv) (Name a) [Annot Formal a] (Maybe [Annot Type a])
+  ProcedureHeader (Maybe Conv) (Name a) [Annot Formal a] (Maybe [Annot SemiFormal a])
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (ProcedureHeader ())
@@ -171,6 +171,12 @@ data Formal a =
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Formal ())
+
+data SemiFormal a =
+  SemiFormal (Maybe Kind) (Annot Type a)
+  deriving (Show, Functor, Foldable, Traversable, Data)
+
+deriving instance Eq (SemiFormal ())
 
 data Actual a =
   Actual (Maybe Kind) (Annot Expr a)

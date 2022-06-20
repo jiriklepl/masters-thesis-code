@@ -92,8 +92,8 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeVar as Type (TypeVar (TypeVar, NoType))
-import safe CMM.Inference.Unify (unify, instanceOf, instantiateTo)
+import safe CMM.Inference.TypeVar as Type (TypeVar (TypeVar, NoType), ToTypeVar (toTypeVar))
+import safe CMM.Inference.Unify (unify, instanceOf, instantiateFrom)
 import safe CMM.Monomorphize.Monomorphized
   ( Monomorphized
   , PolyGenerate(getPolyGenerate)
@@ -152,30 +152,31 @@ instance {-# OVERLAPPABLE #-} MonomorphizeImpl n n' a =>
 
 typingPolytypeness :: Type.Type -> Polytypeness
 typingPolytypeness t =
-  if null $ freeTypeVars t
+  if null free
     then Mono
-    else typePolymorphism
+    else typePolymorphism t free
+    where free = freeTypeVars t
 
 constnessPolytypeness :: TypeVar -> Inferencer Polytypeness
 constnessPolytypeness tVar = go <$> readConstingBounds tVar
   where
-    go (low `Bounds` high) =
+    go bounds@(low `Bounds` high) =
       case low `compare` high of
         LT -> if low >= LinkExpr
           then Mono
-          else constPolymorphism
+          else constPolymorphism tVar bounds
         EQ -> Mono
-        GT -> constAbsurdity
+        GT -> constAbsurdity tVar bounds
 
 kindingPolytypeness :: TypeVar -> Inferencer Polytypeness
 kindingPolytypeness tVar = go <$> readKindingBounds tVar
   where
-    go (low `Bounds` high) =
+    go bounds@(low `Bounds` high) =
       if low PartialOrd.<= high
         then if high PartialOrd.<= low
                then Mono
-               else kindPolymorphism
-        else kindAbsurdity
+               else kindPolymorphism tVar bounds
+        else kindAbsurdity tVar bounds
 
 typePolytypeness :: Subst Type.Type -> TypeVar -> Inferencer Polytypeness
 typePolytypeness subst tVar =
@@ -364,23 +365,23 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl Struct Struct a where
     handle <- getHandle $ getTypeHoleId a
     schemeName <- fromOldName $ getTypeHoleId a
     addStruct <- uses schemes (schemeName `Map.lookup`) <&> \case
-       Nothing -> undefined
-       Just scheme ->
+      Nothing -> undefined
+      Just scheme ->
         polySchemes %~
           Map.insert
             handle
             (scheme, StructScheme $ withAnnot a struct)
     let
       go = getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a) >>= \case
-         Mono -> do
+        Mono -> do
           datums' <- traverse (ensuredJustMonomorphize undefined subst) datums
           return $ do
             datums'' <- sequence datums'
             let struct' = withAnnot a . Struct name <$> traverse getNode datums''
                 meta = foldMap unNode datums''
             return $ withMaybeNode struct' meta
-         Poly {} -> monomorphizeMaybes subst a (const Nothing) datums
-         Absurd absurdity -> error $ show absurdity -- TODO: logic error
+        Poly {} -> monomorphizeMaybes subst a (const Nothing) datums
+        Absurd absurdity -> error $ show absurdity -- TODO: logic error
     go <&> fmap addStruct
 
 instance MonomorphizeImpl Import Import a where
@@ -442,8 +443,10 @@ instance (HasPos a, HasTypeHole a) =>
                   liftA2 Procedure (getNode header'') (getNode body'')
             let meta = unNode header'' <> unNode body''
             return $ withMaybeNode procedure' meta
-        Poly {} -> succeed nullVal
-        Absurd {} -> return $ Left undefined
+        Poly polyWhat
+          | null subst -> succeed nullVal
+          | otherwise -> error $ show polyWhat
+        Absurd {} -> return undefined
 
 instance MonomorphizeImpl ProcedureHeader ProcedureHeader a where
   monomorphizeImpl _ a header =
@@ -582,7 +585,7 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl LValue LValue a where
       Poly {} -> do
         -- error . show $ () <$ lValue -- TODO: lValue cannot be a polytype
         succeed $ withNode (withAnnot a lValue) nullVal
-      Absurd {} -> return $ Left undefined -- TODO: lValue cannot have an illegal type
+      Absurd absurdity -> error $ show absurdity -- TODO: lValue cannot have an illegal type
       Mono ->
         case lValue of
           LVName _ ->
@@ -591,13 +594,12 @@ instance (HasPos a, HasTypeHole a) => MonomorphizeImpl LValue LValue a where
                 succeed $ withNode (withAnnot a lValue) nullVal
               LVInstTypeHole handle scheme ->
                 getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole scheme) >>= \case
-                  Mono -> succeed $ withNode (withAnnot a lValue) nullVal
-                  Poly {} -> do
+                  Absurd {} -> return $ Left undefined
+                  _ -> do
                     let meta =
                           nullVal &
                           addGenerate (holeHandle scheme) handle
                     succeed $ withNode (withAnnot a lValue) meta
-                  Absurd {} -> return $ Left undefined
               _ -> return $ Left undefined
           LVRef mType expr mAsserts -> do
             mType' <-
@@ -737,7 +739,7 @@ monomorphizeMethod scheme inst mono =
     go set = do
       set' <-
         Set.toList set `for` \item -> monomorphizeMethodInner item inst mono
-      return $ first undefined $ oneRight set'
+      return $ first (error . show) $ oneRight set'
 
 monomorphizeField :: (HasPos a, HasTypeHole a) =>
   TypeVar
@@ -751,7 +753,7 @@ monomorphizeField scheme inst mono =
     go map = do
       map' <-
         Map.toList map `for` \(item, struct) -> monomorphizeFieldInner item inst struct mono
-      return $ first undefined $ oneRight map'
+      return $ first head $ oneRight map'
 
 monomorphizeFieldInner ::
      (HasPos a, HasTypeHole a)
@@ -763,7 +765,7 @@ monomorphizeFieldInner ::
 monomorphizeFieldInner scheme inst struct mono = do
   scheme' <- fromOldName scheme >>= getTyping
   inst' <- fromOldName inst >>= getTyping
-  case inst' `instantiateTo` scheme' of
+  case inst' `instantiateFrom` scheme' of
     Left err -> return $ Left undefined -- TODO
     Right (subst, _) -> do
       struct' <- getHandle struct
@@ -772,7 +774,7 @@ monomorphizeFieldInner scheme inst struct mono = do
         Just (_, schematized) -> case schematized of
           FuncScheme _ -> undefined -- TODO: logic error
           StructScheme structure ->
-              monomorphize subst structure <&> fmap (node %~ fmap StructScheme)
+              ensuredJustMonomorphize undefined subst structure <&> fmap (node %~ fmap StructScheme)
 
 monomorphizeMethodInner ::
      (HasPos a, HasTypeHole a)
@@ -781,21 +783,19 @@ monomorphizeMethodInner ::
   -> Monomorphized n a
   -> Inferencer (MonomorphizeError `Either` Monomorphized Schematized a)
 monomorphizeMethodInner scheme inst mono = do
-  scheme' <- reconstructOld $ handleId scheme
-  inst' <- reconstructOld $ handleId inst
-  case ComplType (AddrType scheme') `unify` inst' of
+  scheme' <- fromOldName (toTypeVar scheme) >>= getTyping
+  inst' <- fromOldName (toTypeVar inst) >>= getTyping
+  case inst' `instantiateFrom` ComplType (AddrType scheme') of
     Left err -> do
-      unifs' <- use unifs
-      let x = view polyData $ renewPolyData unifs' mono
-      return $ Left $ error (show scheme <> "\n" <> show inst <> "\n" <> show x <> "\n" <> show scheme' <> "\n" <> show inst')
+      return $ Left $ error $ "\n" <> show scheme' <> "\n" <> show inst'
     Right (subst, _) ->
       case scheme `Map.lookup` view polySchemes mono of
+        Nothing -> error $ show scheme
         Just (_, schematized) ->
           case schematized of
             FuncScheme procedure ->
-              monomorphize subst procedure <&> fmap (node %~ fmap FuncScheme)
+              ensuredJustMonomorphize undefined subst procedure <&> fmap (node %~ fmap FuncScheme)
             StructScheme _ -> undefined -- TODO: logic error
-        Nothing -> error $ show (void $ view polySchemes mono) <> "\n" <> show scheme' <> "\n" <> show inst'
 
 instance MonomorphizeImpl CallAnnot CallAnnot a where
   monomorphizeImpl = undefined

@@ -69,6 +69,8 @@ import safe qualified CMM.AST.Variables.State as CS
 import safe CMM.Inference.TypeCompl (TypeCompl(ConstType), makeFunction, makeApplication)
 import safe qualified CMM.Data.Trilean as T
 import safe CMM.Inference.State (fieldClassHelper)
+import safe CMM.AST (Conv)
+import safe CMM.AST.GetConv ( GetConv(getConv) )
 
 import safe CMM.Inference.Preprocess.State.Impl
   ( PreprocessorState(PreprocessorState)
@@ -91,9 +93,8 @@ import safe CMM.Inference.Preprocess.State.Impl
   , typeClasses
   , typeConstants
   , typeVariables
-  , variables, Preprocessor, freshTypeHelper, freshNamedASTTypeHandle
+  , variables, Preprocessor, freshTypeHelper, freshNamedASTTypeHandle, currentParent
   )
-import CMM.Inference.DataKind
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
@@ -187,11 +188,11 @@ untrivialize tCons =
     storeFacts
       [ handle `typeUnion`
         ComplType (ConstType name' (getTypeKind $ handleId handle) NoType)
-      , getDataKind "" `minKindConstraint` handle
+      , getDataKind "" `kindConstraint` handle
       ]
 
-beginProc :: Text -> CollectorState -> Preprocessor ()
-beginProc name collector = do
+beginProc :: Text -> TypeHole -> CollectorState -> Maybe Conv -> Preprocessor ()
+beginProc name hole collector mConv = do
   vars <- declVars $ collector ^. CS.variables
   variables %= (vars :)
   tAliases <- declVars $ collector ^. CS.typeAliases
@@ -204,8 +205,7 @@ beginProc name collector = do
     [ constExprConstraint currentReturn
     , tVarId (handleId currentReturn) `tupleKind` currentReturn
     ]
-  handle <- lookupCtxFVar name
-  pushContext $ FunctionCtx (name, handle) currentReturn
+  pushContext $ FunctionCtx (name, hole) currentReturn mConv
 
 openProc :: CollectorState -> Preprocessor ()
 openProc collector = do
@@ -238,7 +238,7 @@ lookupCtxFVar name = use currentContext >>= go
     go =
       \case
         ClassCtx {}:_ -> lookupFVar name
-        FunctionCtx (name', handle) _:others
+        FunctionCtx (name', handle) _ _:others
           | name == name' -> return handle
           | otherwise -> go others
         GlobalCtx:_ -> lookupFVar name
@@ -247,15 +247,18 @@ lookupCtxFVar name = use currentContext >>= go
         [] -> poppedGlobalCtxError
 
 getCurrentReturn :: Preprocessor TypeHole
-getCurrentReturn = uses currentContext (go . head)
+getCurrentReturn = uses currentContext $ go . head
   where
     go =
       \case
-        FunctionCtx _ handle -> SimpleTypeHole handle
+        FunctionCtx _ handle _ -> SimpleTypeHole handle
         _ -> noCurrentReturn
 
 getCtxName :: Preprocessor Text
-getCtxName = uses currentContext (getName . head)
+getCtxName = uses currentContext $ getName . head
+
+getCtxMConv :: Preprocessor (Maybe Conv)
+getCtxMConv = uses currentContext $ getConv . head
 
 getCtxClassConstraint :: Preprocessor (Text, Type)
 getCtxClassConstraint = uses currentContext go
@@ -313,6 +316,14 @@ storeProc name fs x = do
           storeFact . forall tVars [handle `typeUnion` t] $ instFact : unionFact :
             facts'
           return $ MethodTypeHole handle fHandle eHandle
+
+pushParent :: TypeVar -> Preprocessor ()
+pushParent parent =
+  currentParent %= (parent :)
+
+popParent :: Preprocessor ()
+popParent =
+  currentParent %= tail
 
 pushFacts :: Preprocessor ()
 pushFacts = facts %= ([] :)
