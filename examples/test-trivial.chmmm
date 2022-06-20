@@ -1,0 +1,5 @@
+foreign "C" f ("" bits32 x) {
+    auto y;
+    y = x + 1;
+    return (y);
+}

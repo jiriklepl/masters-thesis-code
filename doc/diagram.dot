@@ -15,6 +15,10 @@ digraph {
             node [fillcolor="lightgreen"]
 
             AST
+            ASTErrors [label="AST errors"]
+            UnifyErrors [label="Unification errors"]
+            BlockifierErrors [label="Blockifier errors"]
+            MonomorphizeErrors [label="Monomorphization errors"]
             Facts [label="Type facts"]
             Variables [label="Variables"]
             ASTTypeHoles [label="AST\nwith type holes"]
@@ -22,9 +26,9 @@ digraph {
             FlatAST [label="Flat AST"]
             BlockifiedAST [label="Blockified AST"]
             BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow"]
+            MonoAST [label="Monomorphized AST"]
         }
 
-        MonoAST [label="Monomorphized AST", fillcolor="yellow"]
     }
 
     subgraph components {
@@ -48,13 +52,16 @@ digraph {
 
             Infer [label="Type inference"]
             Monomorphization
-            Translator
         }
+
+        Mangling [fillcolor="orange"]
+        Translator [fillcolor="orange"]
     }
 
     subgraph decisions {
         node [shape="diamond"]
     }
+
 
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
@@ -62,8 +69,11 @@ digraph {
     AST -> InferPre -> { Facts ASTTypeHoles }
     Facts -> { FunDepSimpl AnnotMining }
     { FunDepSimpl ASTTypeHoles AnnotMining } -> Infer -> Judgments -> Monomorphization
-    FlatAST -> Blockifier -> BlockifiedAST
+    { Infer Monomorphization } -> UnifyErrors
+    FlatAST -> Blockifier -> {BlockifiedAST BlockifierErrors }
     BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
-    BlockifiedASTAnnots -> Monomorphization -> MonoAST
+    { Blockifier FlowAnalysis VariableMining} -> ASTErrors
+    BlockifiedASTAnnots -> Monomorphization -> {Mangling -> MonoAST}
+    Monomorphization -> MonomorphizeErrors
     MonoAST -> Translator -> LLVM
 }

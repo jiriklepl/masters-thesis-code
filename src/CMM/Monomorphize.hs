@@ -767,14 +767,20 @@ monomorphizeFieldInner scheme inst struct mono = do
   inst' <- fromOldName inst >>= getTyping
   case inst' `instantiateFrom` scheme' of
     Left err -> return $ Left undefined -- TODO
-    Right (subst, _) -> do
-      struct' <- getHandle struct
-      case struct' `Map.lookup` view polySchemes mono of
-        Nothing -> error $ show struct'
-        Just (_, schematized) -> case schematized of
-          FuncScheme _ -> undefined -- TODO: logic error
-          StructScheme structure ->
-              ensuredJustMonomorphize undefined subst structure <&> fmap (node %~ fmap StructScheme)
+    Right _-> do
+      scheme'' <- reconstructOld $ toTypeVar scheme
+      inst'' <- reconstructOld $ toTypeVar inst
+      case inst'' `instantiateFrom` scheme'' of
+        Left err ->
+          return $ Left $ error $ "\n" <> show scheme'' <> "\n" <> show inst'' -- TODO: logic error
+        Right (subst, _) -> do
+          struct' <- getHandle struct
+          case struct' `Map.lookup` view polySchemes mono of
+            Nothing -> error $ show struct' -- TODO: logic error
+            Just (_, schematized) -> case schematized of
+              FuncScheme _ -> undefined -- TODO: logic error
+              StructScheme structure ->
+                  ensuredJustMonomorphize undefined subst structure <&> fmap (node %~ fmap StructScheme)
 
 monomorphizeMethodInner ::
      (HasPos a, HasTypeHole a)
@@ -787,15 +793,21 @@ monomorphizeMethodInner scheme inst mono = do
   inst' <- fromOldName (toTypeVar inst) >>= getTyping
   case inst' `instantiateFrom` ComplType (AddrType scheme') of
     Left err -> do
-      return $ Left $ error $ "\n" <> show scheme' <> "\n" <> show inst'
-    Right (subst, _) ->
-      case scheme `Map.lookup` view polySchemes mono of
-        Nothing -> error $ show scheme
-        Just (_, schematized) ->
-          case schematized of
-            FuncScheme procedure ->
-              ensuredJustMonomorphize undefined subst procedure <&> fmap (node %~ fmap FuncScheme)
-            StructScheme _ -> undefined -- TODO: logic error
+      return $ Left $ error $ "\n" <> show scheme' <> "\n" <> show inst' -- TODO
+    Right _ -> do
+      scheme'' <- reconstructOld $ toTypeVar scheme
+      inst'' <- reconstructOld $ toTypeVar inst
+      case inst'' `instantiateFrom` ComplType (AddrType scheme'') of
+        Left err ->
+          return $ Left $ error $ "\n" <> show scheme'' <> "\n" <> show inst'' -- TODO: logic error
+        Right (subst, _) ->
+          case scheme `Map.lookup` view polySchemes mono of
+            Nothing -> error $ show scheme
+            Just (_, schematized) ->
+              case schematized of
+                FuncScheme procedure ->
+                  ensuredJustMonomorphize undefined subst procedure <&> fmap (node %~ fmap FuncScheme)
+                StructScheme _ -> undefined -- TODO: logic error
 
 instance MonomorphizeImpl CallAnnot CallAnnot a where
   monomorphizeImpl = undefined

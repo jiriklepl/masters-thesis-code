@@ -552,7 +552,7 @@ reduceOne (fact:facts) =
                   if tType `instanceOf` tType' then do
                       subst <- refresher tVars
                       let freshT = subst `apply` t'
-                          newFacts = typeConstraint tVar freshT : (apply subst <$> fs)
+                          newFacts = typeUnion tVar freshT : (apply subst <$> fs)
                       continueWith $ fmap Fact newFacts <> facts
                   else go others
                 [] -> skipWith . Fact $ classConstraint name tVar
