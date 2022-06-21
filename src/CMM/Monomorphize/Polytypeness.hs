@@ -4,20 +4,18 @@ module CMM.Monomorphize.Polytypeness where
 
 import safe Data.Eq (Eq)
 import safe Data.Monoid (Monoid(mempty))
-import safe Data.Ord (Ord)
 import safe Data.Semigroup (Semigroup((<>)))
 import safe Text.Show ( Show )
 import safe Data.Function ( ($) )
-import safe Data.Bool
+import safe Data.Set ( Set )
+import safe Control.Applicative ( Applicative(pure) )
 
 import safe CMM.Data.Nullable (Fallbackable((??)))
-import CMM.Inference.DataKind
-import CMM.Data.Bounds
-import CMM.Inference.Constness
-import CMM.Inference.TypeVar
-import Data.Set
-import Control.Applicative
-import CMM.Inference.Type
+import safe CMM.Inference.DataKind ( DataKind )
+import safe CMM.Data.Bounds ( Bounds )
+import safe CMM.Inference.Constness ( Constness )
+import safe CMM.Inference.TypeVar ( TypeVar )
+import safe CMM.Inference.Type ( Type )
 
 data Absurdity
   = Absurdity { absurdKind :: [(TypeVar, Bounds DataKind)], absurdConst :: [(TypeVar, Bounds Constness)] }

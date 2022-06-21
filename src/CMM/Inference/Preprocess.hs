@@ -27,6 +27,9 @@ import safe Data.Tuple (snd, uncurry)
 import safe GHC.Err (undefined)
 import safe Text.Show (Show(show))
 import safe Data.Tuple.Extra (uncurry3)
+import safe qualified Data.Set as Set
+import safe Control.Monad.State (get, MonadState (put))
+import safe Data.Data ( Data )
 
 import safe CMM.AST as AST
   ( Actual(Actual)
@@ -157,7 +160,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
          SimpleTypeHole, MethodTypeHole, NamedTypeHole)
   , holeHandle
-  , HasTypeHole(getTypeHole), holeId
+  , HasTypeHole(getTypeHole)
   )
 import safe CMM.Inference.Type as Infer
   ( ToType(toType)
@@ -168,17 +171,14 @@ import safe CMM.Inference.TypeCompl
           StringType, TupleType), makeTuple, makeFunction
   )
 import safe CMM.Inference.TypeKind (TypeKind(Constraint, Star))
-import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar(tVarId), tVarParent)
-import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar(tVarId))
+import safe CMM.Parser.HasPos (HasPos, SourcePos)
 import safe CMM.Inference.State (fieldClassHelper)
 import safe CMM.Inference.Refresh ( refreshNestedFact )
 import safe CMM.AST.GetConv ( GetConv(getConv) )
-import CMM.Inference.TypeHandle
-import CMM.Inference.GetParent
-import CMM.Inference.Utils
-import qualified Data.Set as Set
-import Control.Monad.State (get, MonadState (put))
-import Data.Data
+import safe CMM.Inference.TypeHandle ()
+import safe CMM.Inference.GetParent ( GetParent(getParent) )
+import safe CMM.Inference.Utils ( adopt )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -329,38 +329,45 @@ instance Preprocess Struct a b where
     datums' <- preprocessDatums datums
     (hole, Struct paraName' datums') <$ popContext <* popTypeVariables <* popParent
 
+preprocessClassCommon :: (PreprocessParam param1 a1 b1, PreprocessParam param2 a2 b2,
+  WithTypeHole a1 b1, WithTypeHole a2 b2, WithTypeHole a3 b3,
+  Traversable t1, HasPos a1, HasPos a2, HasPos a3,
+  Preprocess n a3 b3) =>
+  ((Text, TypeHole)
+  -> (Text, Infer.Type)
+  -> [(Text, Infer.Type)]
+  -> Preprocessor ())
+  -> ([Annot (ParaName param1) b1]
+      -> Annot (ParaName param2) b2 -> t1 (Annot n b3) -> t2)
+  -> [Annot (ParaName param1) a1]
+  -> Annot (ParaName param2) a2
+  -> t1 (Annot n a3)
+  -> Map.Map Text (SourcePos, TypeKind)
+  -> Preprocessor  (TypeHole, t2)
+preprocessClassCommon pushWhat constr paraNames paraName methods variables = do
+  freshStar >>= pushParent . toTypeVar
+  pushTypeVariables variables
+  (constraints, paraNames') <-
+    unzip <$> traverse (preprocessParaName lookupClass Constraint) paraNames
+  (constraint, paraName') <-
+    preprocessParaName lookupClass Constraint paraName
+  pushWhat
+    (getName paraName, getTypeHole paraName')
+    (getName paraName, constraint)
+    (fmap getName paraNames `zip` constraints)
+  (getTypeHole paraName', ) . constr paraNames' paraName' <$> preprocessT methods <*
+    popContext <*
+    popTypeVariables <* popParent
+
 instance Preprocess Class a b where
-  preprocessImpl _ class'@(Class paraNames paraName methods) = do
-    freshStar >>= pushParent . toTypeVar
-    pushTypeVariables $ classVariables class' ^. typeVariables
-    (constraints, paraNames') <-
-      unzip <$> traverse (preprocessParaName lookupClass Constraint) paraNames
-    (constraint, paraName') <-
-      preprocessParaName lookupClass Constraint paraName
-    let hole = getTypeHole paraName'
-    pushClass
-      (getName paraName, hole)
-      (getName paraName, constraint)
-      (fmap getName paraNames `zip` constraints)
-    (hole, ) . Class paraNames' paraName' <$> preprocessT methods <* popContext <*
-      popTypeVariables <* popParent
+  preprocessImpl _ class'@(Class paraNames paraName methods) =
+    preprocessClassCommon pushClass Class paraNames paraName methods
+      $ classVariables class' ^. typeVariables
 
 instance Preprocess Instance a b where
-  preprocessImpl _ instance'@(Instance paraNames paraName methods) = do
-    freshStar >>= pushParent . toTypeVar
-    pushTypeVariables $ instanceVariables instance' ^. typeVariables
-    (constraints, paraNames') <-
-      unzip <$> traverse (preprocessParaName lookupClass Constraint) paraNames
-    (constraint, paraName') <-
-      preprocessParaName lookupClass Constraint paraName
-    let hole = getTypeHole paraName'
-    pushInstance
-      (getName paraName, getTypeHole paraName')
-      (getName paraName, constraint)
-      (fmap getName paraNames `zip` constraints)
-    (hole, ) . Instance paraNames' paraName' <$> preprocessT methods <*
-      popContext <*
-      popTypeVariables <* popParent
+  preprocessImpl _ instance'@(Instance paraNames paraName methods) =
+    preprocessClassCommon pushInstance Instance paraNames paraName methods
+      $ instanceVariables instance' ^. typeVariables
 
 class Preprocess param a b =>
       PreprocessParam param a b
@@ -527,18 +534,25 @@ preprocessProcedureHeaderImpl (ProcedureHeader mConv name formals mTypes) = do
   hole <- storeProc (getName name) fs procedureType
   return (hole, ProcedureHeader mConv (preprocessTrivial name) formals' mTypes')
 
+preprocessProcedureCommon :: (GetName proc, HasPos a, GetConv proc) =>
+  proc
+  -> Annot ProcedureHeader a
+  -> Preprocessor ()
+preprocessProcedureCommon procedure header = do
+  parent <- getParent
+  hole <- lookupCtxFVar (getName procedure)
+  let adopt' :: forall d . Data d => d -> d
+      adopt' = adopt parent (Set.singleton $ toTypeVar hole)
+      hole' = adopt' hole
+  get >>= put . adopt'
+  pushParent $ toTypeVar hole'
+  beginProc (getName procedure) hole' (localVariables header) (getConv procedure)
+
 -- TODO: consult conventions with the man
 -- TODO: add handle (dependent on the context) to the node
 instance Preprocess Procedure a b where
   preprocessImpl _ procedure@(Procedure header body) = do
-    parent <- getParent
-    hole <- lookupCtxFVar (getName procedure)
-    let adopt' :: forall d . Data d => d -> d
-        adopt' = adopt parent (Set.singleton $ toTypeVar hole)
-        hole' = adopt' hole
-    get >>= put . adopt'
-    pushParent $ toTypeVar hole'
-    beginProc (getName procedure) hole' (localVariables header) (getConv procedure)
+    preprocessProcedureCommon procedure header
     openProc $ localVariables body
     body' <- preprocess body
     header' <- preprocessHeader header
@@ -547,14 +561,7 @@ instance Preprocess Procedure a b where
 -- TODO: ditto
 instance Preprocess ProcedureDecl a b where
   preprocessImpl _ procedure@(ProcedureDecl header) = do
-    parent <- getParent
-    hole <- lookupCtxFVar (getName procedure)
-    let adopt' :: forall d . Data d => d -> d
-        adopt' = adopt parent (Set.singleton $ toTypeVar hole)
-        hole' = adopt' hole
-    get >>= put . adopt'
-    pushParent $ toTypeVar hole'
-    beginProc (getName procedure) hole' (localVariables header) (getConv procedure)
+    preprocessProcedureCommon procedure header
     ((EmptyTypeHole,) . ProcedureDecl <$> preprocessHeader header) <* popParent
 
 instance Preprocess Formal a b where
@@ -921,47 +928,40 @@ instance Preprocess Expr a b where
             storeFacts [type'' `subType` lit', constExprConstraint lit']
             return type''
         return (getTypeHole lit', LitExpr lit' mType')
-      PrefixExpr name actuals -- TODO: fix this
-        -> do
-        handle <- freshStar
-        tupleType <- freshStar
-        argType <- freshStar
-        retType <- freshStar
-        fType <- freshStar
-        opScheme <- freshStar
+      -- TODO: fix this
+      PrefixExpr name actuals -> do
+        (handle, tupleType) <- fixCommon name
         actuals' <- preprocessT actuals
-        storeFacts
-          [ tupleType `typeUnion` makeTuple actuals'
-          , unstorableConstraint tupleType
-          , fType `typeUnion` makeFunction [argType] retType
-          , opScheme `typeUnion` getNamedOperator (getName name)
-          , opScheme `instType` fType
-          , argType `subType` tupleType
-          , handle `subType` retType
-          ]
+        storeFact $
+          tupleType `typeUnion` makeTuple actuals'
         return
           (SimpleTypeHole handle, PrefixExpr (preprocessTrivial name) actuals')
       InfixExpr name left right -> do
-        handle <- freshStar
-        tupleType <- freshStar
-        argType <- freshStar
-        retType <- freshStar
-        fType <- freshStar
-        opScheme <- freshStar
+        (handle, tupleType) <- fixCommon name
         left' <- preprocess left
         right' <- preprocess right
-        storeFacts
-          [ tupleType `typeUnion` makeTuple [left', right']
-          , fType `typeUnion` makeFunction [argType] retType
-          , opScheme `typeUnion` getNamedOperator (getName name)
-          , opScheme `instType` fType
-          , argType `subType` tupleType
-          , handle `subType` retType
-          ]
+        storeFact $
+          tupleType `typeUnion` makeTuple [left', right']
         return
           ( SimpleTypeHole handle
           , InfixExpr (preprocessTrivial name) left' right')
     where
+      fixCommon name = do
+        handle <- freshStar
+        tupleType <- freshStar
+        argType <- freshStar
+        retType <- freshStar
+        fType <- freshStar
+        opScheme <- freshStar
+        storeFacts
+          [ fType `typeUnion` makeFunction [argType] retType
+          , opScheme `typeUnion` getNamedOperator (getName name)
+          , opScheme `instType` fType
+          , argType `subType` tupleType
+          , handle `subType` retType
+          , unstorableConstraint tupleType
+          ]
+        return (handle, tupleType)
       preprocessInherit c n = do
         n' <- preprocess n
         return (getTypeHole n', c n')

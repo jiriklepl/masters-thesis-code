@@ -27,7 +27,7 @@ import safe CMM.Inference.Fact
   ( Facts
   , FlatFacts
   , kindConstraint
-  , regularExprConstraint, constExprConstraint
+  , regularExprConstraint
   )
 import safe CMM.Inference.Type as Infer (Type)
 import safe CMM.Inference.TypeCompl

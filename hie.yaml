@@ -237,13 +237,16 @@ cradle:
     - path: "src/CMM/Monomorphize/Mangle.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Monomorphize/Monomorphized.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Monomorphize/Polytypeness.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Schematized.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Monomorphize/State.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Monomorphize/State/Impl.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Parser.hs"

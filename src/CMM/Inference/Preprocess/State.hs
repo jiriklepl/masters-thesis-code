@@ -44,7 +44,7 @@ import safe CMM.Inference.Fact
   , forall
   , instType
   , tupleKind
-  , typeUnion, kindConstraint, subConst, classFact, classConstraint, minKindConstraint, maxKindConstraint, regularExprConstraint
+  , typeUnion, kindConstraint, subConst, classFact, classConstraint, regularExprConstraint
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context

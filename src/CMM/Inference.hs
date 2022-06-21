@@ -10,7 +10,7 @@ import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Monad (Monad((>>=), return), sequence, when, zipWithM)
+import safe Control.Monad (Monad((>>=), return), sequence, when)
 import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
@@ -36,7 +36,7 @@ import safe Data.List
   )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe, catMaybes)
+import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe)
 import safe Data.Monoid (Monoid(mappend, mconcat, mempty))
 import safe Data.Ord (Ord((<), (>)))
 import safe Data.PartialOrd (PartialOrd)
@@ -48,8 +48,9 @@ import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (snd, swap, uncurry)
 import safe Data.String (fromString)
 import safe Text.Show (Show(show))
-import safe Data.Tuple.Extra (dupe)
 import safe GHC.Err (undefined, error)
+import safe Data.Tuple.Extra (dupe)
+import safe Data.Bifunctor (second)
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
@@ -60,7 +61,7 @@ import safe CMM.Data.Bounds
   , normalizeAbsurd
   , upperBound
   )
-import safe CMM.Data.Function (fOr, fAnd)
+import safe CMM.Data.Function (fOr)
 import safe CMM.Data.Lattice (Lattice)
 import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Data.Num (Num((+)))
@@ -95,7 +96,6 @@ import safe CMM.Inference.State
   , addUnificationErrors
   , classFacts
   , classSchemes
-  , collectPrimeTVars
   , constingBounds
   , freshTypeHelperWithHandle
   , getConsting
@@ -144,7 +144,7 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeKind (getTypeKind, TypeKind (GenericType, Star))
+import safe CMM.Inference.TypeKind (getTypeKind, TypeKind (GenericType))
 import safe CMM.Inference.TypeVar
   ( TypeVar(NoType, TypeVar, tVarId, tVarParent)
   , predecessor, overLeaf
@@ -702,10 +702,10 @@ minimizeSubs parent pTypeVars = do
     safeHandlizeUpdate
       ((_2 . consting %~ apply cSubst) . (_2 . kinding %~ apply kSubst))
   where
-    transformMap pTypeIngs =
-      Map.toList . fmap (Set.filter (setFilter pTypeIngs)) . Map.filterWithKey (mapFilter pTypeIngs)
-    setFilter pTypeIngs = predecessor parent . tVarParent `fOr` (`Set.member` pTypeIngs) `fOr` (`Set.member` pTypeVars)
-    mapFilter pTypeIngs from _ = tVarParent from == parent && not (from `Set.member` pTypeIngs)
+    transformMap pTypeThings =
+      Map.toList . fmap (Set.filter (setFilter pTypeThings)) . Map.filterWithKey (mapFilter pTypeThings)
+    setFilter pTypeThings = predecessor parent . tVarParent `fOr` (`Set.member` pTypeThings) `fOr` (`Set.member` pTypeVars)
+    mapFilter pTypeThings from _ = tVarParent from == parent && not (from `Set.member` pTypeThings)
 
 laundry ::
      ( Bounded a
@@ -720,7 +720,7 @@ laundry ::
   -> Map TypeVar (Bounds a)
   -> [(TypeVar, Set TypeVar)]
   -> ([Map TypeVar TypeVar], [f ((Ordered a, Set TypeVar), TypeVar)])
-laundry parent pTypeIngs boundsMap subGraph =
+laundry parent pTypeThings boundsMap subGraph =
   let scc =
         Graph.stronglyConnCompR $
         (\(from, to) -> (from `readBoundsFrom` boundsMap, from, Set.toList to)) <$>
@@ -753,10 +753,10 @@ laundry parent pTypeIngs boundsMap subGraph =
       | otherwise = getDepends others acc
       where
         getLimits tVar'
-          | tVarParent tVar' == parent && not (tVar' `Set.member` pTypeIngs)=
+          | tVarParent tVar' == parent && not (tVar' `Set.member` pTypeThings)=
             Set.filter relevant . view _2 . fromMaybe (mempty, mempty) $ tVar' `Map.lookup`
             acc
-          | parent `predecessor` tVarParent tVar' || not (tVar' `Set.member` pTypeIngs) =
+          | parent `predecessor` tVarParent tVar' || not (tVar' `Set.member` pTypeThings) =
             if relevant tVar'
               then Set.singleton tVar'
               else mempty
@@ -853,7 +853,7 @@ schematize facts tVars = do
   kindings <- traverse getKinding x
   -- TODO: leave out trivial
   typings <- liftA2 (zip3 x) (traverse reconstruct x) (traverse getTyping x)
-  let toTrivialDeps = fmap (\x -> (x, Set.singleton x))
+  let toTrivialDeps = fmap $ second Set.singleton . dupe
   subConsts <-
     uses subConsting $ filter (keyParentedBy parent `fOr` presentIn constings `fOr` presentIn (Set.toList tVars)) .
     (toTrivialDeps constings <>) . Map.toList
@@ -912,19 +912,17 @@ schematize facts tVars = do
   return factsRest
   where
     translateSubs _ _ _ _ [] = return []
-    translateSubs bounds reconstructor subConstr boundsConstr ((tVar, limits):others) = do
-      t <- return $ reconstructor `apply` toType tVar
-      let limits' = filter (/= tVar) $ Set.toList limits
-      facts' <-
-            (\tVar' -> do
-              t' <- return $ reconstructor `apply` toType tVar'
-              return $ t `subConstr` t') `traverse` limits'
-      let translateOthers =
-            translateSubs bounds reconstructor subConstr boundsConstr others
+    translateSubs bounds reconstructor subConstr boundsConstr ((tVar, limits):others) =
       uses bounds (tVar `Map.lookup`) >>= \case
-        Nothing -> translateOthers
-        Just bounds' ->
-          (boundsConstr bounds' t :) . (facts' <>) <$> translateOthers
+          Nothing -> translateOthers
+          Just bounds' ->
+            (boundsConstr bounds' t :) . (facts' <>) <$> translateOthers
+      where
+          t = reconstructor `apply` toType tVar
+          limits' = filter (/= tVar) $ Set.toList limits
+          translateOthers =
+            translateSubs bounds reconstructor subConstr boundsConstr others
+          facts' = subConstr t . apply reconstructor . toType <$> limits'
     keyParentedBy parent (key, _) = parent `overLeaf` tVarParent key
     parentedBy parent TypeVar {tVarParent = par} = parent `overLeaf` par
     parentedBy _ _ = False
@@ -968,8 +966,8 @@ closeSCCs facts (scc:others) =
       parent'' <- uses unifs (`apply` parent)
       popParent *> pushParent parent''
       (_, facts'') <- fixFacts facts' >>= reduceMany
-      parents' <- uses unifs ((<$> parents) . apply)
-      facts''' <- schematize facts'' $ Set.fromList parents'
+      parents'' <- uses unifs ((<$> parents) . apply)
+      facts''' <- schematize facts'' $ Set.fromList parents''
       (_1 .~ True) <$> (popParent *> closeSCCs facts''' others)
     transformFact (NestedFact (_ :. [fact] :=> fs), _, _) = do
       fact' <- uses unifs (`apply` fact)
@@ -1013,18 +1011,15 @@ collectPairs way handles from = pairs <&> both %~ \i -> varMap Map.! i
       uncurry (<>) (unzip edges)
     graph = Graph.buildG (1, handles) $ (both %~ tVarId) <$> edges
     vs = Map.keys varMap
+    list cond = [(v, v') | v <- vs, v' <- vs, cond v v']
     pairs =
-      case way of
-        Forward -> [(v, v') | v <- vs, v' <- vs, v /= v', Graph.path graph v v']
-        Backward -> [(v, v') | v <- vs, v' <- vs, v /= v', Graph.path graph v' v]
+      list $ \v v' -> case way of
+        Forward -> v /= v' && Graph.path graph v v'
+        Backward -> v /= v' && Graph.path graph v' v
         Both ->
-          [ (v, v')
-          | v <- vs
-          , v' <- vs
-          , v < v' -- this is to prevent duplication
-          , Graph.path graph v v'
-          , Graph.path graph v' v
-          ]
+          v < v' -- this is to prevent duplication
+            && Graph.path graph v v'
+            && Graph.path graph v' v
 
 deduceUnifs :: Int -> Map TypeVar (Set TypeVar) -> Map TypeVar TypeVar
 deduceUnifs handles which = go pairs mempty
@@ -1064,10 +1059,10 @@ boundsUnifs which = do
         Map.filter ((> 1) . Set.size) trivialGroups
   return $ go nontrivialTrivialGroups mempty
   where
-    go ((first:second:others):rest) subst =
-      case apply subst first `unifyLax` apply subst second of
+    go ((x:y:others):rest) subst =
+      case apply subst x `unifyLax` apply subst y of
         Left _ -> undefined -- logic error
-        Right (subst', _) -> go ((first : others) : rest) $ subst' `apply` subst
+        Right (subst', _) -> go ((x : others) : rest) $ subst' `apply` subst
     go (_:rest) subst = go rest subst
     go [] subst = subst
 

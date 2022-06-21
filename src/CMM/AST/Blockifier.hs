@@ -447,7 +447,7 @@ instance Blockify (Annot Procedure) a b where
     index <- blocksCache $ helperName "procedure"
     currentBlock ?= index
     header' <- blockifyProcedureHeader header
-    (withAnnot (Begins index `withBlockAnnot` a) . Procedure header' <$>
+    withAnnot (Begins index `withBlockAnnot` a) <$> (Procedure header' <$>
      blockify body) <*
       unsetBlock <*
       analyzeFlow procedure <*

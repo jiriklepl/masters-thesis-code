@@ -18,5 +18,5 @@ oneRight =
     allLeft =
       \case
         Left a:rest -> bimap (a :) (a :) $ allLeft rest
-        Right a:rest -> allLeft rest >>= Left
+        Right _:rest -> allLeft rest >>= Left
         [] -> Right []
