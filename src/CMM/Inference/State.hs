@@ -8,31 +8,35 @@ module CMM.Inference.State
 import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%=), (<>=))
-import safe Control.Monad (Monad((>>=), return))
+import safe Control.Monad (Monad((>>=), return), when)
 import safe Data.Foldable (fold)
-import safe Data.Function (($), (.), flip)
+import safe Data.Function (($), (.), flip, const)
 import safe Data.Functor (Functor(fmap), (<$>))
 import safe Data.List (tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe, isJust)
-import safe Data.Monoid ((<>))
+import safe Data.Monoid ((<>), mappend)
 import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Traversable (Traversable(traverse))
 import safe Data.Text (Text)
-import safe Data.Bool ( Bool )
+import safe Data.Bool ( not, Bool )
 import safe Data.String ( String )
+import safe Text.Show ( Show )
+import safe Data.Foldable.Extra (anyM)
+import safe GHC.Err ( error )
+import safe Data.Data ( Data )
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
-import safe CMM.Inference.Fact (Scheme)
+import safe CMM.Inference.Fact (Scheme ((:.)), Qual ((:=>)))
 import safe CMM.Inference.Subst (apply)
-import safe CMM.Inference.Type (Type(ComplType, VarType))
+import safe CMM.Inference.Type (Type(ComplType, VarType), ToType (toType))
 import safe CMM.Inference.TypeHandle
   ( TypeHandle
   , consting
@@ -46,7 +50,8 @@ import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
 import safe CMM.Inference.Unify.Error (UnificationError)
 import safe CMM.Data.Trilean ( Trilean, trilean )
 import safe CMM.Inference.FunDeps ( funDepsSimplify )
-import safe CMM.Utils ( addPrefix )
+import safe CMM.Utils ( addPrefix, HasCallStack, backQuoteShow )
+import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
 
 import safe CMM.Inference.State.Impl
   ( InferencerState(InferencerState)
@@ -66,7 +71,7 @@ import safe CMM.Inference.State.Impl
   , subConsting
   , subKinding
   , typize
-  , unifs, Inferencer, funDeps
+  , unifs, Inferencer, funDeps, lockedVars
   )
 
 fieldClassHelper :: Text -> Text
@@ -151,17 +156,46 @@ addFunDeps name rules =
   funDeps %= Map.insert name (funDepsSimplify rules)
 
 hasFunDeps :: Text -> Inferencer Bool
-hasFunDeps = fmap isJust . getFunDeps
+hasFunDeps = fmap isJust . lookupFunDep
 
-getFunDeps :: Text -> Inferencer (Maybe [[Trilean]])
-getFunDeps = uses funDeps . Map.lookup
+lookupFunDep :: Text -> Inferencer (Maybe [[Trilean]])
+lookupFunDep = uses funDeps . Map.lookup
 
 pushConstBounds :: TypeHandle -> Bounds Constness -> Inferencer ()
 pushConstBounds handle bounds =
   constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
 
-registerScheme :: TypeVar -> Scheme Type -> Inferencer ()
-registerScheme tVar scheme = schemes %= Map.insert tVar scheme
+lock :: (ToType a, HasCallStack) => a -> Set TypeVar -> Inferencer ()
+lock parent tVars =
+  lockedVars %= Map.unionWithKey msg newLocks -- TODO msg
+  where
+    msg tVar new old = error $  backQuoteShow tVar <> " already locked by " <> backQuoteShow old <> " (attempted lock by " <> backQuoteShow new <> ")"
+    newLocks = tParent `Map.fromSet` tVars
+    tParent = const $ toType parent
+
+isLocked :: TypeVar -> Inferencer Bool
+isLocked = uses lockedVars . Map.member
+
+isUnlocked :: TypeVar -> Inferencer Bool
+isUnlocked = fmap not . isLocked
+
+
+isOpen :: Data a => Scheme a
+  -> Inferencer Bool
+isOpen = \case
+  tVars :. facts :=> nesteds -> isUnlocked `anyM` freeOuter
+    where
+      freeOuter = freeInner Set.\\ tVars
+      freeInner = freeTypeVars facts <> freeTypeVars nesteds
+
+sanitizeClosed :: (HasCallStack, Data a, Show a) => Scheme a
+  -> Inferencer ()
+sanitizeClosed scheme = do
+  open <- isOpen scheme
+  when open $ error msg -- TODO msg
+  where
+    msg = "scheme " <> backQuoteShow scheme <> " is open" -- TODO
+
 
 fromOldName :: TypeVar -> Inferencer TypeVar
 fromOldName tVar = uses unifs (`apply` tVar)

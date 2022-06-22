@@ -70,6 +70,7 @@ data InferencerState =
     -- ^ TODO
     , _schemes :: Map TypeVar (Scheme Type)
     -- ^ TODO
+    , _lockedVars :: Map TypeVar Type
     , _currentParent :: [TypeVar]
     -- ^ TODO
     }
@@ -89,9 +90,9 @@ initInferencer =
     , _classSchemes = mempty
     , _classFacts = mempty
     , _funDeps = mempty
-    , _funFacts = mempty
     , _errorState = mempty
     , _schemes = mempty
+    , _lockedVars = mempty
     , _currentParent = [globalTVar]
     }
 

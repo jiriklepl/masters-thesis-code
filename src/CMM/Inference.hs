@@ -153,7 +153,7 @@ import safe CMM.Inference.Unify (unify, unifyFold, unifyLax, instanceOf)
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import safe CMM.Data.Way ( Way(Backward, Forward, Both) )
 import safe CMM.Utils
-    ( addPrefix, getPrefix, hasPrefix, splitName )
+    ( addPrefix, getPrefix, hasPrefix, splitName, HasCallStack)
 import safe CMM.Data.Trilean (trilean)
 import safe CMM.Inference.Refresh ( Refresher(refresher) )
 
@@ -194,7 +194,7 @@ elaborate primType = do
   let oneLevel t = maybe (VarType t) (view typing) (t `Bimap.lookup` handles)
   return $ oneLevel <$> primType
 
-simplify :: Type -> Inferencer TypeVar
+simplify :: HasCallStack => Type -> Inferencer TypeVar
 simplify =
   \case
     ErrorType _ -> undefined
@@ -464,7 +464,7 @@ fixTypize = do
 fixFacts :: Facts -> Inferencer Facts
 fixFacts facts = uses unifs $ flip fmap facts . apply
 
-wrapParent :: FlatFacts -> Inferencer a -> Inferencer a
+wrapParent :: HasCallStack => FlatFacts -> Inferencer a -> Inferencer a
 wrapParent flatFacts wrapped =
   case determineParent flatFacts of
     Just parent -> pushParent parent *> wrapped <* popParent
@@ -478,13 +478,13 @@ unwrapParent unwrapped = do
   parent <- getParent
   popParent *> unwrapped <* pushParent parent
 
-flattenFacts :: [NestedFact Type] -> FlatFacts
+flattenFacts :: HasCallStack => [NestedFact Type] -> FlatFacts
 flattenFacts = fmap go
   where
     go (Fact fact) = fact
     go _ = undefined -- TODO: error
 
-reverseFacts :: FlatFacts -> FlatFacts
+reverseFacts :: HasCallStack => FlatFacts -> FlatFacts
 reverseFacts = fmap go
   where
     go (ClassFact name t) = ClassConstraint name t
@@ -665,9 +665,25 @@ reduceMany facts = do
     then (_1 .~ True) <$> reduceMany facts'
     else return (False, facts)
 
+schemesFirst :: [NestedFact a]
+  -> [NestedFact a]
+schemesFirst = go mempty mempty mempty
+  where
+    go priority semi plebs [] = priority <> semi <> plebs
+    go priority semi plebs (fact:facts) = case fact of
+      Fact ClassFunDeps {} -> addPriority
+      NestedFact (_ :. [ClassConstraint {}] :=> _) -> addPriority
+      NestedFact (_ :. [ClassFact {}] :=> _) -> addSemi
+      NestedFact {} -> addPlebs
+      _ -> addSemi
+      where
+        addPriority = go (fact:priority) semi plebs facts
+        addSemi = go priority (fact:semi) plebs facts
+        addPlebs = go priority semi (fact:plebs) facts
+
 reduce :: Facts -> Inferencer (Bool, Facts)
 reduce facts = do
-  (change, facts') <- reduceMany facts
+  (change, facts') <- reduceMany $ schemesFirst facts
   let (facts'', sccs) = makeCallGraph facts'
   (change', facts''') <- closeSCCs facts'' sccs
   return (change || change', facts''')
@@ -984,12 +1000,12 @@ makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
       case fact of
         NestedFact (_ :. [Union (VarType tVar) _] :=> fs) ->
           _2 %~ ((fact, tVar, foldr out [] fs) :)
-        NestedFact (_ :. [Union {}] :=> _) -> undefined -- TODO: logic error
+        NestedFact (_ :. [Union {}] :=> _) -> undefined -- TODO: logic error, broken contract
         _ -> _1 %~ (fact :)
     out fact =
       case fact of
         Fact (InstType (VarType scheme) _) -> (scheme :)
-        Fact InstType {} -> undefined
+        Fact InstType {} -> undefined -- TODO: logic error, broken contract
         _ -> id
 
 collectCounts :: Facts -> Subst Int
@@ -999,7 +1015,7 @@ collectCounts = foldr countIn mempty
       NestedFact (_ :. [Union (VarType tVar) _] :=> _) ->
         Map.insertWith (+) tVar 1
       NestedFact (_ :. [Union {}] :=> _) ->
-        undefined -- TODO: logic error
+        undefined -- TODO: logic error, broken contract
       _ -> id
 
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]
