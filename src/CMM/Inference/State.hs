@@ -8,7 +8,7 @@ module CMM.Inference.State
 import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%=), (<>=))
-import safe Control.Monad (Monad((>>=), return), when)
+import safe Control.Monad (Monad((>>=), return), filterM)
 import safe Data.Foldable (fold)
 import safe Data.Function (($), (.), flip, const)
 import safe Data.Functor (Functor(fmap), (<$>))
@@ -196,13 +196,24 @@ isOpen = \case
       freeOuter = freeInner Set.\\ tVars
       freeInner = freeTypeVars facts <> freeTypeVars nesteds
 
+getUnlockedVars :: Data a => Scheme a
+  -> Inferencer [TypeVar]
+getUnlockedVars = \case
+  tVars :. facts :=> nesteds -> do
+    filterM isUnlocked $ Set.toList freeOuter
+    where
+      freeOuter = freeInner Set.\\ tVars
+      freeInner = freeTypeVars facts <> freeTypeVars nesteds
+
 sanitizeClosed :: (HasCallStack, Data a, Show a) => Scheme a
   -> Inferencer ()
 sanitizeClosed scheme = do
-  open <- isOpen scheme
-  when open $ error msg -- TODO msg
+  freeVars <- getUnlockedVars scheme
+  msg freeVars -- TODO msg
   where
-    msg = "scheme " <> backQuoteShow scheme <> " is open" -- TODO
+    msg [] = return ()
+    msg freeVars = error $ "scheme " <> backQuoteShow scheme <> " is open, free variables: " <> backQuoteShow freeVars
+
 
 addScheme :: HasCallStack => TypeVar
   -> Scheme Type
