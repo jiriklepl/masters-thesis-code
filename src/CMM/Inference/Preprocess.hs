@@ -177,7 +177,7 @@ import safe CMM.Inference.State (fieldClassHelper)
 import safe CMM.Inference.Refresh ( refreshNestedFact )
 import safe CMM.AST.GetConv ( GetConv(getConv) )
 import safe CMM.Inference.TypeHandle ()
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
+import safe CMM.Inference.GetParent ( GetParent(getParent), makeAdoption )
 import safe CMM.Inference.Utils ( adopt )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
@@ -539,12 +539,9 @@ preprocessProcedureCommon :: (GetName proc, HasPos a, GetConv proc) =>
   -> Annot ProcedureHeader a
   -> Preprocessor ()
 preprocessProcedureCommon procedure header = do
-  parent <- getParent
-  hole <- lookupCtxFVar (getName procedure)
-  let adopt' :: forall d . Data d => d -> d
-      adopt' = adopt parent (Set.singleton $ toTypeVar hole)
-      hole' = adopt' hole
-  get >>= put . adopt'
+  hole <- lookupCtxFVar $ getName procedure
+  adoption <- makeAdoption hole
+  let hole' = adoption hole
   pushParent $ toTypeVar hole'
   beginProc (getName procedure) hole' (localVariables header) (getConv procedure)
 
