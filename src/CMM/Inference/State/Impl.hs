@@ -60,7 +60,7 @@ data InferencerState =
     -- ^ TODO
     , _errorState :: ErrorState
     -- ^ TODO
-    , _classSchemes :: Map Text (Scheme Type, [Scheme Type])
+    , _classSchemes :: Map Text (Scheme Type)
     -- ^ TODO
     , _classFacts :: Map Text (Set TypeVar)
     -- ^ TODO
@@ -91,6 +91,7 @@ initInferencer =
     , _classFacts = mempty
     , _funDeps = mempty
     , _errorState = mempty
+    , _funFacts = mempty
     , _schemes = mempty
     , _lockedVars = mempty
     , _currentParent = [globalTVar]

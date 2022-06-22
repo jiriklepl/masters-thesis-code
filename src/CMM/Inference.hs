@@ -114,12 +114,12 @@ import safe CMM.Inference.State
   , readBoundsFrom
   , readLowerBound
   , reconstruct
-  , registerScheme
   , schemes
   , subConsting
   , subKinding
   , typize
-  , unifs, addFunDeps, fieldClassPrefix, funDeps, funFacts, trileanSeq, collectPrimeTVarsAll
+  , unifs, addFunDeps, fieldClassPrefix, trileanSeq, collectPrimeTVarsAll
+  , addScheme, addClassScheme, lookupScheme, lookupClassScheme, lookupFunDep, funFacts, funDeps
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -534,7 +534,7 @@ reduceOne (fact:facts) =
       fixFacts facts >>= continueWith
     Fact (ClassConstraint name t)
       | hasPrefix name, getPrefix name == fieldClassPrefix ->
-        uses funDeps (name `Map.lookup`) >>= \case
+        lookupFunDep name >>= \case
           Nothing -> undefined -- TODO: logic error
           Just rules -> continueWith $ fmap go rules <> facts
             where go rule = Fact $ classConstraint (fromString (trileanSeq rule) `addPrefix` name) t
@@ -560,7 +560,7 @@ reduceOne (fact:facts) =
       | otherwise ->
         uses classSchemes (name `Map.lookup`) >>= \case
           Nothing -> skip
-          Just (tVars :. facts' :=> tVar', _) -> do
+          Just (tVars :. facts' :=> tVar') -> do
             tVar <- simplify t
             subst <- refresher tVars
             continueWith $
@@ -569,9 +569,9 @@ reduceOne (fact:facts) =
               (apply subst <$> facts')) <>
               facts
     Fact (ClassFact name t) ->
-      uses classSchemes (name `Map.lookup`) >>= \case
+      lookupClassScheme name >>= \case
         Nothing -> skip
-        Just (tVars :. facts' :=> tVar', _) -> do
+        Just (tVars :. facts' :=> tVar') -> do
           tVar <- simplify t
           subst <- refresher tVars
           classFacts %= Map.insertWith mappend name (Set.singleton tVar)
@@ -607,11 +607,11 @@ reduceOne (fact:facts) =
         Map.insertWith
           undefined
           name
-          (tVars' :. flattenFacts nesteds :=> t', mempty) -- TODO: error
+          (tVars' :. flattenFacts nesteds :=> t') -- TODO: error
       continue
     NestedFact (tVars :. [ClassFact name t] :=> nesteds)
       | hasPrefix name, getPrefix name == fieldClassPrefix -> do
-        uses funDeps (name `Map.lookup`) >>= \case
+        lookupFunDep name >>= \case
            Nothing -> skip
            Just rules -> do
             traverse_ go rules
@@ -629,16 +629,11 @@ reduceOne (fact:facts) =
                   funFacts %= Map.insertWith (<>) (fromString (trileanSeq rule) `addPrefix` name) [Set.fromList tVars' :. fs :=> t']
               chooseArg arg tVar = trilean arg tVar tVar
       | otherwise -> do
-        uses classSchemes (name `Map.lookup`) >>= \case
+        lookupClassScheme name >>= \case
           Nothing -> skip
-          Just (scheme@(tVars'' :. facts'' :=> t''), consts) -> do
+          Just (tVars'' :. facts'' :=> t'') -> do
             t' <- uses unifs (`apply` t)
-            tVars' <- uses unifs $ (`Set.map` tVars) . apply
             subst <- refresher tVars''
-            classSchemes %=
-              Map.insert
-                name
-                (scheme, (tVars' :. flattenFacts nesteds :=> t') : consts)
             continueWith $
               (Fact <$> typeUnion t' (subst `apply` t'') : flattenFacts nesteds <>
               reverseFacts (apply subst <$> facts'')) <>
@@ -850,7 +845,7 @@ reParent newParent oldParents = go
 unSchematize :: Facts -> Inferencer Facts
 unSchematize [] = return []
 unSchematize (Fact (InstType (VarType scheme) inst):others) =
-  uses schemes (scheme `Map.lookup`) >>= \case
+  lookupScheme scheme >>= \case
     Just (tVars :. facts :=> t) -> do
       instSubst <- refresher tVars
       let facts' = Fact . apply instSubst <$> facts
@@ -943,6 +938,15 @@ schematize facts tVars = do
     parentedBy parent TypeVar {tVarParent = par} = parent `overLeaf` par
     parentedBy _ _ = False
     presentIn where' (key, _) = key `Set.member` Set.fromList where'
+
+registerScheme :: TypeVar -> Scheme Type -> Inferencer ()
+registerScheme tVar = \case
+  tVars :. facts :=> nesteds -> do
+    subst <- refresher tVars
+    let tVars' = apply subst `Set.map`tVars
+        nesteds' = apply subst nesteds
+    void . reduceMany $ Fact <$> facts
+    addScheme tVar $ tVars' :. apply subst facts :=> nesteds'
 
 closeSCCs ::
      Facts -> [SCC (Fact, TypeVar, [TypeVar])] -> Inferencer (Bool, Facts)

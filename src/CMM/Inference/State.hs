@@ -179,6 +179,14 @@ isLocked = uses lockedVars . Map.member
 isUnlocked :: TypeVar -> Inferencer Bool
 isUnlocked = fmap not . isLocked
 
+lookupScheme :: TypeVar
+  -> Inferencer (Maybe (Scheme Type))
+lookupScheme = uses schemes . Map.lookup
+
+lookupClassScheme :: Text
+  -> Inferencer (Maybe (Scheme Type))
+lookupClassScheme = uses classSchemes . Map.lookup
+
 
 isOpen :: Data a => Scheme a
   -> Inferencer Bool
@@ -196,6 +204,25 @@ sanitizeClosed scheme = do
   where
     msg = "scheme " <> backQuoteShow scheme <> " is open" -- TODO
 
+addScheme :: HasCallStack => TypeVar
+  -> Scheme Type
+  -> Inferencer ()
+addScheme tVar scheme = case scheme of
+  tVars :. _ :=> _ -> do
+    lock tVar tVars
+    sanitizeClosed scheme
+    schemes %= Map.insert tVar scheme
+
+addClassScheme :: HasCallStack => Text
+  -> Scheme Type
+  -> Inferencer ()
+addClassScheme name scheme = case scheme of
+  tVars :. _ :=> t -> do
+    lock t tVars
+    sanitizeClosed scheme
+    classSchemes %= Map.insertWith msg name scheme -- TODO msg
+  where
+    msg new old = error $ "class " <> backQuoteShow name <> " already registered with scheme " <> backQuoteShow old <> " (attempted adding " <> backQuoteShow new <> ")"
 
 fromOldName :: TypeVar -> Inferencer TypeVar
 fromOldName tVar = uses unifs (`apply` tVar)
