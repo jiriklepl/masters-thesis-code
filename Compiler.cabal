@@ -44,6 +44,7 @@ common common-options
                        -Wredundant-constraints
                        -Wsafe
                        -Wunused-packages
+  cpp-options:         -DUSE_GHC_STACK
   build-depends:       base >= 4.13 && < 4.17,
                        containers ^>=0.6.4.1,
                        extra ^>=1.7.10,

@@ -1,0 +1,6 @@
+f () {
+    bits32 y;
+    bits32 x;
+    x = y + 1;
+    return (x);
+}

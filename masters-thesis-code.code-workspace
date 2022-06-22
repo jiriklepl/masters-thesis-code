@@ -64,6 +64,7 @@
 			"gmap",
 			"handlize",
 			"hsep",
+			"ifdef",
 			"inferencer",
 			"insts",
 			"kinded",

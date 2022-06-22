@@ -91,6 +91,7 @@ import safe CMM.AST
   , Unit(Unit), SemiFormal (SemiFormal)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
+import safe CMM.Utils (backQuote)
 
 commaSep :: [Doc ann] -> Doc ann
 commaSep xs = hsep $ punctuate comma xs
@@ -486,7 +487,7 @@ instance Pretty (Asserts a) where
       InAssert names mInt -> "in" <+> commaPretty names <> maybeSpacedL mInt
 
 instance Pretty (Pragma a) where
-  pretty _ = error "`Pragma`s are not specified" -- FIXME: pragmas are not specified
+  pretty _ = error $ backQuote "Pragma" <> "s are not specified" -- FIXME: pragmas are not specified
 
 instance Pretty (Name a) where
   pretty =
