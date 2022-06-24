@@ -9,7 +9,7 @@ module CMM.Inference.Preprocess.State
 
 import safe Control.Applicative (Applicative(pure), (<|>))
 import safe Control.Lens.Getter ((^.), use, uses)
-import safe Control.Lens.Setter ((%=), (.=), (<~))
+import safe Control.Lens.Setter ((%=), (.=), (<~), (<>=))
 import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad (Functor((<$), fmap), Monad((>>=), return))
@@ -120,6 +120,7 @@ import safe CMM.Inference.Preprocess.State.Impl
   , typeVariables
   , variables
   )
+import CMM.Err.State (HasErrorState(errorState))
 
 noCurrentReturn :: TypeHole
 noCurrentReturn = EmptyTypeHole
@@ -235,6 +236,7 @@ beginProc name hole collector mConv = do
   tAliases <- declVars $ collector ^. CS.typeAliases
   typeAliases %= (tAliases :)
   tVars <- declVars $ collector ^. CS.typeVariables
+  errorState <>= collector ^. errorState
   typeVariables %= reverse . (tVars :) . reverse
   pushFacts
   currentReturn <- freshTypeHelper Star
@@ -249,6 +251,7 @@ openProc collector = do
   vars' <- declVars $ collector ^. CS.variables
   modifyHead variables (vars' <>)
   tVars' <- declVars $ collector ^. CS.typeVariables
+  errorState <>= collector ^. errorState
   ~(h:t) <- uses typeVariables reverse
   typeVariables .= reverse ((tVars' <> h) : t)
 
@@ -372,9 +375,10 @@ popParent = currentParent %= tail
 pushFacts :: Preprocessor ()
 pushFacts = facts %= ([] :)
 
-pushTypeVariables :: Map Text (SourcePos, TypeKind) -> Preprocessor ()
-pushTypeVariables tVars = do
-  tVars' <- declVars tVars
+pushTypeVariables :: CollectorState -> Preprocessor ()
+pushTypeVariables collector = do
+  tVars' <- declVars $ collector ^. CS.typeVariables
+  errorState <>= collector ^. errorState
   typeVariables %= reverse . (tVars' :) . reverse
 
 popTypeVariables :: Preprocessor ()

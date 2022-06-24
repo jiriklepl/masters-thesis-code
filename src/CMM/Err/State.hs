@@ -15,6 +15,7 @@ import safe Data.Int (Int)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Semigroup (Semigroup((<>)))
 import safe Text.Show (Show)
+import Data.Data ( Data )
 
 import safe CMM.Data.List (count)
 import safe CMM.Data.Nullable (Nullable(nullVal))
@@ -26,7 +27,7 @@ newtype ErrorState =
   ErrorState
     { _errors :: [Error]
     }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Data)
 
 instance Semigroup ErrorState where
   ErrorState errs <> ErrorState errs' = ErrorState $ errs <> errs'
@@ -45,13 +46,24 @@ class a ~ ErrorState =>
 
 makeFieldsNoPrefix ''ErrorState
 
-countErrors :: Severity -> ErrorState -> Int
-countErrors s (ErrorState errs) = count checkSeverity errs
+countSeverity :: Severity -> ErrorState -> Int
+countSeverity s = \case
+  ErrorState errs -> count checkSeverity errs
   where
     checkSeverity e = view errSeverity e == s
 
+countErrors :: ErrorState -> Int
+countErrors = countSeverity ErrorLevel
+
+countWarnings :: ErrorState -> Int
+countWarnings = countSeverity WarningLevel
+
+countInfos :: ErrorState -> Int
+countInfos = countSeverity InfoLevel
+
 addError :: IsError err => Severity -> err -> ErrorState -> ErrorState
-addError s e (ErrorState errs) = ErrorState $ Error s e : errs
+addError s e = \case
+  ErrorState errs -> ErrorState $ Error s e : errs
 
 registerInfo ::
      (IsError err, HasErrorState s ErrorState, MonadState s m) => err -> m ()

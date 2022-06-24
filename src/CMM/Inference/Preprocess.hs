@@ -7,7 +7,7 @@ module CMM.Inference.Preprocess where
 
 import safe Control.Applicative (Applicative((<*), pure), liftA2)
 import safe Control.Lens.Getter ((^.), uses)
-import safe Control.Lens.Setter ((%~))
+import safe Control.Lens.Setter ((%~), (<>=))
 import safe Control.Lens.Tuple (_2)
 import safe Control.Monad (Monad((>>=), return), (>=>), zipWithM, zipWithM_)
 import safe Data.Bool (otherwise)
@@ -89,7 +89,7 @@ import safe CMM.AST.Variables.State
   ( funcInstVariables
   , funcVariables
   , structMembers
-  , typeVariables
+  , CollectorState
   )
 import safe CMM.Control.Applicative ((<:>))
 import safe CMM.Inference.BuiltIn as Infer
@@ -196,8 +196,9 @@ import safe CMM.Inference.TypeHandle ()
 import safe CMM.Inference.TypeKind (TypeKind(Constraint, Star))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar(tVarId))
 import safe CMM.Inference.Utils (fieldClassHelper)
-import safe CMM.Parser.HasPos (HasPos, SourcePos)
+import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
+import safe CMM.Err.State ( HasErrorState(errorState) )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -269,6 +270,7 @@ instance Preprocess Unit a b where
         fVars = collector ^. funcVariables
         fIVars = collector ^. funcInstVariables
         sMems = collector ^. structMembers
+    errorState <>= collector ^. errorState
     beginUnit collector
     storeFacts . factComment $ "Adding built-ins "
     storeFacts builtInTypeFacts
@@ -346,7 +348,7 @@ instance Preprocess Struct a b where
       "START Preprocessing struct " <> backQuote (getName paraName)
     tVar <- lookupTCon (getName paraName) <&> toTypeVar
     pushParent tVar
-    pushTypeVariables $ structVariables struct ^. typeVariables
+    pushTypeVariables $ structVariables struct
     (constraint, paraName') <- preprocessParaName lookupTCon Star paraName
     let hole = getTypeHole paraName'
     pushStruct (getName paraName, hole) (getName paraName, constraint)
@@ -373,11 +375,11 @@ preprocessClassCommon ::
   -> [Annot (ParaName param1) a1]
   -> Annot (ParaName param2) a2
   -> t1 (Annot n a3)
-  -> Map.Map Text (SourcePos, TypeKind)
+  -> CollectorState
   -> Preprocessor (TypeHole, t2)
-preprocessClassCommon pushWhat constr paraNames paraName methods variables = do
+preprocessClassCommon pushWhat constr paraNames paraName methods collector = do
   freshStar >>= pushParent . toTypeVar
-  pushTypeVariables variables
+  pushTypeVariables collector
   (constraints, paraNames') <-
     unzip <$> traverse (preprocessParaName lookupClass Constraint) paraNames
   (constraint, paraName') <- preprocessParaName lookupClass Constraint paraName
@@ -397,7 +399,7 @@ instance Preprocess Class a b where
       "START Preprocessing class " <> backQuote (getName paraName)
     result <-
       preprocessClassCommon pushClass Class paraNames paraName methods $
-      classVariables class' ^. typeVariables
+      classVariables class'
     storeFacts . factComment $
       "END Preprocessing class " <> backQuote (getName paraName)
     return result
@@ -408,7 +410,7 @@ instance Preprocess Instance a b where
       "START Preprocessing instance " <> backQuote (getName paraName)
     result <-
       preprocessClassCommon pushInstance Instance paraNames paraName methods $
-      instanceVariables instance' ^. typeVariables
+      instanceVariables instance'
     storeFacts . factComment $
       "END Preprocessing instance " <> backQuote (getName paraName)
     return result

@@ -16,6 +16,7 @@ import safe Data.Map (Map)
 import safe Data.Maybe (Maybe)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
+import safe qualified Data.Map as Map
 
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.Fact (Facts)
@@ -42,7 +43,7 @@ import safe CMM.Inference.TypeKind
   )
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
 import safe CMM.Parser.HasPos (HasPos(getPos))
-import qualified Data.Map as Map
+import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 
 data PreprocessorState =
   PreprocessorState
@@ -60,9 +61,10 @@ data PreprocessorState =
     , _cSymbols :: [Text]
     , _currentContext :: [Context]
     , _handleCounter :: HandleCounter
+    , _errorState :: ErrorState
     , _currentParent :: [TypeVar]
     }
-  deriving (Data)
+    deriving (Data)
 
 initPreprocessor :: PreprocessorState
 initPreprocessor =
@@ -81,6 +83,7 @@ initPreprocessor =
     , _cSymbols = mempty
     , _currentContext = [GlobalCtx]
     , _handleCounter = 0
+    , _errorState = mempty
     , _currentParent = [NoType]
     }
 

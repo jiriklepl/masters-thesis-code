@@ -548,10 +548,9 @@ reduceTemplates (fact:facts) =
                reverseFacts [f | Fact f <- nesteds] <>
                apply subst facts') :=>
               t
-            -- subst' <- refresher tVars
-            -- continueWith $
-            --   (Fact <$> typeUnion (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
-            continue
+            subst' <- refresher tVars
+            reduceTemplates $
+              (Fact <$> typeUnion (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
     Fact (ClassFunDeps name rules) -> do
       addFunDeps name rules
       continue

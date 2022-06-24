@@ -66,6 +66,7 @@ data MonomorphizeState a =
     , _polyData :: PolyData
     , _polyGenerate :: PolyGenerate
     , _polyMemory :: PolyGenerate
+    , _polyStorage :: PolyGenerate
     , _polyWaves :: Int
     , _polySchemes :: PolySchemes a
     }
@@ -80,6 +81,7 @@ initMonomorphizeState =
     , _polyMethods = mempty
     , _polySchemes = mempty
     , _polyMemory = mempty
+    , _polyStorage = mempty
     , _polyWaves = 0
     }
 

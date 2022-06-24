@@ -60,6 +60,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Tuple
 import GHC.Show
+import CMM.Err.State
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -107,6 +108,8 @@ main = do
     fmap (uncurry mappend . bimap pretty (list . fmap pretty . Set.toList)) .
     Map.toList . Infer.getPolyGenerate $
     monomorphizer ^. Infer.polyMemory
+  print "ERRORS:"
+  print . vsep . fmap pretty . view errors $ inferencer ^. errorState
   print "CLASS_SCHEMES:"
   print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList $
     inferencer ^. classSchemes

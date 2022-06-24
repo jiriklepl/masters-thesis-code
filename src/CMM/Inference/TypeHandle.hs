@@ -30,11 +30,11 @@ data TypeHandle =
   deriving (Show, Data)
 
 instance Eq TypeHandle where
-  TypeHandle {_typing = t, _consting = c, _kinding = k} == TypeHandle { _typing = t'
+  TypeHandle {_identifier = i, _typing = t, _consting = c, _kinding = k} == TypeHandle { _identifier = i', _typing = t'
                                                                       , _consting = c'
                                                                       , _kinding = k'
                                                                       } =
-    t == t' && c == c' && k == k'
+    i == i' && t == t' && c == c' && k == k'
 
 instance Ord TypeHandle where
   TypeHandle {_identifier = i, _typing = t, _consting = c, _kinding = k} `compare` TypeHandle { _identifier = i'

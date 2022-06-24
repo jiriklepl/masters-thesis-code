@@ -7,6 +7,9 @@ import safe Data.Eq (Eq)
 import safe Data.Function ((.))
 import safe Data.Text (Text)
 import safe Text.Show (Show)
+import safe Data.Data ( Data )
+
+import safe Prettyprinter ( Pretty(pretty), (<+>) )
 
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Err.IsError (IsError)
@@ -18,7 +21,15 @@ data VariablesError
   | DuplicateTypeConstant Text -- ^ The given type constant name is already declared
   | DuplicateTypeVariable Text -- ^ The given type variable is already declared
   | DuplicateVariable Text -- ^ The given variable is already declared
-  deriving (Show, Eq, IsError)
+  deriving (Show, Eq, IsError, Data)
+
+instance Pretty VariablesError where
+  pretty = \case
+    DuplicateFunctionVariable name -> "Duplicate function: " <+> pretty name
+    DuplicateTypeAlias name -> "Duplicate type alias: " <+> pretty name
+    DuplicateTypeConstant name -> "Duplicate class: " <+> pretty name
+    DuplicateTypeVariable name -> "Duplicate type variable: " <+> pretty name
+    DuplicateVariable name -> "Duplicate variable: " <+> pretty name
 
 -- | Helper function for using `DuplicateFunctionVariable` on variables that are in `GetName` type class
 duplicateFunctionVariable :: GetName n => n -> VariablesError

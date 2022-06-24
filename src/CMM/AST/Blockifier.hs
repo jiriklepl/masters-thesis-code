@@ -15,7 +15,7 @@ import safe Data.Bool (Bool(False, True), (||), not)
 import safe Data.Eq (Eq)
 import safe Data.Foldable (Foldable(elem, null), any, concat, traverse_)
 import safe Data.Function (($), (.))
-import safe Data.Functor (Functor((<$)), ($>), (<$>), fmap)
+import safe Data.Functor (Functor((<$)), ($>), (<$>), fmap, void)
 import safe Data.Int (Int)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), maybe)
@@ -52,7 +52,7 @@ import safe CMM.AST
      SpanStmt, SwitchStmt)
   , Targets(Targets)
   )
-import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot)
+import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot, unAnnot)
 import safe CMM.AST.BlockAnnot
   ( BlockAnnot(Begins, NoBlock, PartOf, Unreachable)
   , HasBlockAnnot(getBlockAnnot)
@@ -241,7 +241,7 @@ addBlockAnnot ::
 addBlockAnnot stmt@(Annot n annot) =
   use currentBlock >>= \case
     Nothing ->
-      registerASTWarning stmt UnreachableStatement $>
+      registerASTWarning stmt (UnreachableStatement . void $ unAnnot stmt) $>
       withAnnot (withBlockAnnot Unreachable annot) (noBlockAnnots n)
     Just block ->
       return . withAnnot (withBlockAnnot (PartOf block) annot) $ noBlockAnnots n
@@ -551,7 +551,7 @@ instance Blockify (Annot Stmt) a b where
               then addControlFlow name
               else traverse_ addControlFlow targets
           (Just name, _) -> addControlFlow name
-          (Nothing, _) -> registerASTError stmt GotoWithoutTargets
+          (Nothing, _) -> registerASTError stmt . GotoWithoutTargets . void $ unAnnot stmt
         registerReads stmt *> addBlockAnnot stmt <* unsetBlock
       CutToStmt {} ->
         error "'Cut to' statements are not currently implemented" -- TODO: implement `cut to` statements
@@ -585,8 +585,8 @@ instance Blockify (Annot Stmt) a b where
         when (neverReturns callAnnots) unsetBlock
 
 -- This is here just for completeness
-flatteningError :: HasPos n => n -> Blockifier ()
-flatteningError stmt = registerASTError stmt FlatteningInconsistency
+flatteningError :: HasPos (Annot Stmt a) => Annot Stmt a -> Blockifier ()
+flatteningError stmt = registerASTError stmt . FlatteningInconsistency . void $ unAnnot stmt
 
 blockifyLabelStmt ::
      WithBlockAnnot a b => Annot Stmt a -> Blockifier (Annot Stmt b)

@@ -4,10 +4,11 @@
 module CMM.Parser.HasPos
   ( HasPos(..)
   , SourcePos
+  , sourcePosPretty
   ) where
 
 import safe Data.Function (id)
-import safe Text.Megaparsec.Pos (SourcePos)
+import safe Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
 
 class HasPos a where
   getPos :: a -> SourcePos

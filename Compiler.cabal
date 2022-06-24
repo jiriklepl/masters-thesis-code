@@ -88,7 +88,6 @@ executable Compiler
                        CMM.Data.Generics,
                        CMM.Data.Lattice,
                        CMM.Data.List,
-                       CMM.Data.MapLike,
                        CMM.Data.Nullable,
                        CMM.Data.Num,
                        CMM.Data.Ordered,

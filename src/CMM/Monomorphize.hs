@@ -140,6 +140,7 @@ import safe CMM.Monomorphize.State
   , polyMethods
   , polySchemes
   , unPolyGenerate
+  , tryStore
   )
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Utils (backQuote)
@@ -446,17 +447,26 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot Procedure) a where
           reconstructOld (toTypeVar handle) >>=
           simplify . makeAddrType . apply subst >>=
           fmap toTypeVar . getHandle
-        useMonomorphizer $
+
+        stored <- useMonomorphizer $
           case getTypeHole a of
-            SimpleTypeHole _ -> memorizeStrong hole inst
-            MethodTypeHole _ scheme _ -> memorizeStrong (toTypeVar scheme) inst
+            SimpleTypeHole _ -> tryStore hole inst
+            MethodTypeHole _ scheme _ -> tryStore (toTypeVar scheme) inst
             _ -> undefined -- TODO: logic error
-        header' <- ensuredJustMonomorphize undefined subst header
-        body' <- ensuredJustMonomorphize undefined subst body
-        return $ do
-          header'' <- header'
-          body'' <- body'
-          return $ withAnnot a <$> liftA2 Procedure header'' body''
+        if stored
+          then do
+            useMonomorphizer $
+              case getTypeHole a of
+                SimpleTypeHole _ -> memorizeStrong hole inst
+                MethodTypeHole _ scheme _ -> memorizeStrong (toTypeVar scheme) inst
+                _ -> undefined -- TODO: logic error
+            header' <- ensuredJustMonomorphize undefined subst header
+            body' <- ensuredJustMonomorphize undefined subst body
+            return $ do
+              header'' <- header'
+              body'' <- body'
+              return $ withAnnot a <$> liftA2 Procedure header'' body''
+          else succeed nullVal
       Poly polyWhat
         | null subst -> succeed nullVal
         | otherwise -> error $ show polyWhat

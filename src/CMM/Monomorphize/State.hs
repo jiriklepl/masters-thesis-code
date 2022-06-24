@@ -1,4 +1,5 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE Rank2Types #-}
 
 module CMM.Monomorphize.State
   ( module CMM.Monomorphize.State
@@ -19,6 +20,7 @@ import safe Data.Monoid (Monoid(mempty))
 import safe Data.Semigroup (Semigroup)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
+import safe Control.Lens.Lens (Lens')
 
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Subst (Apply(apply))
@@ -39,6 +41,7 @@ import safe CMM.Monomorphize.State.Impl
   , polyMemory
   , polyMethods
   , polySchemes
+  , polyStorage
   )
 
 renewPolyData :: Map TypeVar TypeVar -> Monomorphizer a ()
@@ -63,24 +66,42 @@ addImpl ::
 addImpl which scheme inst =
   (<>= which (Map.singleton scheme $ Set.singleton inst))
 
+memorizeImpl :: Lens' (MonomorphizeState a) PolyGenerate -> TypeVar -> TypeVar -> Monomorphizer a ()
+memorizeImpl toWhere scheme inst = addImpl PolyGenerate scheme inst toWhere
+
 memorize :: TypeVar -> TypeVar -> Monomorphizer a ()
-memorize scheme inst = addImpl PolyGenerate scheme inst polyMemory
+memorize = memorizeImpl polyMemory
+
+store :: TypeVar -> TypeVar -> Monomorphizer a ()
+store = memorizeImpl polyStorage
 
 memorizeStrong :: TypeVar -> TypeVar -> Monomorphizer a ()
 memorizeStrong scheme inst = do
   memorize scheme inst
   removeGenerate scheme inst
 
-isMemorized :: TypeVar -> TypeVar -> Monomorphizer a Bool
-isMemorized scheme inst =
-  uses polyMemory $ maybe False (Set.member inst) . Map.lookup scheme .
+isMemorizedImpl :: Lens' (MonomorphizeState a) PolyGenerate -> TypeVar -> TypeVar -> Monomorphizer a Bool
+isMemorizedImpl inWhere scheme inst =
+  uses inWhere $ maybe False (Set.member inst) . Map.lookup scheme .
   getPolyGenerate
 
-tryMemorize :: TypeVar -> TypeVar -> Monomorphizer a Bool
-tryMemorize scheme inst = do
-  memorized <- isMemorized scheme inst
-  unless memorized $ memorize scheme inst
+isMemorized :: TypeVar -> TypeVar -> Monomorphizer a Bool
+isMemorized = isMemorizedImpl polyMemory
+
+isStored :: TypeVar -> TypeVar -> Monomorphizer a Bool
+isStored = isMemorizedImpl polyStorage
+
+tryMemorizeImpl :: Lens' (MonomorphizeState a) PolyGenerate -> TypeVar -> TypeVar -> Monomorphizer a Bool
+tryMemorizeImpl toWhere scheme inst = do
+  memorized <- isMemorizedImpl toWhere scheme inst
+  unless memorized $ memorizeImpl toWhere scheme inst
   return $ not memorized
+
+tryMemorize :: TypeVar -> TypeVar -> Monomorphizer a Bool
+tryMemorize  = tryMemorizeImpl polyMemory
+
+tryStore :: TypeVar -> TypeVar -> Monomorphizer a Bool
+tryStore = tryMemorizeImpl polyStorage
 
 addGenerate :: TypeVar -> TypeVar -> Monomorphizer a ()
 addGenerate scheme inst = do
