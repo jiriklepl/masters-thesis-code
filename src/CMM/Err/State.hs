@@ -7,6 +7,7 @@ import safe Control.Lens.TH (makeFieldsNoPrefix)
 
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Setter ((%=))
+import safe Control.Lens.Type (Lens')
 import safe Control.Monad.State (MonadState)
 import safe Data.Eq (Eq((==)))
 import safe Data.Function (($))
@@ -14,13 +15,12 @@ import safe Data.Int (Int)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Semigroup (Semigroup((<>)))
 import safe Text.Show (Show)
-import safe Control.Lens.Type (Lens')
 
 import safe CMM.Data.List (count)
+import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Err.Error (Error(Error), HasErrSeverity(errSeverity))
 import safe CMM.Err.IsError (IsError)
 import safe CMM.Err.Severity (Severity(ErrorLevel, InfoLevel, WarningLevel))
-import safe CMM.Data.Nullable ( Nullable(nullVal) )
 
 newtype ErrorState =
   ErrorState

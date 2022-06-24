@@ -6,51 +6,54 @@ import safe Data.Bool (Bool, not)
 import safe Data.Char (Char)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (Foldable (null))
+import safe Data.Foldable (Foldable(null))
+import safe Data.Function (($), (.))
 import safe Data.Functor (Functor, (<$>))
 import safe Data.Int (Int)
-import safe Data.Maybe (Maybe (Nothing, Just), maybe)
+import safe Data.Maybe (Maybe(Just, Nothing), maybe)
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable)
 import safe GHC.Err (error)
 import safe Text.Show (Show(show))
-import safe Data.Function ( ($), (.) )
 
 import safe Prettyprinter
-    ( (<>),
-      (<+>),
-      hsep,
-      vsep,
-      angles,
-      braces,
-      brackets,
-      colon,
-      dquotes,
-      equals,
-      parens,
-      semi,
-      slash,
-      space,
-      squotes,
-      Doc,
-      Pretty(pretty) )
+  ( Doc
+  , Pretty(pretty)
+  , (<+>)
+  , (<>)
+  , angles
+  , braces
+  , brackets
+  , colon
+  , dquotes
+  , equals
+  , hsep
+  , parens
+  , semi
+  , slash
+  , space
+  , squotes
+  , vsep
+  )
 
-import safe CMM.AST.Annot (Annot, Annotation (Annot))
+import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.Data.Float (Float)
-import safe Data.Monoid ( Monoid(mempty) )
 import safe CMM.Pretty
-    ( commaSep,
-      commaPretty,
-      bracesBlock,
-      maybeSpacedL,
-      maybeSpacedR,
-      darrow,
-      arrow,
-      bquotes,
-      ddot,
-      dcolon,
-      ifTrue, inBraces )
-import safe CMM.Utils ( backQuote )
+  ( arrow
+  , bquotes
+  , bracesBlock
+  , commaPretty
+  , commaSep
+  , darrow
+  , dcolon
+  , ddot
+  , ifTrue
+  , inBraces
+  , maybeSpacedL
+  , maybeSpacedR
+  )
+import safe CMM.Utils (backQuote)
+import safe Data.Monoid (Monoid(mempty))
 
 newtype Unit a =
   Unit [Annot TopLevel a]
@@ -142,9 +145,9 @@ deriving instance Eq (Class ())
 
 instance Pretty (Class a) where
   pretty class' =
-    "class" <+> case class' of
-      Class [] paraName methods ->
-        pretty paraName <+> bracesBlock methods
+    "class" <+>
+    case class' of
+      Class [] paraName methods -> pretty paraName <+> bracesBlock methods
       Class paraNames paraName methods ->
         commaPretty paraNames <+>
         darrow <+> pretty paraName <+> bracesBlock methods
@@ -160,9 +163,9 @@ deriving instance Eq (Instance ())
 
 instance Pretty (Instance a) where
   pretty instance' =
-    "instance" <+> case instance' of
-      Instance [] paraName methods ->
-        pretty paraName <+> bracesBlock methods
+    "instance" <+>
+    case instance' of
+      Instance [] paraName methods -> pretty paraName <+> bracesBlock methods
       Instance paraNames paraName methods ->
         commaPretty paraNames <+>
         darrow <+> pretty paraName <+> bracesBlock methods
@@ -174,9 +177,10 @@ data Struct a =
 deriving instance Eq (Struct ())
 
 instance Pretty (Struct a) where
-  pretty = \case
-    Struct paraName datums ->
-      "struct" <+> pretty paraName <+> inBraces (prettyDatums datums)
+  pretty =
+    \case
+      Struct paraName datums ->
+        "struct" <+> pretty paraName <+> inBraces (prettyDatums datums)
 
 data ParaName param a =
   ParaName (Name a) [Annot param a]
@@ -260,9 +264,10 @@ instance Pretty (Datum a) where
 
 prettyDatums :: [Annotation Datum annot] -> Doc ann
 prettyDatums [] = mempty
-prettyDatums (datum:others) = case datum of
-  DatumLabel {} `Annot` _ -> pretty datum <+> prettyDatums others
-  _ -> pretty datum <> prettyDatums others
+prettyDatums (datum:others) =
+  case datum of
+    DatumLabel {} `Annot` _ -> pretty datum <+> prettyDatums others
+    _ -> pretty datum <> prettyDatums others
 
 data Init a
   = ExprInit [Annot Expr a]
@@ -286,13 +291,15 @@ data Registers a =
 deriving instance Eq (Registers ())
 
 instance Pretty (Registers a) where
-  pretty = \case
-    Registers mKind type' nameStringPairs ->
-      maybeSpacedR mKind <> pretty type' <+>
-      commaSep
-        [ pretty name <> maybe mempty ((space <>) . (equals <+>) . pretty) mString
-        | (name, mString) <- nameStringPairs
-        ]
+  pretty =
+    \case
+      Registers mKind type' nameStringPairs ->
+        maybeSpacedR mKind <> pretty type' <+>
+        commaSep
+          [ pretty name <>
+          maybe mempty ((space <>) . (equals <+>) . pretty) mString
+          | (name, mString) <- nameStringPairs
+          ]
 
 newtype Size a =
   Size (Maybe (Annot Expr a))
@@ -301,8 +308,9 @@ newtype Size a =
 deriving instance Eq (Size ())
 
 instance Pretty (Size a) where
-  pretty = \case
-    Size mExpr -> brackets $ maybe mempty pretty mExpr
+  pretty =
+    \case
+      Size mExpr -> brackets $ maybe mempty pretty mExpr
 
 newtype Body a =
   Body [Annot BodyItem a]
@@ -311,8 +319,9 @@ newtype Body a =
 deriving instance Eq (Body ())
 
 instance Pretty (Body a) where
-  pretty = \case
-    Body bodyItems -> bracesBlock bodyItems
+  pretty =
+    \case
+      Body bodyItems -> bracesBlock bodyItems
 
 data BodyItem a
   = BodyDecl (Annot Decl a)
@@ -336,8 +345,9 @@ data Procedure a =
 deriving instance Eq (Procedure ())
 
 instance Pretty (Procedure a) where
-  pretty = \case
-    Procedure header body -> pretty header <+> pretty body
+  pretty =
+    \case
+      Procedure header body -> pretty header <+> pretty body
 
 newtype ProcedureDecl a =
   ProcedureDecl (Annot ProcedureHeader a)
@@ -346,25 +356,31 @@ newtype ProcedureDecl a =
 deriving instance Eq (ProcedureDecl ())
 
 instance Pretty (ProcedureDecl a) where
-  pretty = \case
-    ProcedureDecl header -> pretty header <> semi
+  pretty =
+    \case
+      ProcedureDecl header -> pretty header <> semi
 
 data ProcedureHeader a =
-  ProcedureHeader (Maybe Conv) (Name a) [Annot Formal a] (Maybe [Annot SemiFormal a])
+  ProcedureHeader
+    (Maybe Conv)
+    (Name a)
+    [Annot Formal a]
+    (Maybe [Annot SemiFormal a])
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (ProcedureHeader ())
 
 instance Pretty (ProcedureHeader a) where
-  pretty = \case
-    ProcedureHeader mConv name formals mTypes ->
-      maybeSpacedR mConv <> pretty name <> parens (commaPretty formals) <> ending
-      where
-        ending =
-          case mTypes of
-            Nothing -> mempty
-            Just [] -> mempty <+> arrow
-            Just types -> mempty <+> arrow <+> commaPretty types
+  pretty =
+    \case
+      ProcedureHeader mConv name formals mTypes ->
+        maybeSpacedR mConv <>
+        pretty name <> parens (commaPretty formals) <> ending
+        where ending =
+                case mTypes of
+                  Nothing -> mempty
+                  Just [] -> mempty <+> arrow
+                  Just types -> mempty <+> arrow <+> commaPretty types
 
 data Formal a =
   Formal (Maybe Kind) Bool (Annot Type a) (Name a)
@@ -373,10 +389,12 @@ data Formal a =
 deriving instance Eq (Formal ())
 
 instance Pretty (Formal a) where
-  pretty = \case
-    Formal mKind invar type' name ->
-      maybeSpacedR mKind <> ifTrue invar ("invariant" <> space) <> pretty type' <+>
-      pretty name
+  pretty =
+    \case
+      Formal mKind invar type' name ->
+        maybeSpacedR mKind <>
+        ifTrue invar ("invariant" <> space) <> pretty type' <+>
+        pretty name
 
 data SemiFormal a =
   SemiFormal (Maybe Kind) (Annot Type a)
@@ -385,9 +403,9 @@ data SemiFormal a =
 deriving instance Eq (SemiFormal ())
 
 instance Pretty (SemiFormal a) where
-  pretty = \case
-    SemiFormal mKind type' ->
-      maybeSpacedR mKind <> pretty type'
+  pretty =
+    \case
+      SemiFormal mKind type' -> maybeSpacedR mKind <> pretty type'
 
 data Actual a =
   Actual (Maybe Kind) (Annot Expr a)
@@ -396,16 +414,18 @@ data Actual a =
 deriving instance Eq (Actual ())
 
 instance Pretty (Actual a) where
-  pretty = \case
-    Actual mKind expr -> maybeSpacedR mKind <> pretty expr
+  pretty =
+    \case
+      Actual mKind expr -> maybeSpacedR mKind <> pretty expr
 
 newtype Kind =
   Kind StrLit
   deriving (Show, Data, Eq)
 
 instance Pretty Kind where
-  pretty = \case
-    Kind string -> pretty string
+  pretty =
+    \case
+      Kind string -> pretty string
 
 newtype StackDecl a =
   StackDecl [Annot Datum a]
@@ -414,8 +434,9 @@ newtype StackDecl a =
 deriving instance Eq (StackDecl ())
 
 instance Pretty (StackDecl a) where
-  pretty = \case
-    StackDecl datums -> "stackdata" <+> inBraces (prettyDatums datums)
+  pretty =
+    \case
+      StackDecl datums -> "stackdata" <+> inBraces (prettyDatums datums)
 
 data Stmt a
   = EmptyStmt
@@ -512,8 +533,9 @@ data KindName a =
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
 
 instance Pretty (KindName a) where
-  pretty = \case
-    KindName mKind name -> maybeSpacedR mKind <> pretty name
+  pretty =
+    \case
+      KindName mKind name -> maybeSpacedR mKind <> pretty name
 
 data Arm a =
   Arm [Annot Range a] (Annot Body a)
@@ -522,9 +544,9 @@ data Arm a =
 deriving instance Eq (Arm ())
 
 instance Pretty (Arm a) where
-  pretty = \case
-    Arm ranges body ->
-      "case" <+> commaPretty ranges <> colon <+> pretty body
+  pretty =
+    \case
+      Arm ranges body -> "case" <+> commaPretty ranges <> colon <+> pretty body
 
 data Range a =
   Range (Annot Expr a) (Maybe (Annot Expr a))
@@ -714,23 +736,24 @@ data Op
   deriving (Show, Data, Eq)
 
 instance Pretty Op where
-  pretty = \case
-    AddOp -> "+"
-    SubOp -> "-"
-    MulOp -> "*"
-    DivOp -> "/"
-    ModOp -> "%"
-    AndOp -> "&"
-    OrOp -> "|"
-    XorOp -> "^"
-    ShLOp -> "<<"
-    ShROp -> ">>"
-    EqOp -> "=="
-    NeqOp -> "!="
-    GtOp -> ">"
-    LtOp -> "<"
-    GeOp -> ">="
-    LeOp -> "<="
+  pretty =
+    \case
+      AddOp -> "+"
+      SubOp -> "-"
+      MulOp -> "*"
+      DivOp -> "/"
+      ModOp -> "%"
+      AndOp -> "&"
+      OrOp -> "|"
+      XorOp -> "^"
+      ShLOp -> "<<"
+      ShROp -> ">>"
+      EqOp -> "=="
+      NeqOp -> "!="
+      GtOp -> ">"
+      LtOp -> "<"
+      GeOp -> ">="
+      LeOp -> "<="
 
 newtype Name a =
   Name Text

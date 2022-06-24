@@ -10,7 +10,7 @@ import safe Control.Lens.Getter (use, uses)
 import safe Control.Lens.Setter ((%=), (.=), (?=))
 import safe Control.Lens.Type (Lens)
 import safe Control.Monad (Monad((>>=), return))
-import safe Control.Monad.State.Lazy (when)
+import safe Control.Monad.State (when)
 import safe Data.Bool (Bool(False, True), (||), not)
 import safe Data.Eq (Eq)
 import safe Data.Foldable (Foldable(elem, null), any, concat, traverse_)
@@ -114,6 +114,12 @@ blocksCache name = do
     Nothing ->
       let index = Map.size table
        in index <$ (blocksTable .= Map.insert name index table)
+
+setCurrentBlock :: Text -> Blockifier Int
+setCurrentBlock name = do
+  index <- blocksCache name
+  currentBlock ?= index
+  return index
 
 updateBlock :: Maybe Text -> Blockifier ()
 updateBlock mName = do
@@ -444,19 +450,17 @@ blockifyProcedureHeader (ProcedureHeader mConv name formals mType `Annot` a) = d
 
 instance Blockify (Annot Procedure) a b where
   blockify procedure@(Procedure header body `Annot` a) = do
-    index <- blocksCache $ helperName "procedure"
-    currentBlock ?= index
+    index <- setCurrentBlock $ helperName "procedure"
     header' <- blockifyProcedureHeader header
-    withAnnot (Begins index `withBlockAnnot` a) <$> (Procedure header' <$>
-     blockify body) <*
+    withAnnot (Begins index `withBlockAnnot` a) <$>
+      (Procedure header' <$> blockify body) <*
       unsetBlock <*
       analyzeFlow procedure <*
       clearBlockifier
 
 instance Blockify (Annot ProcedureDecl) a b where
   blockify (ProcedureDecl header `Annot` a) = do
-    index <- blocksCache $ helperName "procedure"
-    currentBlock ?= index
+    index <- setCurrentBlock $ helperName "procedure"
     header' <- blockifyProcedureHeader header
     withAnnot (Begins index `withBlockAnnot` a) (ProcedureDecl header') <$
       unsetBlock <*

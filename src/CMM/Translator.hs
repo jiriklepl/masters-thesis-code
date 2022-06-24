@@ -15,7 +15,7 @@ module CMM.Translator where
 import safe Prelude
 
 import safe Control.Applicative
-import safe Control.Monad.State.Lazy
+import safe Control.Monad.State
 import safe Data.Char
 import safe Data.Foldable
 import safe Data.Function
@@ -243,7 +243,8 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
   translate (Annot (ComExpr expr) _) = do
     expr' <- translate expr
     L.typeOf expr' >>= \case
-      Right (L.IntegerType bits) -> L.xor expr' . L.ConstantOperand $ L.Int bits (-1)
+      Right (L.IntegerType bits) ->
+        L.xor expr' . L.ConstantOperand $ L.Int bits (-1)
       _ -> error "Cannot create a binary complement to a non-int"
   translate (Annot (NegExpr expr) _) = translate expr >>= L.icmp L.EQ (L.bit 0)
 

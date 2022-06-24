@@ -15,17 +15,18 @@ import safe qualified Data.Map as Map
 import safe Data.Maybe (fromMaybe, maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
 
-import safe CMM.Inference.Fact (Fact, FlatFact, NestedFact, Scheme ((:.)), Qual)
+import safe CMM.Data.Generics ((*|*))
+import safe CMM.Inference.Fact (Fact, FlatFact, NestedFact, Qual, Scheme((:.)))
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar, tVarParent))
-import safe CMM.Data.Generics ( (*|*) )
 
 type Subst = Map TypeVar
 
 schemeNCase :: Apply (Qual n) b => Subst b -> Scheme n -> Scheme n
-schemeNCase subst (tVars :. qN) = tVars :. (Map.withoutKeys subst tVars `apply` qN)
+schemeNCase subst (tVars :. qN) =
+  tVars :. (Map.withoutKeys subst tVars `apply` qN)
 
 class (ToType b, Typeable b, Data a, TypeCase b) =>
       Apply a b
@@ -97,12 +98,14 @@ instance Apply n b => Apply [n] b
 instance (ToType b, Typeable b, TypeCase b) => Apply PrimType b
 
 instance (ToType b, Typeable b, TypeCase b) => Apply Type b
+
 instance (ToType b, Typeable b, TypeCase b) => Apply (Qual Type) b
 
 instance Apply n b => Apply (NestedFact n) b
-instance (ToType b, Typeable b, TypeCase b) => Apply (Qual Fact) b
-instance (ToType b, Typeable b, TypeCase b) => Apply (FlatFact Type) b
 
+instance (ToType b, Typeable b, TypeCase b) => Apply (Qual Fact) b
+
+instance (ToType b, Typeable b, TypeCase b) => Apply (FlatFact Type) b
 
 instance Apply b b => Apply (Map TypeVar b) b where
   subst' `apply` subst

@@ -8,17 +8,16 @@ import safe Control.Lens.TH (makeLenses)
 import safe Data.Bool ((&&))
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
-import safe Data.Function ((.), ($))
+import safe Data.Function (($), (.))
 import safe Data.Ord (Ord(compare))
 import safe Text.Show (Show)
 
-import Prettyprinter
-    ( (<>), (<+>), braces, parens, Pretty(pretty) )
+import Prettyprinter (Pretty(pretty), (<+>), (<>), braces, parens)
 
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
-import CMM.Pretty (typingSymbol, constingSymbol, kindingSymbol)
+import CMM.Pretty (constingSymbol, kindingSymbol, typingSymbol)
 
 data TypeHandle =
   TypeHandle
@@ -39,10 +38,10 @@ instance Eq TypeHandle where
 
 instance Ord TypeHandle where
   TypeHandle {_identifier = i, _typing = t, _consting = c, _kinding = k} `compare` TypeHandle { _identifier = i'
-                                                                             , _typing = t'
-                                                                             , _consting = c'
-                                                                             , _kinding = k'
-                                                                             } =
+                                                                                              , _typing = t'
+                                                                                              , _consting = c'
+                                                                                              , _kinding = k'
+                                                                                              } =
     compare i i' <> compare t t' <> compare c c' <> compare k k'
 
 instance ToType TypeHandle where
@@ -52,9 +51,16 @@ instance ToTypeVar TypeHandle where
   toTypeVar = toTypeVar . handleId
 
 instance Pretty TypeHandle where
-  pretty = \case
-    TypeHandle { _identifier = tId, _typing = typing, _consting = consting, _kinding = kinding, _annot = annot} ->
-      braces $ pretty tId <+>
+  pretty =
+    \case
+      TypeHandle { _identifier = tId
+                 , _typing = typing
+                 , _consting = consting
+                 , _kinding = kinding
+                 , _annot = annot
+                 } ->
+        braces $
+        pretty tId <+>
         parens (typingSymbol <+> "~" <+> pretty typing) <+>
         parens (constingSymbol <+> "~" <+> pretty consting) <+>
         parens (kindingSymbol <+> "~" <+> pretty kinding) <+> pretty annot

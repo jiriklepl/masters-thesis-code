@@ -2,16 +2,16 @@
 
 module CMM.Data.Trilean where
 
-import safe Data.Eq ( Eq )
-import safe Data.Ord ( Ord )
-import safe Text.Show ( Show )
-import safe Text.Read ( Read )
-import safe Data.Data ( Data )
 import safe Data.Bool (Bool)
 import safe qualified Data.Bool as B
+import safe Data.Data (Data)
+import safe Data.Eq (Eq)
+import safe Data.Ord (Ord)
+import safe Text.Read (Read)
+import safe Text.Show (Show)
 
-import safe CMM.Data.Bounded ( Bounded (minBound, maxBound) )
-import safe CMM.Data.Nullable (Fallbackable ((??)), Nullable (nullVal))
+import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
+import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 
 -- | Data type used for three-valued logic (with added 'Unknown' value)
 data Trilean
@@ -50,10 +50,11 @@ _ || _ = Unknown
 
 -- | NOT operation on a 'Trilean' value
 not :: Trilean -> Trilean
-not = \case
-  False -> True
-  Unknown -> Unknown
-  True -> False
+not =
+  \case
+    False -> True
+    Unknown -> Unknown
+    True -> False
 
 -- | 'True'
 otherwise :: Trilean
@@ -62,16 +63,18 @@ otherwise = True
 -- | Case analysis for the 'Trilean' type.
 -- @'trilean' x y w p@ evaluates to @x@ when @p@ is 'False', @y@ when @p@ is 'Unknown', and finally evaluates to @z@ when @p@ is 'True'
 trilean :: a -> a -> a -> Trilean -> a
-trilean a b c = \case
-  False -> a
-  Unknown -> b
-  True -> c
+trilean a b c =
+  \case
+    False -> a
+    Unknown -> b
+    True -> c
 
 -- | transforms a 'Bool' value to an equivalent 'Trilean' value
 fromBool :: Bool -> Trilean
-fromBool = \case
-  B.True -> True
-  B.False -> False
+fromBool =
+  \case
+    B.True -> True
+    B.False -> False
 
 -- | transforms a 'Trilean' value to an equivalent 'Bool' value with a fallback used on 'Unknown'-valued argument
 toBool :: Bool -> Trilean -> Bool

@@ -3,9 +3,8 @@
 module CMM.Data.Function where
 
 import safe Data.Bool (Bool, (&&), (||))
-import safe Data.Function ( (&) )
-import safe Data.Foldable ( Foldable(foldl') )
-
+import safe Data.Foldable (Foldable(foldl'))
+import safe Data.Function ((&))
 
 infixr 1 `fOr`
 

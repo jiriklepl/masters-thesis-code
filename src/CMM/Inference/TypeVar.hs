@@ -5,15 +5,15 @@ module CMM.Inference.TypeVar where
 import safe Data.Bool (Bool(False, True), otherwise)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
-import safe Data.Function (id, (.), const)
+import safe Data.Foldable ()
+import safe Data.Function ((.), const, id)
+import safe Data.Functor ()
 import safe Data.Int (Int)
+import Data.Monoid ((<>), mempty)
 import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Text.Show (Show)
-import Data.Monoid ((<>), mempty)
-import safe Data.Functor ()
-import safe Data.Foldable ()
 
-import safe Prettyprinter ( Pretty(pretty), parens, (<+>) )
+import safe Prettyprinter (Pretty(pretty), (<+>), parens)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Data.Num (Num((+)))
@@ -22,7 +22,7 @@ import safe CMM.Inference.TypeKind
   , TypeKind(GenericType)
   , setTypeKindInvariantLogicError
   )
-import safe CMM.Pretty ( emptySet, dollar )
+import safe CMM.Pretty (dollar, emptySet)
 
 data TypeVar
   = NoType
@@ -79,17 +79,19 @@ instance HasTypeKind TypeVar where
       tVar@TypeVar {} -> tVar {tVarKind = kind}
 
 instance Pretty TypeVar where
-  pretty = parens . \case
-    NoType -> emptySet
-    TypeVar tId kind parent -> case parent of
-      NoType -> base
-      _ -> base <+> "in" <+> go parent
-      where
-        base = dollar <> pretty tId <+> pretty kind
+  pretty =
+    parens . \case
+      NoType -> emptySet
+      TypeVar tId kind parent ->
+        case parent of
+          NoType -> base
+          _ -> base <+> "in" <+> go parent
+        where base = dollar <> pretty tId <+> pretty kind
     where
-      go = \case
-        NoType -> mempty
-        parent -> dollar <> pretty (tVarId parent) <> go (tVarParent parent)
+      go =
+        \case
+          NoType -> mempty
+          parent -> dollar <> pretty (tVarId parent) <> go (tVarParent parent)
 
 familyDepth :: TypeVar -> Int
 familyDepth =
@@ -106,11 +108,12 @@ predecessor whose@TypeVar {tVarParent = parent} who
 
 overLeaf :: TypeVar -> TypeVar -> Bool
 overLeaf NoType = const False
-overLeaf x = \case
-  NoType -> False
-  leaf
-    | x == leaf -> True
-    | otherwise -> x `overLeaf` tVarParent leaf
+overLeaf x =
+  \case
+    NoType -> False
+    leaf
+      | x == leaf -> True
+      | otherwise -> x `overLeaf` tVarParent leaf
 
 noType :: FromTypeVar a => a
 noType = fromTypeVar NoType

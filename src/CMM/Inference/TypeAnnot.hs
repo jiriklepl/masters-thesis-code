@@ -17,9 +17,9 @@ import safe Text.Show (Show)
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Parser.HasPos (SourcePos)
-import CMM.Pretty (genSymbol, commaSep)
-import safe Data.Functor ( Functor(fmap) )
-import safe Prettyprinter ( (<>), dquotes, parens, Pretty(pretty) )
+import CMM.Pretty (commaSep, genSymbol)
+import safe Data.Functor (Functor(fmap))
+import safe Prettyprinter (Pretty(pretty), (<>), dquotes, parens)
 
 data TypeAnnot
   = NoTypeAnnot
@@ -50,11 +50,12 @@ instance Monoid TypeAnnot where
   mempty = NoTypeAnnot
 
 instance Pretty TypeAnnot where
-  pretty = parens . \case
-    NoTypeAnnot -> mempty
-    TypeInst poly -> genSymbol <> pretty poly
-    TypeAST {} -> mempty
-    TypeNamed name -> dquotes $ pretty name
-    TypeNamedAST name _ -> dquotes $ pretty name
-    TypeBuiltIn name -> dquotes $ pretty name
-    MultiAnnot set -> commaSep . fmap pretty $ Set.toList set
+  pretty =
+    parens . \case
+      NoTypeAnnot -> mempty
+      TypeInst poly -> genSymbol <> pretty poly
+      TypeAST {} -> mempty
+      TypeNamed name -> dquotes $ pretty name
+      TypeNamedAST name _ -> dquotes $ pretty name
+      TypeBuiltIn name -> dquotes $ pretty name
+      MultiAnnot set -> commaSep . fmap pretty $ Set.toList set

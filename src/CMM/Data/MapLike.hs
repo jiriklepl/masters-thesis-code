@@ -2,32 +2,43 @@
 
 module CMM.Data.MapLike where
 
-import safe Data.Maybe ( Maybe, isJust )
-import safe Data.Bool ( Bool )
-import safe Data.Function ( ($), (.), const, id )
-import safe qualified Data.List as List
-import safe Data.Eq ( Eq )
-import safe Data.Ord ( Ord )
-import safe Data.Functor ( Functor(fmap) )
-import safe Data.Tuple ( fst, snd )
-import safe GHC.Err ( undefined )
-import safe Data.Map (Map)
-import safe qualified Data.Map as Map
 import Data.Bimap (Bimap)
 import qualified Data.Bimap as Bimap
+import safe Data.Bool (Bool)
+import safe Data.Eq (Eq)
+import safe Data.Function (($), (.), const, id)
+import safe Data.Functor (Functor(fmap))
 import safe Data.Kind (Constraint)
+import safe qualified Data.List as List
+import safe Data.Map (Map)
+import safe qualified Data.Map as Map
+import safe Data.Maybe (Maybe, isJust)
+import safe Data.Ord (Ord)
+import safe Data.Tuple (fst, snd)
+import safe GHC.Err (undefined)
 
 type family Adjust n :: Constraint
+
 type family Lookup n :: Constraint
+
 type family ToList n :: Constraint
+
 type family FromList n :: Constraint
+
 type family Elems n :: Constraint
+
 type family Empty n :: Constraint
+
 type family Singleton n :: Constraint
+
 type family Keys n :: Constraint
+
 type family Filter n :: Constraint
+
 type family InsertWith n :: Constraint
+
 type family Insert n :: Constraint
+
 type family Member n :: Constraint
 
 class MapLike k a n | n -> k a where
@@ -45,7 +56,9 @@ class MapLike k a n | n -> k a where
   member :: Member n => k -> n -> Bool
 
 type instance Lookup [(k, a)] = Eq k
+
 type instance Insert [(k, a)] = (Ord k, Ord a)
+
 type instance Member [(k, a)] = Eq k
 
 instance MapLike k a [(k, a)] where
@@ -55,7 +68,7 @@ instance MapLike k a [(k, a)] where
   fromList = id
   elems = fmap snd
   empty = []
-  singleton k a = [(k,a)]
+  singleton k a = [(k, a)]
   keys = fmap fst
   filter pred = List.filter $ pred . snd
   insertWith = undefined
@@ -63,13 +76,18 @@ instance MapLike k a [(k, a)] where
   member = (isJust .) . lookup
 
 type instance Adjust (Map k a) = Ord k
+
 type instance Lookup (Map k a) = Ord k
+
 type instance FromList (Map k a) = Ord k
+
 type instance Insert (Map k a) = Ord k
+
 type instance InsertWith (Map k a) = Ord k
+
 type instance Member (Map k a) = Ord k
 
-instance MapLike k a (Map k a)  where
+instance MapLike k a (Map k a) where
   adjust = Map.adjust
   lookup = Map.lookup
   toList = Map.toList
@@ -84,13 +102,18 @@ instance MapLike k a (Map k a)  where
   member = Map.member
 
 type instance Adjust (Bimap k a) = (Ord k, Ord a)
+
 type instance Lookup (Bimap k a) = (Ord k, Ord a)
+
 type instance FromList (Bimap k a) = (Ord k, Ord a)
+
 type instance Filter (Bimap k a) = (Ord k, Ord a)
+
 type instance Insert (Bimap k a) = (Ord k, Ord a)
+
 type instance Member (Bimap k a) = (Ord k, Ord a)
 
-instance MapLike k a (Bimap k a)  where
+instance MapLike k a (Bimap k a) where
   adjust = Bimap.adjust
   lookup = Bimap.lookup
   toList = Bimap.toList

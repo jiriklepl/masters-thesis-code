@@ -2,10 +2,10 @@
 
 module CMM.Data.Way where
 
-import safe Data.Eq ( Eq )
-import safe Data.Semigroup ( Semigroup((<>)) )
-import safe Text.Show ( Show )
-import safe Text.Read ( Read )
+import safe Data.Eq (Eq)
+import safe Data.Semigroup (Semigroup((<>)))
+import safe Text.Read (Read)
+import safe Text.Show (Show)
 
 data Way
   = Backward
@@ -16,15 +16,14 @@ data Way
 instance Semigroup Way where
   Both <> _ = Both
   _ <> Both = Both
-
   Backward <> Forward = Both
   Forward <> Backward = Both
-
   Backward <> Backward = Backward
   Forward <> Forward = Forward
 
 otherWay :: Way -> Way
-otherWay = \case
-  Backward -> Forward
-  Both -> Both
-  Forward -> Backward
+otherWay =
+  \case
+    Backward -> Forward
+    Both -> Both
+    Forward -> Backward

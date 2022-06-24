@@ -5,23 +5,29 @@ module CMM.Utils where
 
 import safe Control.Applicative (Applicative((*>)))
 import safe Control.Monad (Monad((>>=)), unless, when)
+import safe Data.Bifunctor (Bifunctor(second))
 import safe Data.Bool (Bool, otherwise)
+import safe Data.Char (Char)
 import safe Data.Eq (Eq((/=), (==)))
 import safe Data.Function ((.), flip)
+import safe Data.List (elem, init)
 import safe Data.Maybe (isJust)
 import safe Data.Semigroup (Semigroup((<>)))
 import safe Data.String (IsString, String)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
-import safe Data.Char ( Char )
-import safe Data.Bifunctor ( Bifunctor(second) )
-import safe Data.List ( elem, init )
 import safe Text.Show (Show(show))
-
 #ifdef USE_GHC_STACK
 import safe qualified GHC.Stack
 #endif
 
+#ifdef USE_GHC_STACK
+type HasCallStack = GHC.Stack.HasCallStack
+#else
+class HasCallStack
+
+instance HasCallStack
+#endif
 prefixSeparator :: Char
 prefixSeparator = ':'
 
@@ -67,10 +73,3 @@ backQuote string = "`" <> string <> "`"
 
 backQuoteShow :: Show a => a -> String
 backQuoteShow = backQuote . show
-
-#ifdef USE_GHC_STACK
-type HasCallStack = GHC.Stack.HasCallStack
-#else
-class HasCallStack
-instance HasCallStack
-#endif

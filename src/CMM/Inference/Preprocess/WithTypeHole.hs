@@ -4,9 +4,11 @@ module CMM.Inference.Preprocess.WithTypeHole where
 
 import safe Data.Function (flip)
 
-import safe CMM.Parser.HasPos (SourcePos)
 import safe CMM.Inference.Preprocess.TypeHole
-    ( HasTypeHole, TypeHole(EmptyTypeHole) )
+  ( HasTypeHole
+  , TypeHole(EmptyTypeHole)
+  )
+import safe CMM.Parser.HasPos (SourcePos)
 
 class HasTypeHole b =>
       WithTypeHole a b

@@ -8,7 +8,7 @@ import safe Data.Function (($), (.))
 import safe Data.Functor (Functor(fmap), (<$>))
 import safe Data.Maybe (Maybe, maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
-import safe Data.String ( IsString )
+import safe Data.String (IsString)
 
 import safe Prettyprinter
   ( Doc
@@ -18,9 +18,10 @@ import safe Prettyprinter
   , enclose
   , hsep
   , indent
+  , line
   , punctuate
   , space
-  , vsep, line
+  , vsep
   )
 
 commaSep :: [Doc ann] -> Doc ann

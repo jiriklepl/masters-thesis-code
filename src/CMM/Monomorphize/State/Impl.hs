@@ -5,23 +5,22 @@ module CMM.Monomorphize.State.Impl where
 
 import safe Control.Lens.TH (makeLenses)
 
-import safe Data.Map ( Map )
-import safe Data.Eq ( Eq )
-import safe Data.Ord ( Ord )
-import safe Text.Show ( Show )
-import safe Data.Int ( Int )
-import safe Data.Set ( Set )
-import safe Data.Semigroup ( Semigroup((<>)) )
+import safe Control.Monad.State (State)
+import safe Data.Eq (Eq)
+import safe Data.Function (($))
+import safe Data.Int (Int)
+import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Monoid ( Monoid(mempty, mappend) )
-import safe Control.Monad.State ( State )
-import safe Data.Function ( ($) )
+import safe Data.Monoid (Monoid(mappend, mempty))
+import safe Data.Ord (Ord)
+import safe Data.Semigroup (Semigroup((<>)))
+import safe Data.Set (Set)
+import safe Text.Show (Show)
 
-
-import safe CMM.Inference.Fact ( Scheme )
-import safe CMM.Inference.TypeVar ( TypeVar )
-import safe CMM.Inference.Type ( Type )
-import safe CMM.Monomorphize.Schematized ( Schematized )
+import safe CMM.Inference.Fact (Scheme)
+import safe CMM.Inference.Type (Type)
+import safe CMM.Inference.TypeVar (TypeVar)
+import safe CMM.Monomorphize.Schematized (Schematized)
 
 newtype PolyGenerate =
   PolyGenerate
@@ -76,6 +75,12 @@ makeLenses ''MonomorphizeState
 initMonomorphizeState :: MonomorphizeState a
 initMonomorphizeState =
   MonoMorphizeState
-    {_polyGenerate = mempty, _polyData = mempty, _polyMethods = mempty, _polySchemes = mempty, _polyMemory = mempty, _polyWaves  = 0}
+    { _polyGenerate = mempty
+    , _polyData = mempty
+    , _polyMethods = mempty
+    , _polySchemes = mempty
+    , _polyMemory = mempty
+    , _polyWaves = 0
+    }
 
 type Monomorphizer a = State (MonomorphizeState a)

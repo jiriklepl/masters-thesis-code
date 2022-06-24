@@ -10,13 +10,14 @@ import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Monad (Monad((>>=), return), sequence, when, (>=>))
+import safe Control.Monad (Monad((>>=), return), (>=>), sequence, when)
+import safe Data.Bifunctor (second)
 import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
 import safe Data.Eq (Eq((/=), (==)))
-import safe Data.Foldable (Foldable (foldl'), for_, traverse_)
-import safe Data.Function (($), (.), flip, id, const)
+import safe Data.Foldable (Foldable(foldl'), for_, traverse_)
+import safe Data.Function (($), (.), const, flip, id)
 import safe Data.Functor (Functor((<$), fmap), ($>), (<$>), (<&>), void)
 import safe Data.Graph (SCC(AcyclicSCC, CyclicSCC), stronglyConnCompR)
 import safe qualified Data.Graph as Graph
@@ -32,7 +33,9 @@ import safe Data.List
   , or
   , partition
   , unzip
-  , zip, zipWith, zip3
+  , zip
+  , zip3
+  , zipWith
   )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
@@ -43,15 +46,14 @@ import safe Data.PartialOrd (PartialOrd)
 import safe Data.Semigroup (Semigroup())
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
+import safe Data.String (fromString)
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (snd, swap, uncurry)
-import safe Data.String (fromString)
-import safe GHC.Err (undefined)
 import safe Data.Tuple.Extra (dupe)
-import safe Data.Bifunctor (second)
+import safe GHC.Err (undefined)
 
-import safe Prettyprinter ( (<>) )
+import safe Prettyprinter ((<>))
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
@@ -63,40 +65,55 @@ import safe CMM.Data.Bounds
   , upperBound
   )
 import safe CMM.Data.Function (fOr)
+import safe CMM.Data.Generics ((*|*))
 import safe CMM.Data.Lattice (Lattice)
 import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Data.Num (Num((+)))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.OrderedBounds ()
+import safe CMM.Data.Trilean (trilean)
+import safe CMM.Data.Way (Way(Backward, Both, Forward))
+import safe CMM.Inference.BuiltIn ()
 import safe CMM.Inference.DataKind (DataKind)
-import safe CMM.Data.Generics ((*|*))
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
-  , FlatFact(ClassConstraint, ClassFact,
-         ConstnessBounds, InstType, KindBounds, OnRegister, SubConst,
-         SubKind, SubType, Typing, Union, ClassFunDeps, ConstUnion, KindUnion, Lock, FactComment)
+  , FlatFact(ClassConstraint, ClassFact, ClassFunDeps, ConstUnion,
+         ConstnessBounds, FactComment, InstType, KindBounds, KindUnion,
+         Lock, OnRegister, SubConst, SubKind, SubType, Typing, Union)
   , FlatFacts
   , NestedFact(Fact, NestedFact)
   , Qual((:=>))
   , Scheme((:.))
+  , classConstraint
+  , constUnion
+  , kindUnion
   , subConst
   , subKind
   , typeConstraint
-  , typeUnion, classConstraint, constUnion, kindUnion
+  , typeUnion
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
+import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
 import safe CMM.Inference.Preprocess.TypeHole
-  ( TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         MethodTypeHole, SimpleTypeHole, NamedTypeHole), HasTypeHole(getTypeHole)
+  ( HasTypeHole(getTypeHole)
+  , TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
+         MethodTypeHole, NamedTypeHole, SimpleTypeHole)
   )
+import safe CMM.Inference.Refresh (Refresher(refresher))
 import safe CMM.Inference.State
   ( Inferencer
   , InferencerState
+  , addClassFact
+  , addClassScheme
+  , addFunDeps
+  , addScheme
   , addUnificationErrors
+  , collectPrimeTVarsAll
   , constingBounds
   , freshTypeHelperWithHandle
+  , fromOldName
   , getConsting
   , getHandle
   , getKinding
@@ -104,6 +121,11 @@ import safe CMM.Inference.State
   , handlize
   , handlizeTVar
   , kindingBounds
+  , lock
+  , lookupClassScheme
+  , lookupFact
+  , lookupFunDep
+  , lookupScheme
   , popParent
   , pushConstBounds
   , pushKindBounds
@@ -116,8 +138,7 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
-  , unifs, addFunDeps, collectPrimeTVarsAll
-  , addScheme, addClassScheme, lookupScheme, lookupClassScheme, lookupFunDep, addClassFact, lookupFact, lock, fromOldName
+  , unifs
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -127,7 +148,9 @@ import safe CMM.Inference.Subst
   )
 import safe CMM.Inference.Type
   ( ToType(toType)
-  , Type(ComplType, ErrorType, VarType), unfoldApp, foldApp
+  , Type(ComplType, ErrorType, VarType)
+  , foldApp
+  , unfoldApp
   )
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 import safe CMM.Inference.TypeCompl
@@ -142,20 +165,15 @@ import safe CMM.Inference.TypeHandle
   , kinding
   , typing
   )
-import safe CMM.Inference.TypeKind (getTypeKind, TypeKind (GenericType))
+import safe CMM.Inference.TypeKind (TypeKind(GenericType), getTypeKind)
 import safe CMM.Inference.TypeVar
   ( TypeVar(NoType, TypeVar, tVarId, tVarParent)
-  , predecessor, overLeaf
+  , overLeaf
+  , predecessor
   )
-import safe CMM.Inference.Unify (unify, unifyFold, unifyLax, instanceOf)
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
-import safe CMM.Data.Way ( Way(Backward, Forward, Both) )
-import safe CMM.Utils
-    ( addPrefix, getPrefix, hasPrefix, HasCallStack)
-import safe CMM.Data.Trilean (trilean)
-import safe CMM.Inference.Refresh ( Refresher(refresher) )
-import safe CMM.Inference.Utils ( fieldClassPrefix, trileanSeq )
-import safe CMM.Inference.BuiltIn()
+import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
+import safe CMM.Inference.Utils (fieldClassPrefix, trileanSeq)
+import safe CMM.Utils (HasCallStack, addPrefix, getPrefix, hasPrefix)
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -164,18 +182,20 @@ instance (Foldable t, FactCheck a) => FactCheck (t a) where
   factCheck = traverse_ factCheck
 
 instance {-# OVERLAPPING #-} FactCheck (TypeCompl Type) where
-  factCheck = \case
-    TupleType ts -> factCheck ts
-    FunctionType ts t -> factCheck ts *> factCheck t
-    AppType t t' -> factCheck t *> factCheck t'
-    AddrType t -> factCheck t
-    _ -> return ()
+  factCheck =
+    \case
+      TupleType ts -> factCheck ts
+      FunctionType ts t -> factCheck ts *> factCheck t
+      AppType t t' -> factCheck t *> factCheck t'
+      AddrType t -> factCheck t
+      _ -> return ()
 
 instance FactCheck Type where
-  factCheck = \case
-    VarType t -> factCheck t
-    ComplType t -> factCheck t
-    _ -> return ()
+  factCheck =
+    \case
+      VarType t -> factCheck t
+      ComplType t -> factCheck t
+      _ -> return ()
 
 instance {-# OVERLAPPING #-} FactCheck Fact where
   factCheck fact =
@@ -490,33 +510,44 @@ reduceTemplates (fact:facts) =
     NestedFact (tVars :. [ClassConstraint name t] :=> nesteds) -> do
       subst <- refresher tVars
       let tVars' = apply subst `Set.map` tVars
-      addClassScheme name $ tVars' :. flattenFacts (subst `apply` nesteds) :=> apply subst t
+      addClassScheme name $ tVars' :. flattenFacts (subst `apply` nesteds) :=>
+        apply subst t
       continue
     NestedFact (tVars :. [ClassFact name t] :=> nesteds)
-      | hasPrefix name, getPrefix name == fieldClassPrefix -> do
+      | hasPrefix name
+      , getPrefix name == fieldClassPrefix -> do
         lookupFunDep name >>= \case
-           Nothing -> skip
-           Just rules -> do
+          Nothing -> skip
+          Just rules -> do
             traverse_ go rules
             continue
-            where
-              class': args = unfoldApp t
-              go rule = do
-                  tVars' <- const (freshTypeHelperWithHandle GenericType) `traverse` args
-                  let t' = foldApp $
-                        class' : zipWith
-                          (uncurry chooseArg)
-                          (zip args (toType <$> tVars'))
-                          rule
-                      fs = zipWith typeUnion tVars' args
-                  addClassFact (fromString (trileanSeq rule) `addPrefix` name) $ Set.fromList tVars' :. fs :=> t'
-              chooseArg arg tVar = trilean arg tVar tVar
+            where class':args = unfoldApp t
+                  go rule = do
+                    tVars' <-
+                      const (freshTypeHelperWithHandle GenericType) `traverse`
+                      args
+                    let t' =
+                          foldApp $ class' :
+                          zipWith
+                            (uncurry chooseArg)
+                            (zip args (toType <$> tVars'))
+                            rule
+                        fs = zipWith typeUnion tVars' args
+                    addClassFact (fromString (trileanSeq rule) `addPrefix` name) $
+                      Set.fromList tVars' :.
+                      fs :=>
+                      t'
+                  chooseArg arg tVar = trilean arg tVar tVar
       | otherwise -> do
         lookupClassScheme name >>= \case
           Nothing -> skip
           Just (tVars' :. facts' :=> t') -> do
             subst <- refresher tVars'
-            addClassFact  name $ (tVars <> (apply subst `Set.map` tVars')) :. ((t `typeUnion` apply subst t'):reverseFacts [f | Fact f <- nesteds] <> apply subst facts') :=> t
+            addClassFact name $ (tVars <> (apply subst `Set.map` tVars')) :.
+              ((t `typeUnion` apply subst t') :
+               reverseFacts [f | Fact f <- nesteds] <>
+               apply subst facts') :=>
+              t
             -- subst' <- refresher tVars
             -- continueWith $
             --   (Fact <$> typeUnion (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
@@ -543,7 +574,8 @@ reduceTrivial (fact:facts) =
     Fact (KindUnion t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
-      continueWith $ Fact (tVar `subKind` tVar') : Fact (tVar' `subKind` tVar) : facts
+      continueWith $ Fact (tVar `subKind` tVar') : Fact (tVar' `subKind` tVar) :
+        facts
     Fact (SubKind t t') -> do
       handle <- simplify t >>= getHandle
       handle' <- simplify t' >>= getHandle
@@ -557,7 +589,8 @@ reduceTrivial (fact:facts) =
     Fact (ConstUnion t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
-      continueWith $ Fact (tVar `subConst` tVar') : Fact (tVar' `subConst` tVar) : facts
+      continueWith $ Fact (tVar `subConst` tVar') : Fact (tVar' `subConst` tVar) :
+        facts
     Fact (Typing t t') -> do
       handle <- simplify t >>= getHandle
       handle' <- simplify t' >>= getHandle
@@ -589,12 +622,13 @@ reduceTrivial (fact:facts) =
       lock t tVar
       continue
     Fact FactComment {} -> continue
-    NestedFact (tVars :. facts' :=> nesteds) -> case facts' of
-      [ClassConstraint {}] -> skip
-      [ClassFact {}] -> skip
-      _ -> do
-        nesteds' <- wrapParent facts' $ reduceTrivial nesteds
-        skipWith . NestedFact $ tVars :. facts' :=> nesteds'
+    NestedFact (tVars :. facts' :=> nesteds) ->
+      case facts' of
+        [ClassConstraint {}] -> skip
+        [ClassFact {}] -> skip
+        _ -> do
+          nesteds' <- wrapParent facts' $ reduceTrivial nesteds
+          skipWith . NestedFact $ tVars :. facts' :=> nesteds'
     _ -> skip
   where
     skip = skipWith fact
@@ -607,29 +641,37 @@ reduceConstraint [] = fixAll $> (False, [])
 reduceConstraint (fact:facts) =
   case fact of
     Fact (ClassConstraint name t)
-      | hasPrefix name, getPrefix name == fieldClassPrefix ->
+      | hasPrefix name
+      , getPrefix name == fieldClassPrefix ->
         lookupFunDep name >>= \case
           Nothing -> undefined -- TODO: logic error
           Just rules -> continueWith $ fmap go rules <> facts
-            where go rule = Fact $ classConstraint (fromString (trileanSeq rule) `addPrefix` name) t
+            where go rule =
+                    Fact $
+                    classConstraint
+                      (fromString (trileanSeq rule) `addPrefix` name)
+                      t
       | otherwise ->
         lookupFact name >>= \case
           Nothing -> skip
           Just schemes' -> do
             tType <- simplify t >>= getTyping
-            let
-              go accum = \case
-                (tVars :. fs :=> t'):others -> do
-                  tType' <- simplify t' >>= getTyping
-                  if tType `instanceOf` tType' then do
-                      subst <- refresher tVars
-                      let freshT = subst `apply` t'
-                          newFacts = typeUnion t freshT : (apply subst <$> fs)
-                      go (fmap Fact newFacts:accum) others
-                  else go accum others
-                [] -> case accum of
-                  [h] -> continueWith $ h <> facts
-                  _ -> skip
+            let go accum =
+                  \case
+                    (tVars :. fs :=> t'):others -> do
+                      tType' <- simplify t' >>= getTyping
+                      if tType `instanceOf` tType'
+                        then do
+                          subst <- refresher tVars
+                          let freshT = subst `apply` t'
+                              newFacts =
+                                typeUnion t freshT : (apply subst <$> fs)
+                          go (fmap Fact newFacts : accum) others
+                        else go accum others
+                    [] ->
+                      case accum of
+                        [h] -> continueWith $ h <> facts
+                        _ -> skip
             go mempty schemes'
     Fact (ClassFact name t) ->
       lookupClassScheme name >>= \case
@@ -658,8 +700,7 @@ reduceMany :: Facts -> Inferencer (Bool, Facts)
 reduceMany = reduceTrivial >=> reduceTemplates >=> go
   where
     go facts = do
-      result@(change, facts') <-
-        reduceTrivial facts >>= reduceConstraint
+      result@(change, facts') <- reduceTrivial facts >>= reduceConstraint
       if change
         then go facts'
         else return result
@@ -673,8 +714,10 @@ reduce facts = do
 
 minimizeSubs :: TypeVar -> Set TypeVar -> Inferencer ()
 minimizeSubs parent pTypeVars = do
-  pTypeConstings <- fmap Set.fromList . traverse getConsting $ Set.toList pTypeVars
-  pTypeKindings <- fmap Set.fromList . traverse getKinding $ Set.toList pTypeVars
+  pTypeConstings <-
+    fmap Set.fromList . traverse getConsting $ Set.toList pTypeVars
+  pTypeKindings <-
+    fmap Set.fromList . traverse getKinding $ Set.toList pTypeVars
   constings <- uses subConsting (transformMap pTypeConstings)
   constBounds <- use constingBounds
   kindings <- uses subKinding (transformMap pTypeKindings)
@@ -702,9 +745,13 @@ minimizeSubs parent pTypeVars = do
       ((_2 . consting %~ apply cSubst) . (_2 . kinding %~ apply kSubst))
   where
     transformMap pTypeThings =
-      Map.toList . fmap (Set.filter (setFilter pTypeThings)) . Map.filterWithKey (mapFilter pTypeThings)
-    setFilter pTypeThings = predecessor parent . tVarParent `fOr` (`Set.member` pTypeThings) `fOr` (`Set.member` pTypeVars)
-    mapFilter pTypeThings from _ = tVarParent from == parent && not (from `Set.member` pTypeThings)
+      Map.toList . fmap (Set.filter (setFilter pTypeThings)) .
+      Map.filterWithKey (mapFilter pTypeThings)
+    setFilter pTypeThings =
+      predecessor parent . tVarParent `fOr` (`Set.member` pTypeThings) `fOr`
+      (`Set.member` pTypeVars)
+    mapFilter pTypeThings from _ =
+      tVarParent from == parent && not (from `Set.member` pTypeThings)
 
 laundry ::
      ( Bounded a
@@ -746,16 +793,17 @@ laundry parent pTypeThings boundsMap subGraph =
         Right (subst, Just tVar) = unifyFold $ Set.toList tVars
     getDepends [] acc = acc
     getDepends (Graph.AcyclicSCC (bounds, tVar, tVars):others) acc
-      | tVarParent tVar == parent  =
+      | tVarParent tVar == parent =
         getDepends others $
         Map.insert tVar (bounds, mconcat (getLimits <$> tVars)) acc
       | otherwise = getDepends others acc
       where
         getLimits tVar'
-          | tVarParent tVar' == parent && not (tVar' `Set.member` pTypeThings)=
+          | tVarParent tVar' == parent && not (tVar' `Set.member` pTypeThings) =
             Set.filter relevant . view _2 . fromMaybe (mempty, mempty) $ tVar' `Map.lookup`
             acc
-          | parent `predecessor` tVarParent tVar' || not (tVar' `Set.member` pTypeThings) =
+          | parent `predecessor` tVarParent tVar' ||
+              not (tVar' `Set.member` pTypeThings) =
             if relevant tVar'
               then Set.singleton tVar'
               else mempty
@@ -786,7 +834,8 @@ freeParented parent ts = do
     , filter (isFreeParented tKinds subKinds) kinds)
   where
     isFreeParented tIngs with tVar@TypeVar {} =
-      not (tVar `Map.member` with) && tVarParent tVar == parent && not (tVar `Set.member` tIngs)
+      not (tVar `Map.member` with) && tVarParent tVar == parent &&
+      not (tVar `Set.member` tIngs)
     isFreeParented _ _ NoType = False
     mineSubs handle = (handle ^. consting, handle ^. kinding)
 
@@ -856,24 +905,38 @@ schematize facts tVars = do
   let toTrivialDeps = fmap $ second Set.singleton . dupe
   subConsts <-
     uses subConsting $ filter (presentIn tVarsList) .
-    (toTrivialDeps constings <>) . Map.toList
+    (toTrivialDeps constings <>) .
+    Map.toList
   subKinds <-
-    uses subKinding $ filter (presentIn tVarsList) .
-    (toTrivialDeps kindings <>) . Map.toList
+    uses subKinding $ filter (presentIn tVarsList) . (toTrivialDeps kindings <>) .
+    Map.toList
   let constingsSubst = Map.fromList $ zip constings reX
       constingFacts =
         [ constUnion t' t
         | (t', t) <- zip (constingsSubst `apply` fmap toType constings) reX
-        , t' /= t]
+        , t' /= t
+        ]
       kindingsSubst = Map.fromList $ zip kindings reX
       kindingFacts =
         [ kindUnion t' t
         | (t', t) <- zip (kindingsSubst `apply` fmap toType kindings) reX
-        , t' /= t]
+        , t' /= t
+        ]
   -- when (tVars == Set.fromList [TypeVar 2 Star NoType]) . error $ show constingsSubst <> "\n" <> show kindingsSubst
-  constFacts <- translateSubs constingBounds constingsSubst SubConst ConstnessBounds subConsts
+  constFacts <-
+    translateSubs
+      constingBounds
+      constingsSubst
+      SubConst
+      ConstnessBounds
+      subConsts
   kindFacts <-
-    translateSubs kindingBounds kindingsSubst SubKind (KindBounds . fmap Ordered) subKinds
+    translateSubs
+      kindingBounds
+      kindingsSubst
+      SubKind
+      (KindBounds . fmap Ordered)
+      subKinds
   (determineFacts, factsRest) <-
     do let elaborate' t = do
              tVar <- simplify t
@@ -887,7 +950,9 @@ schematize facts tVars = do
        (factPairs, others) <- construct facts
        let (filtered, rest) =
              partition
-               (any ((`Set.member` Set.fromList x) `fOr` parentedBy parent `fOr` (`Set.member` tVars)) .
+               (any
+                  ((`Set.member` Set.fromList x) `fOr` parentedBy parent `fOr`
+                   (`Set.member` tVars)) .
                 freeTypeVars .
                 view _1)
                factPairs
@@ -895,16 +960,21 @@ schematize facts tVars = do
   let typingFacts =
         [ typeConstraint t t'
         | (t, t'', t') <- typings
-        , let useFilter = (`Set.member` freeTypeVars t'') `fOr` parentedBy parent
+        , let useFilter =
+                (`Set.member` freeTypeVars t'') `fOr` parentedBy parent
         , toType t /= t'
         , useFilter t
         ]
-      facts' = typingFacts <> determineFacts <> constingFacts <> constFacts <> kindingFacts <> kindFacts
+      facts' =
+        typingFacts <> determineFacts <> constingFacts <> constFacts <>
+        kindingFacts <>
+        kindFacts
   tVars `for_` \tVar -> do
     t <- reconstruct tVar
     let scheme =
           Set.filter
-            ((`Set.member` freeTypeVars t) `fOr` parentedBy parent `fOr` (`Set.member` tVars))
+            ((`Set.member` freeTypeVars t) `fOr` parentedBy parent `fOr`
+             (`Set.member` tVars))
             (freeTypeVars facts' <> freeTypeVars t) :.
           facts' :=>
           t
@@ -915,28 +985,29 @@ schematize facts tVars = do
     translateSubs _ _ _ _ [] = return []
     translateSubs bounds reconstructor subConstr boundsConstr ((tVar, limits):others) =
       uses bounds (tVar `Map.lookup`) >>= \case
-          Nothing -> translateOthers
-          Just bounds' ->
-            (boundsConstr bounds' t :) . (facts' <>) <$> translateOthers
+        Nothing -> translateOthers
+        Just bounds' ->
+          (boundsConstr bounds' t :) . (facts' <>) <$> translateOthers
       where
-          t = reconstructor `apply` toType tVar
-          limits' = filter (/= tVar) $ Set.toList limits
-          translateOthers =
-            translateSubs bounds reconstructor subConstr boundsConstr others
-          facts' = subConstr t . apply reconstructor . toType <$> limits'
+        t = reconstructor `apply` toType tVar
+        limits' = filter (/= tVar) $ Set.toList limits
+        translateOthers =
+          translateSubs bounds reconstructor subConstr boundsConstr others
+        facts' = subConstr t . apply reconstructor . toType <$> limits'
     keyParentedBy parent (key, _) = tVarParent key `overLeaf` parent
     parentedBy parent TypeVar {tVarParent = par} = par `overLeaf` parent
     parentedBy _ _ = False
     presentIn where' (key, _) = key `Set.member` Set.fromList where'
 
 registerScheme :: TypeVar -> Scheme Type -> Inferencer ()
-registerScheme tVar = \case
-  tVars :. facts :=> nesteds -> do
-    subst <- refresher tVars
-    let tVars' = apply subst `Set.map`tVars
-        nesteds' = apply subst nesteds
-    void . reduceMany $ Fact <$> facts
-    addScheme tVar $ tVars' :. apply subst facts :=> nesteds'
+registerScheme tVar =
+  \case
+    tVars :. facts :=> nesteds -> do
+      subst <- refresher tVars
+      let tVars' = apply subst `Set.map` tVars
+          nesteds' = apply subst nesteds
+      void . reduceMany $ Fact <$> facts
+      addScheme tVar $ tVars' :. apply subst facts :=> nesteds'
 
 closeSCCs ::
      Facts -> [SCC (Fact, TypeVar, [TypeVar])] -> Inferencer (Bool, Facts)
@@ -964,7 +1035,7 @@ closeSCCs facts (scc:others) =
         (<> fmap rePar facts) .
         concat
       parents' <- uses unifs ((<$> parents) . apply)
-      x <- Set.unions <$> collectPrimeTVarsAll  `traverse` parents'
+      x <- Set.unions <$> collectPrimeTVarsAll `traverse` parents'
       --  error $ show x
       minimizeSubs parent x
       minimizeFree parent x
@@ -985,9 +1056,10 @@ closeSCCs facts (scc:others) =
       fact' <- uses unifs (`apply` fact)
       (Fact fact' :) <$> unSchematize fs
     transformFact _ = undefined
-    getParents = \case
-      [] -> []
-      (_, tVar, _):rest -> tVar : getParents rest
+    getParents =
+      \case
+        [] -> []
+        (_, tVar, _):rest -> tVar : getParents rest
 
 makeCallGraph :: Facts -> (Facts, [SCC (Fact, TypeVar, [TypeVar])])
 makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
@@ -1007,12 +1079,13 @@ makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
 collectCounts :: Facts -> Subst Int
 collectCounts = foldr countIn mempty
   where
-    countIn = \case
-      NestedFact (_ :. [Union (VarType tVar) _] :=> _) ->
-        Map.insertWith (+) tVar 1
-      NestedFact (_ :. [Union {}] :=> _) ->
-        undefined -- TODO: logic error, broken contract
-      _ -> id
+    countIn =
+      \case
+        NestedFact (_ :. [Union (VarType tVar) _] :=> _) ->
+          Map.insertWith (+) tVar 1
+        NestedFact (_ :. [Union {}] :=> _) ->
+          undefined -- TODO: logic error, broken contract
+        _ -> id
 
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]
 collectPairs way handles from = pairs <&> both %~ \i -> varMap Map.! i
@@ -1025,13 +1098,11 @@ collectPairs way handles from = pairs <&> both %~ \i -> varMap Map.! i
     vs = Map.keys varMap
     list' cond = [(v, v') | v <- vs, v' <- vs, cond v v']
     pairs =
-      list' $ \v v' -> case way of
-        Forward -> v /= v' && Graph.path graph v v'
-        Backward -> v /= v' && Graph.path graph v' v
-        Both ->
-          v < v' -- this is to prevent duplication
-            && Graph.path graph v v'
-            && Graph.path graph v' v
+      list' $ \v v' ->
+        case way of
+          Forward -> v /= v' && Graph.path graph v v'
+          Backward -> v /= v' && Graph.path graph v' v
+          Both -> v < v' && Graph.path graph v v' && Graph.path graph v' v
 
 deduceUnifs :: Int -> Map TypeVar (Set TypeVar) -> Map TypeVar TypeVar
 deduceUnifs handles which = go pairs mempty
@@ -1052,9 +1123,11 @@ propagateBounds which by = do
   pairs <- liftA2 (collectPairs Forward) getHandleCounter (use by)
   for_ pairs $ \(sup, sub) -> do
     uses which (sub `Map.lookup`) >>=
-      traverse_ ((which %=) . Map.insertWith (<>) sup . (upperBound .~ maxBound))
+      traverse_
+        ((which %=) . Map.insertWith (<>) sup . (upperBound .~ maxBound))
     uses which (sup `Map.lookup`) >>=
-      traverse_ ((which %=) . Map.insertWith (<>) sub . (lowerBound .~ minBound))
+      traverse_
+        ((which %=) . Map.insertWith (<>) sub . (lowerBound .~ minBound))
 
 boundsUnifs ::
      (PartialOrd a, Eq a, Ord (Ordered a), Bounded a)

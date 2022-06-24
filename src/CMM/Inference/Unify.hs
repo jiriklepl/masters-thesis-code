@@ -6,10 +6,10 @@ import safe Control.Applicative (Applicative(pure), (<$>))
 import safe Control.Lens ((%~))
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad (Functor(fmap), Monad(return))
-import safe Data.Bool (not, otherwise, Bool)
+import safe Data.Bool (Bool, not, otherwise)
 import safe Data.Either (Either(Left, Right), isRight)
 import safe Data.Eq (Eq((/=), (==)))
-import safe Data.Function ((.), ($), flip)
+import safe Data.Function (($), (.), flip)
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
 import safe Data.Maybe (Maybe(Just, Nothing))
@@ -18,6 +18,7 @@ import safe Data.Ord (Ord((<), (>)))
 import safe qualified Data.Set as Set
 import safe GHC.Err (undefined)
 
+import safe CMM.Data.Way (Way(Backward, Both, Forward), otherWay)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Subst (Apply(apply), Subst)
 import safe CMM.Inference.Type
@@ -40,12 +41,8 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Unify.Error
   ( UnificationError(BadKind, GotErrorType, Mismatch, Occurs)
   )
-import safe CMM.Data.Way (Way(Backward, Both, Forward), otherWay)
 
-unify :: Unify a b =>
-     a
-  -> a
-  -> Either [UnificationError] (Subst b, a)
+unify :: Unify a b => a -> a -> Either [UnificationError] (Subst b, a)
 unify = unifyDirected Both
 
 unifiable :: Unify a b => a -> a -> Bool
@@ -61,7 +58,8 @@ schemeOf :: Unify a b => a -> a -> Bool
 schemeOf = flip instanceOf
 
 -- | unifies two type variables ignoring their type kinds
-unifyLax :: TypeVar
+unifyLax ::
+     TypeVar
   -> TypeVar
   -> Either [UnificationError] (Map TypeVar TypeVar, TypeVar)
 unifyLax = unifyLaxDirected Both
@@ -109,10 +107,8 @@ unifyLaxDirected way tVar@TypeVar {} tVar'@TypeVar {}
   | way == Forward = forward
   | way == Backward = backward
   | tVar == tVar' = Right (mempty, tVar')
-  | familyDepth tVar > familyDepth tVar' =
-    forward
-  | familyDepth tVar < familyDepth tVar' =
-    backward
+  | familyDepth tVar > familyDepth tVar' = forward
+  | familyDepth tVar < familyDepth tVar' = backward
   | tVar > tVar' = forward
   | otherwise = backward
   where
@@ -154,16 +150,20 @@ unifyCompl ::
   -> TypeCompl a
   -> Either [UnificationError] (Map TypeVar b, TypeCompl a)
 unifyCompl way t t'
-  | TupleType ts <- t, TupleType ts' <- t' = (_2 %~ TupleType) <$> ts `unifyMany'` ts'
-  | FunctionType args ret <- t,  FunctionType args' ret' <- t' = do
-      (subst, args'') <- args `unifyMany'` args'
-      (subst', ret'') <- apply subst ret `unify'` apply subst ret'
-      return (subst' `apply` subst, FunctionType (apply subst' <$> args'') ret'')
-  | AppType app arg <- t, AppType app' arg' <- t' = do
-      (subst, app'') <- app `unify'` app'
-      (subst', arg'') <- apply subst arg `unify'` apply subst arg'
-      return (subst' `apply` subst, AppType (subst' `apply` app'') arg'')
-  | AddrType addr <- t, AddrType addr' <- t' = (_2 %~ AddrType) <$> unify' addr addr'
+  | TupleType ts <- t
+  , TupleType ts' <- t' = (_2 %~ TupleType) <$> ts `unifyMany'` ts'
+  | FunctionType args ret <- t
+  , FunctionType args' ret' <- t' = do
+    (subst, args'') <- args `unifyMany'` args'
+    (subst', ret'') <- apply subst ret `unify'` apply subst ret'
+    return (subst' `apply` subst, FunctionType (apply subst' <$> args'') ret'')
+  | AppType app arg <- t
+  , AppType app' arg' <- t' = do
+    (subst, app'') <- app `unify'` app'
+    (subst', arg'') <- apply subst arg `unify'` apply subst arg'
+    return (subst' `apply` subst, AppType (subst' `apply` app'') arg'')
+  | AddrType addr <- t
+  , AddrType addr' <- t' = (_2 %~ AddrType) <$> unify' addr addr'
   | t == t' = return (mempty, t)
   | otherwise = Left msg
   where
@@ -176,12 +176,16 @@ instance Unify PrimType TypeVar where
 
 instance Unify Type Type where
   unifyDirected way t t'
-    | ErrorType text <- t, ErrorType text' <- t' =
-      Left [GotErrorType text, GotErrorType text']
+    | ErrorType text <- t
+    , ErrorType text' <- t' = Left [GotErrorType text, GotErrorType text']
     | ErrorType text <- t = Left [GotErrorType text]
     | ErrorType text <- t' = Left [GotErrorType text]
     | t == t' = Right (mempty, t)
-    | way /= Backward, VarType tVar <- t = bind way tVar t'
-    | way /= Forward, VarType tVar' <- t' = bind (otherWay way) tVar' t
-    | ComplType tCompl <- t,  ComplType tCompl' <- t' = (_2 %~ ComplType) <$> unifyCompl way tCompl tCompl'
+    | way /= Backward
+    , VarType tVar <- t = bind way tVar t'
+    | way /= Forward
+    , VarType tVar' <- t' = bind (otherWay way) tVar' t
+    | ComplType tCompl <- t
+    , ComplType tCompl' <- t' =
+      (_2 %~ ComplType) <$> unifyCompl way tCompl tCompl'
     | otherwise = Left [t `unifyMismatch` t']

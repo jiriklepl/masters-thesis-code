@@ -5,38 +5,44 @@ module CMM.Inference.Preprocess.State.Impl where
 
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
+import safe Control.Lens.Getter (uses)
+import safe Control.Monad (Monad((>>=)), sequence)
+import safe Control.Monad.State (State)
+import safe Data.Data (Data)
+import safe Data.Function (($), (.))
+import safe Data.Functor (Functor(fmap))
+import safe Data.List (head)
 import safe Data.Map (Map)
+import safe Data.Maybe (Maybe)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
-import safe Control.Monad.State ( State  )
-import safe Control.Monad (sequence, Monad ((>>=)))
-import safe Data.Maybe ( Maybe )
-import safe Data.List ( head)
-import safe Data.Function ( (.), ($) )
-import safe Data.Functor (Functor (fmap) )
-import safe Control.Lens.Getter ( uses )
-import safe Data.Data ( Data )
 
+import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.Fact (Facts)
+import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
   ( HandleCounter
-  , HasHandleCounter(handleCounter), freshAnnotatedTypeHelperWithParent
+  , HasHandleCounter(handleCounter)
+  , freshAnnotatedTypeHelperWithParent
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
-import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
-import safe CMM.Inference.TypeVar ( TypeVar (NoType) )
-import safe CMM.Inference.Preprocess.TypeHole ( safeHoleHandle, HasTypeHole(getTypeHole) )
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
-import qualified Data.Map as Map
+import safe CMM.Inference.Preprocess.TypeHole
+  ( HasTypeHole(getTypeHole)
+  , safeHoleHandle
+  )
 import safe CMM.Inference.Refresh (Refresher(refresher))
-import safe CMM.Parser.HasPos (HasPos (getPos))
-import safe CMM.Inference.TypeKind
-    ( HasTypeKind(getTypeKind), TypeKind (Star, GenericType) )
-import safe CMM.AST.GetName (GetName (getName))
 import safe CMM.Inference.TypeAnnot
-    ( TypeAnnot(TypeInst, NoTypeAnnot, TypeNamed, TypeNamedAST,
-                TypeAST) )
+  ( TypeAnnot(NoTypeAnnot, TypeAST, TypeInst, TypeNamed, TypeNamedAST)
+  )
+import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
+import safe CMM.Inference.TypeKind
+  ( HasTypeKind(getTypeKind)
+  , TypeKind(GenericType, Star)
+  )
+import safe CMM.Inference.TypeVar (TypeVar(NoType))
+import safe CMM.Parser.HasPos (HasPos(getPos))
+import qualified Data.Map as Map
 
 data PreprocessorState =
   PreprocessorState
@@ -56,7 +62,7 @@ data PreprocessorState =
     , _handleCounter :: HandleCounter
     , _currentParent :: [TypeVar]
     }
-    deriving (Data)
+  deriving (Data)
 
 initPreprocessor :: PreprocessorState
 initPreprocessor =
@@ -85,12 +91,13 @@ type Preprocessor = State PreprocessorState
 instance GetParent Preprocessor TypeVar where
   getParent = uses currentParent head
 
-
 instance Refresher Preprocessor where
   refresher tVars =
     sequence $
     Map.fromSet
-      (\tVar -> fmap handleId . freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind tVar)
+      (\tVar ->
+         fmap handleId . freshAnnotatedTypeHelper (TypeInst tVar) $
+         getTypeKind tVar)
       tVars
 
 getCtxHandle :: Preprocessor (Maybe TypeHandle)
@@ -102,10 +109,8 @@ freshNamedASTTypeHandle ::
 freshNamedASTTypeHandle name node =
   freshAnnotatedTypeHelper . TypeNamedAST name $ getPos node
 
-freshNamedTypeHandle ::
-     Text -> TypeKind -> Preprocessor TypeHandle
-freshNamedTypeHandle name =
-  freshAnnotatedTypeHelper $ TypeNamed name
+freshNamedTypeHandle :: Text -> TypeKind -> Preprocessor TypeHandle
+freshNamedTypeHandle name = freshAnnotatedTypeHelper $ TypeNamed name
 
 freshNamedNodeTypeHandle ::
      (HasPos n, GetName n) => n -> TypeKind -> Preprocessor TypeHandle

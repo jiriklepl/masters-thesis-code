@@ -2,12 +2,12 @@
 
 module CMM.Data.Zippable where
 
+import safe Control.Applicative (Applicative(pure))
+import safe Data.Either (Either(Left, Right))
+import safe Data.Function (($), (.))
 import safe qualified Data.List as List
-import safe Data.Maybe ( Maybe (Just, Nothing) )
-import safe Control.Applicative ( Applicative(pure) )
-import safe Data.Function ( ($), (.) )
-import safe Data.Either ( Either(Left,Right) )
-import safe Data.Monoid ( Monoid, (<>) )
+import safe Data.Maybe (Maybe(Just, Nothing))
+import safe Data.Monoid (Monoid, (<>))
 
 class Zippable z where
   zipWith :: (a -> b -> c) -> z a -> z b -> Maybe (z c)
@@ -24,4 +24,3 @@ instance Monoid e => Zippable (Either e) where
   zipWith f (Right a) (Right b) = Just . Right $ f a b
   zipWith _ (Left a) (Left b) = Just . Left $ a <> b
   zipWith _ _ _ = Nothing
-

@@ -13,15 +13,14 @@ import safe Data.Int (Int)
 import safe Data.List (zip)
 import safe Data.Maybe (Maybe, maybe)
 import safe Data.Monoid (Monoid(mempty), (<>))
+import safe Data.Semigroup (Semigroup)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.String (IsString(fromString), String)
 import safe Data.Text (Text)
 import safe GHC.Err (error, undefined)
-import safe Data.Semigroup ( Semigroup )
 
-import safe Prettyprinter ( Pretty(pretty), dquotes )
-
+import safe Prettyprinter (Pretty(pretty), dquotes)
 
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Bimap (Bimap)
@@ -32,7 +31,8 @@ import safe CMM.Inference.Fact
   ( Facts
   , FlatFacts
   , kindConstraint
-  , regularExprConstraint, lockFact
+  , lockFact
+  , regularExprConstraint
   )
 import safe CMM.Inference.Type as Infer (Type)
 import safe CMM.Inference.TypeCompl
@@ -125,7 +125,9 @@ builtInContext :: Facts
 builtInContext = [] -- undefined
 
 builtInTypeFacts :: FlatFacts
-builtInTypeFacts = (kindConstraint GenericData <$> abstractTypes) <> (regularExprConstraint <$> abstractTypes) <> (lockFact <$> abstractTypes)
+builtInTypeFacts =
+  (kindConstraint GenericData <$> abstractTypes) <>
+  (regularExprConstraint <$> abstractTypes) <> (lockFact <$> abstractTypes)
   where
     abstractTypes :: [PrimType]
     abstractTypes =

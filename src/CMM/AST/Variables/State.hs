@@ -9,6 +9,7 @@ module CMM.AST.Variables.State
 
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Setter ((%=))
+import safe Control.Lens.Type (Lens')
 import safe Control.Monad (Functor((<$)), Monad((>>=)), unless)
 import safe Control.Monad.State (State)
 import safe Data.Bool (Bool(False, True))
@@ -16,12 +17,11 @@ import safe Data.Function (($), flip)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
-import safe Control.Lens.Type (Lens')
 
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.TypeKind (TypeKind)
-import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Parser.ASTError (registerASTError)
+import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 
 import safe CMM.AST.Variables.Error
   ( VariablesError

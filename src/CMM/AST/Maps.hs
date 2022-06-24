@@ -47,6 +47,7 @@ import safe CMM.AST
   , Range(Range)
   , Registers(Registers)
   , Section(SecDatum, SecDecl, SecProcedure, SecSpan)
+  , SemiFormal(SemiFormal)
   , Size(Size)
   , StackDecl(StackDecl)
   , Stmt(AssignStmt, CallStmt, ContStmt, CutToStmt, EmptyStmt,
@@ -58,7 +59,7 @@ import safe CMM.AST
   , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
          TopStruct)
   , Type(TAuto, TBits, TName, TPar)
-  , Unit(Unit), SemiFormal (SemiFormal)
+  , Unit(Unit)
   )
 import safe CMM.AST.Annot (Annot)
 import safe CMM.Control.Applicative (liftA4, liftA6)
@@ -246,8 +247,7 @@ instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
     \case
       Formal a b c d -> liftA2 (Formal a b) (f c) (f d)
 
-instance (ASTmapCTX1 hint a b Type) =>
-         ASTmap hint SemiFormal a b where
+instance (ASTmapCTX1 hint a b Type) => ASTmap hint SemiFormal a b where
   astMapM _ f =
     \case
       SemiFormal a b -> SemiFormal a <$> f b

@@ -7,7 +7,7 @@ import safe Control.Applicative (Applicative((<*)))
 import safe Control.Lens.Getter (use)
 import safe Control.Lens.Setter ((.=))
 import safe Control.Lens.Type (Lens)
-import safe Control.Monad.State.Lazy (MonadState)
+import safe Control.Monad.State (MonadState)
 
 infix 4 `exchange`
 

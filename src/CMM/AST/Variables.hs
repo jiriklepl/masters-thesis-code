@@ -49,11 +49,11 @@ import safe CMM.AST.Variables.State
   , addVarTrivial
   , initCollector
   )
+import safe CMM.Data.Generics ((<*|*>))
 import safe CMM.Inference.TypeKind
   ( TypeKind((:->), Constraint, GenericType, Star)
   )
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
-import safe CMM.Data.Generics ( (<*|*>) )
 
 localVariables ::
      (Data (n SourcePos), Functor n, HasPos a) => n a -> CollectorState
@@ -108,7 +108,9 @@ type CasesAdder m a
 
 addCommonCases :: CasesAdder m a
 addCommonCases go =
-  goFormal <*|*> goDecl <*|*> goImport <*|*> goRegisters <*|*> goDatum <*|*> goStmt <*|*> go
+  goFormal <*|*> goDecl <*|*> goImport <*|*> goRegisters <*|*> goDatum <*|*>
+  goStmt <*|*>
+  go
   where
     goFormal =
       \case
@@ -138,7 +140,8 @@ addCommonCases go =
 
 addGlobalCases :: CasesAdder m a
 addGlobalCases go =
-  goClass <*|*> goInstance <*|*> goStruct <*|*> goSection <*|*> goProcedure <*|*> go
+  goClass <*|*> goInstance <*|*> goStruct <*|*> goSection <*|*> goProcedure <*|*>
+  go
   where
     goClass =
       \case

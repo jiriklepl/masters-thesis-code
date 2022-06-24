@@ -6,14 +6,14 @@ module CMM.Data.Ordered where
 
 import safe Data.Data (Data)
 import safe Data.Eq (Eq)
+import safe Data.Function ((.))
 import safe Data.Ord (Ord)
 import safe Text.Show (Show)
-import safe Data.Function ( (.) )
 
-import safe Prettyprinter ( Pretty(pretty) )
+import safe Prettyprinter (Pretty(pretty))
 
 data Ordered a where
-  Ordered :: Ord (Ordered a) => { unOrdered :: a} -> Ordered a
+  Ordered :: { unOrdered :: a} -> Ordered a
 
 deriving instance Show a => Show (Ordered a)
 

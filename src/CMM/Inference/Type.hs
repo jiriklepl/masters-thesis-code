@@ -7,17 +7,17 @@ import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
 import safe Data.Function (($), (.), id)
 import safe Data.Functor (Functor(fmap))
+import safe Data.Int (Int)
+import safe Data.List (foldl', reverse)
+import safe Data.Monoid ((<>))
 import safe Data.Ord (Ord)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
-import safe Data.List ( foldl', reverse )
-import safe Data.Int ( Int )
-import safe Data.Monoid ( (<>) )
 
-import safe Prettyprinter ( dquotes, Pretty(pretty) )
+import safe Prettyprinter (Pretty(pretty), dquotes)
 
 import safe CMM.Data.Nullable (Fallbackable((??)))
-import safe CMM.Inference.TypeCompl (TypeCompl (AppType, AddrType, TBitsType))
+import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, AppType, TBitsType))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
   , TypeKind(GenericType)
@@ -64,12 +64,12 @@ instance ToType TypeVar where
 instance ToType a => ToType (TypeCompl a) where
   toType = ComplType . fmap toType
 
-
 instance Pretty Type where
-  pretty = \case
-    ErrorType txt -> "!" <> dquotes (pretty txt)
-    VarType tVar -> pretty tVar
-    ComplType tCompl -> pretty tCompl
+  pretty =
+    \case
+      ErrorType txt -> "!" <> dquotes (pretty txt)
+      VarType tVar -> pretty tVar
+      ComplType tCompl -> pretty tCompl
 
 makeAppType :: ToType a => a -> a -> Type
 makeAppType f a = ComplType $ toType f `AppType` toType a
@@ -81,13 +81,15 @@ makeTBitsType :: Int -> Type
 makeTBitsType = ComplType . TBitsType
 
 foldApp :: [Type] -> Type
-foldApp = \case
-  t:ts -> foldl' ((ComplType .) . AppType) t ts
-  [] -> ErrorType "Illegal type fold"
+foldApp =
+  \case
+    t:ts -> foldl' ((ComplType .) . AppType) t ts
+    [] -> ErrorType "Illegal type fold"
 
 unfoldApp :: Type -> [Type]
 unfoldApp = reverse . go
   where
-    go = \case
-      ComplType (AppType l r) -> r : go l
-      t -> [t]
+    go =
+      \case
+        ComplType (AppType l r) -> r : go l
+        t -> [t]

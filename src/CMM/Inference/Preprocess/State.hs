@@ -14,11 +14,13 @@ import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad (Functor((<$), fmap), Monad((>>=), return))
 import safe Control.Monad.State (MonadState)
+import safe Data.Bifunctor (Bifunctor(bimap, second))
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (Foldable(foldr), for_, traverse_)
 import safe Data.Function (($), (.), id)
 import safe Data.Functor ((<$>))
+import safe Data.Generics.Aliases (extT)
 import safe Data.List (head, init, last, reverse, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
@@ -28,25 +30,40 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Tuple (snd, uncurry)
-import safe Data.Bifunctor ( Bifunctor(bimap, second) )
-import safe Data.Generics.Aliases ( extT )
 
 import safe GHC.Err (error)
 
+import safe CMM.AST (Conv)
+import safe CMM.AST.GetConv (GetConv(getConv))
 import safe CMM.AST.GetName (GetName(getName))
+import safe CMM.AST.Variables.State (CollectorState)
+import safe qualified CMM.AST.Variables.State as CS
+import safe qualified CMM.Data.Trilean as T
 import safe CMM.Data.Tuple (complThd3)
-import safe CMM.Inference.BuiltIn (constraintWitness, getConstType, getDataKind, addressKind)
+import safe CMM.Inference.BuiltIn
+  ( addressKind
+  , constraintWitness
+  , getConstType
+  , getDataKind
+  )
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
-  , FlatFact (ClassFunDeps)
+  , FlatFact(ClassFunDeps)
   , NestedFact(Fact)
+  , classConstraint
+  , classFact
   , constExprConstraint
   , forall
   , instType
+  , kindConstraint
+  , lockFact
+  , regularExprConstraint
+  , subConst
   , tupleKind
-  , typeUnion, kindConstraint, subConst, classFact, classConstraint, regularExprConstraint, lockFact
+  , typeUnion
   )
+import safe CMM.Inference.GetParent (makeAdoption)
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
   ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx)
@@ -54,50 +71,54 @@ import safe CMM.Inference.Preprocess.Context
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, MethodTypeHole, SimpleTypeHole)
   , holeHandle
-
   )
+import safe CMM.Inference.Refresh (Refresher(refresher))
+import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
+import safe CMM.Inference.TypeCompl
+  ( TypeCompl(ConstType)
+  , makeApplication
+  , makeFunction
+  )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
-import safe CMM.Inference.TypeKind (TypeKind(Star, (:->), Constraint), HasTypeKind (getTypeKind))
+import safe CMM.Inference.TypeKind
+  ( HasTypeKind(getTypeKind)
+  , TypeKind((:->), Constraint, Star)
+  )
 import safe CMM.Inference.TypeVar
   ( ToTypeVar(toTypeVar)
-
-  , noType, TypeVar (NoType, tVarId)
+  , TypeVar(NoType, tVarId)
+  , noType
   )
+import safe CMM.Inference.Utils (fieldClassHelper)
 import safe CMM.Parser.HasPos (SourcePos)
-import safe CMM.AST.Variables.State (CollectorState)
-import safe qualified CMM.AST.Variables.State as CS
-import safe CMM.Inference.TypeCompl (TypeCompl(ConstType), makeFunction, makeApplication)
-import safe qualified CMM.Data.Trilean as T
-import safe CMM.AST (Conv)
-import safe CMM.AST.GetConv ( GetConv(getConv) )
-import safe CMM.Inference.Refresh ( Refresher(refresher) )
-import safe CMM.Inference.Subst ( Apply(apply) )
-import safe CMM.Inference.GetParent (makeAdoption)
-import safe CMM.Inference.Utils ( fieldClassHelper )
 
 import safe CMM.Inference.Preprocess.State.Impl
-  ( PreprocessorState(PreprocessorState)
+  ( Preprocessor
+  , PreprocessorState(PreprocessorState)
   , cSymbols
   , currentContext
+  , currentParent
   , facts
-  , freshStar
-  , freshASTStar
   , freshASTGeneric
-  , freshNamedASTStar
+  , freshASTStar
+  , freshASTTypeHandle
   , freshGeneric
+  , freshNamedASTStar
+  , freshNamedASTTypeHandle
+  , freshStar
+  , freshTypeHelper
   , funcElabVariables
   , funcInstVariables
   , funcVariables
   , initPreprocessor
-  , freshASTTypeHandle
   , structInstMembers
   , structMembers
   , typeAliases
   , typeClasses
   , typeConstants
   , typeVariables
-  , variables, Preprocessor, freshTypeHelper, freshNamedASTTypeHandle, currentParent
+  , variables
   )
 
 noCurrentReturn :: TypeHole
@@ -119,10 +140,13 @@ beginUnit collector = do
       classHandles
       ((^. _3) <$> (collector ^. CS.typeClasses))
   memberClasses <-
-    declVars . Map.fromAscList $ bimap fieldClassHelper (second $ \_ -> Star :-> Star :-> Constraint) <$> Map.toAscList members
+    declVars . Map.fromAscList $
+    bimap fieldClassHelper (second $ \_ -> Star :-> Star :-> Constraint) <$>
+    Map.toAscList members
   let memberClassData = (`ClassData` mempty) . SimpleTypeHole <$> memberClasses
   typeClasses %= (`Map.union` memberClassData)
-  Map.toList memberClasses `for_` \(name, handle) -> storeFacts
+  Map.toList memberClasses `for_` \(name, handle) ->
+    storeFacts
       [ ClassFunDeps name [[T.False, T.True]] :: FlatFact Type
       , lockFact $ toType handle
       ]
@@ -133,7 +157,9 @@ beginUnit collector = do
     b <- freshTypeHelper Star
     let t = makeFunction [a] b
     storeFact $
-      forall (Set.fromList $ toTypeVar <$> [a, b]) [mem `typeUnion` t]
+      forall
+        (Set.fromList $ toTypeVar <$> [a, b])
+        [mem `typeUnion` t]
         [ Fact $ addressKind `kindConstraint` a
         , Fact $ addressKind `kindConstraint` b
         , Fact $ b `subConst` a
@@ -167,7 +193,8 @@ lookupFEVar :: GetName n => n -> Preprocessor TypeHole
 lookupFEVar named = lookupVarImpl named <$> uses funcElabVariables pure
 
 lookupProc :: GetName n => n -> Preprocessor (Maybe TypeHole)
-lookupProc = uses variables . fmap (fmap SimpleTypeHole) . (. last) . Map.lookup . getName
+lookupProc =
+  uses variables . fmap (fmap SimpleTypeHole) . (. last) . Map.lookup . getName
 
 lookupTCon :: GetName n => n -> Preprocessor TypeHole
 lookupTCon named = lookupVarImpl named <$> use typeConstants
@@ -177,11 +204,13 @@ lookupTVar named = lookupVarImpl named <$> use typeVariables
 
 lookupClass :: GetName n => n -> Preprocessor TypeHole
 lookupClass named =
-  uses typeClasses $ maybe EmptyTypeHole (^. classHole) . (getName named `Map.lookup`)
+  uses typeClasses $ maybe EmptyTypeHole (^. classHole) .
+  (getName named `Map.lookup`)
 
 lookupVarImpl :: GetName n => n -> [Map Text TypeHandle] -> TypeHole
 lookupVarImpl named vars =
-  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $ (getName named `Map.lookup`) <$>
+  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $
+  (getName named `Map.lookup`) <$>
   vars
 
 storeVar :: Text -> Type -> Preprocessor ()
@@ -225,7 +254,8 @@ openProc collector = do
 
 declVars :: Map Text (SourcePos, TypeKind) -> Preprocessor (Map Text TypeHandle)
 declVars =
-  Map.traverseWithKey (\name (pos, kind) -> freshNamedASTTypeHandle name pos kind)
+  Map.traverseWithKey
+    (\name (pos, kind) -> freshNamedASTTypeHandle name pos kind)
 
 endProc :: Preprocessor (Facts, TypeHole)
 endProc = do
@@ -295,7 +325,8 @@ storeProc name fs x = do
       Fact (uncurry classConstraint classConstraint') :
       fs
     InstanceCtx _ classConstraint' superConstraints ->
-      storeElaboratedProc subst tVars'  $ Fact (uncurry classFact classConstraint') :
+      storeElaboratedProc subst tVars' $
+      Fact (uncurry classFact classConstraint') :
       (Fact . uncurry classFact <$> superConstraints) <>
       fs
     FunctionCtx {} -> goIllegal
@@ -320,21 +351,23 @@ storeProc name fs x = do
       uses currentContext head >>= \case
         ClassCtx {} -> do
           adoption :: TypeVar -> TypeVar <- makeAdoption eHandle
-          storeFact . extT id adoption . apply subst $ forall tVars [eHandle `typeUnion` eType] facts'
-          storeFact . extT id adoption . apply subst $ forall tVars [handle `typeUnion` t] [instFact, unionFact]
+          storeFact . extT id adoption . apply subst $
+            forall tVars [eHandle `typeUnion` eType] facts'
+          storeFact . extT id adoption . apply subst $
+            forall tVars [handle `typeUnion` t] [instFact, unionFact]
           return . extT id adoption $ SimpleTypeHole handle
         _ -> do
-          storeFact . apply subst . forall tVars [handle `typeUnion` t] $ instFact : unionFact :
+          storeFact . apply subst . forall tVars [handle `typeUnion` t] $
+            instFact :
+            unionFact :
             facts'
           return $ MethodTypeHole handle fHandle eHandle
 
 pushParent :: TypeVar -> Preprocessor ()
-pushParent parent =
-  currentParent %= (parent :)
+pushParent parent = currentParent %= (parent :)
 
 popParent :: Preprocessor ()
-popParent =
-  currentParent %= tail
+popParent = currentParent %= tail
 
 pushFacts :: Preprocessor ()
 pushFacts = facts %= ([] :)
@@ -358,7 +391,11 @@ pushStruct :: (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
 pushStruct handle mainHandle = do
   tVars <- collectTVars
   pushContext $ StructCtx handle mainHandle
-  storeFact $ forall tVars [snd handle `typeUnion` snd mainHandle] [Fact . regularExprConstraint $ snd mainHandle]
+  storeFact $
+    forall
+      tVars
+      [snd handle `typeUnion` snd mainHandle]
+      [Fact . regularExprConstraint $ snd mainHandle]
 
 pushClass ::
      (Text, TypeHole) -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()

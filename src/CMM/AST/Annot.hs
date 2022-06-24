@@ -11,12 +11,12 @@ import safe Data.Ord (Ord)
 import safe Data.Traversable (Traversable)
 import safe Text.Show (Show)
 
-import safe Prettyprinter ( Pretty(pretty) )
+import safe Prettyprinter (Pretty(pretty))
 
-import safe CMM.Inference.Preprocess.TypeHole ( HasTypeHole (getTypeHole) )
-import safe CMM.Inference.Type ( ToType (toType) )
-import safe CMM.Inference.TypeVar ( ToTypeVar (toTypeVar) )
-import safe CMM.Parser.HasPos ( HasPos (getPos) )
+import safe CMM.Inference.Preprocess.TypeHole (HasTypeHole(getTypeHole))
+import safe CMM.Inference.Type (ToType(toType))
+import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
+import safe CMM.Parser.HasPos (HasPos(getPos))
 
 -- | Annotation used as a wrapper for nodes, can contain 'SourcePos', for example
 data Annotation node annot =
@@ -26,7 +26,6 @@ data Annotation node annot =
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
 
 deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
-
 
 instance HasTypeHole a => HasTypeHole (Annot n a) where
   getTypeHole = getTypeHole . takeAnnot

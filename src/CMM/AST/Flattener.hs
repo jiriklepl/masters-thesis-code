@@ -4,7 +4,8 @@ module CMM.AST.Flattener where
 
 import safe Control.Applicative (Applicative(pure), liftA2)
 import safe Control.Monad (Monad(return), sequence)
-import safe Control.Monad.State (get, put, evalState, State)
+import safe Control.Monad.State (State, evalState, get, put)
+import safe Data.Data (Data(gmapT), Typeable)
 import safe Data.Function (($), (.), flip)
 import safe Data.Functor ((<$>))
 import safe Data.Int (Int)
@@ -16,7 +17,6 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe GHC.Err (error)
 import safe Text.Show (Show(show))
-import safe Data.Data ( Data(gmapT), Typeable )
 
 import safe CMM.AST
   ( Arm(Arm)
@@ -28,18 +28,25 @@ import safe CMM.AST
   , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
+import safe CMM.Data.Generics ((*|*))
 import safe CMM.Data.Num (Num((+)))
 import safe CMM.Utils (addPrefix)
-import safe CMM.Data.Generics ( (*|*) )
 
 -- | Flattens the given AST node, more specifically nested blocks
-flatten :: forall a n . (Data (n a), Typeable a) => n a -> n a
+flatten ::
+     forall a n. (Data (n a), Typeable a)
+  => n a
+  -> n a
 flatten = go
   where
-    go :: forall d . Data d => d -> d
+    go ::
+         forall d. Data d
+      => d
+      -> d
     go = flattenBody *|* gmapT go
     flattenBody :: Body a -> Body a
-    flattenBody (Body bodyItems) = Body $ evalState (flattenBodyItems bodyItems) 0
+    flattenBody (Body bodyItems) =
+      Body $ evalState (flattenBodyItems bodyItems) 0
 
 -- | Creates a `Name` from a `String` with `flattenerPrefix`
 helperName :: String -> Name a
@@ -64,7 +71,7 @@ instance FlattenBodyItems (Annot Body) where
     liftA2 (++) (flattenBodyItems bodyItems) (flattenBodyItems bodies)
 
 class FlattenStmt n where
-  flattenStmt ::  n a -> State Int [Annot BodyItem a]
+  flattenStmt :: n a -> State Int [Annot BodyItem a]
 
 instance FlattenBodyItems (Annot BodyItem) where
   flattenBodyItems [] = pure []

@@ -6,39 +6,39 @@ module CMM.Inference.State.Impl where
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
 import safe qualified CMM.Data.Bimap as Bimap
+import safe Control.Lens.Getter (uses)
+import safe Control.Lens.Setter ((%=))
+import safe Control.Monad (Monad((>>=), return), sequence)
+import safe Control.Monad.State (State)
+import safe Data.Function (($))
+import safe Data.List (head)
 import safe Data.Map (Map)
+import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
-import safe Control.Monad.State ( State )
-import safe Control.Lens.Getter ( uses )
-import safe Data.List ( head )
-import safe qualified Data.Map as Map
-import safe Control.Monad ( Monad(return, (>>=)), sequence )
-import safe Data.Function ( ($) )
-import safe Control.Lens.Setter ( (%=) )
 
 import safe CMM.Data.Bimap (Bimap)
 import safe CMM.Data.Bounds (Bounds)
+import CMM.Data.Nullable (Nullable(nullVal))
+import safe CMM.Data.Trilean (Trilean)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Scheme)
+import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
   ( HandleCounter
-  , HasHandleCounter(handleCounter), freshAnnotatedTypeHelperWithParent
+  , HasHandleCounter(handleCounter)
+  , freshAnnotatedTypeHelperWithParent
   )
+import safe CMM.Inference.Refresh (Refresher(refresher))
 import safe CMM.Inference.Type (Type)
+import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
+import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import safe CMM.Inference.GetParent ( GetParent(getParent) )
-import safe CMM.Data.Trilean ( Trilean )
-import safe CMM.Inference.Refresh ( Refresher(refresher) )
-import safe CMM.Inference.TypeAnnot ( TypeAnnot(TypeInst, NoTypeAnnot) )
-import safe CMM.Inference.TypeKind
-    ( HasTypeKind(getTypeKind), TypeKind )
-import CMM.Data.Nullable ( Nullable(nullVal) )
 
 data InferencerState =
   InferencerState

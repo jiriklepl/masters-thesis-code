@@ -1,13 +1,14 @@
 {-# LANGUAGE Safe #-}
+{-# OPTIONS_GHC -w #-}
 
 module Main where
 
-import Control.Lens.Getter (view, use, (^.))
+import Control.Lens.Getter ((^.), use, view)
 import Control.Monad.State as State (Monad(return), runState)
-import Data.Either (Either(Left,Right), either)
+import Data.Either (Either(Left, Right), either)
 import Data.Function (($), (.), id)
 import Data.List (head, reverse)
-import Data.Monoid (Monoid(mempty, mappend))
+import Data.Monoid (Monoid(mappend, mempty))
 import GHC.Err (undefined)
 
 import qualified Data.Text.IO as TS
@@ -18,7 +19,7 @@ import qualified Data.Text.IO as TS
 -- import qualified Data.Map as Map
 -- import Control.Lens
 -- import Data.Text as T
-import safe System.IO (IO, putStrLn, print)
+import safe System.IO (IO, print, putStrLn)
 
 -- import Data.Tuple
 import Text.Megaparsec hiding (parse)
@@ -50,15 +51,15 @@ import safe CMM.Inference.HandleCounter
 -- import CMM.Inference.TypeKind as Infer
 import CMM.Lexer
 import CMM.Monomorphize (Monomorphize(monomorphize))
+import qualified CMM.Monomorphize.State as Infer
 import CMM.Parser
 import CMM.Pretty ()
-import Data.Functor
-import GHC.Show
-import qualified CMM.Monomorphize.State as Infer
-import qualified Data.Map as Map
 import Data.Bifunctor
-import Data.Tuple
+import Data.Functor
+import qualified Data.Map as Map
 import qualified Data.Set as Set
+import Data.Tuple
+import GHC.Show
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -101,17 +102,22 @@ main = do
             Left what -> show what
             Right mined' -> show $ pretty mined'
   putStrLn msg
-
-  print . vsep . fmap (uncurry mappend . bimap pretty (list . fmap pretty . Set.toList)) . Map.toList . Infer.getPolyGenerate $ monomorphizer ^. Infer.polyMemory
-
+  print .
+    vsep .
+    fmap (uncurry mappend . bimap pretty (list . fmap pretty . Set.toList)) .
+    Map.toList . Infer.getPolyGenerate $
+    monomorphizer ^. Infer.polyMemory
   print "CLASS_SCHEMES:"
-  print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList  $ inferencer ^. classSchemes
-
+  print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList $
+    inferencer ^. classSchemes
   print "CLASS_FACTS:"
-  print . vsep . fmap (uncurry mappend . bimap pretty (vsep . fmap pretty)) . Map.toList  $ inferencer ^. classFacts
-
+  print .
+    vsep .
+    fmap (uncurry mappend . bimap pretty (vsep . fmap pretty)) . Map.toList $
+    inferencer ^. classFacts
   print "SCHEMES:"
-  print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList  $ inferencer ^. schemes
+  print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList $
+    inferencer ^. schemes
   void $ return inferencer
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a

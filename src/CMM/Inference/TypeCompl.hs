@@ -2,7 +2,8 @@
 
 module CMM.Inference.TypeCompl where
 
-import safe Data.Bool (otherwise, (&&), Bool (True, False))
+import safe CMM.Pretty (arrowNice)
+import safe Data.Bool (Bool(False, True), (&&), otherwise)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (Foldable, and)
@@ -10,17 +11,22 @@ import safe Data.Function (($))
 import safe Data.Functor (Functor, (<$>))
 import safe Data.Int (Int)
 import safe Data.List ((++), zipWith)
-import safe Data.Ord (Ord (compare), Ordering (EQ, LT, GT))
+import safe Data.Monoid (Monoid(mconcat, mempty), (<>))
+import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe Data.Traversable (Traversable)
-import safe GHC.Err (undefined, error)
+import safe GHC.Err (error, undefined)
 import safe Text.Show (Show(show))
-import safe Data.Monoid ( (<>), Monoid(mconcat, mempty) )
-import safe CMM.Pretty ( arrowNice )
 
 import safe Prettyprinter
-    ( (<+>), tupled, brackets, parens, Pretty(pretty), comma )
+  ( Pretty(pretty)
+  , (<+>)
+  , brackets
+  , comma
+  , parens
+  , tupled
+  )
 
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
@@ -47,33 +53,58 @@ data TypeCompl a
 
 instance Eq a => Eq (TypeCompl a) where
   t == t'
-    | TupleType ts <- t, TupleType ts' <- t' = and $ zipWith (==) ts ts'
-    | FunctionType args ret <- t, FunctionType args' ret' <- t' = and $ zipWith (==) (ret:args) (ret':args')
-    | AppType app arg <- t, AppType app' arg' <- t' = app == app' && arg == arg'
-    | AddrType addr <- t, AddrType addr' <- t' = addr == addr'
-    | LamType int _ _ <- t, LamType int' _ _ <- t' = int == int'
-    | ConstType text _ _ <- t, ConstType text' _ _ <- t' = text == text'
-    | StringType <- t, StringType <- t' = True
-    | String16Type <- t, String16Type <- t' = True
-    | LabelType <- t, LabelType <- t' = True
-    | TBitsType int <- t, TBitsType int' <- t' = int == int'
-    | BoolType <- t, BoolType <- t' = True
-    | VoidType <- t, VoidType <- t' = True
+    | TupleType ts <- t
+    , TupleType ts' <- t' = and $ zipWith (==) ts ts'
+    | FunctionType args ret <- t
+    , FunctionType args' ret' <- t' =
+      and $ zipWith (==) (ret : args) (ret' : args')
+    | AppType app arg <- t
+    , AppType app' arg' <- t' = app == app' && arg == arg'
+    | AddrType addr <- t
+    , AddrType addr' <- t' = addr == addr'
+    | LamType int _ _ <- t
+    , LamType int' _ _ <- t' = int == int'
+    | ConstType text _ _ <- t
+    , ConstType text' _ _ <- t' = text == text'
+    | StringType <- t
+    , StringType <- t' = True
+    | String16Type <- t
+    , String16Type <- t' = True
+    | LabelType <- t
+    , LabelType <- t' = True
+    | TBitsType int <- t
+    , TBitsType int' <- t' = int == int'
+    | BoolType <- t
+    , BoolType <- t' = True
+    | VoidType <- t
+    , VoidType <- t' = True
     | otherwise = False
 
 instance Ord a => Ord (TypeCompl a) where
   t `compare` t'
-    | TupleType ts <- t, TupleType ts' <- t' = mconcat $ zipWith compare ts ts'
-    | FunctionType args ret <- t, FunctionType args' ret' <- t' = mconcat $ zipWith compare (ret:args) (ret':args')
-    | AppType app arg <- t, AppType app' arg' <- t' = compare app  app' <> compare arg arg'
-    | AddrType addr <- t, AddrType addr' <- t' = addr `compare` addr'
-    | LamType int _ _ <- t, LamType int' _ _ <- t' = int `compare` int'
-    | ConstType text _ _ <- t, ConstType text' _ _ <- t' = text `compare` text'
-    | StringType <- t, StringType <- t' = EQ
-    | String16Type <- t, String16Type <- t' = EQ
-    | LabelType <- t, LabelType <- t' = EQ
-    | TBitsType int <- t, TBitsType int' <- t' = int `compare` int'
-    | BoolType <- t, BoolType <- t' = EQ
+    | TupleType ts <- t
+    , TupleType ts' <- t' = mconcat $ zipWith compare ts ts'
+    | FunctionType args ret <- t
+    , FunctionType args' ret' <- t' =
+      mconcat $ zipWith compare (ret : args) (ret' : args')
+    | AppType app arg <- t
+    , AppType app' arg' <- t' = compare app app' <> compare arg arg'
+    | AddrType addr <- t
+    , AddrType addr' <- t' = addr `compare` addr'
+    | LamType int _ _ <- t
+    , LamType int' _ _ <- t' = int `compare` int'
+    | ConstType text _ _ <- t
+    , ConstType text' _ _ <- t' = text `compare` text'
+    | StringType <- t
+    , StringType <- t' = EQ
+    | String16Type <- t
+    , String16Type <- t' = EQ
+    | LabelType <- t
+    , LabelType <- t' = EQ
+    | TBitsType int <- t
+    , TBitsType int' <- t' = int `compare` int'
+    | BoolType <- t
+    , BoolType <- t' = EQ
     | TupleType {} <- t = LT
     | TupleType {} <- t' = GT
     | FunctionType {} <- t = LT
@@ -96,7 +127,8 @@ instance Ord a => Ord (TypeCompl a) where
     | TBitsType {} <- t' = GT
     | BoolType {} <- t = LT
     | BoolType {} <- t' = GT
-    | VoidType <- t, VoidType <- t' = EQ
+    | VoidType <- t
+    , VoidType <- t' = EQ
 
 instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
   getTypeKind =
@@ -121,20 +153,22 @@ instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
         | otherwise -> setTypeKindInvariantLogicError tCompl kind
 
 instance Pretty a => Pretty (TypeCompl a) where
-  pretty = \case
-    TupleType [t] -> parens $  pretty t <> comma -- precedented by python
-    TupleType ts -> tupled $ pretty <$> ts
-    FunctionType args ret -> brackets mempty <> tupled (pretty <$> args) <+> arrowNice <+> pretty ret
-    AppType app arg -> parens $ pretty app <+> pretty arg
-    AddrType t -> "addr" <+> pretty t
-    LamType {} -> error "obsolete" -- TODO: remove safely
-    ConstType name kind _ -> pretty name <> "@" <> parens (pretty kind)
-    StringType -> "str"
-    String16Type -> "str16"
-    LabelType -> "label"
-    TBitsType n -> "bits" <> pretty n
-    BoolType -> "bool"
-    VoidType -> "void"
+  pretty =
+    \case
+      TupleType [t] -> parens $ pretty t <> comma -- precedented by python
+      TupleType ts -> tupled $ pretty <$> ts
+      FunctionType args ret ->
+        brackets mempty <> tupled (pretty <$> args) <+> arrowNice <+> pretty ret
+      AppType app arg -> parens $ pretty app <+> pretty arg
+      AddrType t -> "addr" <+> pretty t
+      LamType {} -> error "obsolete" -- TODO: remove safely
+      ConstType name kind _ -> pretty name <> "@" <> parens (pretty kind)
+      StringType -> "str"
+      String16Type -> "str16"
+      LabelType -> "label"
+      TBitsType n -> "bits" <> pretty n
+      BoolType -> "bool"
+      VoidType -> "void"
 
 toLam :: TypeVar -> TypeCompl a
 toLam =

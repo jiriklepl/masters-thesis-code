@@ -12,13 +12,13 @@ import safe Data.Text (Text)
 import safe GHC.Err (error, undefined)
 import safe Text.Show (Show(show))
 
-import safe Prettyprinter ( (<>), parens, Pretty(pretty) )
+import safe Prettyprinter (Pretty(pretty), (<>), parens)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
+import safe CMM.Data.Num (Num((+)))
+import safe CMM.Inference.Arity (Arity(arity))
+import safe CMM.Pretty (arrowNice, bang, deltaBig, question, star)
 import safe CMM.Utils (backQuote)
-import safe CMM.Pretty ( star, deltaBig, bang, question, arrowNice )
-import safe CMM.Inference.Arity ( Arity(arity) )
-import safe CMM.Data.Num ( Num((+)) )
 
 infixr 6 :->
 
@@ -74,23 +74,24 @@ instance Nullable TypeKind where
   nullVal = GenericType
 
 instance Arity TypeKind where
-  arity = \case
-    Star -> 0
-    Constraint -> 0
-    GenericType -> 0 -- if it gets defaulted into Star
-    ErrorKind {} -> 0 -- it does not matter
-    _ :-> kind -> arity kind + 1
+  arity =
+    \case
+      Star -> 0
+      Constraint -> 0
+      GenericType -> 0 -- if it gets defaulted into Star
+      ErrorKind {} -> 0 -- it does not matter
+      _ :-> kind -> arity kind + 1
 
 instance Pretty TypeKind where
-  pretty = \case
-    Star -> star
-    Constraint -> deltaBig
-    GenericType -> question
-    ErrorKind {} -> bang
-    left :-> right
-      | arity left == 0 -> pretty left <> arrowNice <> pretty right
-      | otherwise -> parens (pretty left) <> arrowNice <> pretty right
-
+  pretty =
+    \case
+      Star -> star
+      Constraint -> deltaBig
+      GenericType -> question
+      ErrorKind {} -> bang
+      left :-> right
+        | arity left == 0 -> pretty left <> arrowNice <> pretty right
+        | otherwise -> parens (pretty left) <> arrowNice <> pretty right
 
 setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
 setTypeKindInvariantLogicError what kind =

@@ -2,18 +2,21 @@
 
 module CMM.Inference.Preprocess.Context where
 
+import safe Data.Data (Data)
+import safe Data.Maybe (Maybe(Nothing))
 import safe Data.Text (Text)
-import safe Data.Maybe ( Maybe(Nothing) )
-import safe Data.Data ( Data )
 
 import safe GHC.Err (undefined)
 
+import safe CMM.AST (Conv)
+import safe CMM.AST.GetConv (GetConv(getConv))
 import safe CMM.AST.GetName (GetName(getName))
-import safe CMM.Inference.Preprocess.TypeHole (TypeHole(EmptyTypeHole), HasTypeHole(getTypeHole))
+import safe CMM.Inference.Preprocess.TypeHole
+  ( HasTypeHole(getTypeHole)
+  , TypeHole(EmptyTypeHole)
+  )
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeHandle (TypeHandle)
-import safe CMM.AST (Conv)
-import safe CMM.AST.GetConv ( GetConv(getConv) )
 
 data Context
   = GlobalCtx
@@ -43,6 +46,7 @@ instance HasTypeHole Context where
       StructCtx (_, handle) _ -> handle
 
 instance GetConv Context where
-  getConv = \case
+  getConv =
+    \case
       FunctionCtx _ _ mConv -> mConv
       _ -> Nothing
