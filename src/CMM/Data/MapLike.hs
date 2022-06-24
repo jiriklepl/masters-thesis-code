@@ -3,14 +3,14 @@
 module CMM.Data.MapLike where
 
 import safe Data.Maybe ( Maybe, isJust )
-import safe Data.Bool
-import safe Data.Function
+import safe Data.Bool ( Bool )
+import safe Data.Function ( ($), (.), const, id )
 import safe qualified Data.List as List
-import safe Data.Eq
-import safe Data.Ord
-import safe Data.Functor
-import safe Data.Tuple
-import safe GHC.Err
+import safe Data.Eq ( Eq )
+import safe Data.Ord ( Ord )
+import safe Data.Functor ( Functor(fmap) )
+import safe Data.Tuple ( fst, snd )
+import safe GHC.Err ( undefined )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import Data.Bimap (Bimap)

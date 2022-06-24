@@ -9,14 +9,15 @@ import safe Data.Bool ((&&))
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
 import safe Data.Function ((.), ($))
-import safe Data.Monoid ((<>))
 import safe Data.Ord (Ord(compare))
 import safe Text.Show (Show)
+
+import Prettyprinter
+    ( (<>), (<+>), braces, parens, Pretty(pretty) )
 
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
-import Prettyprinter
 import CMM.Pretty (typingSymbol, constingSymbol, kindingSymbol)
 
 data TypeHandle =
@@ -28,8 +29,6 @@ data TypeHandle =
     , _annot :: TypeAnnot
     }
   deriving (Show, Data)
-
-makeLenses ''TypeHandle
 
 instance Eq TypeHandle where
   TypeHandle {_typing = t, _consting = c, _kinding = k} == TypeHandle { _typing = t'
@@ -52,6 +51,14 @@ instance ToType TypeHandle where
 instance ToTypeVar TypeHandle where
   toTypeVar = toTypeVar . handleId
 
+instance Pretty TypeHandle where
+  pretty = \case
+    TypeHandle { _identifier = tId, _typing = typing, _consting = consting, _kinding = kinding, _annot = annot} ->
+      braces $ pretty tId <+>
+        parens (typingSymbol <+> "~" <+> pretty typing) <+>
+        parens (constingSymbol <+> "~" <+> pretty consting) <+>
+        parens (kindingSymbol <+> "~" <+> pretty kinding) <+> pretty annot
+
 initTypeHandle :: TypeAnnot -> TypeVar -> TypeHandle
 initTypeHandle annotation tVar =
   TypeHandle
@@ -62,13 +69,7 @@ initTypeHandle annotation tVar =
     , _annot = annotation
     }
 
-instance Pretty TypeHandle where
-  pretty = \case
-    TypeHandle { _identifier = tId, _typing = typing, _consting = consting, _kinding = kinding, _annot = annot} ->
-      braces $ pretty tId <+>
-        parens (typingSymbol <+> "~" <+> pretty typing) <+>
-        parens (constingSymbol <+> "~" <+> pretty consting) <+>
-        parens (kindingSymbol <+> "~" <+> pretty kinding) <+> pretty annot
-
 handleId :: TypeHandle -> TypeVar
 handleId = _identifier
+
+makeLenses ''TypeHandle

@@ -14,10 +14,11 @@ import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable)
-import safe Text.Show (Show (show))
-import qualified Data.Set as Set
+import safe Text.Show (Show)
+import safe qualified Data.Set as Set
+import safe Control.Applicative (Applicative(pure))
 
-import safe Prettyprinter ( (<+>), list, dot, Pretty(pretty), parens, tupled, dquotes, squotes )
+import safe Prettyprinter ( (<+>), list, dot, Pretty(pretty), parens, tupled, squotes )
 
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds))
@@ -30,8 +31,6 @@ import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Data.Trilean ( Trilean )
 import safe CMM.Pretty ( darrow, lambda, instSymbol, constingSymbol, kindingSymbol, regingSymbol, typingSymbol, isIn )
 import safe CMM.Inference.Utils ( trileanSeq )
-import Control.Applicative (Applicative(pure))
-import Data.String (IsString (fromString), String)
 
 infix 6 :=>
 

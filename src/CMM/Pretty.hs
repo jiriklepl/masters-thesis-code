@@ -20,7 +20,7 @@ import safe Prettyprinter
   , indent
   , punctuate
   , space
-  , vsep
+  , vsep, line
   )
 
 commaSep :: [Doc ann] -> Doc ann
@@ -29,8 +29,11 @@ commaSep xs = hsep $ punctuate comma xs
 commaPretty :: Pretty a => [a] -> Doc ann
 commaPretty = commaSep . fmap pretty
 
+inBraces :: Doc ann -> Doc ann
+inBraces = braces . enclose line line . indent 2
+
 bracesBlock :: Pretty a => [a] -> Doc ann
-bracesBlock xs = braces . enclose "\n" "\n" . indent 2 . vsep $ pretty <$> xs
+bracesBlock xs = inBraces . vsep $ pretty <$> xs
 
 maybeSpacedL :: Pretty a => Maybe a -> Doc ann
 maybeSpacedL = maybe mempty ((space <>) . pretty)

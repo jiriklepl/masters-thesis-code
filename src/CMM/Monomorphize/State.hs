@@ -41,6 +41,11 @@ addImpl which scheme inst = (<>= which (Map.singleton scheme $ Set.singleton ins
 memorize :: TypeVar -> TypeVar -> Monomorphizer a ()
 memorize scheme inst = addImpl PolyGenerate scheme inst polyMemory
 
+memorizeStrong :: TypeVar -> TypeVar -> Monomorphizer a ()
+memorizeStrong scheme inst = do
+  memorize scheme inst
+  removeGenerate scheme inst
+
 isMemorized ::  TypeVar -> TypeVar -> Monomorphizer a Bool
 isMemorized scheme inst =
   uses polyMemory $ maybe False (Set.member inst) . Map.lookup scheme . getPolyGenerate
@@ -55,6 +60,10 @@ addGenerate :: TypeVar -> TypeVar -> Monomorphizer a ()
 addGenerate scheme inst = do
   success <- tryMemorize scheme inst
   when success $ addImpl PolyGenerate scheme inst polyGenerate
+
+removeGenerate :: TypeVar -> TypeVar -> Monomorphizer a ()
+removeGenerate scheme inst =
+  polyGenerate %= PolyGenerate . Map.adjust (Set.delete inst) scheme . getPolyGenerate
 
 addPolyScheme ::
   TypeVar

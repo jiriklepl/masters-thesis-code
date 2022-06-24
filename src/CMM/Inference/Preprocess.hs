@@ -12,14 +12,13 @@ import safe Control.Lens.Tuple (_2)
 import safe Control.Monad (Monad((>>=), return), (>=>), zipWithM, zipWithM_)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (for_, traverse_, Foldable (foldl'), concat)
+import safe Data.Foldable (for_, traverse_, concat)
 import safe Data.Function (($), (.))
 import safe Data.Functor (Functor(fmap), (<$>), (<&>), (<$))
 import safe Data.Int (Int)
 import safe Data.List (elem, head, unzip, zip, unzip3)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), fromJust)
-import safe Data.Monoid ((<>))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe Data.Traversable (Traversable(traverse), for)
@@ -28,6 +27,7 @@ import safe GHC.Err (undefined)
 import safe Text.Show (Show(show))
 import safe Data.Tuple.Extra (uncurry3)
 import safe qualified Data.Set as Set
+import safe Prettyprinter ( (<>) )
 
 import safe CMM.AST as AST
   ( Actual(Actual)
@@ -111,7 +111,7 @@ import safe CMM.Inference.Fact as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint, NestedFact (Fact), classConstraint, classFact, kindUnion, lockFact, factComment
+  , unstorableConstraint, NestedFact (Fact), classConstraint, classFact, kindUnion, factComment
   )
 import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.Preprocess.Context (Context(StructCtx))
@@ -162,7 +162,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   )
 import safe CMM.Inference.Type as Infer
   ( ToType(toType)
-  , Type(ComplType), makeAppType, foldApp, makeAddrType, makeTBitsType
+  , Type(ComplType), foldApp, makeAddrType, makeTBitsType
   )
 import safe CMM.Inference.TypeCompl
   ( TypeCompl(BoolType, LabelType, String16Type,
@@ -177,8 +177,7 @@ import safe CMM.Inference.TypeHandle ()
 import safe CMM.Inference.GetParent ( makeAdoption)
 import safe CMM.Inference.Utils (fieldClassHelper)
 import safe CMM.Inference.Subst ( Apply(apply) )
-import CMM.Utils
-import Prettyprinter
+import safe CMM.Utils ( backQuote )
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable

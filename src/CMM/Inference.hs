@@ -40,17 +40,18 @@ import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe)
 import safe Data.Monoid (Monoid(mappend, mconcat, mempty))
 import safe Data.Ord (Ord((<), (>)))
 import safe Data.PartialOrd (PartialOrd)
-import safe Data.Semigroup (Semigroup((<>)))
+import safe Data.Semigroup (Semigroup())
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable(traverse))
-import safe Data.Tuple (snd, swap, uncurry, fst)
+import safe Data.Tuple (snd, swap, uncurry)
 import safe Data.String (fromString)
-import safe Text.Show (Show(show))
-import safe GHC.Err (undefined, error)
+import safe GHC.Err (undefined)
 import safe Data.Tuple.Extra (dupe)
 import safe Data.Bifunctor (second)
+
+import safe Prettyprinter ( (<>) )
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
@@ -155,7 +156,6 @@ import safe CMM.Data.Trilean (trilean)
 import safe CMM.Inference.Refresh ( Refresher(refresher) )
 import safe CMM.Inference.Utils ( fieldClassPrefix, trileanSeq )
 import safe CMM.Inference.BuiltIn()
-import Prettyprinter
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -588,7 +588,7 @@ reduceTrivial (fact:facts) =
       tVar <- simplify t
       lock t tVar
       continue
-    Fact (FactComment {}) -> continue
+    Fact FactComment {} -> continue
     NestedFact (tVars :. facts' :=> nesteds) -> case facts' of
       [ClassConstraint {}] -> skip
       [ClassFact {}] -> skip
@@ -641,7 +641,7 @@ reduceConstraint (fact:facts) =
           --   (Fact <$> typeUnion t (subst `apply` t') :
           --    (apply subst <$> facts')) <>
           --   facts
-      continue
+          continue
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceConstraint nesteds
       (_1 %~ (|| changed)) <$>
@@ -660,7 +660,7 @@ reduceMany = reduceTrivial >=> reduceTemplates >=> go
     go facts = do
       result@(change, facts') <-
         reduceTrivial facts >>= reduceConstraint
-  if change
+      if change
         then go facts'
         else return result
 
@@ -1023,9 +1023,9 @@ collectPairs way handles from = pairs <&> both %~ \i -> varMap Map.! i
       uncurry (<>) (unzip edges)
     graph = Graph.buildG (1, handles) $ (both %~ tVarId) <$> edges
     vs = Map.keys varMap
-    list cond = [(v, v') | v <- vs, v' <- vs, cond v v']
+    list' cond = [(v, v') | v <- vs, v' <- vs, cond v v']
     pairs =
-      list $ \v v' -> case way of
+      list' $ \v v' -> case way of
         Forward -> v /= v' && Graph.path graph v v'
         Backward -> v /= v' && Graph.path graph v' v
         Both ->

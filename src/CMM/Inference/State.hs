@@ -10,13 +10,13 @@ import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%=), (<>=))
 import safe Control.Monad (Monad((>>=), return), filterM, unless)
 import safe Data.Foldable (fold, traverse_, Foldable)
-import safe Data.Function (($), (.), flip, id)
+import safe Data.Function (($), (.), flip)
 import safe Data.Functor (Functor(fmap), (<$>))
 import safe Data.List (tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe, isJust)
-import safe Data.Monoid ((<>), mappend)
+import safe Data.Monoid (mappend)
 import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
@@ -28,12 +28,14 @@ import safe Data.Foldable.Extra (anyM)
 import safe GHC.Err ( error )
 import safe Data.Data ( Data )
 
+import safe Prettyprinter ( (<>), Pretty(pretty) )
+
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
-import safe CMM.Inference.Fact (Scheme ((:.)), Qual ((:=>)), typeUnion)
+import safe CMM.Inference.Fact (Scheme ((:.)), Qual ((:=>)))
 import safe CMM.Inference.Subst (apply)
 import safe CMM.Inference.Type (Type(ComplType, VarType), ToType (toType))
 import safe CMM.Inference.TypeHandle
@@ -71,9 +73,6 @@ import safe CMM.Inference.State.Impl
   , typize
   , unifs, Inferencer, funDeps, lockedVars
   )
-import Prettyprinter
-import Control.Lens.Traversal (both)
-import Data.Tuple
 
 pushParent :: TypeVar -> Inferencer ()
 pushParent parent = currentParent %= (parent :)

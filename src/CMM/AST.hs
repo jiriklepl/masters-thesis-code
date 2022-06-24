@@ -35,7 +35,7 @@ import safe Prettyprinter
       Doc,
       Pretty(pretty) )
 
-import safe CMM.AST.Annot (Annot)
+import safe CMM.AST.Annot (Annot, Annotation (Annot))
 import safe CMM.Data.Float (Float)
 import safe Data.Monoid ( Monoid(mempty) )
 import safe CMM.Pretty
@@ -49,7 +49,7 @@ import safe CMM.Pretty
       bquotes,
       ddot,
       dcolon,
-      ifTrue )
+      ifTrue, inBraces )
 import safe CMM.Utils ( backQuote )
 
 newtype Unit a =
@@ -176,7 +176,7 @@ deriving instance Eq (Struct ())
 instance Pretty (Struct a) where
   pretty = \case
     Struct paraName datums ->
-      "struct" <+> pretty paraName <+> bracesBlock datums
+      "struct" <+> pretty paraName <+> inBraces (prettyDatums datums)
 
 data ParaName param a =
   ParaName (Name a) [Annot param a]
@@ -257,6 +257,12 @@ instance Pretty (Datum a) where
       Datum type' mSize mInit ->
         pretty type' <>
         maybe mempty pretty mSize <> maybe mempty pretty mInit <> semi
+
+prettyDatums :: [Annotation Datum annot] -> Doc ann
+prettyDatums [] = mempty
+prettyDatums (datum:others) = case datum of
+  DatumLabel {} `Annot` _ -> pretty datum <+> prettyDatums others
+  _ -> pretty datum <> prettyDatums others
 
 data Init a
   = ExprInit [Annot Expr a]
@@ -409,7 +415,7 @@ deriving instance Eq (StackDecl ())
 
 instance Pretty (StackDecl a) where
   pretty = \case
-    StackDecl datums -> "stackdata" <+> bracesBlock datums
+    StackDecl datums -> "stackdata" <+> inBraces (prettyDatums datums)
 
 data Stmt a
   = EmptyStmt

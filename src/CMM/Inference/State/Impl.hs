@@ -7,7 +7,6 @@ import safe Control.Lens.TH (makeFieldsNoPrefix)
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe Data.Map (Map)
-import safe Data.Monoid (Monoid(mempty))
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Text.Show (Show)
