@@ -17,7 +17,7 @@ import safe Control.Monad.State (MonadState)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (Foldable(foldr), for_, traverse_)
-import safe Data.Function (($), (.))
+import safe Data.Function (($), (.), id)
 import safe Data.Functor ((<$>))
 import safe Data.List (head, init, last, reverse, tail)
 import safe Data.Map (Map)
@@ -29,6 +29,7 @@ import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Tuple (snd, uncurry)
 import safe Data.Bifunctor ( Bifunctor(bimap, second) )
+import safe Data.Generics.Aliases ( extT )
 
 import safe GHC.Err (error)
 
@@ -44,7 +45,7 @@ import safe CMM.Inference.Fact
   , forall
   , instType
   , tupleKind
-  , typeUnion, kindConstraint, subConst, classFact, classConstraint, regularExprConstraint
+  , typeUnion, kindConstraint, subConst, classFact, classConstraint, regularExprConstraint, lockFact
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
@@ -68,9 +69,12 @@ import safe CMM.AST.Variables.State (CollectorState)
 import safe qualified CMM.AST.Variables.State as CS
 import safe CMM.Inference.TypeCompl (TypeCompl(ConstType), makeFunction, makeApplication)
 import safe qualified CMM.Data.Trilean as T
-import safe CMM.Inference.State (fieldClassHelper)
 import safe CMM.AST (Conv)
 import safe CMM.AST.GetConv ( GetConv(getConv) )
+import safe CMM.Inference.Refresh ( Refresher(refresher) )
+import safe CMM.Inference.Subst ( Apply(apply) )
+import safe CMM.Inference.GetParent (makeAdoption)
+import safe CMM.Inference.Utils ( fieldClassHelper )
 
 import safe CMM.Inference.Preprocess.State.Impl
   ( PreprocessorState(PreprocessorState)
@@ -108,6 +112,7 @@ beginUnit collector = do
   untrivialize tCons
   typeConstants .= pure tCons
   classHandles <- declVars $ complThd3 <$> (collector ^. CS.typeClasses)
+  untrivialize classHandles
   typeClasses .=
     Map.intersectionWith
       (ClassData . SimpleTypeHole)
@@ -117,8 +122,10 @@ beginUnit collector = do
     declVars . Map.fromAscList $ bimap fieldClassHelper (second $ \_ -> Star :-> Star :-> Constraint) <$> Map.toAscList members
   let memberClassData = (`ClassData` mempty) . SimpleTypeHole <$> memberClasses
   typeClasses %= (`Map.union` memberClassData)
-  Map.keys memberClasses `for_` \name ->
-    storeFact (ClassFunDeps name [[T.False, T.True]] :: FlatFact Type)
+  Map.toList memberClasses `for_` \(name, handle) -> storeFacts
+      [ ClassFunDeps name [[T.False, T.True]] :: FlatFact Type
+      , lockFact $ toType handle
+      ]
   mems <- declVars members
   structMembers .= mems
   mems `for_` \mem -> do
@@ -189,6 +196,7 @@ untrivialize tCons =
       [ handle `typeUnion`
         ComplType (ConstType name' (getTypeKind $ handleId handle) NoType)
       , getDataKind "" `kindConstraint` handle
+      , lockFact handle
       ]
 
 beginProc :: Text -> TypeHole -> CollectorState -> Maybe Conv -> Preprocessor ()
@@ -275,17 +283,19 @@ getCtxClassConstraint = uses currentContext go
 storeProc :: ToType a => Text -> Facts -> a -> Preprocessor TypeHole
 storeProc name fs x = do
   tVars <- collectTVars
+  subst <- refresher tVars
+  let tVars' = apply subst `Set.map` tVars
   uses currentContext head >>= \case
     GlobalCtx -> do
       hole <- lookupFVar name
-      storeFact $ forall tVars [hole `typeUnion` t] fs
+      storeFact . apply subst $ forall tVars' [hole `typeUnion` t] fs
       return hole
     ClassCtx _ classConstraint' _ ->
-      storeElaboratedProc tVars $
+      storeElaboratedProc subst tVars' $
       Fact (uncurry classConstraint classConstraint') :
       fs
     InstanceCtx _ classConstraint' superConstraints ->
-      storeElaboratedProc tVars $ Fact (uncurry classFact classConstraint') :
+      storeElaboratedProc subst tVars'  $ Fact (uncurry classFact classConstraint') :
       (Fact . uncurry classFact <$> superConstraints) <>
       fs
     FunctionCtx {} -> goIllegal
@@ -293,7 +303,7 @@ storeProc name fs x = do
   where
     goIllegal = error "(internal) Illegal local function encountered." -- TODO: reword this (consolidate)
     t = toType x
-    storeElaboratedProc tVars facts' = do
+    storeElaboratedProc subst tVars facts' = do
       handle <- holeHandle <$> lookupCtxFVar name
       fHandle <- holeHandle <$> lookupFVar name
       eHandle <- holeHandle <$> lookupFEVar name
@@ -309,11 +319,12 @@ storeProc name fs x = do
           unionFact = Fact $ iHandle `typeUnion` eType
       uses currentContext head >>= \case
         ClassCtx {} -> do
-          storeFact $ forall tVars [eHandle `typeUnion` eType] facts'
-          storeFact $ forall tVars [handle `typeUnion` t] [instFact, unionFact]
-          return $ SimpleTypeHole handle
+          adoption :: TypeVar -> TypeVar <- makeAdoption eHandle
+          storeFact . extT id adoption . apply subst $ forall tVars [eHandle `typeUnion` eType] facts'
+          storeFact . extT id adoption . apply subst $ forall tVars [handle `typeUnion` t] [instFact, unionFact]
+          return . extT id adoption $ SimpleTypeHole handle
         _ -> do
-          storeFact . forall tVars [handle `typeUnion` t] $ instFact : unionFact :
+          storeFact . apply subst . forall tVars [handle `typeUnion` t] $ instFact : unionFact :
             facts'
           return $ MethodTypeHole handle fHandle eHandle
 

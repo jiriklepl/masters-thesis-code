@@ -1,4 +1,5 @@
 {-# LANGUAGE Safe #-}
+{-# LANGUAGE CPP #-}
 
 module CMM.Inference.Fact where
 
@@ -6,14 +7,17 @@ import safe Data.Data (Data)
 import safe Data.Eq (Eq)
 import safe Data.Foldable (Foldable(null))
 import safe Data.Function (($), (.))
-import safe Data.Functor (Functor)
+import safe Data.Functor (Functor (fmap), (<$>))
 import safe Data.Int (Int)
-import safe Data.Monoid (Monoid(mempty))
+import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable)
-import safe Text.Show (Show)
+import safe Text.Show (Show (show))
+import qualified Data.Set as Set
+
+import safe Prettyprinter ( (<+>), list, dot, Pretty(pretty), parens, tupled, dquotes, squotes )
 
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds))
@@ -24,6 +28,10 @@ import safe CMM.Inference.Type (ToType(toType), Type)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind, setTypeKind))
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Data.Trilean ( Trilean )
+import safe CMM.Pretty ( darrow, lambda, instSymbol, constingSymbol, kindingSymbol, regingSymbol, typingSymbol, isIn )
+import safe CMM.Inference.Utils ( trileanSeq )
+import Control.Applicative (Applicative(pure))
+import Data.String (IsString (fromString), String)
 
 infix 6 :=>
 
@@ -35,6 +43,11 @@ instance HasTypeKind a => HasTypeKind (Qual a) where
   getTypeKind (_ :=> t) = getTypeKind t
   setTypeKind kind (facts :=> t) = facts :=> setTypeKind kind t
 
+instance (Pretty a, Pretty DataKind) => Pretty (Qual a) where
+  pretty = \case
+    facts :=> nested ->
+      tupled (pretty <$> facts) <+> darrow <+> pretty nested
+
 infix 5 :.
 
 data Scheme a =
@@ -45,18 +58,21 @@ instance HasTypeKind a => HasTypeKind (Scheme a) where
   getTypeKind (_ :. t) = getTypeKind t
   setTypeKind kind (tVars :. t) = tVars :. setTypeKind kind t
 
+instance (Pretty a, Pretty DataKind) => Pretty (Scheme a) where
+  pretty = \case
+    tVars :. qual ->
+      lambda <+> list (pretty <$> Set.toList tVars) <+> dot <+> pretty qual
+
 -- | Flat fact is a non-nested fact that specifies some constraints on type inference
 data FlatFact a
   = SubType a a
   -- ^ TODO supertype; subtype
   | Union a a
   -- ^ TODO binds the type to a type
-  | ClassUnion a a
-  -- ^ TODO binds the type to a type
-  | InstanceUnion a a
-  -- ^ TODO binds the type to a type
   | Typing a a
   -- ^ states that the type follows a certain typing
+  | FactComment Text
+  -- ^ fact with zero semantics
   | KindBounds (Bounds (Ordered DataKind)) a
   -- ^ lower bound on the kind of the type variable
   | ConstnessBounds (Bounds Constness) a
@@ -69,17 +85,35 @@ data FlatFact a
   | SubConst a a
   -- ^ TODO superConst; subConst
   | ConstUnion a a
+  | Lock a
   | InstType a a
   -- ^ TODO polytype; monotype
   | ClassConstraint Text a
   -- ^ TODO
   | ClassFact Text a
   -- ^ TODO
-  | ClassDetermine Text a
-  -- ^ TODO
   | ClassFunDeps Text [[Trilean]]
   -- ^ TODO: False = from, True = to, Unknown = invariant
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data)
+
+instance (Pretty a, Pretty DataKind) => Pretty (FlatFact a) where
+  pretty = \case
+    SubType sup sub -> pretty sub <+> "≤" <+> pretty sup
+    Union t t' -> pretty t <+> "~" <+> pretty t'
+    Typing t t' -> pretty t <+> "~" <> typingSymbol <+> pretty t'
+    KindBounds bounds t -> pretty t <+> isIn <> kindingSymbol <+> pretty bounds
+    ConstnessBounds bounds t -> pretty t <+> isIn <> constingSymbol <+> pretty bounds
+    OnRegister reg t -> pretty t <+> "~" <> regingSymbol <+> pretty reg
+    SubKind sup sub -> pretty sub <+> "≤" <> kindingSymbol <+> pretty sup
+    KindUnion sup sub -> pretty sub <+> "~" <> kindingSymbol <+> pretty sup
+    FactComment txt -> squotes . squotes . squotes $ pretty txt
+    SubConst sup sub -> pretty sub <+> "≤" <> constingSymbol <+> pretty sup
+    ConstUnion sup sub -> pretty sub <+> "~" <> constingSymbol <+> pretty sup
+    Lock t -> "lock" <+> pretty t
+    InstType poly mono -> pretty poly <+> instSymbol <+> pretty mono
+    ClassConstraint name t -> pretty name <> "?" <> parens (pretty t)
+    ClassFact name t -> pretty name <> "!" <> parens (pretty t)
+    ClassFunDeps name rules -> pretty name <> ":" <+> pretty (fmap trileanSeq rules)
 
 -- | A nested fact that specifies constraints on type inference, typically used for schemes
 data NestedFact a
@@ -93,6 +127,11 @@ type Fact = NestedFact Type
 
 type Facts = [Fact]
 
+instance (Pretty a, Pretty DataKind) => Pretty (NestedFact a) where
+  pretty = \case
+    Fact flatFact -> pretty flatFact
+    NestedFact scheme -> pretty scheme
+
 forall :: Set TypeVar -> FlatFacts -> Facts -> Fact
 forall s fs f
   | null s = NestedFact $ mempty :. fs :=> f -- the trivial case
@@ -102,13 +141,8 @@ forall s fs f = NestedFact $ s :. fs :=> f
 typeUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
 typeUnion t t' = toType t `Union` toType t'
 
--- | States that the given `TypeVar` type variable is unified with the given `Type`
-classUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
-classUnion t t' = toType t `ClassUnion` toType t'
-
--- | States that the given `TypeVar` type variable is unified with the given `Type`
-instanceUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
-instanceUnion t t' = toType t `InstanceUnion` toType t'
+lockFact :: ToType a => a -> FlatFact Type
+lockFact = Lock . toType
 
 -- | States that the given `TypeVar` type variable follows the typing dictated by the `Type` (note that this does not imply type unification nor any subtyping)
 typeConstraint :: (ToType a, ToType b) => a -> b -> FlatFact Type
@@ -179,5 +213,10 @@ classFact :: ToType a => Text -> a -> FlatFact Type
 classFact name t = name `ClassFact` toType t
 
 -- | TODO
-classDetermine :: ToType a => Text -> a -> FlatFact Type
-classDetermine name t = name `ClassDetermine` toType t
+#ifdef FACT_COMMENTS
+factComment :: Text -> [FlatFact Type]
+factComment = pure . FactComment
+#else
+factComment :: Text -> [FlatFact Type]
+factComment _ = []
+#endif

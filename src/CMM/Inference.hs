@@ -10,7 +10,7 @@ import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Monad (Monad((>>=), return), sequence, when)
+import safe Control.Monad (Monad((>>=), return), sequence, when, (>=>))
 import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
 import safe Data.Either (Either(Left, Right))
@@ -45,7 +45,7 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Traversable (Traversable(traverse))
-import safe Data.Tuple (snd, swap, uncurry)
+import safe Data.Tuple (snd, swap, uncurry, fst)
 import safe Data.String (fromString)
 import safe Text.Show (Show(show))
 import safe GHC.Err (undefined, error)
@@ -72,9 +72,9 @@ import safe CMM.Data.Generics ((*|*))
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
-  , FlatFact(ClassConstraint, ClassDetermine, ClassFact,
+  , FlatFact(ClassConstraint, ClassFact,
          ConstnessBounds, InstType, KindBounds, OnRegister, SubConst,
-         SubKind, SubType, Typing, Union, ClassFunDeps, ConstUnion, KindUnion)
+         SubKind, SubType, Typing, Union, ClassFunDeps, ConstUnion, KindUnion, Lock, FactComment)
   , FlatFacts
   , NestedFact(Fact, NestedFact)
   , Qual((:=>))
@@ -94,8 +94,6 @@ import safe CMM.Inference.State
   ( Inferencer
   , InferencerState
   , addUnificationErrors
-  , classFacts
-  , classSchemes
   , constingBounds
   , freshTypeHelperWithHandle
   , getConsting
@@ -114,13 +112,11 @@ import safe CMM.Inference.State
   , readBoundsFrom
   , readLowerBound
   , reconstruct
-  , schemes
   , subConsting
   , subKinding
   , typize
-  , ensureLocked
-  , unifs, addFunDeps, fieldClassPrefix, trileanSeq, collectPrimeTVarsAll
-  , addScheme, addClassScheme, lookupScheme, lookupClassScheme, lookupFunDep, funFacts, funDeps
+  , unifs, addFunDeps, collectPrimeTVarsAll
+  , addScheme, addClassScheme, lookupScheme, lookupClassScheme, lookupFunDep, addClassFact, lookupFact, lock, fromOldName
   )
 import safe CMM.Inference.Subst
   ( Apply(apply)
@@ -154,9 +150,12 @@ import safe CMM.Inference.Unify (unify, unifyFold, unifyLax, instanceOf)
 import safe CMM.Inference.GetParent ( GetParent(getParent) )
 import safe CMM.Data.Way ( Way(Backward, Forward, Both) )
 import safe CMM.Utils
-    ( addPrefix, getPrefix, hasPrefix, splitName, HasCallStack)
+    ( addPrefix, getPrefix, hasPrefix, HasCallStack)
 import safe CMM.Data.Trilean (trilean)
 import safe CMM.Inference.Refresh ( Refresher(refresher) )
+import safe CMM.Inference.Utils ( fieldClassPrefix, trileanSeq )
+import safe CMM.Inference.BuiltIn()
+import Prettyprinter
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -246,18 +245,11 @@ mineAST = traverse_ (addHandles . getTypeHole)
           addHandle handle *> traverse_ addHandle handles *>
           traverse_ addHandle handles'
 
-fixClasses :: Inferencer ()
-fixClasses = do
-  unifs' <- use unifs
-  classFacts %= fmap (Set.map $ apply unifs')
-
 fixAll :: Inferencer Bool
 fixAll = do
   results <- sequence [fixTypize, fixHandlize, fixSubs]
   if or results
-    then do
-      fixClasses
-      True <$ fixAll
+    then True <$ fixAll
     else return False
 
 mapFold :: (Ord a, Semigroup b) => [(a, b)] -> Map a b
@@ -491,9 +483,55 @@ reverseFacts = fmap go
     go (ClassFact name t) = ClassConstraint name t
     go _ = undefined -- TODO: error
 
-reduceOne :: Facts -> Inferencer (Bool, Facts)
-reduceOne [] = fixAll $> (False, [])
-reduceOne (fact:facts) =
+reduceTemplates :: Facts -> Inferencer Facts
+reduceTemplates [] = return []
+reduceTemplates (fact:facts) =
+  case fact of
+    NestedFact (tVars :. [ClassConstraint name t] :=> nesteds) -> do
+      subst <- refresher tVars
+      let tVars' = apply subst `Set.map` tVars
+      addClassScheme name $ tVars' :. flattenFacts (subst `apply` nesteds) :=> apply subst t
+      continue
+    NestedFact (tVars :. [ClassFact name t] :=> nesteds)
+      | hasPrefix name, getPrefix name == fieldClassPrefix -> do
+        lookupFunDep name >>= \case
+           Nothing -> skip
+           Just rules -> do
+            traverse_ go rules
+            continue
+            where
+              class': args = unfoldApp t
+              go rule = do
+                  tVars' <- const (freshTypeHelperWithHandle GenericType) `traverse` args
+                  let t' = foldApp $
+                        class' : zipWith
+                          (uncurry chooseArg)
+                          (zip args (toType <$> tVars'))
+                          rule
+                      fs = zipWith typeUnion tVars' args
+                  addClassFact (fromString (trileanSeq rule) `addPrefix` name) $ Set.fromList tVars' :. fs :=> t'
+              chooseArg arg tVar = trilean arg tVar tVar
+      | otherwise -> do
+        lookupClassScheme name >>= \case
+          Nothing -> skip
+          Just (tVars' :. facts' :=> t') -> do
+            subst <- refresher tVars'
+            addClassFact  name $ (tVars <> (apply subst `Set.map` tVars')) :. ((t `typeUnion` apply subst t'):reverseFacts [f | Fact f <- nesteds] <> apply subst facts') :=> t
+            -- subst' <- refresher tVars
+            -- continueWith $
+            --   (Fact <$> typeUnion (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
+            continue
+    Fact (ClassFunDeps name rules) -> do
+      addFunDeps name rules
+      continue
+    _ -> skip
+  where
+    skip = (fact :) <$> continue
+    continue = reduceTemplates facts
+
+reduceTrivial :: Facts -> Inferencer Facts
+reduceTrivial [] = fixAll $> []
+reduceTrivial (fact:facts) =
   case fact of
     Fact (SubType t t') -> do
       tVar <- simplify t
@@ -533,61 +571,6 @@ reduceOne (fact:facts) =
         Right (subst, _) -> unifs %= (subst `apply`)
       _ <- fixAll
       fixFacts facts >>= continueWith
-    Fact (ClassConstraint name t)
-      | hasPrefix name, getPrefix name == fieldClassPrefix ->
-        lookupFunDep name >>= \case
-          Nothing -> undefined -- TODO: logic error
-          Just rules -> continueWith $ fmap go rules <> facts
-            where go rule = Fact $ classConstraint (fromString (trileanSeq rule) `addPrefix` name) t
-      | (_:s:_:_) <- splitName name, s == fieldClassPrefix ->
-        uses funFacts (name `Map.lookup`) >>= \case
-          Nothing -> skip
-          Just schemes' -> do
-            tVar <- simplify t
-            tType <- getTyping tVar
-            let
-              go = \case
-                (tVars :. fs :=> t'):others -> do
-                  tVar' <- simplify t'
-                  tType' <- getTyping tVar'
-                  if tType `instanceOf` tType' then do
-                      subst <- refresher tVars
-                      let freshT = subst `apply` t'
-                          newFacts = typeUnion tVar freshT : (apply subst <$> fs)
-                      continueWith $ fmap Fact newFacts <> facts
-                  else go others
-                [] -> skipWith . Fact $ classConstraint name tVar
-            go schemes'
-      | otherwise ->
-        uses classSchemes (name `Map.lookup`) >>= \case
-          Nothing -> skip
-          Just (tVars :. facts' :=> tVar') -> do
-            tVar <- simplify t
-            subst <- refresher tVars
-            continueWith $
-              (Fact <$> ClassDetermine name (toType tVar) :
-              typeUnion tVar (subst `apply` tVar') :
-              (apply subst <$> facts')) <>
-              facts
-    Fact (ClassFact name t) ->
-      lookupClassScheme name >>= \case
-        Nothing -> skip
-        Just (tVars :. facts' :=> tVar') -> do
-          tVar <- simplify t
-          subst <- refresher tVars
-          classFacts %= Map.insertWith mappend name (Set.singleton tVar)
-          continueWith $
-            (Fact <$> typeUnion tVar (subst `apply` tVar') :
-             (apply subst <$> facts')) <>
-            facts
-    Fact (ClassDetermine name t) ->
-      uses classFacts (name `Map.lookup`) >>= \case -- TODO: Map.lookup perhaps too strong
-        Nothing -> skip
-        Just tVars -> do
-          tVar <- simplify t
-          if tVar `Set.member` tVars
-            then continue
-            else skipWith . Fact $ ClassDetermine name (VarType tVar)
     Fact (ConstnessBounds bounds t) -> do
       handle <- simplify t >>= getHandle
       pushConstBounds handle bounds
@@ -601,85 +584,89 @@ reduceOne (fact:facts) =
       kind <- registerKind reg
       pushKindBounds handle $ kind `Bounds` kind
       continue
-    NestedFact (tVars :. [ClassConstraint name t] :=> nesteds) -> do
-      tVars' <- uses unifs $ (`Set.map` tVars) . apply
-      t' <- uses unifs (`apply` t)
-      classSchemes %=
-        Map.insertWith
-          undefined
-          name
-          (tVars' :. flattenFacts nesteds :=> t') -- TODO: error
+    Fact (Lock t) -> do
+      tVar <- simplify t
+      lock t tVar
       continue
-    NestedFact (tVars :. [ClassFact name t] :=> nesteds)
-      | hasPrefix name, getPrefix name == fieldClassPrefix -> do
+    Fact (FactComment {}) -> continue
+    NestedFact (tVars :. facts' :=> nesteds) -> case facts' of
+      [ClassConstraint {}] -> skip
+      [ClassFact {}] -> skip
+      _ -> do
+        nesteds' <- wrapParent facts' $ reduceTrivial nesteds
+        skipWith . NestedFact $ tVars :. facts' :=> nesteds'
+    _ -> skip
+  where
+    skip = skipWith fact
+    skipWith fact' = (fact' :) <$> reduceTrivial facts
+    continue = continueWith facts
+    continueWith = reduceTrivial
+
+reduceConstraint :: Facts -> Inferencer (Bool, Facts)
+reduceConstraint [] = fixAll $> (False, [])
+reduceConstraint (fact:facts) =
+  case fact of
+    Fact (ClassConstraint name t)
+      | hasPrefix name, getPrefix name == fieldClassPrefix ->
         lookupFunDep name >>= \case
-           Nothing -> skip
-           Just rules -> do
-            traverse_ go rules
-            continue
-            where
-              class': args = unfoldApp t
-              go rule = do
-                  tVars' <- const (freshTypeHelperWithHandle GenericType) `traverse` args
-                  let t' = foldApp $
-                        class' : zipWith
-                          (uncurry chooseArg)
-                          (zip args (toType <$> tVars'))
-                          rule
-                      fs = zipWith typeUnion tVars' args
-                  funFacts %= Map.insertWith (<>) (fromString (trileanSeq rule) `addPrefix` name) [Set.fromList tVars' :. fs :=> t']
-              chooseArg arg tVar = trilean arg tVar tVar
-      | otherwise -> do
-        lookupClassScheme name >>= \case
+          Nothing -> undefined -- TODO: logic error
+          Just rules -> continueWith $ fmap go rules <> facts
+            where go rule = Fact $ classConstraint (fromString (trileanSeq rule) `addPrefix` name) t
+      | otherwise ->
+        lookupFact name >>= \case
           Nothing -> skip
-          Just (tVars'' :. facts'' :=> t'') -> do
-            t' <- uses unifs (`apply` t)
-            subst <- refresher tVars''
-            continueWith $
-              (Fact <$> typeUnion t' (subst `apply` t'') : flattenFacts nesteds <>
-              reverseFacts (apply subst <$> facts'')) <>
-              facts
+          Just schemes' -> do
+            tType <- simplify t >>= getTyping
+            let
+              go accum = \case
+                (tVars :. fs :=> t'):others -> do
+                  tType' <- simplify t' >>= getTyping
+                  if tType `instanceOf` tType' then do
+                      subst <- refresher tVars
+                      let freshT = subst `apply` t'
+                          newFacts = typeUnion t freshT : (apply subst <$> fs)
+                      go (fmap Fact newFacts:accum) others
+                  else go accum others
+                [] -> case accum of
+                  [h] -> continueWith $ h <> facts
+                  _ -> skip
+            go mempty schemes'
+    Fact (ClassFact name t) ->
+      lookupClassScheme name >>= \case
+        Nothing -> skip
+        Just (tVars :. facts' :=> t') -> do
+          subst <- refresher tVars
+          addClassFact name $ mempty :. [] :=> t
+          -- continueWith $
+          --   (Fact <$> typeUnion t (subst `apply` t') :
+          --    (apply subst <$> facts')) <>
+          --   facts
+      continue
     NestedFact (tVars :. facts' :=> nesteds) -> do
-      (changed, nesteds') <- wrapParent facts' $ reduceOne nesteds
+      (changed, nesteds') <- wrapParent facts' $ reduceConstraint nesteds
       (_1 %~ (|| changed)) <$>
         skipWith (NestedFact (tVars :. facts' :=> nesteds'))
     Fact InstType {} -> skip
-    Fact (ClassFunDeps name rules) -> do
-      addFunDeps name rules
-      continue
-    Fact _ -> error $ "unknown fact: " <> show fact --TODO
+    Fact _ -> skip
   where
     skip = skipWith fact
-    skipWith fact' = (_2 %~ (fact' :)) <$> reduceOne facts
+    skipWith fact' = (_2 %~ (fact' :)) <$> reduceConstraint facts
     continue = continueWith facts
-    continueWith = ((_1 .~ True) <$>) . reduceOne
+    continueWith = ((_1 .~ True) <$>) . reduceConstraint
 
 reduceMany :: Facts -> Inferencer (Bool, Facts)
-reduceMany facts = do
-  (change, facts') <- reduceOne facts
-  if change
-    then (_1 .~ True) <$> reduceMany facts'
-    else return (False, facts)
-
-schemesFirst :: [NestedFact a]
-  -> [NestedFact a]
-schemesFirst = go mempty mempty mempty
+reduceMany = reduceTrivial >=> reduceTemplates >=> go
   where
-    go priority semi plebs [] = priority <> semi <> plebs
-    go priority semi plebs (fact:facts) = case fact of
-      Fact ClassFunDeps {} -> addPriority
-      NestedFact (_ :. [ClassConstraint {}] :=> _) -> addPriority
-      NestedFact (_ :. [ClassFact {}] :=> _) -> addSemi
-      NestedFact {} -> addPlebs
-      _ -> addSemi
-      where
-        addPriority = go (fact:priority) semi plebs facts
-        addSemi = go priority (fact:semi) plebs facts
-        addPlebs = go priority semi (fact:plebs) facts
+    go facts = do
+      result@(change, facts') <-
+        reduceTrivial facts >>= reduceConstraint
+  if change
+        then go facts'
+        else return result
 
 reduce :: Facts -> Inferencer (Bool, Facts)
 reduce facts = do
-  (change, facts') <- reduceMany $ schemesFirst facts
+  (change, facts') <- reduceMany facts
   let (facts'', sccs) = makeCallGraph facts'
   (change', facts''') <- closeSCCs facts'' sccs
   return (change || change', facts''')
@@ -846,7 +833,7 @@ reParent newParent oldParents = go
 unSchematize :: Facts -> Inferencer Facts
 unSchematize [] = return []
 unSchematize (Fact (InstType (VarType scheme) inst):others) =
-  lookupScheme scheme >>= \case
+  fromOldName scheme >>= lookupScheme >>= \case
     Just (tVars :. facts :=> t) -> do
       instSubst <- refresher tVars
       let facts' = Fact . apply instSubst <$> facts
@@ -858,8 +845,9 @@ unSchematize (fact:others) = (fact :) <$> unSchematize others
 -- TODO: check whether all typings are set (otherwise error)
 schematize :: Facts -> Set TypeVar -> Inferencer Facts
 schematize facts tVars = do
+  let tVarsList = Set.toList tVars
   parent <- getParent
-  x <- Set.toList . Set.unions <$> traverse collectPrimeTVarsAll (Set.toList tVars)
+  x <- Set.toList . Set.unions <$> traverse collectPrimeTVarsAll tVarsList
   reX <- traverse reconstruct x
   constings <- traverse getConsting x
   kindings <- traverse getKinding x
@@ -867,10 +855,10 @@ schematize facts tVars = do
   typings <- liftA2 (zip3 x) (traverse reconstruct x) (traverse getTyping x)
   let toTrivialDeps = fmap $ second Set.singleton . dupe
   subConsts <-
-    uses subConsting $ filter (keyParentedBy parent `fOr` presentIn constings `fOr` presentIn (Set.toList tVars)) .
+    uses subConsting $ filter (presentIn tVarsList) .
     (toTrivialDeps constings <>) . Map.toList
   subKinds <-
-    uses subKinding $ filter (keyParentedBy parent `fOr` presentIn kindings `fOr` presentIn (Set.toList tVars)) .
+    uses subKinding $ filter (presentIn tVarsList) .
     (toTrivialDeps kindings <>) . Map.toList
   let constingsSubst = Map.fromList $ zip constings reX
       constingFacts =
@@ -890,7 +878,7 @@ schematize facts tVars = do
     do let elaborate' t = do
              tVar <- simplify t
              reconstruct tVar
-           construct (Fact (ClassDetermine name t):others) = do
+           construct (Fact (ClassConstraint name t):others) = do
              t' <- elaborate' t
              let pair = (t', ClassConstraint name t')
              (_1 %~ (pair :)) <$> construct others
@@ -920,7 +908,8 @@ schematize facts tVars = do
             (freeTypeVars facts' <> freeTypeVars t) :.
           facts' :=>
           t
-    registerScheme tVar scheme
+    -- registerScheme tVar scheme -- TODO: swap those
+    addScheme tVar scheme
   return factsRest
   where
     translateSubs _ _ _ _ [] = return []
@@ -935,8 +924,8 @@ schematize facts tVars = do
           translateOthers =
             translateSubs bounds reconstructor subConstr boundsConstr others
           facts' = subConstr t . apply reconstructor . toType <$> limits'
-    keyParentedBy parent (key, _) = parent `overLeaf` tVarParent key
-    parentedBy parent TypeVar {tVarParent = par} = parent `overLeaf` par
+    keyParentedBy parent (key, _) = tVarParent key `overLeaf` parent
+    parentedBy parent TypeVar {tVarParent = par} = par `overLeaf` parent
     parentedBy _ _ = False
     presentIn where' (key, _) = key `Set.member` Set.fromList where'
 
@@ -984,9 +973,11 @@ closeSCCs facts (scc:others) =
       popParent *> pushParent parent'
       floatSubs parent' x
       _ <- fixAll
-      parent'' <- uses unifs (`apply` parent)
+      parent'' <- uses unifs (`apply` parent')
       popParent *> pushParent parent''
       (_, facts'') <- fixFacts facts' >>= reduceMany
+      parent''' <- uses unifs (`apply` parent'')
+      popParent *> pushParent parent'''
       parents'' <- uses unifs ((<$> parents) . apply)
       facts''' <- schematize facts'' $ Set.fromList parents''
       (_1 .~ True) <$> (popParent *> closeSCCs facts''' others)

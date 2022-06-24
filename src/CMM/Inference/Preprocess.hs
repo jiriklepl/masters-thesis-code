@@ -28,8 +28,6 @@ import safe GHC.Err (undefined)
 import safe Text.Show (Show(show))
 import safe Data.Tuple.Extra (uncurry3)
 import safe qualified Data.Set as Set
-import safe Control.Monad.State (get, MonadState (put))
-import safe Data.Data ( Data )
 
 import safe CMM.AST as AST
   ( Actual(Actual)
@@ -113,7 +111,7 @@ import safe CMM.Inference.Fact as Infer
   , subType
   , typeConstraint
   , typeUnion
-  , unstorableConstraint, NestedFact (Fact), classConstraint, classFact, kindUnion
+  , unstorableConstraint, NestedFact (Fact), classConstraint, classFact, kindUnion, lockFact, factComment
   )
 import safe CMM.Inference.HandleCounter (nextHandleCounter)
 import safe CMM.Inference.Preprocess.Context (Context(StructCtx))
@@ -173,12 +171,14 @@ import safe CMM.Inference.TypeCompl
 import safe CMM.Inference.TypeKind (TypeKind(Constraint, Star))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar(tVarId))
 import safe CMM.Parser.HasPos (HasPos, SourcePos)
-import safe CMM.Inference.State (fieldClassHelper)
-import safe CMM.Inference.Refresh ( refreshNestedFact )
+import safe CMM.Inference.Refresh ( refreshNestedFact, Refresher (refresher) )
 import safe CMM.AST.GetConv ( GetConv(getConv) )
 import safe CMM.Inference.TypeHandle ()
-import safe CMM.Inference.GetParent ( GetParent(getParent), makeAdoption )
-import safe CMM.Inference.Utils ( adopt )
+import safe CMM.Inference.GetParent ( makeAdoption)
+import safe CMM.Inference.Utils (fieldClassHelper)
+import safe CMM.Inference.Subst ( Apply(apply) )
+import CMM.Utils
+import Prettyprinter
 
 -- TODO: check everywhere whether propagating types correctly (via subtyping)
 -- the main idea is: (AST, pos) -> ((AST, (pos, handle)), (Map handle Type)); where handle is a pseudonym for the variable
@@ -244,11 +244,13 @@ purePreprocess hole = return . (hole, ) . (withTypeHole hole <$>)
 
 instance Preprocess Unit a b where
   preprocessImpl _ unit@(Unit topLevels) = do
+    storeFacts . factComment $ "START Preprocessing unit"
     let collector = globalVariables unit
         fVars = collector ^. funcVariables
         fIVars = collector ^. funcInstVariables
         sMems = collector ^. structMembers
     beginUnit collector
+    storeFacts . factComment $ "Adding built-ins "
     storeFacts builtInTypeFacts
     -- TODO: rename this
     let storeFacts' var =
@@ -259,7 +261,9 @@ instance Preprocess Unit a b where
     for_ (Map.keys fIVars) $ lookupFIVar >=> storeFacts'
     for_ (Map.keys fVars) $ lookupFVar >=> storeFacts'
     for_ (Map.keys sMems) $ lookupSMem >=> storeFacts'
-    (EmptyTypeHole, ) . Unit <$> preprocessT topLevels
+    topLevels' <- preprocessT topLevels
+    storeFacts . factComment $ "END Preprocessing unit"
+    return (EmptyTypeHole, Unit topLevels')
 
 instance Preprocess Section a b where
   preprocessImpl _ =
@@ -321,12 +325,15 @@ instance Preprocess Decl a b where
 -- TODO: continue from here
 instance Preprocess Struct a b where
   preprocessImpl _ struct@(Struct paraName datums) = do
-    lookupTCon (getName paraName) >>= pushParent . toTypeVar
+    storeFacts . factComment $ "START Preprocessing struct " <> backQuote (getName paraName)
+    tVar <- lookupTCon (getName paraName) <&> toTypeVar
+    pushParent tVar
     pushTypeVariables $ structVariables struct ^. typeVariables
     (constraint, paraName') <- preprocessParaName lookupTCon Star paraName
     let hole = getTypeHole paraName'
     pushStruct (getName paraName, hole) (getName paraName, constraint)
     datums' <- preprocessDatums datums
+    storeFacts . factComment $ "END Preprocessing struct " <> backQuote (getName paraName)
     (hole, Struct paraName' datums') <$ popContext <* popTypeVariables <* popParent
 
 preprocessClassCommon :: (PreprocessParam param1 a1 b1, PreprocessParam param2 a2 b2,
@@ -360,14 +367,20 @@ preprocessClassCommon pushWhat constr paraNames paraName methods variables = do
     popTypeVariables <* popParent
 
 instance Preprocess Class a b where
-  preprocessImpl _ class'@(Class paraNames paraName methods) =
-    preprocessClassCommon pushClass Class paraNames paraName methods
+  preprocessImpl _ class'@(Class paraNames paraName methods) = do
+    storeFacts . factComment $ "START Preprocessing class " <> backQuote (getName paraName)
+    result <- preprocessClassCommon pushClass Class paraNames paraName methods
       $ classVariables class' ^. typeVariables
+    storeFacts . factComment $ "END Preprocessing class " <> backQuote (getName paraName)
+    return result
 
 instance Preprocess Instance a b where
-  preprocessImpl _ instance'@(Instance paraNames paraName methods) =
-    preprocessClassCommon pushInstance Instance paraNames paraName methods
+  preprocessImpl _ instance'@(Instance paraNames paraName methods) = do
+    storeFacts . factComment $ "START Preprocessing instance " <> backQuote (getName paraName)
+    result <- preprocessClassCommon pushInstance Instance paraNames paraName methods
       $ instanceVariables instance' ^. typeVariables
+    storeFacts . factComment $ "END Preprocessing instance " <> backQuote (getName paraName)
+    return result
 
 class Preprocess param a b =>
       PreprocessParam param a b
@@ -396,11 +409,7 @@ preprocessParaName looker kind (Annot (ParaName name params) annot) = do
   params' <- traverse preprocessParam params
   class' <- looker $ getName name'
   handle <- freshNamedASTTypeHandle (getName name) annot kind
-  let constraint =
-        foldl'
-          ((toType .) . makeAppType)
-          (toType class')
-          (toType <$> params')
+  let constraint = foldApp $ toType class': fmap toType params'
   storeFact $ handle `typeUnion` constraint
   return
     ( constraint
@@ -427,7 +436,7 @@ instance Preprocess AST.Type a b where
       hole <- lookupTCon name
       purePreprocess hole t
     TAuto Nothing -> do
-      handle <- freshASTStar annot -- TODO:, really Star?
+      handle <- freshASTGeneric annot
       purePreprocess (SimpleTypeHole handle) t
     TAuto (Just name) -> do
       hole <- lookupTVar name
@@ -440,12 +449,8 @@ instance Preprocess ParaType a b where
   preprocessImpl annot (ParaType type' types') = do
     type'' <- preprocess type'
     types'' <- traverse preprocess types'
-    handle <- freshASTGeneric annot -- TODO: determine the kind
-    storeFact $ handle `typeUnion`
-      foldl'
-        ((toType .) . makeAppType)
-        (toType type'')
-        (toType  <$> types'')
+    handle <- freshASTGeneric annot
+    storeFact . typeUnion handle . foldApp $ toType type'' : fmap toType types''
     return (SimpleTypeHole handle, ParaType type'' types'')
 
 maybeKindUnif ::
@@ -549,10 +554,12 @@ preprocessProcedureCommon procedure header = do
 -- TODO: add handle (dependent on the context) to the node
 instance Preprocess Procedure a b where
   preprocessImpl _ procedure@(Procedure header body) = do
+    storeFacts . factComment $ "START Preprocessing procedure " <> backQuote (getName header)
     preprocessProcedureCommon procedure header
     openProc $ localVariables body
     body' <- preprocess body
     header' <- preprocessHeader header
+    storeFacts . factComment $ "END Preprocessing procedure " <> backQuote (getName header)
     (getTypeHole header', Procedure header' body') <$ popParent
 
 -- TODO: ditto
@@ -786,7 +793,8 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
               hole' = MemberTypeHole (holeHandle sHole) `uncurry3` unzip3 cache'
               scheme (MemberTypeHole h [NamedTypeHole classHandle name] _ _ ) = do
                 method <- refreshNestedFact . forall tVars [h `typeUnion` t] $ structAddrFact : fieldAddrFact : funcFact h : constExprFact : fs
-                fact <- refreshNestedFact $ forall tVars [classF] []
+                subst <- refresher tVars
+                fact <- refreshNestedFact $ forall (apply subst `Set.map` tVars) [subst `apply` classF] []
                 return [method, fact]
                 where
                   -- classC = Fact $ classConstraint name constraint
