@@ -8,6 +8,8 @@ import safe Data.Ord as Ord (Ord((<=), compare, max, min), Ordering(EQ, GT, LT))
 import safe Data.PartialOrd (PartialOrd((<=)))
 import safe Text.Show (Show)
 
+import safe Prettyprinter ( Pretty(pretty) )
+
 import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Lattice (Lattice((/\), (\/)))
 import safe CMM.Data.Ordered (Ordered(Ordered))
@@ -39,3 +41,9 @@ instance Lattice Constness where
 instance Bounded Constness where
   minBound = ConstExpr
   maxBound = Regular
+
+instance Pretty Constness where
+  pretty = \case
+    Regular -> "Regular"
+    LinkExpr -> "Link"
+    ConstExpr -> "Const"

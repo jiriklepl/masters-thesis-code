@@ -2,12 +2,12 @@
 
 module Main where
 
-import Control.Lens.Getter (view)
+import Control.Lens.Getter (view, use, (^.))
 import Control.Monad.State as State (Monad(return), runState)
-import Data.Either (Either(..), either)
+import Data.Either (Either(Left,Right), either)
 import Data.Function (($), (.), id)
 import Data.List (head, reverse)
-import Data.Monoid (Monoid(mempty))
+import Data.Monoid (Monoid(mempty, mappend))
 import GHC.Err (undefined)
 
 import qualified Data.Text.IO as TS
@@ -50,11 +50,15 @@ import safe CMM.Inference.HandleCounter
 -- import CMM.Inference.TypeKind as Infer
 import CMM.Lexer
 import CMM.Monomorphize (Monomorphize(monomorphize))
-import CMM.Monomorphize.Monomorphized as Infer
 import CMM.Parser
 import CMM.Pretty ()
 import Data.Functor
 import GHC.Show
+import qualified CMM.Monomorphize.State as Infer
+import qualified Data.Map as Map
+import Data.Bifunctor
+import Data.Tuple
+import qualified Data.Set as Set
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -83,18 +87,31 @@ main = do
   --       runIRBuilderT emptyIRBuilder $ translate blockified
   -- T.putStr translated
   let _ = globalVariables $ unAnnot ast
-  -- print $ CMM.Inference.Preprocess.State._facts miner
-  let (msg, inferencer) =
+      oldCounter = view handleCounter miner
+      fs = reverse . head $ view CMM.Inference.Preprocess.State.facts miner
+  print . sep $ pretty <$> fs
+  let (fs', inferencer) =
         (`runState` InferState.initInferencer) $ do
-          setHandleCounter $ view handleCounter miner
-          let fs = reverse . head $ view CMM.Inference.Preprocess.State.facts miner
+          setHandleCounter oldCounter
           mineAST mined
-        -- liftIO $ print fs
-          void $ reduce fs
+          reduce fs
+  let (msg, (inferencer', monomorphizer)) =
+        (`runState` (inferencer, Infer.initMonomorphizeState)) $ do
           monomorphize mempty mined <&> \case
             Left what -> show what
-            Right mined' -> show . pretty $ view Infer.node mined'
+            Right mined' -> show $ pretty mined'
   putStrLn msg
+
+  print . vsep . fmap (uncurry mappend . bimap pretty (list . fmap pretty . Set.toList)) . Map.toList . Infer.getPolyGenerate $ monomorphizer ^. Infer.polyMemory
+
+  print "CLASS_SCHEMES:"
+  print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList  $ inferencer ^. classSchemes
+
+  print "CLASS_FACTS:"
+  print . vsep . fmap (uncurry mappend . bimap pretty (vsep . fmap pretty)) . Map.toList  $ inferencer ^. classFacts
+
+  print "SCHEMES:"
+  print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList  $ inferencer ^. schemes
   void $ return inferencer
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a

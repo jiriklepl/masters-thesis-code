@@ -96,6 +96,9 @@ cradle:
     - path: "src/CMM/Data/List.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Data/MapLike.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Data/Nullable.hs"
       component: "Compiler:exe:Compiler"
 
@@ -136,6 +139,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/Arity.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/BuiltIn.hs"

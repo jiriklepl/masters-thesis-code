@@ -11,6 +11,8 @@ import safe Data.Ord (Ord)
 import safe Data.Traversable (Traversable)
 import safe Text.Show (Show)
 
+import safe Prettyprinter ( Pretty(pretty) )
+
 import safe CMM.Inference.Preprocess.TypeHole ( HasTypeHole (getTypeHole) )
 import safe CMM.Inference.Type ( ToType (toType) )
 import safe CMM.Inference.TypeVar ( ToTypeVar (toTypeVar) )
@@ -37,6 +39,11 @@ instance HasPos a => HasPos (Annot n a) where
 
 instance ToTypeVar a => ToTypeVar (Annot n a) where
   toTypeVar = toTypeVar . takeAnnot
+
+instance (Pretty (n a)) => Pretty (Annot n a) where
+  pretty =
+    \case
+      Annot n _ -> pretty n
 
 -- | see 'Annotation'
 type Annot = Annotation

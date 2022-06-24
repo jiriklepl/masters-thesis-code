@@ -8,9 +8,9 @@ module CMM.Inference.State
 import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%=), (<>=))
-import safe Control.Monad (Monad((>>=), return), filterM)
-import safe Data.Foldable (fold)
-import safe Data.Function (($), (.), flip, const)
+import safe Control.Monad (Monad((>>=), return), filterM, unless)
+import safe Data.Foldable (fold, traverse_, Foldable)
+import safe Data.Function (($), (.), flip, id)
 import safe Data.Functor (Functor(fmap), (<$>))
 import safe Data.List (tail)
 import safe Data.Map (Map)
@@ -23,8 +23,7 @@ import safe qualified Data.Set as Set
 import safe Data.Traversable (Traversable(traverse))
 import safe Data.Text (Text)
 import safe Data.Bool ( not, Bool )
-import safe Data.String ( String )
-import safe Text.Show ( Show )
+import safe Text.Show ( Show (show) )
 import safe Data.Foldable.Extra (anyM)
 import safe GHC.Err ( error )
 import safe Data.Data ( Data )
@@ -34,7 +33,7 @@ import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
-import safe CMM.Inference.Fact (Scheme ((:.)), Qual ((:=>)))
+import safe CMM.Inference.Fact (Scheme ((:.)), Qual ((:=>)), typeUnion)
 import safe CMM.Inference.Subst (apply)
 import safe CMM.Inference.Type (Type(ComplType, VarType), ToType (toType))
 import safe CMM.Inference.TypeHandle
@@ -48,9 +47,9 @@ import safe CMM.Err.Error (Error(Error))
 import safe CMM.Err.Severity (Severity(ErrorLevel))
 import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
 import safe CMM.Inference.Unify.Error (UnificationError)
-import safe CMM.Data.Trilean ( Trilean, trilean )
+import safe CMM.Data.Trilean ( Trilean )
 import safe CMM.Inference.FunDeps ( funDepsSimplify )
-import safe CMM.Utils ( addPrefix, HasCallStack, backQuoteShow )
+import safe CMM.Utils ( HasCallStack, backQuoteShow )
 import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
 
 import safe CMM.Inference.State.Impl
@@ -58,7 +57,6 @@ import safe CMM.Inference.State.Impl
   , freshAnnotatedTypeHelper
   , freshTypeHelperWithHandle
   , funDeps
-  , funFacts
   , classFacts
   , classSchemes
   , constingBounds
@@ -73,17 +71,9 @@ import safe CMM.Inference.State.Impl
   , typize
   , unifs, Inferencer, funDeps, lockedVars
   )
-
-fieldClassHelper :: Text -> Text
-fieldClassHelper = addPrefix fieldClassPrefix
-
-fieldClassPrefix :: Text
-fieldClassPrefix = "HasField"
-
-trileanSeq :: [Trilean] -> String
-trileanSeq = \case
-  t:others -> trilean 'F' 'U' 'T' t : trileanSeq others
-  [] -> []
+import Prettyprinter
+import Control.Lens.Traversal (both)
+import Data.Tuple
 
 pushParent :: TypeVar -> Inferencer ()
 pushParent parent = currentParent %= (parent :)
@@ -165,13 +155,20 @@ pushConstBounds :: TypeHandle -> Bounds Constness -> Inferencer ()
 pushConstBounds handle bounds =
   constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
 
-lock :: (ToType a, HasCallStack) => a -> Set TypeVar -> Inferencer ()
-lock parent tVars =
-  lockedVars %= Map.unionWithKey msg newLocks -- TODO msg
+lock :: (ToType a, HasCallStack) => a -> TypeVar -> Inferencer ()
+lock parent tVar =
+  lockedVars %= Map.insertWith msg tVar tParent  -- TODO msg
   where
-    msg tVar new old = error $  backQuoteShow tVar <> " already locked by " <> backQuoteShow old <> " (attempted lock by " <> backQuoteShow new <> ")"
-    newLocks = tParent `Map.fromSet` tVars
-    tParent = const $ toType parent
+    tParent = toType parent
+    msg new old = error $  backQuoteShow tVar <> " already locked by " <> backQuoteShow old <> " (attempted lock by " <> backQuoteShow new <> ")"
+
+lockVars :: (ToType a, HasCallStack, Foldable f) => a -> f TypeVar -> Inferencer ()
+lockVars = traverse_ . lock
+
+ensureLocked :: TypeVar -> TypeVar -> Inferencer ()
+ensureLocked parent tVar = do
+  locked <- isLocked tVar
+  unless locked . lockVars parent $ Set.singleton tVar
 
 isLocked :: TypeVar -> Inferencer Bool
 isLocked = uses lockedVars . Map.member
@@ -187,6 +184,9 @@ lookupClassScheme :: Text
   -> Inferencer (Maybe (Scheme Type))
 lookupClassScheme = uses classSchemes . Map.lookup
 
+lookupFact :: Text
+  -> Inferencer (Maybe [Scheme Type])
+lookupFact = uses classFacts . Map.lookup
 
 isOpen :: Data a => Scheme a
   -> Inferencer Bool
@@ -205,31 +205,40 @@ getUnlockedVars = \case
       freeOuter = freeInner Set.\\ tVars
       freeInner = freeTypeVars facts <> freeTypeVars nesteds
 
-sanitizeClosed :: (HasCallStack, Data a, Show a) => Scheme a
+sanitizeClosed :: (HasCallStack, Data a, Pretty a, Pretty DataKind) => Scheme a
   -> Inferencer ()
 sanitizeClosed scheme = do
   freeVars <- getUnlockedVars scheme
   msg freeVars -- TODO msg
   where
     msg [] = return ()
-    msg freeVars = error $ "scheme " <> backQuoteShow scheme <> " is open, free variables: " <> backQuoteShow freeVars
+    msg freeVars =
+      error $ "scheme " <> show (pretty scheme) <> " is open, free variables: " <> show (pretty freeVars)
 
+addClassFact :: (HasCallStack, Pretty DataKind) => Text
+  -> Scheme Type
+  -> Inferencer ()
+addClassFact name scheme = case scheme of
+  tVars :. _ :=> t -> do
+    lockVars t tVars
+    -- sanitizeClosed scheme -- TODO: turn this on!!!
+    classFacts %= Map.insertWith mappend name [scheme]
 
-addScheme :: HasCallStack => TypeVar
+addScheme :: (HasCallStack, Pretty DataKind) => TypeVar
   -> Scheme Type
   -> Inferencer ()
 addScheme tVar scheme = case scheme of
   tVars :. _ :=> _ -> do
-    lock tVar tVars
+    lockVars tVar tVars
     sanitizeClosed scheme
     schemes %= Map.insert tVar scheme
 
-addClassScheme :: HasCallStack => Text
+addClassScheme :: (HasCallStack, Pretty DataKind) => Text
   -> Scheme Type
   -> Inferencer ()
 addClassScheme name scheme = case scheme of
   tVars :. _ :=> t -> do
-    lock t tVars
+    lockVars t tVars
     sanitizeClosed scheme
     classSchemes %= Map.insertWith msg name scheme -- TODO msg
   where

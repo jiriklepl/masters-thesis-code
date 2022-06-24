@@ -12,6 +12,9 @@ import safe Data.Text (Text)
 import safe Text.Show (Show)
 import safe Data.List ( foldl', reverse )
 import safe Data.Int ( Int )
+import safe Data.Monoid ( (<>) )
+
+import safe Prettyprinter ( dquotes, Pretty(pretty) )
 
 import safe CMM.Data.Nullable (Fallbackable((??)))
 import safe CMM.Inference.TypeCompl (TypeCompl (AppType, AddrType, TBitsType))
@@ -60,6 +63,13 @@ instance ToType TypeVar where
 
 instance ToType a => ToType (TypeCompl a) where
   toType = ComplType . fmap toType
+
+
+instance Pretty Type where
+  pretty = \case
+    ErrorType txt -> "!" <> dquotes (pretty txt)
+    VarType tVar -> pretty tVar
+    ComplType tCompl -> pretty tCompl
 
 makeAppType :: ToType a => a -> a -> Type
 makeAppType f a = ComplType $ toType f `AppType` toType a

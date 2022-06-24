@@ -45,6 +45,7 @@ common common-options
                        -Wsafe
                        -Wunused-packages
   cpp-options:         -DUSE_GHC_STACK
+  cpp-options:         -DFACT_COMMENTS
   build-depends:       base >= 4.13 && < 4.17,
                        containers ^>=0.6.4.1,
                        extra ^>=1.7.10,
@@ -87,6 +88,7 @@ executable Compiler
                        CMM.Data.Generics,
                        CMM.Data.Lattice,
                        CMM.Data.List,
+                       CMM.Data.MapLike,
                        CMM.Data.Nullable,
                        CMM.Data.Num,
                        CMM.Data.Ordered,
@@ -101,6 +103,7 @@ executable Compiler
                        CMM.Err.State,
                        CMM.FlowAnalysis,
                        CMM.Inference,
+                       CMM.Inference.Arity,
                        CMM.Inference.BuiltIn,
                        CMM.Inference.Constness,
                        CMM.Inference.DataKind,

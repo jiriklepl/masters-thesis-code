@@ -1,4 +1,5 @@
 {-# LANGUAGE Safe #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module CMM.Inference.BuiltIn where
 
@@ -6,7 +7,7 @@ import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
 import safe Data.Bool (otherwise)
 import safe Data.Eq (Eq((==)))
-import safe Data.Function (($))
+import safe Data.Function (($), (.))
 import safe Data.Functor ((<$>))
 import safe Data.Int (Int)
 import safe Data.List (zip)
@@ -17,6 +18,10 @@ import safe qualified Data.Set as Set
 import safe Data.String (IsString(fromString), String)
 import safe Data.Text (Text)
 import safe GHC.Err (error, undefined)
+import safe Data.Semigroup ( Semigroup )
+
+import safe Prettyprinter ( Pretty(pretty), dquotes )
+
 
 import safe CMM.AST as AST (Op)
 import safe CMM.Data.Bimap (Bimap)
@@ -27,7 +32,7 @@ import safe CMM.Inference.Fact
   ( Facts
   , FlatFacts
   , kindConstraint
-  , regularExprConstraint
+  , regularExprConstraint, lockFact
   )
 import safe CMM.Inference.Type as Infer (Type)
 import safe CMM.Inference.TypeCompl
@@ -39,22 +44,25 @@ import safe CMM.Inference.TypeKind (TypeKind((:->), Constraint, Star))
 import safe CMM.Inference.TypeVar as Infer (TypeVar(NoType))
 
 getNamedOperator :: Text -> Infer.Type
-getNamedOperator = undefined
+getNamedOperator = undefined -- TODO
 
 getSymbolicOperator :: Op -> Infer.Type
-getSymbolicOperator = undefined
+getSymbolicOperator = undefined -- TODO
 
 builtInKinds :: Bimap Text (Ordered DataKind)
 builtInKinds =
   Bimap.fromList $
   (_2 %~ Ordered) <$>
-  [ (fromString $ builtInPrefix <> "unstorable", Unstorable)
-  , (fromString $ builtInPrefix <> "!generic", GenericData)
-  , ("address", addressKind)
-  , ("float", floatKind)
-  , ("bool", boolKind)
-  , ("", integerKind)
+  [ (unstorableKindName, Unstorable)
+  , (genericKindName, GenericData)
+  , (addressKindName, addressKind)
+  , (floatKindName, floatKind)
+  , (boolKindName, boolKind)
+  , (integerKindName, integerKind)
   ]
+
+instance Pretty DataKind where
+  pretty = maybe errorKindName (dquotes . pretty) . translateDataKind
 
 getDataKind :: Text -> DataKind
 getDataKind name = maybe mempty unOrdered $ name `Bimap.lookup` builtInKinds
@@ -65,12 +73,27 @@ translateDataKind name = Ordered name `Bimap.lookupR` builtInKinds
 builtInRegisters :: Bimap Text Int
 builtInRegisters = Bimap.fromList $ zip [] [0 ..]
 
+errorKindName :: (IsString a, Semigroup a) => a
+errorKindName = builtInPrefix <> "error"
+
+genericKindName :: (IsString a, Semigroup a) => a
+genericKindName = builtInPrefix <> "generic"
+
+unstorableKindName :: (IsString a, Semigroup a) => a
+unstorableKindName = builtInPrefix <> "unstorable"
+
+addressKindName :: IsString a => a
+addressKindName = "address"
+
 -- TODO: add to `Preprocess` (after adding the typed labels)
 addressKind :: DataKind
 addressKind = DataKind addressRegisters
 
 addressRegisters :: Set Int
 addressRegisters = Set.fromList [0] -- TODO: just a placeholder
+
+floatKindName :: IsString a => a
+floatKindName = "float"
 
 -- TODO: add to `Preprocess`
 floatKind :: DataKind
@@ -79,12 +102,18 @@ floatKind = DataKind floatRegisters
 floatRegisters :: Set Int
 floatRegisters = Set.fromList [1] -- TODO: just a placeholder
 
+integerKindName :: IsString a => a
+integerKindName = ""
+
 -- TODO: add to `Preprocess`
 integerKind :: DataKind
 integerKind = DataKind integerRegisters
 
 integerRegisters :: Set Int
 integerRegisters = Set.fromList [0, 2] -- TODO: just a placeholder
+
+boolKindName :: IsString a => a
+boolKindName = "bool"
 
 boolKind :: DataKind
 boolKind = DataKind boolRegisters
@@ -96,8 +125,9 @@ builtInContext :: Facts
 builtInContext = [] -- undefined
 
 builtInTypeFacts :: FlatFacts
-builtInTypeFacts = (kindFact <$> abstractTypes) <> (constFact <$> abstractTypes)
+builtInTypeFacts = (kindConstraint GenericData <$> abstractTypes) <> (regularExprConstraint <$> abstractTypes) <> (lockFact <$> abstractTypes)
   where
+    abstractTypes :: [PrimType]
     abstractTypes =
       [ LabelType
       , StringType
@@ -109,8 +139,6 @@ builtInTypeFacts = (kindFact <$> abstractTypes) <> (constFact <$> abstractTypes)
       , TBitsType 32
       , TBitsType 64
       ]
-    kindFact primType = GenericData `kindConstraint` (primType :: PrimType)
-    constFact primType = regularExprConstraint (primType :: PrimType)
 
 builtInPrefix :: IsString a => a
 builtInPrefix = "!"

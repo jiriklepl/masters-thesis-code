@@ -53,12 +53,6 @@ instance Bounded DataKind where
   minBound = Unstorable
   maxBound = GenericData
 
--- | Transforms the given `Set` of `Int`s denoting physical registers into a corresponding `DataKind`
-makeDataKind :: Set Int -> DataKind
-makeDataKind set
-  | null set = Unstorable
-  | otherwise = DataKind set
-
 instance Lattice DataKind where
   GenericData /\ a = a
   Unstorable /\ _ = Unstorable
@@ -107,3 +101,9 @@ instance Ord (Ordered DataKind) where
 instance Bounded (Ordered DataKind) where
   minBound = Ordered minBound
   maxBound = Ordered maxBound
+
+-- | Transforms the given `Set` of `Int`s denoting physical registers into a corresponding `DataKind`
+makeDataKind :: Set Int -> DataKind
+makeDataKind set
+  | null set = Unstorable
+  | otherwise = DataKind set

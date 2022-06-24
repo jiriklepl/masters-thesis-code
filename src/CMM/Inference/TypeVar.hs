@@ -5,10 +5,15 @@ module CMM.Inference.TypeVar where
 import safe Data.Bool (Bool(False, True), otherwise)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
-import safe Data.Function (id, const)
+import safe Data.Function (id, (.), const)
 import safe Data.Int (Int)
 import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Text.Show (Show)
+import Data.Monoid ((<>), mempty)
+import safe Data.Functor ()
+import safe Data.Foldable ()
+
+import safe Prettyprinter ( Pretty(pretty), parens, (<+>) )
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Data.Num (Num((+)))
@@ -17,6 +22,7 @@ import safe CMM.Inference.TypeKind
   , TypeKind(GenericType)
   , setTypeKindInvariantLogicError
   )
+import safe CMM.Pretty ( emptySet, dollar )
 
 data TypeVar
   = NoType
@@ -71,6 +77,19 @@ instance HasTypeKind TypeVar where
         | kind == GenericType -> NoType {}
         | otherwise -> setTypeKindInvariantLogicError t kind
       tVar@TypeVar {} -> tVar {tVarKind = kind}
+
+instance Pretty TypeVar where
+  pretty = parens . \case
+    NoType -> emptySet
+    TypeVar tId kind parent -> case parent of
+      NoType -> base
+      _ -> base <+> "in" <+> go parent
+      where
+        base = dollar <> pretty tId <+> pretty kind
+    where
+      go = \case
+        NoType -> mempty
+        parent -> dollar <> pretty (tVarId parent) <> go (tVarParent parent)
 
 familyDepth :: TypeVar -> Int
 familyDepth =

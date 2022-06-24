@@ -20,13 +20,12 @@ import safe Data.Function ( ($) )
 
 import safe CMM.Inference.Fact ( Scheme )
 import safe CMM.Inference.TypeVar ( TypeVar )
-import safe CMM.Inference.TypeHandle ( TypeHandle )
 import safe CMM.Inference.Type ( Type )
 import safe CMM.Monomorphize.Schematized ( Schematized )
 
 newtype PolyGenerate =
   PolyGenerate
-    { getPolyGenerate :: Map TypeHandle (Set TypeHandle)
+    { getPolyGenerate :: Map TypeVar (Set TypeVar)
     }
   deriving (Eq, Ord, Show)
 
@@ -38,7 +37,7 @@ instance Monoid PolyGenerate where
 
 newtype PolyMethods =
   PolyMethods
-    { getPolyMethods :: Map TypeHandle (Set TypeHandle)
+    { getPolyMethods :: Map TypeVar (Set TypeVar)
     }
   deriving (Eq, Ord, Show)
 
@@ -60,7 +59,7 @@ instance Semigroup PolyData where
 instance Monoid PolyData where
   mempty = PolyData mempty
 
-type PolySchemes a = Map TypeHandle (Scheme Type, Schematized a)
+type PolySchemes a = Map TypeVar (Scheme Type, Schematized a)
 
 data MonomorphizeState a =
   MonoMorphizeState

@@ -5,7 +5,7 @@ module CMM.Inference.TypeAnnot where
 import safe Data.Bool (otherwise)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
-import safe Data.Function (($))
+import safe Data.Function (($), (.))
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Ord (Ord)
 import safe Data.Semigroup (Semigroup((<>)))
@@ -17,6 +17,9 @@ import safe Text.Show (Show)
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Parser.HasPos (SourcePos)
+import Prettyprinter
+import CMM.Pretty (genSymbol, commaSep)
+import Data.Functor
 
 data TypeAnnot
   = NoTypeAnnot
@@ -45,3 +48,13 @@ instance Semigroup TypeAnnot where
 
 instance Monoid TypeAnnot where
   mempty = NoTypeAnnot
+
+instance Pretty TypeAnnot where
+  pretty = parens . \case
+    NoTypeAnnot -> mempty
+    TypeInst poly -> genSymbol <> pretty poly
+    TypeAST {} -> mempty
+    TypeNamed name -> dquotes $ pretty name
+    TypeNamedAST name _ -> dquotes $ pretty name
+    TypeBuiltIn name -> dquotes $ pretty name
+    MultiAnnot set -> commaSep . fmap pretty $ Set.toList set

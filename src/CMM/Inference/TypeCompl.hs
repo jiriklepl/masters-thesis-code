@@ -7,16 +7,20 @@ import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (Foldable, and)
 import safe Data.Function (($))
-import safe Data.Functor (Functor)
+import safe Data.Functor (Functor, (<$>))
 import safe Data.Int (Int)
 import safe Data.List ((++), zipWith)
 import safe Data.Ord (Ord (compare), Ordering (EQ, LT, GT))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe Data.Traversable (Traversable)
-import safe GHC.Err (undefined)
+import safe GHC.Err (undefined, error)
 import safe Text.Show (Show(show))
-import safe Data.Monoid ( (<>), Monoid(mconcat) )
+import safe Data.Monoid ( (<>), Monoid(mconcat, mempty) )
+import safe CMM.Pretty ( arrowNice )
+
+import safe Prettyprinter
+    ( (<+>), tupled, brackets, parens, Pretty(pretty), comma )
 
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
@@ -115,6 +119,22 @@ instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
       tCompl
         | kind == Star -> tCompl
         | otherwise -> setTypeKindInvariantLogicError tCompl kind
+
+instance Pretty a => Pretty (TypeCompl a) where
+  pretty = \case
+    TupleType [t] -> parens $  pretty t <> comma -- precedented by python
+    TupleType ts -> tupled $ pretty <$> ts
+    FunctionType args ret -> brackets mempty <> tupled (pretty <$> args) <+> arrowNice <+> pretty ret
+    AppType app arg -> parens $ pretty app <+> pretty arg
+    AddrType t -> "addr" <+> pretty t
+    LamType {} -> error "obsolete" -- TODO: remove safely
+    ConstType name kind _ -> pretty name <> "@" <> parens (pretty kind)
+    StringType -> "str"
+    String16Type -> "str16"
+    LabelType -> "label"
+    TBitsType n -> "bits" <> pretty n
+    BoolType -> "bool"
+    VoidType -> "void"
 
 toLam :: TypeVar -> TypeCompl a
 toLam =

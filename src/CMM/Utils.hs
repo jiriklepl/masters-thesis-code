@@ -20,8 +20,6 @@ import safe Text.Show (Show(show))
 
 #ifdef USE_GHC_STACK
 import safe qualified GHC.Stack
-#else
-import safe Data.Kind (Constraint)
 #endif
 
 prefixSeparator :: Char
@@ -73,5 +71,6 @@ backQuoteShow = backQuote . show
 #ifdef USE_GHC_STACK
 type HasCallStack = GHC.Stack.HasCallStack
 #else
-type HasCallStack = () :: Constraint
+class HasCallStack
+instance HasCallStack
 #endif

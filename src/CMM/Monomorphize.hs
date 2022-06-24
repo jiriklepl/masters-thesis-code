@@ -98,8 +98,7 @@ import safe CMM.Inference.TypeCompl
           VoidType)
   )
 import safe CMM.Inference.TypeHandle
-  ( TypeHandle
-  , consting
+  ( consting
   , handleId
   , kinding
   , typing
@@ -113,7 +112,7 @@ import safe CMM.Monomorphize.State
   , polyMethods
   , polySchemes
   , unPolyGenerate
-  , addMethod, PolyMethods (getPolyMethods), addData, polyData, PolyData (getPolyData), MonomorphizeState, Monomorphizer
+  , addMethod, PolyMethods (getPolyMethods), addData, polyData, PolyData (getPolyData), MonomorphizeState, Monomorphizer, memorize, addPolyScheme
   )
 import safe CMM.Monomorphize.Polytypeness (Polytypeness(Absurd, Mono, Poly), typePolymorphism, constPolymorphism, constAbsurdity, kindAbsurdity, kindPolymorphism)
 import safe CMM.Monomorphize.Schematized
@@ -339,15 +338,15 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot Instance) a where
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot Struct) a where
   monomorphize subst (struct `Annot` a) = case struct of
     Struct name datums -> do
-      handle <- useInferencer . getHandle $ getTypeHoleId a
+      handle <- useInferencer . fmap handleId . getHandle $ getTypeHoleId a
       schemeName <- useInferencer . fromOldName $ getTypeHoleId a
       useInferencer (uses schemes (schemeName `Map.lookup`)) >>= \case
         Nothing -> undefined
         Just scheme ->
-          useMonomorphizer $ polySchemes %=
-            Map.insert
+          useMonomorphizer $ addPolyScheme
               handle
-              (scheme, StructScheme $ withAnnot a struct)
+              scheme
+              (StructScheme $ withAnnot a struct)
       useInferencer (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
           Mono -> do
             datums' <- traverse (ensuredJustMonomorphize undefined subst) datums
@@ -393,13 +392,13 @@ instance (HasPos a, HasTypeHole a) =>
     useInferencer (uses schemes (schemeName `Map.lookup`)) >>= \case
       Nothing -> undefined -- TODO: logic error
       Just scheme -> useMonomorphizer $
-        polySchemes %=
-        Map.insert
-          (holeHandle $ getTypeHole a)
-          (scheme, FuncScheme (withAnnot a procedure))
+        addPolyScheme
+          (toTypeVar $ getTypeHole a)
+          scheme
+          (FuncScheme $ withAnnot a procedure)
     case getTypeHole a of
       SimpleTypeHole {} -> return ()
-      MethodTypeHole inst scheme _ -> useMonomorphizer $ addMethod scheme inst
+      MethodTypeHole inst scheme _ -> useMonomorphizer $ addMethod (toTypeVar scheme) (toTypeVar inst)
       _ -> undefined -- TODO: logic error
     useInferencer (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>=
       \case
@@ -545,7 +544,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot LValue) a where
                   useInferencer (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole scheme)) >>= \case
                     Absurd {} -> return $ Left undefined
                     _ -> do
-                      useMonomorphizer $ addGenerate (holeHandle scheme) handle
+                      useMonomorphizer $ addGenerate (toTypeVar scheme) (toTypeVar handle)
                       succeed . Just $ annotated
                 _ -> return $ Left undefined
             LVRef mType expr mAsserts -> do
@@ -595,20 +594,13 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot Expr) a where
       MemberExpr expr' field -> case getTypeHole a of
         MethodTypeHole _ scheme inst ->
           useInferencer (getTypeHandleIdPolytypeness subst scheme) >>= \case
-            Poly {} -> do
+            Absurd {} -> undefined -- TODO: logic error
+            _ -> do
               expr'' <- monomorphize subst expr'
-              useMonomorphizer $ addGenerate scheme inst
+              useMonomorphizer $ addGenerate (toTypeVar scheme) (toTypeVar inst)
               return $ do
                 expr''' <- expr''
                 return $ withAnnot a . (`MemberExpr` field) <$> expr'''
-            Mono -> do
-               monomorphize subst expr' >>= \case
-                  Left err -> return $ Left err
-                  Right expr''' -> do
-                    useMonomorphizer $ addGenerate scheme inst
-                    return $ do
-                      return $ withAnnot a . (`MemberExpr` field) <$> expr'''
-            Absurd {} -> undefined -- TODO: logic error
         _ -> undefined -- TODO: logic error
 
 instance Monomorphize (Annot Lit) a where
@@ -650,11 +642,11 @@ instantiateType =
 
 monomorphizePolyType ::
      (HasPos a, HasTypeHole a)
-  => TypeHandle
-  -> TypeHandle
+  => TypeVar
+  -> TypeVar
   -> InferMonomorphizer a (MonomorphizeError `Either` Maybe (Schematized a))
 monomorphizePolyType scheme inst =
-  go [monomorphizeMethod scheme inst, monomorphizeField (handleId scheme) (handleId inst)]
+  go [monomorphizeMethod scheme inst, monomorphizeField scheme inst]
   where
     go = \case
       action:actions ->
@@ -666,8 +658,8 @@ monomorphizePolyType scheme inst =
 
 monomorphizeMethod ::
      (HasPos a, HasTypeHole a)
-  => TypeHandle
-  -> TypeHandle
+  => TypeVar
+  -> TypeVar
   -> InferMonomorphizer a (Maybe (MonomorphizeError `Either` Maybe (Schematized a)))
 monomorphizeMethod scheme inst = do
   useMonomorphizer (uses polyMethods $ Map.lookup scheme . getPolyMethods) >>= \case
@@ -711,7 +703,7 @@ monomorphizeFieldInner scheme inst struct = do
         Left err ->
           return $ Left $ error $ "\n" <> show scheme'' <> "\n" <> show inst'' -- TODO: logic error
         Right (subst, _) -> do
-          struct' <- useInferencer $ getHandle struct
+          struct' <- useInferencer . fmap toTypeVar $ getHandle struct
           useMonomorphizer (uses polySchemes $ Map.lookup struct') >>= \case
             Nothing -> error $ show struct' -- TODO: logic error
             Just (_, schematized) -> case schematized of
@@ -721,18 +713,18 @@ monomorphizeFieldInner scheme inst struct = do
 
 monomorphizeMethodInner ::
      (HasPos a, HasTypeHole a)
-  => TypeHandle
-  -> TypeHandle
+  => TypeVar
+  -> TypeVar
   -> InferMonomorphizer a (MonomorphizeError `Either` Maybe (Schematized a))
 monomorphizeMethodInner scheme inst = do
-  scheme' <- useInferencer $ fromOldName (toTypeVar scheme) >>= getTyping
-  inst' <- useInferencer $ fromOldName (toTypeVar inst) >>= getTyping
+  scheme' <- useInferencer $ fromOldName scheme >>= getTyping
+  inst' <- useInferencer $ fromOldName inst >>= getTyping
   case inst' `instantiateFrom` ComplType (AddrType scheme') of
     Left err -> do
       return $ Left $ error $ "\n" <> show scheme' <> "\n" <> show inst' -- TODO
     Right _ -> do
-      scheme'' <- useInferencer $ reconstructOld $ toTypeVar scheme
-      inst'' <- useInferencer $ reconstructOld $ toTypeVar inst
+      scheme'' <- useInferencer $ reconstructOld scheme
+      inst'' <- useInferencer $ reconstructOld inst
       case inst'' `instantiateFrom` ComplType (AddrType scheme'') of
         Left err ->
           return $ Left $ error $ "\n" <> show scheme'' <> "\n" <> show inst'' -- TODO: logic error

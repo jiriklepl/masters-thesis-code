@@ -39,6 +39,7 @@ import safe CMM.Inference.Refresh ( Refresher(refresher) )
 import safe CMM.Inference.TypeAnnot ( TypeAnnot(TypeInst, NoTypeAnnot) )
 import safe CMM.Inference.TypeKind
     ( HasTypeKind(getTypeKind), TypeKind )
+import CMM.Data.Nullable ( Nullable(nullVal) )
 
 data InferencerState =
   InferencerState
@@ -62,11 +63,9 @@ data InferencerState =
     -- ^ TODO
     , _classSchemes :: Map Text (Scheme Type)
     -- ^ TODO
-    , _classFacts :: Map Text (Set TypeVar)
+    , _classFacts :: Map Text [Scheme Type]
     -- ^ TODO
     , _funDeps :: Map Text [[Trilean]]
-    -- ^ TODO
-    , _funFacts :: Map Text [Scheme Type]
     -- ^ TODO
     , _schemes :: Map TypeVar (Scheme Type)
     -- ^ TODO
@@ -79,21 +78,20 @@ data InferencerState =
 initInferencer :: InferencerState
 initInferencer =
   InferencerState
-    { _subKinding = mempty
-    , _kindingBounds = mempty
-    , _subConsting = mempty
-    , _constingBounds = mempty
-    , _unifs = mempty
+    { _subKinding = nullVal
+    , _kindingBounds = nullVal
+    , _subConsting = nullVal
+    , _constingBounds = nullVal
+    , _unifs = nullVal
     , _typize = Bimap.empty
-    , _handlize = Bimap.empty
-    , _handleCounter = mempty
-    , _classSchemes = mempty
-    , _classFacts = mempty
-    , _funDeps = mempty
-    , _errorState = mempty
-    , _funFacts = mempty
-    , _schemes = mempty
-    , _lockedVars = mempty
+    , _handlize = nullVal
+    , _handleCounter = nullVal
+    , _classSchemes = nullVal
+    , _classFacts = nullVal
+    , _funDeps = nullVal
+    , _errorState = nullVal
+    , _schemes = nullVal
+    , _lockedVars = nullVal
     , _currentParent = [globalTVar]
     }
 

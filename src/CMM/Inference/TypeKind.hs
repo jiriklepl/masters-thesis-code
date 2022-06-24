@@ -2,7 +2,7 @@
 
 module CMM.Inference.TypeKind where
 
-import safe Data.Bool (Bool(False, True), (&&))
+import safe Data.Bool (Bool(False, True), (&&), otherwise)
 import safe Data.Data (Data)
 import safe Data.Eq (Eq((==)))
 import safe Data.Function (($), const, id)
@@ -12,8 +12,13 @@ import safe Data.Text (Text)
 import safe GHC.Err (error, undefined)
 import safe Text.Show (Show(show))
 
+import safe Prettyprinter ( (<>), parens, Pretty(pretty) )
+
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Utils (backQuote)
+import safe CMM.Pretty ( star, deltaBig, bang, question, arrowNice )
+import safe CMM.Inference.Arity ( Arity(arity) )
+import safe CMM.Data.Num ( Num((+)) )
 
 infixr 6 :->
 
@@ -28,15 +33,6 @@ data TypeKind
 class HasTypeKind a where
   getTypeKind :: a -> TypeKind
   setTypeKind :: TypeKind -> a -> a
-
-setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
-setTypeKindInvariantLogicError what kind =
-  error $
-  "(internal) " ++
-  backQuote (show what) ++
-  " has to be given the " ++
-  backQuote (show (getTypeKind what)) ++
-  " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
 
 instance HasTypeKind TypeKind where
   getTypeKind = id
@@ -76,6 +72,34 @@ instance Fallbackable TypeKind where
 
 instance Nullable TypeKind where
   nullVal = GenericType
+
+instance Arity TypeKind where
+  arity = \case
+    Star -> 0
+    Constraint -> 0
+    GenericType -> 0 -- if it gets defaulted into Star
+    ErrorKind {} -> 0 -- it does not matter
+    _ :-> kind -> arity kind + 1
+
+instance Pretty TypeKind where
+  pretty = \case
+    Star -> star
+    Constraint -> deltaBig
+    GenericType -> question
+    ErrorKind {} -> bang
+    left :-> right
+      | arity left == 0 -> pretty left <> arrowNice <> pretty right
+      | otherwise -> parens (pretty left) <> arrowNice <> pretty right
+
+
+setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
+setTypeKindInvariantLogicError what kind =
+  error $
+  "(internal) " ++
+  backQuote (show what) ++
+  " has to be given the " ++
+  backQuote (show (getTypeKind what)) ++
+  " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
 
 matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
 matchKind a b = getTypeKind a `go` getTypeKind b

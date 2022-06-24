@@ -14,12 +14,13 @@ import safe Data.Int (Int)
 import safe Data.Monoid (Monoid(mempty))
 import safe Data.Semigroup (Semigroup((<>)))
 import safe Text.Show (Show)
+import safe Control.Lens.Type (Lens')
 
 import safe CMM.Data.List (count)
 import safe CMM.Err.Error (Error(Error), HasErrSeverity(errSeverity))
 import safe CMM.Err.IsError (IsError)
 import safe CMM.Err.Severity (Severity(ErrorLevel, InfoLevel, WarningLevel))
-import safe Control.Lens.Type (Lens')
+import safe CMM.Data.Nullable ( Nullable(nullVal) )
 
 newtype ErrorState =
   ErrorState
@@ -32,6 +33,9 @@ instance Semigroup ErrorState where
 
 instance Monoid ErrorState where
   mempty = ErrorState mempty
+
+instance Nullable ErrorState where
+  nullVal = ErrorState mempty
 
 class a ~ ErrorState =>
       HasErrorState s a

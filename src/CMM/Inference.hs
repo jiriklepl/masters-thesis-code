@@ -118,6 +118,7 @@ import safe CMM.Inference.State
   , subConsting
   , subKinding
   , typize
+  , ensureLocked
   , unifs, addFunDeps, fieldClassPrefix, trileanSeq, collectPrimeTVarsAll
   , addScheme, addClassScheme, lookupScheme, lookupClassScheme, lookupFunDep, funFacts, funDeps
   )
