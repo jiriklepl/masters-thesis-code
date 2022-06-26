@@ -50,7 +50,7 @@ digraph {
         subgraph yellowComponents {
             node [fillcolor="yellow"]
 
-            Infer [label="Type inference"]
+            Inference [label="Type inference"]
             Monomorphization
         }
 
@@ -68,8 +68,8 @@ digraph {
     AST -> VariableMining -> Variables -> InferPre
     AST -> InferPre -> { Facts ASTTypeHoles }
     Facts -> { FunDepSimpl AnnotMining }
-    { FunDepSimpl ASTTypeHoles AnnotMining } -> Infer -> Judgments -> Monomorphization
-    { Infer Monomorphization } -> UnifyErrors
+    { FunDepSimpl ASTTypeHoles AnnotMining } -> Inference -> Judgments -> Monomorphization
+    { Inference Monomorphization } -> UnifyErrors
     FlatAST -> Blockifier -> {BlockifiedAST BlockifierErrors }
     BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
     { Blockifier FlowAnalysis VariableMining} -> ASTErrors

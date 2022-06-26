@@ -121,7 +121,7 @@ main = do
   print "SCHEMES:"
   print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList $
     inferencer ^. schemes
-  void $ return inferencer
+  return ()
 
 parse :: Parsec e s a -> s -> Either (ParseErrorBundle s e) a
 parse parser = runParser parser "stdin"

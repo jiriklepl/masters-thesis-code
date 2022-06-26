@@ -1,8 +1,7 @@
 #!/bin/sh
 
-mkdir -p examples/out
 
-cabal build Compiler || exit 1
+run_tests() {
 
 find examples -maxdepth 1 -mindepth 1 -name "*.chmmm" | {
     TOTAL=0
@@ -25,3 +24,25 @@ find examples -maxdepth 1 -mindepth 1 -name "*.chmmm" | {
 
     [ "$SUCCESS" -lt "$TOTAL" ] && exit 2
 }
+
+}
+
+case $1 in
+    run)
+        run_tests
+    ;;
+    safe)
+        mkdir -p examples/out
+
+        cabal build Compiler || exit 1
+
+        systemd-run --scope -p MemoryMax=500M "$0" run
+    ;;
+    *)
+    mkdir -p examples/out
+
+    cabal build Compiler || exit 1
+
+    run_tests
+    ;;
+esac

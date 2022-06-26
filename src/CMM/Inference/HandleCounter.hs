@@ -7,7 +7,7 @@ import safe Control.Lens.Setter ((+=), (.=))
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad (Monad((>>)))
 import safe Control.Monad.State (MonadState)
-import safe Data.Function ((.))
+import safe Data.Function ((.), id)
 import safe Data.Functor ((<$>))
 import safe Data.Int (Int)
 import safe Data.Monoid (Sum(getSum))
@@ -24,6 +24,9 @@ class a ~ HandleCounter =>
   | s -> a
   where
   handleCounter :: Lens' s a
+
+instance HasHandleCounter HandleCounter HandleCounter where
+  handleCounter = id
 
 getHandleCounter :: (MonadState s m, HasHandleCounter s a) => m Int
 getHandleCounter = uses handleCounter getSum

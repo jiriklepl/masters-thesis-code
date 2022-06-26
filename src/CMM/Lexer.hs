@@ -16,25 +16,25 @@ import safe Control.Applicative
 import safe Data.Bool (Bool(False, True))
 import safe Data.Char (Char)
 import safe Data.Eq (Eq)
-import safe Data.Function (($), (.))
+import safe Data.Function (($), (.), flip)
 import safe Data.Functor (Functor, ($>), (<$>), void)
 import safe Data.Int (Int)
 import safe Data.List ((++))
 import safe Data.Maybe (isNothing)
 import safe Data.Ord (Ord)
-import safe Data.String (String)
+import safe Data.String (String, IsString)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
 import safe Data.Void (Void)
 import safe Text.Megaparsec
-  ( MonadParsec(eof, notFollowedBy, try)
+  ( MonadParsec(eof, notFollowedBy, try, label, withRecovery)
   , Parsec
   , SourcePos
   , choice
   , getSourcePos
   , many
   , manyTill
-  , oneOf
+  , oneOf, ParseError, anySingle, registerParseError
   )
 import safe Text.Megaparsec.Char
   ( alphaNumChar
@@ -48,104 +48,11 @@ import safe Text.Show (Show)
 
 import safe CMM.Data.Float (Float)
 import safe CMM.Data.Num (Num(negate))
+import Data.Monoid
+import CMM.Lexer.Token
 
 type Lexer = Parsec Void Text
 
-data Reserved
-  = Aborts
-  | Align
-  | Aligned
-  | Also
-  | As
-  | Auto
-  | Big
-  | Bits
-  | Byteorder
-  | Case
-  | Class
-  | Const
-  | Continuation
-  | Cut
-  | Cuts
-  | Else
-  | Equal
-  | Export
-  | Foreign
-  | Goto
-  | If
-  | Import
-  | In
-  | Instance
-  | Invariant
-  | Invisible
-  | Jump
-  | Little
-  | Memsize
-  | Never
-  | Pointersize
-  | Pragma
-  | Reads
-  | Register
-  | Return
-  | Returns
-  | Section
-  | Semi
-  | Span
-  | Stackdata
-  | Struct
-  | Switch
-  | Target
-  | Targets
-  | To
-  | Typedef
-  | Unicode
-  | Unwinds
-  | Writes
-  | Wordsize
-  deriving (Eq, Ord, Show)
-
-data Token a
-  = Keyword Reserved
-  | Ident Text
-  | StrLit Text
-  | BitsType Int
-  | CharLit Char
-  | FloatLit Float
-  | IntLit (Int, Bool)
-  | Arr
-  | DArr
-  | Colon
-  | DColon
-  | Semicolon
-  | LBrace
-  | RBrace
-  | LParen
-  | RParen
-  | LBracket
-  | RBracket
-  | Lt
-  | Gt
-  | Leq
-  | Geq
-  | ShL
-  | ShR
-  | Eq
-  | Neq
-  | Comma
-  | Backtick
-  | Percent
-  | DPercent
-  | Tilde
-  | Minus
-  | Plus
-  | Slash
-  | Star
-  | Ampersand
-  | Pipe
-  | EqSign
-  | DotDot
-  | Caret
-  deriving (Functor, Eq, Ord, Show)
 
 type SourceLexer = Lexer (Annot Token SourcePos)
 
@@ -161,7 +68,7 @@ symbol :: Text -> Lexer Text
 symbol = L.symbol sc
 
 keyword :: Text -> Lexer ()
-keyword k = void . lexeme $ try (string k <* notFollowedBy alphaNumChar)
+keyword k = void . label (T.unpack k) . lexeme $ try (string k <* notFollowedBy alphaNumChar)
 
 stringLiteral :: ULocLexer
 stringLiteral =
@@ -212,55 +119,55 @@ token :: SourceLexer
 token =
   withSourcePos $
   choice
-    [ keyword "aborts" $> Keyword Aborts
-    , keyword "align" $> Keyword Align
-    , keyword "aligned" $> Keyword Aligned
-    , keyword "also" $> Keyword Also
-    , keyword "as" $> Keyword As
-    , keyword "auto" $> Keyword Auto
-    , keyword "big" $> Keyword Big
-    , keyword "byteorder" $> Keyword Byteorder
-    , keyword "case" $> Keyword Case
-    , keyword "class" $> Keyword Class
-    , keyword "const" $> Keyword Const
-    , keyword "continuation" $> Keyword Continuation
-    , keyword "cut" $> Keyword Cut
-    , keyword "cuts" $> Keyword Cuts
-    , keyword "else" $> Keyword Else
-    , keyword "equal" $> Keyword Equal
-    , keyword "export" $> Keyword Export
-    , keyword "foreign" $> Keyword Foreign
-    , keyword "goto" $> Keyword Goto
-    , keyword "if" $> Keyword If
-    , keyword "import" $> Keyword Import
-    , keyword "in" $> Keyword In
-    , keyword "instance" $> Keyword Instance
-    , keyword "invariant" $> Keyword Invariant
-    , keyword "invisible" $> Keyword Invisible
-    , keyword "jump" $> Keyword Jump
-    , keyword "little" $> Keyword Little
-    , keyword "memsize" $> Keyword Memsize
-    , keyword "never" $> Keyword Never
-    , keyword "pointersize" $> Keyword Pointersize
-    , keyword "pragma" $> Keyword Pragma
-    , keyword "reads" $> Keyword Reads
-    , keyword "register" $> Keyword Register
-    , keyword "return" $> Keyword Return
-    , keyword "returns" $> Keyword Returns
-    , keyword "section" $> Keyword Section
-    , keyword "semi" $> Keyword Semi
-    , keyword "span" $> Keyword Span
-    , keyword "stackdata" $> Keyword Stackdata
-    , keyword "struct" $> Keyword Struct
-    , keyword "switch" $> Keyword Switch
-    , keyword "target" $> Keyword Target
-    , keyword "targets" $> Keyword Targets
-    , keyword "to" $> Keyword To
-    , keyword "typedef" $> Keyword Typedef
-    , keyword "unicode" $> Keyword Unicode
-    , keyword "unwinds" $> Keyword Unwinds
-    , keyword "wordsize" $> Keyword Wordsize
-    , keyword "writes" $> Keyword Writes
+    [ keyword abortsName $> Keyword Aborts
+    , keyword alignName $> Keyword Align
+    , keyword alignedName $> Keyword Aligned
+    , keyword alsoName $> Keyword Also
+    , keyword asName $> Keyword As
+    , keyword autoName $> Keyword Auto
+    , keyword bigName $> Keyword Big
+    , keyword byteorderName $> Keyword Byteorder
+    , keyword caseName $> Keyword Case
+    , keyword className $> Keyword Class
+    , keyword constName $> Keyword Const
+    , keyword continuationName $> Keyword Continuation
+    , keyword cutName $> Keyword Cut
+    , keyword cutsName $> Keyword Cuts
+    , keyword elseName $> Keyword Else
+    , keyword equalName $> Keyword Equal
+    , keyword exportName $> Keyword Export
+    , keyword foreignName $> Keyword Foreign
+    , keyword gotoName $> Keyword Goto
+    , keyword ifName $> Keyword If
+    , keyword importName $> Keyword Import
+    , keyword inName $> Keyword In
+    , keyword instanceName $> Keyword Instance
+    , keyword invariantName $> Keyword Invariant
+    , keyword invisibleName $> Keyword Invisible
+    , keyword jumpName $> Keyword Jump
+    , keyword littleName $> Keyword Little
+    , keyword memsizeName $> Keyword Memsize
+    , keyword neverName $> Keyword Never
+    , keyword pointersizeName $> Keyword Pointersize
+    , keyword pragmaName $> Keyword Pragma
+    , keyword readsName $> Keyword Reads
+    , keyword registerName $> Keyword Register
+    , keyword returnName $> Keyword Return
+    , keyword returnsName $> Keyword Returns
+    , keyword sectionName $> Keyword Section
+    , keyword semiName $> Keyword Semi
+    , keyword spanName $> Keyword Span
+    , keyword stackdataName $> Keyword Stackdata
+    , keyword structName $> Keyword Struct
+    , keyword switchName $> Keyword Switch
+    , keyword targetName $> Keyword Target
+    , keyword targetsName $> Keyword Targets
+    , keyword toName $> Keyword To
+    , keyword typedefName $> Keyword Typedef
+    , keyword unicodeName $> Keyword Unicode
+    , keyword unwindsName $> Keyword Unwinds
+    , keyword wordsizeName $> Keyword Wordsize
+    , keyword writesName $> Keyword Writes
     , symbol "{" $> LBrace
     , symbol "}" $> RBrace
     , symbol "(" $> LParen
@@ -291,14 +198,23 @@ token =
     , try float
     , int
     , lexeme $
-      string "bits" *>
+      string bitsName *>
       choice
         [ BitsType <$> L.decimal
-        , Ident . T.pack . ("bits" ++) <$> identifierRest
+        , Ident . T.pack . (bitsName ++) <$> identifierRest
         , pure $ Keyword Bits
         ]
     , identifier
     ]
 
+tokenSafe :: SourceLexer
+tokenSafe =
+  token >?= \e -> registerParseError e *> anySingle *> tokenSafe
+
+(>?=) :: MonadParsec e s m => m a
+  -> (ParseError s e -> m a)
+  -> m a
+(>?=) = flip withRecovery
+
 tokenize :: Lexer [Annot Token SourcePos]
-tokenize = sc *> manyTill token eof
+tokenize = sc *> manyTill tokenSafe eof

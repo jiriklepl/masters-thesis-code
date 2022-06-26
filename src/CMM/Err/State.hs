@@ -44,6 +44,9 @@ class a ~ ErrorState =>
   where
   errorState :: Lens' s a
 
+instance HasErrorState ErrorState ErrorState where
+  errorState = id
+
 makeFieldsNoPrefix ''ErrorState
 
 countSeverity :: Severity -> ErrorState -> Int
