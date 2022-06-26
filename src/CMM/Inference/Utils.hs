@@ -29,6 +29,9 @@ fieldClassHelper = addPrefix fieldClassPrefix
 fieldClassPrefix :: Text
 fieldClassPrefix = "HasField"
 
+funDepsClassPrefix :: Text
+funDepsClassPrefix = "FunDeps"
+
 trileanSeq :: [Trilean] -> String
 trileanSeq =
   \case

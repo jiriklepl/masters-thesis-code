@@ -7,7 +7,7 @@ import safe qualified Data.Bool as B
 import safe Data.Eq (Eq((==)))
 import safe Data.Foldable (or)
 import safe Data.Function (($), (.), const, id)
-import safe Data.Functor (Functor(fmap), (<$>))
+import safe Data.Functor (Functor(fmap, (<$)), (<$>))
 import safe Data.Int (Int)
 import safe Data.List ((++), sortOn, zipWith)
 import safe Data.Tuple ()
@@ -134,3 +134,8 @@ funDepsSimplify original = generalize composed []
     weakened = weaken strengthened []
     strengthened = strengthen decomposed []
     decomposed = decompose original
+
+addTrivialDep :: [[Trilean]] -> [[Trilean]]
+addTrivialDep rules = case rules of
+  [] -> []
+  rule : _ -> (T.False <$ rule) : rules

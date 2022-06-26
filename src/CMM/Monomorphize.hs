@@ -5,7 +5,7 @@
 module CMM.Monomorphize where
 
 import safe Control.Applicative (Applicative(pure, (*>)), liftA2, liftA3)
-import safe Control.Lens.Getter ((^.), uses)
+import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Lens.Zoom (zoom)
 import safe Control.Monad (Monad((>>=), return), sequence, zipWithM_)
@@ -20,8 +20,7 @@ import safe Data.List (concatMap, head, null, zipWith)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (Maybe(Just, Nothing), catMaybes, maybe, isNothing, fromJust)
 import safe Data.Monoid ((<>), mappend, mempty)
-import safe Data.Ord (Ord((>=), compare, (<)), Ordering(EQ, GT, LT))
-import safe qualified Data.PartialOrd as PartialOrd
+import safe Data.Ord (Ord((<)))
 import safe qualified Data.Set as Set
 import safe Data.Traversable (for, traverse)
 import safe Data.Tuple (uncurry)
@@ -33,18 +32,11 @@ import safe CMM.AST.Annot (Annot, Annotation(Annot, takeAnnot), withAnnot, mapAn
 import safe CMM.AST.Utils (addTopLevels)
 import safe CMM.Control.Applicative (liftA5)
 import safe CMM.Control.Monad ((>>@=))
-import safe CMM.Data.Bounds.Impl (Bounds(Bounds))
 import safe CMM.Data.Either (oneRight)
 import safe CMM.Data.Nullable (nullVal)
 import safe CMM.Data.Tuple (submergeTuple)
 import safe CMM.Inference (simplify)
-import safe CMM.Inference.Constness (Constness(LinkExpr))
 import safe CMM.Inference.Fact ()
-import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.Preprocess.HasTypeHandle
-  ( HasTypeHandle
-  , getTypeHandleId
-  )
 import safe CMM.Inference.Preprocess.TypeHole
   ( HasTypeHole(getTypeHole)
   , TypeHole(LVInstTypeHole, MemberTypeHole, MethodTypeHole,
@@ -64,23 +56,21 @@ import safe CMM.Inference.TypeCompl
           LabelType, LamType, String16Type, StringType, TBitsType, TupleType,
           VoidType)
   )
-import safe CMM.Inference.TypeHandle (consting, kinding, typing)
 import safe CMM.Inference.TypeVar as Type (ToTypeVar(toTypeVar), TypeVar)
 import safe CMM.Inference.Unify (instantiateFrom)
 import safe CMM.Monomorphize.Polytypeness
   ( Polytypeness(Absurd, Mono, Poly)
-  , constAbsurdity
-  , constPolymorphism
-  , kindAbsurdity
-  , kindPolymorphism
-  , typePolymorphism
+
+
+
+
+  , getTypeHandleIdPolytypeness
   )
 import safe CMM.Monomorphize.Schematized
   ( Schematized(FuncScheme, StructScheme)
   , schematized2topLevel
   )
 import safe CMM.Parser.HasPos (HasPos, SourcePos)
-import safe CMM.Utils (backQuote)
 import safe CMM.Err.Error
     ( Error, )
 import safe qualified CMM.Err.Error as Error
@@ -99,7 +89,6 @@ import safe CMM.AST.Wrap
 import safe CMM.Inference.Unify.Error ( UnificationError )
 
 import safe qualified CMM.Monomorphize.State as State
-import safe qualified CMM.Inference.State.Impl as State
 import safe CMM.Monomorphize.State.Impl
     ( Monomorphizer, MonomorphizeState )
 
@@ -135,54 +124,6 @@ class Monomorphize n a where
     => Subst Type.Type
     -> n a
     -> InferMonomorphizer a (Error `Either` Maybe (n a))
-
-typingPolytypeness :: Type.Type -> Polytypeness
-typingPolytypeness t =
-  if null free
-    then Mono
-    else typePolymorphism t free
-  where
-    free = freeTypeVars t
-
-constnessPolytypeness :: TypeVar -> State.Inferencer Polytypeness
-constnessPolytypeness tVar = go <$> State.readConstingBounds tVar
-  where
-    go bounds@(low `Bounds` high) =
-      case low `compare` high of
-        LT ->
-          if low >= LinkExpr
-            then Mono
-            else constPolymorphism tVar bounds
-        EQ -> Mono
-        GT -> constAbsurdity tVar bounds
-
-kindingPolytypeness :: TypeVar -> State.Inferencer Polytypeness
-kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
-  where
-    go bounds@(low `Bounds` high) =
-      if low PartialOrd.<= high
-        then if high PartialOrd.<= low
-               then Mono
-               else kindPolymorphism tVar bounds
-        else kindAbsurdity tVar bounds
-
-typePolytypeness :: Subst Type.Type -> TypeVar -> State.Inferencer Polytypeness
-typePolytypeness subst tVar =
-  State.reconstructOld tVar >>= simplify . apply subst >>= State.tryGetHandle >>= \case
-    Just handle ->
-      mappend (typingPolytypeness $ apply subst handle ^. typing) <$>
-      liftA2
-        mappend
-        (kindingPolytypeness $ apply subst handle ^. kinding)
-        (constnessPolytypeness $ apply subst handle ^. consting)
-    Nothing ->
-      error $
-      "(internal logic error) Type variable " <>
-      backQuote (show tVar) <> " not registered by the inferencer."
-
-getTypeHandleIdPolytypeness ::
-     HasTypeHandle a => Subst Type.Type -> a -> State.Inferencer Polytypeness
-getTypeHandleIdPolytypeness subst = typePolytypeness subst . getTypeHandleId
 
 monomorphizeTrivial ::
      (Monomorphize p a, HasPos a, HasTypeHole a)
@@ -347,7 +288,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Struct) a where
       AST.Struct name datums -> do
         handle <- useInferencer . fmap toTypeVar . State.getHandle $ getTypeHoleId a
         schemeName <- useInferencer . State.fromOldName $ getTypeHoleId a
-        addScheme <- useInferencer (uses State.schemes (schemeName `Map.lookup`)) >>= \case
+        addScheme <- useInferencer (lookupScheme schemeName) >>= \case
           Nothing -> fail $ isNotScheme annotated
           Just scheme ->
             useMonomorphizer . fmap Right $

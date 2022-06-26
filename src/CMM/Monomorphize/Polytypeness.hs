@@ -3,29 +3,45 @@
 
 module CMM.Monomorphize.Polytypeness where
 
-import safe Control.Applicative (Applicative(pure))
+import safe Control.Applicative (Applicative(pure, liftA2))
 import safe Data.Eq (Eq)
 import safe Data.Function (($), (.))
-import safe Data.Monoid (Monoid(mempty))
+import safe Data.Monoid (Monoid(mempty, mappend))
 import safe Data.Set (Set)
-import safe Text.Show (Show)
+import safe Text.Show (Show, show)
 import safe Data.Data (Data)
 import safe qualified Data.Set as Set
 import safe Data.Functor ( Functor(fmap), (<$>) )
 import safe Data.Semigroup ( Semigroup((<>)) )
+import safe qualified Data.PartialOrd as PartialOrd
+import safe Data.Ord ( Ord((>=), compare), Ordering(GT, LT, EQ) )
+import safe Data.Maybe ( Maybe(Nothing, Just) )
+import safe Control.Lens.Getter ((^.))
+import safe GHC.Err (error)
+import safe Control.Monad ( Monad((>>=)) )
+import safe Data.Foldable ( Foldable(null) )
 
 import safe Prettyprinter
     ( Pretty(pretty), (<+>), list, Doc )
 
-import safe CMM.Data.Bounds (Bounds)
+import safe CMM.Data.Bounds (Bounds (Bounds))
 import safe CMM.Data.Nullable (Fallbackable((??)))
-import safe CMM.Inference.Constness (Constness)
+import safe CMM.Inference.Constness (Constness (LinkExpr))
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Type (Type, ToType)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Inference.Fact ( constnessBounds, kindingBounds )
 import safe CMM.Pretty ( lambda )
 import safe CMM.Inference.BuiltIn()
+import safe CMM.Inference.State (Inferencer)
+import safe qualified CMM.Inference.State as State
+import safe CMM.Inference.Subst ( Apply(apply), Subst )
+import safe CMM.Inference.Preprocess.HasTypeHandle
+    ( getTypeHandleId, HasTypeHandle )
+import safe CMM.Inference.TypeHandle ( typing, kinding, consting )
+import safe CMM.Inference ( simplify )
+import safe CMM.Utils ( backQuote )
+import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
 
 data Absurdity =
   Absurdity
@@ -124,3 +140,51 @@ instance Monoid Polytypeness where
 instance Fallbackable Polytypeness where
   Absurd {} ?? kind = kind
   kind ?? _ = kind
+
+typingPolytypeness :: Type -> Polytypeness
+typingPolytypeness t =
+  if null free
+    then Mono
+    else typePolymorphism t free
+  where
+    free = freeTypeVars t
+
+constnessPolytypeness :: TypeVar -> Inferencer Polytypeness
+constnessPolytypeness tVar = go <$> State.readConstingBounds tVar
+  where
+    go bounds@(low `Bounds` high) =
+      case low `compare` high of
+        LT ->
+          if low >= LinkExpr
+            then Mono
+            else constPolymorphism tVar bounds
+        EQ -> Mono
+        GT -> constAbsurdity tVar bounds
+
+kindingPolytypeness :: TypeVar -> Inferencer Polytypeness
+kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
+  where
+    go bounds@(low `Bounds` high) =
+      if low PartialOrd.<= high
+        then if high PartialOrd.<= low
+               then Mono
+               else kindPolymorphism tVar bounds
+        else kindAbsurdity tVar bounds
+
+typePolytypeness :: Subst Type -> TypeVar -> Inferencer Polytypeness
+typePolytypeness subst tVar =
+  State.reconstructOld tVar >>= simplify . apply subst >>= State.tryGetHandle >>= \case
+    Just handle ->
+      mappend (typingPolytypeness $ apply subst handle ^. typing) <$>
+      liftA2
+        mappend
+        (kindingPolytypeness $ apply subst handle ^. kinding)
+        (constnessPolytypeness $ apply subst handle ^. consting)
+    Nothing ->
+      error $
+      "(internal logic error) Type variable " <>
+      backQuote (show tVar) <> " not registered by the inferencer."
+
+getTypeHandleIdPolytypeness ::
+     HasTypeHandle a => Subst Type -> a -> Inferencer Polytypeness
+getTypeHandleIdPolytypeness subst = typePolytypeness subst . getTypeHandleId

@@ -137,7 +137,7 @@ import safe CMM.Inference.TypeVar
   , predecessor
   )
 import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
-import safe CMM.Inference.Utils (fieldClassPrefix, trileanSeq)
+import safe CMM.Inference.Utils (fieldClassPrefix, trileanSeq, funDepsClassPrefix)
 import safe CMM.Utils (HasCallStack, addPrefix, getPrefix, hasPrefix)
 import safe qualified CMM.Inference.State.Impl as State
 
@@ -481,7 +481,8 @@ reduceTemplates (fact:facts) =
       continue
     NestedFact (tVars :. [ClassFact name t] :=> nesteds)
       | hasPrefix name
-      , getPrefix name == fieldClassPrefix -> do
+      , let prefix = getPrefix name
+      , prefix == fieldClassPrefix || prefix == funDepsClassPrefix -> do
         State.lookupFunDep name >>= \case
           Nothing -> skip
           Just rules -> do
@@ -607,7 +608,8 @@ reduceConstraint (fact:facts) =
   case fact of
     Fact (ClassConstraint name t)
       | hasPrefix name
-      , getPrefix name == fieldClassPrefix ->
+      , let prefix = getPrefix name
+      , prefix == fieldClassPrefix || prefix == funDepsClassPrefix ->
         State.lookupFunDep name >>= \case
           Nothing -> undefined -- TODO: logic error
           Just rules -> continueWith $ fmap go rules <> facts

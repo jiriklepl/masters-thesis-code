@@ -41,7 +41,7 @@ import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Qual((:=>)), Scheme((:.)))
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.FunDeps (funDepsSimplify)
+import safe CMM.Inference.FunDeps (funDepsSimplify, addTrivialDep)
 import safe CMM.Inference.Subst (apply)
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType, VarType))
 import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
@@ -122,7 +122,7 @@ pushKindBounds handle bounds =
   State.kindingBounds %= Map.insertWith (<>) (handle ^. kinding) bounds
 
 addFunDeps :: Text -> [[Trilean]] -> Inferencer ()
-addFunDeps name rules = State.funDeps %= Map.insert name (funDepsSimplify rules)
+addFunDeps name rules = State.funDeps %= Map.insert name (addTrivialDep $ funDepsSimplify rules)
 
 hasFunDeps :: Text -> Inferencer Bool
 hasFunDeps = fmap isJust . lookupFunDep
