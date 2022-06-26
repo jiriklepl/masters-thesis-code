@@ -51,39 +51,21 @@ import safe CMM.Utils (HasCallStack, backQuoteShow)
 
 import safe CMM.Inference.State.Impl
   ( Inferencer
-  , InferencerState(InferencerState)
-  , classFacts
-  , classSchemes
-  , constingBounds
-  , currentParent
-  , freshAnnotatedTypeHelper
-  , freshTypeHelperWithHandle
-  , funDeps
-  , funDeps
-  , handlize
-  , handlizeTVar
-  , initInferencer
-  , kindingBounds
-  , lockedVars
-  , schemes
-  , subConsting
-  , subKinding
-  , typize
-  , unifs
-  )
+  , InferencerState(InferencerState))
+import safe qualified CMM.Inference.State.Impl as State
 
 pushParent :: TypeVar -> Inferencer ()
-pushParent parent = currentParent %= (parent :)
+pushParent parent = State.currentParent %= (parent :)
 
 popParent :: Inferencer ()
-popParent = currentParent %= tail
+popParent = State.currentParent %= tail
 
 getHandle :: TypeVar -> Inferencer TypeHandle
 getHandle = fmap fromJust . tryGetHandle
 
 tryGetHandle :: TypeVar -> Inferencer (Maybe TypeHandle)
 tryGetHandle tVar =
-  uses handlize (flip Bimap.lookup) <*> uses unifs (`apply` tVar)
+  uses State.handlize (flip Bimap.lookup) <*> uses State.unifs (`apply` tVar)
 
 readBoundsFrom :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> Bounds a
 readBoundsFrom = (fromMaybe (minBound `Bounds` maxBound) .) . Map.lookup
@@ -98,10 +80,10 @@ getConsting :: TypeVar -> Inferencer TypeVar
 getConsting tVar = view consting <$> getHandle tVar
 
 readConstingBounds :: TypeVar -> Inferencer (Bounds Constness)
-readConstingBounds tVar = uses constingBounds (readBoundsFrom tVar)
+readConstingBounds tVar = uses State.constingBounds (readBoundsFrom tVar)
 
 readKindingBounds :: TypeVar -> Inferencer (Bounds DataKind)
-readKindingBounds tVar = uses kindingBounds (readBoundsFrom tVar)
+readKindingBounds tVar = uses State.kindingBounds (readBoundsFrom tVar)
 
 getKinding :: TypeVar -> Inferencer TypeVar
 getKinding tVar = view kinding <$> getHandle tVar
@@ -111,13 +93,13 @@ getTyping tVar = view typing <$> getHandle tVar
 
 collectPrimeTVars :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVars tVar =
-  uses typize (Bimap.lookup tVar) >>= \case
+  uses State.typize (Bimap.lookup tVar) >>= \case
     Just primType -> fold <$> traverse collectPrimeTVars primType
     Nothing -> return $ Set.singleton tVar
 
 collectPrimeTVarsAll :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVarsAll tVar =
-  uses typize (Bimap.lookup tVar) >>= \case
+  uses State.typize (Bimap.lookup tVar) >>= \case
     Just primType ->
       Set.insert tVar . fold <$> traverse collectPrimeTVarsAll primType
     Nothing -> return $ Set.singleton tVar
@@ -129,31 +111,31 @@ insertEdge a b = Map.insertWith Set.union a (Set.singleton b)
 
 pushSubKind :: TypeHandle -> TypeHandle -> Inferencer ()
 pushSubKind handle handle' =
-  subKinding %= view kinding handle `insertEdge` view kinding handle'
+  State.subKinding %= view kinding handle `insertEdge` view kinding handle'
 
 pushSubConst :: TypeHandle -> TypeHandle -> Inferencer ()
 pushSubConst handle handle' =
-  subConsting %= view consting handle `insertEdge` view consting handle'
+  State.subConsting %= view consting handle `insertEdge` view consting handle'
 
 pushKindBounds :: TypeHandle -> Bounds DataKind -> Inferencer ()
 pushKindBounds handle bounds =
-  kindingBounds %= Map.insertWith (<>) (handle ^. kinding) bounds
+  State.kindingBounds %= Map.insertWith (<>) (handle ^. kinding) bounds
 
 addFunDeps :: Text -> [[Trilean]] -> Inferencer ()
-addFunDeps name rules = funDeps %= Map.insert name (funDepsSimplify rules)
+addFunDeps name rules = State.funDeps %= Map.insert name (funDepsSimplify rules)
 
 hasFunDeps :: Text -> Inferencer Bool
 hasFunDeps = fmap isJust . lookupFunDep
 
 lookupFunDep :: Text -> Inferencer (Maybe [[Trilean]])
-lookupFunDep = uses funDeps . Map.lookup
+lookupFunDep = uses State.funDeps . Map.lookup
 
 pushConstBounds :: TypeHandle -> Bounds Constness -> Inferencer ()
 pushConstBounds handle bounds =
-  constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
+  State.constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
 
 lock :: (ToType a, HasCallStack) => a -> TypeVar -> Inferencer ()
-lock parent tVar = lockedVars %= Map.insertWith msg tVar tParent -- TODO msg
+lock parent tVar = State.lockedVars %= Map.insertWith msg tVar tParent -- TODO msg
   where
     tParent = toType parent
     msg new old =
@@ -172,19 +154,19 @@ ensureLocked parent tVar = do
   unless locked . lockVars parent $ Set.singleton tVar
 
 isLocked :: TypeVar -> Inferencer Bool
-isLocked = uses lockedVars . Map.member
+isLocked = uses State.lockedVars . Map.member
 
 isUnlocked :: TypeVar -> Inferencer Bool
 isUnlocked = fmap not . isLocked
 
 lookupScheme :: TypeVar -> Inferencer (Maybe (Scheme Type))
-lookupScheme = uses schemes . Map.lookup
+lookupScheme = uses State.schemes . Map.lookup
 
 lookupClassScheme :: Text -> Inferencer (Maybe (Scheme Type))
-lookupClassScheme = uses classSchemes . Map.lookup
+lookupClassScheme = uses State.classSchemes . Map.lookup
 
 lookupFact :: Text -> Inferencer (Maybe [Scheme Type])
-lookupFact = uses classFacts . Map.lookup
+lookupFact = uses State.classFacts . Map.lookup
 
 isOpen :: Data a => Scheme a -> Inferencer Bool
 isOpen =
@@ -223,7 +205,7 @@ addClassFact name scheme =
     tVars :. _ :=> t -> do
       lockVars t tVars
     -- sanitizeClosed scheme -- TODO: turn this on!!!
-      classFacts %= Map.insertWith mappend name [scheme]
+      State.classFacts %= Map.insertWith mappend name [scheme]
 
 addScheme ::
      (HasCallStack, Pretty DataKind) => TypeVar -> Scheme Type -> Inferencer ()
@@ -232,7 +214,7 @@ addScheme tVar scheme =
     tVars :. _ :=> _ -> do
       lockVars tVar tVars
       sanitizeClosed scheme
-      schemes %= Map.insert tVar scheme
+      State.schemes %= Map.insert tVar scheme
 
 addClassScheme ::
      (HasCallStack, Pretty DataKind) => Text -> Scheme Type -> Inferencer ()
@@ -241,7 +223,7 @@ addClassScheme name scheme =
     tVars :. _ :=> t -> do
       lockVars t tVars
       sanitizeClosed scheme
-      classSchemes %= Map.insertWith msg name scheme -- TODO msg
+      State.classSchemes %= Map.insertWith msg name scheme -- TODO msg
   where
     msg new old =
       error $
@@ -251,11 +233,11 @@ addClassScheme name scheme =
       backQuoteShow old <> " (attempted adding " <> backQuoteShow new <> ")"
 
 fromOldName :: TypeVar -> Inferencer TypeVar
-fromOldName tVar = uses unifs (`apply` tVar)
+fromOldName tVar = uses State.unifs (`apply` tVar)
 
 reconstruct :: TypeVar -> Inferencer Type
 reconstruct tVar =
-  uses typize (Bimap.lookup tVar) >>= \case
+  uses State.typize (Bimap.lookup tVar) >>= \case
     Just primType -> ComplType <$> traverse reconstruct primType
     Nothing -> return $ VarType tVar
 

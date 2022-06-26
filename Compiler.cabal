@@ -26,6 +26,7 @@ common common-options
                        GADTSyntax
                        KindSignatures
                        LambdaCase
+                       NamedFieldPuns
                        NoImplicitPrelude
                        OverloadedStrings
                        ScopedTypeVariables
@@ -45,7 +46,7 @@ common common-options
                        -Wsafe
                        -Wunused-packages
   cpp-options:         -DUSE_GHC_STACK
-  cpp-options:         -DFACT_COMMENTS
+                       -DFACT_COMMENTS
   build-depends:       base >= 4.13 && < 4.17,
                        containers ^>=0.6.4.1,
                        extra ^>=1.7.10,
@@ -62,7 +63,6 @@ executable Compiler
                        CMM.AST.Blockifier,
                        CMM.AST.Blockifier.Error,
                        CMM.AST.Blockifier.State,
-                       CMM.AST.Blockifier.State.Impl,
                        CMM.AST.BlockAnnot,
                        CMM.AST.Flattener,
                        CMM.AST.GetConv,
@@ -74,6 +74,7 @@ executable Compiler
                        CMM.AST.Variables.State,
                        CMM.AST.Variables.State.Impl,
                        CMM.AST.Variables.SymbolType,
+                       CMM.AST.Wrap,
                        CMM.Control.Applicative,
                        CMM.Control.Monad,
                        CMM.Data.Bimap,
@@ -117,8 +118,10 @@ executable Compiler
                        CMM.Inference.Preprocess.HasTypeHandle,
                        CMM.Inference.Preprocess.WithTypeHole,
                        CMM.Inference.Preprocess.TypeHole,
+                       CMM.Inference.Preprocess.Settings,
                        CMM.Inference.Preprocess.State,
                        CMM.Inference.Preprocess.State.Impl,
+                       CMM.Inference.Settings,
                        CMM.Inference.Refresh,
                        CMM.Inference.State,
                        CMM.Inference.State.Impl,
@@ -136,9 +139,11 @@ executable Compiler
                        CMM.Lexer,
                        CMM.Lexer.Token,
                        CMM.Monomorphize,
+                       CMM.Monomorphize.Error,
                        CMM.Monomorphize.Mangle,
                        CMM.Monomorphize.Polytypeness,
                        CMM.Monomorphize.Schematized,
+                       CMM.Monomorphize.Settings,
                        CMM.Monomorphize.State,
                        CMM.Monomorphize.State.Impl,
                        CMM.Parser,

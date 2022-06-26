@@ -190,35 +190,41 @@ constUnion t t' = toType t `ConstUnion` toType t'
 instType :: (ToType a, ToType b) => a -> b -> FlatFact Type
 instType t t' = toType t `InstType` toType t'
 
+kindingBounds :: ToType a => Bounds DataKind -> a -> FlatFact Type
+kindingBounds (low `Bounds` high) = (. toType) . KindBounds $ Ordered low `Bounds` Ordered high
+
 -- | States the minimum kind `DataKind` of a `TypeVar` type variable
 minKindConstraint :: ToType a => DataKind -> a -> FlatFact Type
-minKindConstraint = (. toType) . KindBounds . (`Bounds` maxBound) . Ordered
+minKindConstraint = kindingBounds . (`Bounds` maxBound)
 
 -- | States the maximum kind `DataKind` of a `TypeVar` type variable
 maxKindConstraint :: ToType a => DataKind -> a -> FlatFact Type
-maxKindConstraint = (. toType) . KindBounds . (minBound `Bounds`) . Ordered
+maxKindConstraint = kindingBounds . (minBound `Bounds`)
 
 unstorableConstraint :: ToType a => a -> FlatFact Type
 unstorableConstraint = KindBounds (minBound `Bounds` minBound) . toType
 
+constnessBounds :: ToType a => Bounds Constness -> a -> FlatFact Type
+constnessBounds = (. toType) . ConstnessBounds
+
 -- | States that the given `TypeVar` (type variable) is a compile-time expression
 constExprConstraint :: ToType a => a -> FlatFact Type
-constExprConstraint = (. toType) . ConstnessBounds $ Bounds ConstExpr ConstExpr
+constExprConstraint = constnessBounds $ Bounds ConstExpr ConstExpr
 
 -- | States that the given `TypeVar` (type variable) is a link-time expression
 linkExprConstraint :: ToType a => a -> FlatFact Type
-linkExprConstraint = (. toType) . ConstnessBounds $ Bounds ConstExpr LinkExpr
+linkExprConstraint = constnessBounds $ Bounds ConstExpr LinkExpr
 
 -- | States that the given `TypeVar` (type variable) is a regular (aka. run-time) expression
 regularExprConstraint :: ToType a => a -> FlatFact Type
-regularExprConstraint = (. toType) . ConstnessBounds $ Bounds Regular Regular
+regularExprConstraint = constnessBounds $ Bounds Regular Regular
 
 -- | States that the given `TypeVar` type variables is to be allocated to the register given by the given `Text` (this is a stronger version of `minKindConstraint`)
 registerConstraint :: ToType a => Text -> a -> FlatFact Type
 registerConstraint = (. toType) . OnRegister
 
 kindConstraint :: ToType a => DataKind -> a -> FlatFact Type
-kindConstraint kind = KindBounds (Ordered kind `Bounds` Ordered kind) . toType
+kindConstraint kind = kindingBounds $ kind `Bounds` kind
 
 functionKind :: ToType a => Int -> a -> FlatFact Type
 functionKind = kindConstraint . FunctionKind
@@ -233,7 +239,7 @@ classConstraint name t = name `ClassConstraint` toType t
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
 classFact :: ToType a => Text -> a -> FlatFact Type
 classFact name t = name `ClassFact` toType t
--- | TODO
+
 #ifdef FACT_COMMENTS
 factComment :: Text -> [FlatFact Type]
 factComment = pure . FactComment

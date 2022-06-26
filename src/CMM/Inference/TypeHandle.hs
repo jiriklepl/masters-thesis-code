@@ -12,12 +12,12 @@ import safe Data.Function (($), (.))
 import safe Data.Ord (Ord(compare))
 import safe Text.Show (Show)
 
-import Prettyprinter (Pretty(pretty), (<+>), (<>), braces, parens)
+import safe Prettyprinter (Pretty(pretty), (<+>), (<>), braces, parens)
 
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
-import CMM.Pretty (constingSymbol, kindingSymbol, typingSymbol)
+import safe CMM.Pretty (constingSymbol, kindingSymbol, typingSymbol)
 
 data TypeHandle =
   TypeHandle

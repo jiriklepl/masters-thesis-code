@@ -18,9 +18,6 @@ cradle:
     - path: "src/CMM/AST/Blockifier/State.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/AST/Blockifier/State/Impl.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/AST/BlockAnnot.hs"
       component: "Compiler:exe:Compiler"
 
@@ -52,6 +49,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/AST/Variables/SymbolType.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/AST/Wrap.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Control/Applicative.hs"
@@ -183,10 +183,16 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/TypeHole.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Inference/Preprocess/Settings.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Inference/Preprocess/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Preprocess/State/Impl.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Inference/Settings.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Refresh.hs"
@@ -234,7 +240,13 @@ cradle:
     - path: "src/CMM/Lexer.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Lexer/Token.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Monomorphize.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Monomorphize/Error.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Mangle.hs"
@@ -244,6 +256,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Schematized.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Monomorphize/Settings.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/State.hs"
@@ -259,6 +274,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Parser/HasPos.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Pipeline.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Pretty.hs"

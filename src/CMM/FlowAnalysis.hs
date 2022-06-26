@@ -28,15 +28,8 @@ import CMM.AST.Blockifier.Error
   ( BlockifierError(UninitializedRegisters, UnreachableContinuations,
                 UnreachableLabels)
   )
-import safe CMM.AST.Blockifier.State
-  ( Blockifier
-  , blockData
-  , blocksTable
-  , continuations
-  , controlFlow
-  , labels
-  , registers
-  )
+import safe qualified CMM.AST.Blockifier.State as State
+import safe CMM.AST.Blockifier.State (Blockifier)
 import safe CMM.Data.Num ((-))
 import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.HasPos (HasPos)
@@ -47,22 +40,22 @@ analyzeFlow :: HasPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)
   -- TODO: implement `cut to` statements
  = do
-  flow <- use controlFlow
-  blocks <- use blocksTable
+  flow <- use State.controlFlow
+  blocks <- use State.blocksTable
   let graph = Graph.buildG (0, Map.size blocks - 1) flow -- one block is guaranteed (procedure)
       blockNames = Map.fromList $ swap <$> Map.toList blocks
       reachable = Set.fromList $ Graph.reachable graph 0
       removeReachable = (`Map.withoutKeys` Set.map (blockNames Map.!) reachable)
       makeMessageFromVisible = filter (not . hasPrefix) . Map.keys
-  labelsWarning <- makeMessageFromVisible <$> uses labels removeReachable
+  labelsWarning <- makeMessageFromVisible <$> uses State.labels removeReachable
   continuationsWarning <-
-    makeMessageFromVisible <$> uses continuations removeReachable
+    makeMessageFromVisible <$> uses State.continuations removeReachable
   unless (null labelsWarning && null continuationsWarning) $ do
     registerASTWarning procedure $ UnreachableLabels labelsWarning
     registerASTWarning procedure $ UnreachableContinuations continuationsWarning
   preCleanData <-
-    uses registers (fmap . flip Map.restrictKeys . Map.keysSet) <*>
-    uses blockData (`Map.restrictKeys` reachable) -- we filter out variables that are not local variables and whole blocks that are not reachable
+    uses State.registers (fmap . flip Map.restrictKeys . Map.keysSet) <*>
+    uses State.blockData (`Map.restrictKeys` reachable) -- we filter out variables that are not local variables and whole blocks that are not reachable
   let allVars =
         (False, False, False) <$
         Map.foldlWithKey (\vars _ block -> block <> vars) mempty preCleanData
@@ -71,17 +64,17 @@ analyzeFlow procedure@(Annot _ _)
         flip elemIndex . filter (`Set.member` reachable) $ Graph.topSort graph
       cleanFlow =
         sortOn (order . fst) $ filter ((`Set.member` reachable) . fst) flow -- we filter out unreachable flow
-  blockData .= cleanData
-  controlFlow .= cleanFlow
+  State.blockData .= cleanData
+  State.controlFlow .= cleanFlow
   doWhile $ or <$> traverse updateFlowPair cleanFlow
-  uninitialized <- uses blockData $ Map.keys . Map.filter (^. _3) . (Map.! 0)
+  uninitialized <- uses State.blockData $ Map.keys . Map.filter (^. _3) . (Map.! 0)
   unless (null uninitialized) $
     registerASTError procedure $ UninitializedRegisters uninitialized
 
 -- TODO: "unused after write" warning
 updateFlowPair :: (Int, Int) -> Blockifier Bool
 updateFlowPair (f, t) = do
-  blocks <- use blockData
+  blocks <- use State.blockData
   let toVars = blocks Map.! t
       fromVars = blocks Map.! f
       newBlocks =
@@ -93,7 +86,7 @@ updateFlowPair (f, t) = do
           toVars
           blocks
       newBlock = newBlocks Map.! f
-  blockData .= newBlocks
+  State.blockData .= newBlocks
   return . or $
     zipWith
       (\a b -> a ^. _3 /= b ^. _3)

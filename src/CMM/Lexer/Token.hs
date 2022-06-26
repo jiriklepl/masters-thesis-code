@@ -3,24 +3,29 @@
 module CMM.Lexer.Token where
 
 import safe Data.String ( IsString )
-import safe Data.Functor
-import safe Data.Eq
-import safe Data.Ord
-import safe Text.Show
-import safe Data.Text hiding (length)
-import safe CMM.Data.Float
-import safe Data.Int
-import safe Data.Char
-import safe Data.Bool
-import Prettyprinter
-import Data.Function
-import CMM.AST.Annot
-import Text.Megaparsec hiding (Token)
-import Data.List.NonEmpty hiding (length)
-import Data.Foldable hiding (toList)
-import Data.Data
-import CMM.Data.Num
-import Data.Maybe
+import safe Data.Functor ( Functor(fmap) )
+import safe Data.Eq ( Eq )
+import safe Data.Ord ( Ord((<=)) )
+import safe Text.Show ( Show(show) )
+import safe Data.Text ( Text )
+import safe CMM.Data.Float ( Float )
+import safe Data.Int ( Int )
+import safe Data.Char ( Char )
+import safe Data.Bool ( otherwise, Bool )
+import safe Prettyprinter
+    ( (<>), Pretty(pretty), hsep, dquotes, squotes )
+
+import safe Data.Function ( ($), (.) )
+import safe CMM.AST.Annot ( takeAnnot, Annot )
+import safe Text.Megaparsec
+    ( SourcePos,
+      TraversableStream(reachOffset),
+      VisualStream (showTokens, tokensLength),
+      PosState(PosState) )
+import safe Data.List.NonEmpty ( toList )
+import safe Data.Foldable ( Foldable(length) )
+import safe CMM.Data.Num ( Num((+)) )
+import safe Data.Maybe ( Maybe(Just, Nothing) )
 
 data Reserved
   = Aborts
@@ -216,8 +221,7 @@ instance Pretty (Token a) where
     Caret -> "^"
 
 instance Ord a => VisualStream [Annot Token a] where
-  showTokens proxy = show . hsep . fmap pretty . toList
-
+  showTokens _ = show . hsep . fmap pretty . toList
   tokensLength proxy = length . showTokens proxy
 
 instance TraversableStream [Annot Token SourcePos] where

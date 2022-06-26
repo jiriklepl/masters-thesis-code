@@ -44,6 +44,8 @@ import safe CMM.Inference.TypeKind
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
 import safe CMM.Parser.HasPos (HasPos(getPos))
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
+import safe CMM.Inference.Preprocess.Settings
+    ( PreprocessorSettings(PreprocessorSettings) )
 
 data PreprocessorState =
   PreprocessorState
@@ -66,8 +68,8 @@ data PreprocessorState =
     }
     deriving (Data)
 
-initPreprocessor :: PreprocessorState
-initPreprocessor =
+initPreprocessor :: PreprocessorSettings -> PreprocessorState
+initPreprocessor PreprocessorSettings {} =
   PreprocessorState
     { _variables = [mempty]
     , _funcVariables = mempty

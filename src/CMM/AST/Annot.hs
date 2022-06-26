@@ -18,10 +18,17 @@ import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
 import safe CMM.Parser.HasPos (HasPos(getPos))
 
+-- TODO :
+-- | Returns the unannotated version of the given annotated node
+-- unAnnot :: Annot n a -> n a
+-- -- | Returns the annotation of the given annotated node
+-- takeAnnot :: Annot n a -> a
+
 -- | Annotation used as a wrapper for nodes, can contain 'SourcePos', for example
 data Annotation node annot =
-  Annot (node annot) annot
+  Annot { unAnnot :: node annot, takeAnnot :: annot }
   deriving (Show, Foldable, Traversable, Functor, Data)
+
 
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
 
@@ -51,13 +58,16 @@ type Annot = Annotation
 withAnnot :: a -> n a -> Annot n a
 withAnnot = flip Annot
 
--- | Returns the annotation of the given annotated node
-takeAnnot :: Annot n a -> a
-takeAnnot (Annot _ annot) = annot
+toTuple :: Annot n a -> (a, n a)
+toTuple = \case
+  Annot {unAnnot, takeAnnot} -> (takeAnnot, unAnnot)
 
--- | Returns the unannotated version of the given annotated node
-unAnnot :: Annot n a -> n a
-unAnnot (Annot node _) = node
+fromTuple :: (a, n a) -> Annot n a
+fromTuple (takeAnnot, unAnnot) = Annot {unAnnot, takeAnnot}
+
+mapAnnot :: (n a -> m a) -> Annot n a -> Annot m a
+mapAnnot f = \case
+  n `Annot` a -> f n `Annot` a
 
 -- | Applies an update function to all annotations inside the given node
 updateAnnots :: Functor n => (a -> b) -> n a -> n b

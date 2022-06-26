@@ -3,27 +3,63 @@
 module CMM.Inference.Preprocess.TypeHole where
 
 import safe Data.Data (Data)
-import safe Data.Function ((.), id)
+import safe Data.Function ((.), id, ($))
 import safe Data.Functor (Functor(fmap))
-import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe)
+import safe Data.Maybe (Maybe(Just, Nothing))
 import Data.Text (Text)
-import safe GHC.Err (error)
 import safe Text.Show (Show)
+import safe Data.Eq ( Eq ((==)) )
+import safe Data.Ord ( Ord(compare), Ordering(GT, EQ, LT) )
+import safe Control.Lens.Getter (view)
+import safe Control.Lens.Tuple (_2)
+import safe Data.Bool ( Bool(False, True) )
+import safe Data.List ( zipWith3 )
+
+import safe Prettyprinter ( (<>), Pretty(pretty), (<+>), parens )
 
 import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
-import safe Control.Lens.Getter (view)
-import safe Control.Lens.Tuple (_2)
+import safe CMM.Pretty (emptySet, instSymbol, darrowNice, commaSep)
 
 data TypeHole
   = EmptyTypeHole
-  | SimpleTypeHole !TypeHandle
-  | NamedTypeHole !TypeHandle !Text
-  | LVInstTypeHole !TypeHandle !TypeHole
-  | MethodTypeHole !TypeHandle !TypeHandle !TypeHandle
-  | MemberTypeHole !TypeHandle ![TypeHole] ![TypeHandle] ![TypeHandle]
+  | SimpleTypeHole { holeHandle :: !TypeHandle }
+  | NamedTypeHole { holeHandle :: !TypeHandle, holeName :: !Text }
+  | LVInstTypeHole { holeHandle :: !TypeHandle,  schemeHandle :: !TypeHandle }
+  | MethodTypeHole { holeHandle :: !TypeHandle,  schemeHandle :: !TypeHandle, elabHandle :: !TypeHandle }
+  | MemberTypeHole { holeHandle :: !TypeHandle,  classHandles :: ![(Text, TypeHandle)],  instHandles :: ![TypeHandle], schemeHandles :: ![TypeHandle] }
   deriving (Show, Data)
+
+instance Eq TypeHole where
+  EmptyTypeHole {} == EmptyTypeHole {} = True
+  EmptyTypeHole {} == _ = False
+  _ == EmptyTypeHole {} = False
+  hole == hole' = holeHandle hole == holeHandle hole'
+
+instance Ord TypeHole where
+  EmptyTypeHole {} `compare` EmptyTypeHole {} = EQ
+  EmptyTypeHole {} `compare` _ = LT
+  _ `compare` EmptyTypeHole {} = GT
+  hole `compare` hole' = holeHandle hole `compare` holeHandle hole'
+
+instance Pretty TypeHole where
+  pretty = \case
+    EmptyTypeHole -> emptySet
+    SimpleTypeHole handle ->
+      pretty handle
+    NamedTypeHole handle name ->
+      parens $ pretty name <> "@" <> pretty handle
+    LVInstTypeHole inst scheme ->
+      parens $ pretty scheme <+> instSymbol <+> pretty inst
+    MethodTypeHole inst scheme elab ->
+      parens $ pretty scheme <+> instSymbol <+> pretty inst <> ";" <+> pretty elab
+    MemberTypeHole sHandle cHandles insts schemes ->
+      parens $ pretty sHandle <+> darrowNice <+> commaSep members
+      where
+        members = zipWith3 goInst cHandles insts schemes
+        goInst cHandle inst scheme =
+          pretty cHandle <> ":" <+> pretty scheme <+> instSymbol <+> pretty inst
 
 class HasTypeHole a where
   getTypeHole :: a -> TypeHole
@@ -49,26 +85,11 @@ getTypeHoleId = holeId . getTypeHole
 getSafeTypeHoleId :: HasTypeHole a => a -> Maybe TypeVar
 getSafeTypeHoleId = safeHoleId . getTypeHole
 
-holeHandle :: TypeHole -> TypeHandle
-holeHandle = fromMaybe err . safeHoleHandle
-  where
-    err = error "(Internal) implementation error" -- TODO
-
 safeHoleHandle :: TypeHole -> Maybe TypeHandle
 safeHoleHandle =
   \case
     EmptyTypeHole -> Nothing
-    SimpleTypeHole handle -> Just handle
-    NamedTypeHole handle _ -> Just handle
-    LVInstTypeHole handle _ -> Just handle
-    MethodTypeHole handle _ _ -> Just handle
-    MemberTypeHole handle _ _ _ -> Just handle
-
-holeName :: TypeHole -> Text
-holeName =
-  \case
-    NamedTypeHole _ name -> name
-    _ -> error "logic error" -- TODO: logic error
+    hole -> Just $ holeHandle hole
 
 holeId :: TypeHole -> TypeVar
 holeId = handleId . holeHandle

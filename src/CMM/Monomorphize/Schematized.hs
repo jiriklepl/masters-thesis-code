@@ -18,10 +18,10 @@ data Schematized a
   | StructScheme (Annot Struct a)
   deriving (Show, Functor, Foldable, Traversable, Data)
 
+deriving instance Eq (Schematized ())
+
 schematized2topLevel :: Schematized a -> Annot TopLevel a
 schematized2topLevel =
   \case
     FuncScheme procedure -> copyAnnot procedure $ TopProcedure procedure
     StructScheme struct -> copyAnnot struct $ TopStruct struct
-
-deriving instance Eq (Schematized ())

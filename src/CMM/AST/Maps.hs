@@ -13,55 +13,8 @@ import safe Data.Maybe (Maybe(Just, Nothing))
 import safe Data.Traversable (Traversable(traverse))
 import safe GHC.Err (error)
 
-import safe CMM.AST
-  ( Actual(Actual)
-  , Alias(Reads, Writes)
-  , Arm(Arm)
-  , Asserts(AlignAssert, InAssert)
-  , Body(Body)
-  , BodyItem(BodyDecl, BodyStackDecl, BodyStmt)
-  , CallAnnot(AliasAnnot, FlowAnnot)
-  , Class(Class)
-  , Datum(Datum, DatumAlign, DatumLabel)
-  , Decl(ConstDecl, ExportDecl, ImportDecl, PragmaDecl, RegDecl,
-     TargetDecl, TypedefDecl)
-  , Export
-  , Expr(BinOpExpr, ComExpr, InfixExpr, LVExpr, LitExpr, MemberExpr,
-     NegExpr, ParExpr, PrefixExpr)
-  , Flow(AlsoAborts, AlsoCutsTo, AlsoReturnsTo, AlsoUnwindsTo,
-     NeverReturns)
-  , Formal(Formal)
-  , Import
-  , Init(ExprInit, Str16Init, StrInit)
-  , Instance(Instance)
-  , KindName(KindName)
-  , LValue(LVName, LVRef)
-  , Lit
-  , Name
-  , ParaName(ParaName)
-  , ParaType(ParaType)
-  , Pragma
-  , Procedure(Procedure)
-  , ProcedureDecl(ProcedureDecl)
-  , ProcedureHeader(ProcedureHeader)
-  , Range(Range)
-  , Registers(Registers)
-  , Section(SecDatum, SecDecl, SecProcedure, SecSpan)
-  , SemiFormal(SemiFormal)
-  , Size(Size)
-  , StackDecl(StackDecl)
-  , Stmt(AssignStmt, CallStmt, ContStmt, CutToStmt, EmptyStmt,
-     GotoStmt, IfStmt, JumpStmt, LabelStmt, PrimOpStmt, ReturnStmt,
-     SpanStmt, SwitchStmt)
-  , Struct(Struct)
-  , TargetDirective
-  , Targets(Targets)
-  , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
-         TopStruct)
-  , Type(TAuto, TBits, TName, TPar)
-  , Unit(Unit)
-  )
 import safe CMM.AST.Annot (Annot)
+import safe qualified CMM.AST as AST
 import safe CMM.Control.Applicative (liftA4, liftA6)
 
 type family Constraint hint a b :: Kind.Constraint
@@ -116,271 +69,271 @@ astMap hint f = runIdentity . astMapM hint (pure . f)
 trivial :: (Applicative f, Functor n) => n a -> f (n b)
 trivial = pure . (error "Is not a trivial functor" <$>)
 
-instance ASTmapCTX1 hint a b TopLevel => ASTmap hint Unit a b where
-  astMapM _ f (Unit a) = Unit <$> traverse f a
+instance ASTmapCTX1 hint a b AST.TopLevel => ASTmap hint AST.Unit a b where
+  astMapM _ f (AST.Unit a) = AST.Unit <$> traverse f a
 
-instance ASTmapCTX6 hint a b Class Decl Instance Procedure Section Struct =>
-         ASTmap hint TopLevel a b where
+instance ASTmapCTX6 hint a b AST.Class AST.Decl AST.Instance AST.Procedure AST.Section AST.Struct =>
+         ASTmap hint AST.TopLevel a b where
   astMapM _ f =
     \case
-      TopSection strLit a -> TopSection strLit <$> traverse f a
-      TopDecl a -> TopDecl <$> f a
-      TopProcedure a -> TopProcedure <$> f a
-      TopClass a -> TopClass <$> f a
-      TopInstance a -> TopInstance <$> f a
-      TopStruct a -> TopStruct <$> f a
+      AST.TopSection strLit a -> AST.TopSection strLit <$> traverse f a
+      AST.TopDecl a -> AST.TopDecl <$> f a
+      AST.TopProcedure a -> AST.TopProcedure <$> f a
+      AST.TopClass a -> AST.TopClass <$> f a
+      AST.TopInstance a -> AST.TopInstance <$> f a
+      AST.TopStruct a -> AST.TopStruct <$> f a
 
-instance ASTmapCTX5 hint a b Datum Decl Expr Procedure Section =>
-         ASTmap hint Section a b where
+instance ASTmapCTX5 hint a b AST.Datum AST.Decl AST.Expr AST.Procedure AST.Section =>
+         ASTmap hint AST.Section a b where
   astMapM _ f =
     \case
-      SecDecl a -> SecDecl <$> f a
-      SecProcedure a -> SecProcedure <$> f a
-      SecDatum a -> SecDatum <$> f a
-      SecSpan a b c -> liftA3 SecSpan (f a) (f b) (traverse f c)
+      AST.SecDecl a -> AST.SecDecl <$> f a
+      AST.SecProcedure a -> AST.SecProcedure <$> f a
+      AST.SecDatum a -> AST.SecDatum <$> f a
+      AST.SecSpan a b c -> liftA3 AST.SecSpan (f a) (f b) (traverse f c)
 
-instance ( ASTmapCTX8 hint a b Export Expr Import Name Pragma Registers TargetDirective Type
-         , Space hint a b Name
+instance ( ASTmapCTX8 hint a b AST.Export AST.Expr AST.Import AST.Name AST.Pragma AST.Registers AST.TargetDirective AST.Type
+         , Space hint a b AST.Name
          ) =>
-         ASTmap hint Decl a b where
+         ASTmap hint AST.Decl a b where
   astMapM _ f =
     \case
-      ImportDecl a -> ImportDecl <$> traverse f a
-      ExportDecl a -> ExportDecl <$> traverse f a
-      ConstDecl a b c -> liftA3 ConstDecl (traverse f a) (f b) (f c)
-      TypedefDecl a b -> liftA2 TypedefDecl (f a) (traverse f b)
-      RegDecl a b -> RegDecl a <$> f b
-      PragmaDecl a b -> liftA2 PragmaDecl (f a) (f b)
-      TargetDecl a -> TargetDecl <$> traverse f a
+      AST.ImportDecl a -> AST.ImportDecl <$> traverse f a
+      AST.ExportDecl a -> AST.ExportDecl <$> traverse f a
+      AST.ConstDecl a b c -> liftA3 AST.ConstDecl (traverse f a) (f b) (f c)
+      AST.TypedefDecl a b -> liftA2 AST.TypedefDecl (f a) (traverse f b)
+      AST.RegDecl a b -> AST.RegDecl a <$> f b
+      AST.PragmaDecl a b -> liftA2 AST.PragmaDecl (f a) (f b)
+      AST.TargetDecl a -> AST.TargetDecl <$> traverse f a
 
-instance ASTmapCTX3 hint a b (ParaName Name) (ParaName Type) ProcedureDecl =>
-         ASTmap hint Class a b where
-  astMapM _ f (Class a b c) = liftA3 Class (traverse f a) (f b) (traverse f c)
+instance ASTmapCTX3 hint a b (AST.ParaName AST.Name) (AST.ParaName AST.Type) AST.ProcedureDecl =>
+         ASTmap hint AST.Class a b where
+  astMapM _ f (AST.Class a b c) = liftA3 AST.Class (traverse f a) (f b) (traverse f c)
 
-instance ASTmapCTX2 hint a b (ParaName Type) Procedure =>
-         ASTmap hint Instance a b where
-  astMapM _ f (Instance a b c) =
-    liftA3 Instance (traverse f a) (f b) (traverse f c)
+instance ASTmapCTX2 hint a b (AST.ParaName AST.Type) AST.Procedure =>
+         ASTmap hint AST.Instance a b where
+  astMapM _ f (AST.Instance a b c) =
+    liftA3 AST.Instance (traverse f a) (f b) (traverse f c)
 
-instance ASTmapCTX2 hint a b (ParaName Name) Datum =>
-         ASTmap hint Struct a b where
-  astMapM _ f (Struct a b) = liftA2 Struct (f a) (traverse f b)
+instance ASTmapCTX2 hint a b (AST.ParaName AST.Name) AST.Datum =>
+         ASTmap hint AST.Struct a b where
+  astMapM _ f (AST.Struct a b) = liftA2 AST.Struct (f a) (traverse f b)
 
-instance (ASTmapCTX1 hint a b param, Space hint a b Name) =>
-         ASTmap hint (ParaName param) a b where
-  astMapM _ f (ParaName a b) = liftA2 ParaName (f a) (traverse f b)
+instance (ASTmapCTX1 hint a b param, Space hint a b AST.Name) =>
+         ASTmap hint (AST.ParaName param) a b where
+  astMapM _ f (AST.ParaName a b) = liftA2 AST.ParaName (f a) (traverse f b)
 
-instance ASTmap hint TargetDirective a b where
+instance ASTmap hint AST.TargetDirective a b where
   astMapM _ _ = trivial
 
-instance ASTmap hint Import a b where
+instance ASTmap hint AST.Import a b where
   astMapM _ _ = trivial
 
-instance ASTmap hint Export a b where
+instance ASTmap hint AST.Export a b where
   astMapM _ _ = trivial
 
-instance (ASTmapCTX3 hint a b Init Size Type, Space hint a b Name) =>
-         ASTmap hint Datum a b where
+instance (ASTmapCTX3 hint a b AST.Init AST.Size AST.Type, Space hint a b AST.Name) =>
+         ASTmap hint AST.Datum a b where
   astMapM _ f =
     \case
-      DatumLabel a -> DatumLabel <$> f a
-      DatumAlign a -> pure $ DatumAlign a
-      Datum a b c -> liftA3 Datum (f a) (traverse f b) (traverse f c)
+      AST.DatumLabel a -> AST.DatumLabel <$> f a
+      AST.DatumAlign a -> pure $ AST.DatumAlign a
+      AST.Datum a b c -> liftA3 AST.Datum (f a) (traverse f b) (traverse f c)
 
-instance ASTmapCTX1 hint a b Expr => ASTmap hint Init a b where
+instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Init a b where
   astMapM _ f =
     \case
-      ExprInit a -> ExprInit <$> traverse f a
-      StrInit a -> pure $ StrInit a
-      Str16Init a -> pure $ Str16Init a
+      AST.ExprInit a -> AST.ExprInit <$> traverse f a
+      AST.StrInit a -> pure $ AST.StrInit a
+      AST.Str16Init a -> pure $ AST.Str16Init a
 
-instance ASTmapCTX2 hint a b Name Type => ASTmap hint Registers a b where
+instance ASTmapCTX2 hint a b AST.Name AST.Type => ASTmap hint AST.Registers a b where
   astMapM _ f =
     \case
-      Registers a b c ->
-        liftA2 (Registers a) (f b) (traverse (\(x, y) -> (, y) <$> f x) c)
+      AST.Registers a b c ->
+        liftA2 (AST.Registers a) (f b) (traverse (\(x, y) -> (, y) <$> f x) c)
 
-instance ASTmapCTX1 hint a b Expr => ASTmap hint Size a b where
+instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Size a b where
   astMapM _ f =
     \case
-      Size a -> Size <$> traverse f a
+      AST.Size a -> AST.Size <$> traverse f a
 
-instance ASTmapCTX1 hint a b BodyItem => ASTmap hint Body a b where
+instance ASTmapCTX1 hint a b AST.BodyItem => ASTmap hint AST.Body a b where
   astMapM _ f =
     \case
-      Body a -> Body <$> traverse f a
+      AST.Body a -> AST.Body <$> traverse f a
 
-instance ASTmapCTX3 hint a b Decl StackDecl Stmt =>
-         ASTmap hint BodyItem a b where
+instance ASTmapCTX3 hint a b AST.Decl AST.StackDecl AST.Stmt =>
+         ASTmap hint AST.BodyItem a b where
   astMapM _ f =
     \case
-      BodyDecl a -> BodyDecl <$> f a
-      BodyStackDecl a -> BodyStackDecl <$> f a
-      BodyStmt a -> BodyStmt <$> f a
+      AST.BodyDecl a -> AST.BodyDecl <$> f a
+      AST.BodyStackDecl a -> AST.BodyStackDecl <$> f a
+      AST.BodyStmt a -> AST.BodyStmt <$> f a
 
-instance ASTmapCTX2 hint a b Body ProcedureHeader =>
-         ASTmap hint Procedure a b where
+instance ASTmapCTX2 hint a b AST.Body AST.ProcedureHeader =>
+         ASTmap hint AST.Procedure a b where
   astMapM _ f =
     \case
-      Procedure a b -> liftA2 Procedure (f a) (f b)
+      AST.Procedure a b -> liftA2 AST.Procedure (f a) (f b)
 
-instance ASTmapCTX1 hint a b ProcedureHeader =>
-         ASTmap hint ProcedureDecl a b where
+instance ASTmapCTX1 hint a b AST.ProcedureHeader =>
+         ASTmap hint AST.ProcedureDecl a b where
   astMapM _ f =
     \case
-      ProcedureDecl a -> ProcedureDecl <$> f a
+      AST.ProcedureDecl a -> AST.ProcedureDecl <$> f a
 
-instance (ASTmapCTX3 hint a b Formal Type SemiFormal, Space hint a b Name) =>
-         ASTmap hint ProcedureHeader a b where
+instance (ASTmapCTX3 hint a b AST.Formal AST.Type AST.SemiFormal, Space hint a b AST.Name) =>
+         ASTmap hint AST.ProcedureHeader a b where
   astMapM _ f =
     \case
-      ProcedureHeader a b c d ->
+      AST.ProcedureHeader a b c d ->
         liftA3
-          (ProcedureHeader a)
+          (AST.ProcedureHeader a)
           (f b)
           (traverse f c)
           (traverse (traverse f) d)
 
-instance (ASTmapCTX1 hint a b Type, Space hint a b Name) =>
-         ASTmap hint Formal a b where
+instance (ASTmapCTX1 hint a b AST.Type, Space hint a b AST.Name) =>
+         ASTmap hint AST.Formal a b where
   astMapM _ f =
     \case
-      Formal a b c d -> liftA2 (Formal a b) (f c) (f d)
+      AST.Formal a b c d -> liftA2 (AST.Formal a b) (f c) (f d)
 
-instance (ASTmapCTX1 hint a b Type) => ASTmap hint SemiFormal a b where
+instance (ASTmapCTX1 hint a b AST.Type) => ASTmap hint AST.SemiFormal a b where
   astMapM _ f =
     \case
-      SemiFormal a b -> SemiFormal a <$> f b
+      AST.SemiFormal a b -> AST.SemiFormal a <$> f b
 
-instance ASTmapCTX1 hint a b Expr => ASTmap hint Actual a b where
+instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Actual a b where
   astMapM _ f =
     \case
-      Actual a b -> Actual a <$> f b
+      AST.Actual a b -> AST.Actual a <$> f b
 
-instance ASTmapCTX1 hint a b Datum => ASTmap hint StackDecl a b where
+instance ASTmapCTX1 hint a b AST.Datum => ASTmap hint AST.StackDecl a b where
   astMapM _ f =
     \case
-      StackDecl a -> StackDecl <$> traverse f a
+      AST.StackDecl a -> AST.StackDecl <$> traverse f a
 
-instance ( ASTmapCTX9 hint a b Actual Arm Body CallAnnot Expr Flow KindName LValue Targets
-         , Space hint a b Name
+instance ( ASTmapCTX9 hint a b AST.Actual AST.Arm AST.Body AST.CallAnnot AST.Expr AST.Flow AST.KindName AST.LValue AST.Targets
+         , Space hint a b AST.Name
          ) =>
-         ASTmap hint Stmt a b where
+         ASTmap hint AST.Stmt a b where
   astMapM _ f =
     \case
-      EmptyStmt -> pure EmptyStmt
-      IfStmt a b c -> liftA3 IfStmt (f a) (f b) (traverse f c)
-      SwitchStmt a b -> liftA2 SwitchStmt (f a) (traverse f b)
-      SpanStmt a b c -> liftA3 SpanStmt (f a) (f b) (f c)
-      AssignStmt a b -> liftA2 AssignStmt (traverse f a) (traverse f b)
-      PrimOpStmt a b c d ->
-        liftA4 PrimOpStmt (f a) (f b) (traverse f c) (traverse f d)
-      CallStmt a b c d e g ->
+      AST.EmptyStmt -> pure AST.EmptyStmt
+      AST.IfStmt a b c -> liftA3 AST.IfStmt (f a) (f b) (traverse f c)
+      AST.SwitchStmt a b -> liftA2 AST.SwitchStmt (f a) (traverse f b)
+      AST.SpanStmt a b c -> liftA3 AST.SpanStmt (f a) (f b) (f c)
+      AST.AssignStmt a b -> liftA2 AST.AssignStmt (traverse f a) (traverse f b)
+      AST.PrimOpStmt a b c d ->
+        liftA4 AST.PrimOpStmt (f a) (f b) (traverse f c) (traverse f d)
+      AST.CallStmt a b c d e g ->
         liftA6
-          CallStmt
+          AST.CallStmt
           (traverse f a)
           (pure b)
           (f c)
           (traverse f d)
           (traverse f e)
           (traverse f g)
-      JumpStmt a b c d ->
-        liftA4 JumpStmt (pure a) (f b) (traverse f c) (traverse f d)
-      ReturnStmt a (Just (b, c)) d ->
-        liftA2 (ReturnStmt a) (Just <$> liftA2 (,) (f b) (f c)) (traverse f d)
-      ReturnStmt a Nothing b -> ReturnStmt a Nothing <$> traverse f b
-      LabelStmt a -> LabelStmt <$> f a
-      ContStmt a b -> liftA2 ContStmt (f a) (traverse f b)
-      GotoStmt a b -> liftA2 GotoStmt (f a) (traverse f b)
-      CutToStmt a b c -> liftA3 CutToStmt (f a) (traverse f b) (traverse f c)
+      AST.JumpStmt a b c d ->
+        liftA4 AST.JumpStmt (pure a) (f b) (traverse f c) (traverse f d)
+      AST.ReturnStmt a (Just (b, c)) d ->
+        liftA2 (AST.ReturnStmt a) (Just <$> liftA2 (,) (f b) (f c)) (traverse f d)
+      AST.ReturnStmt a Nothing b -> AST.ReturnStmt a Nothing <$> traverse f b
+      AST.LabelStmt a -> AST.LabelStmt <$> f a
+      AST.ContStmt a b -> liftA2 AST.ContStmt (f a) (traverse f b)
+      AST.GotoStmt a b -> liftA2 AST.GotoStmt (f a) (traverse f b)
+      AST.CutToStmt a b c -> liftA3 AST.CutToStmt (f a) (traverse f b) (traverse f c)
 
-instance Space hint a b Name => ASTmap hint KindName a b where
+instance Space hint a b AST.Name => ASTmap hint AST.KindName a b where
   astMapM _ f =
     \case
-      KindName a b -> KindName a <$> f b
+      AST.KindName a b -> AST.KindName a <$> f b
 
-instance ASTmapCTX2 hint a b Body Range => ASTmap hint Arm a b where
+instance ASTmapCTX2 hint a b AST.Body AST.Range => ASTmap hint AST.Arm a b where
   astMapM _ f =
     \case
-      Arm a b -> liftA2 Arm (traverse f a) (f b)
+      AST.Arm a b -> liftA2 AST.Arm (traverse f a) (f b)
 
-instance ASTmapCTX1 hint a b Expr => ASTmap hint Range a b where
+instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Range a b where
   astMapM _ f =
     \case
-      Range a b -> liftA2 Range (f a) (traverse f b)
+      AST.Range a b -> liftA2 AST.Range (f a) (traverse f b)
 
-instance (ASTmapCTX3 hint a b Asserts Expr Type, Space hint a b Name) =>
-         ASTmap hint LValue a b where
+instance (ASTmapCTX3 hint a b AST.Asserts AST.Expr AST.Type, Space hint a b AST.Name) =>
+         ASTmap hint AST.LValue a b where
   astMapM _ f =
     \case
-      LVName a -> LVName <$> f a
-      LVRef a b c -> liftA3 LVRef (traverse f a) (f b) (traverse f c)
+      AST.LVName a -> AST.LVName <$> f a
+      AST.LVRef a b c -> liftA3 AST.LVRef (traverse f a) (f b) (traverse f c)
 
-instance ASTmapCTX1 hint a b Name => ASTmap hint Flow a b where
+instance ASTmapCTX1 hint a b AST.Name => ASTmap hint AST.Flow a b where
   astMapM _ f =
     \case
-      AlsoCutsTo a -> AlsoCutsTo <$> traverse f a
-      AlsoUnwindsTo a -> AlsoUnwindsTo <$> traverse f a
-      AlsoReturnsTo a -> AlsoReturnsTo <$> traverse f a
-      AlsoAborts -> pure AlsoAborts
-      NeverReturns -> pure NeverReturns
+      AST.AlsoCutsTo a -> AST.AlsoCutsTo <$> traverse f a
+      AST.AlsoUnwindsTo a -> AST.AlsoUnwindsTo <$> traverse f a
+      AST.AlsoReturnsTo a -> AST.AlsoReturnsTo <$> traverse f a
+      AST.AlsoAborts -> pure AST.AlsoAborts
+      AST.NeverReturns -> pure AST.NeverReturns
 
-instance ASTmapCTX1 hint a b Name => ASTmap hint Alias a b where
+instance ASTmapCTX1 hint a b AST.Name => ASTmap hint AST.Alias a b where
   astMapM _ f =
     \case
-      Reads a -> Reads <$> traverse f a
-      Writes a -> Writes <$> traverse f a
+      AST.Reads a -> AST.Reads <$> traverse f a
+      AST.Writes a -> AST.Writes <$> traverse f a
 
-instance ASTmapCTX2 hint a b Flow Alias => ASTmap hint CallAnnot a b where
+instance ASTmapCTX2 hint a b AST.Flow AST.Alias => ASTmap hint AST.CallAnnot a b where
   astMapM _ f =
     \case
-      FlowAnnot a -> FlowAnnot <$> f a
-      AliasAnnot a -> AliasAnnot <$> f a
+      AST.FlowAnnot a -> AST.FlowAnnot <$> f a
+      AST.AliasAnnot a -> AST.AliasAnnot <$> f a
 
-instance ASTmapCTX1 hint a b Name => ASTmap hint Targets a b where
+instance ASTmapCTX1 hint a b AST.Name => ASTmap hint AST.Targets a b where
   astMapM _ f =
     \case
-      Targets a -> Targets <$> traverse f a
+      AST.Targets a -> AST.Targets <$> traverse f a
 
-instance ( ASTmapCTX6 hint a b Actual Expr Lit LValue Name Type
-         , Space hint a b Name
+instance ( ASTmapCTX6 hint a b AST.Actual AST.Expr AST.Lit AST.LValue AST.Name AST.Type
+         , Space hint a b AST.Name
          ) =>
-         ASTmap hint Expr a b where
+         ASTmap hint AST.Expr a b where
   astMapM _ f =
     \case
-      LitExpr a b -> liftA2 LitExpr (f a) (traverse f b)
-      LVExpr a -> LVExpr <$> f a
-      ParExpr a -> ParExpr <$> f a
-      BinOpExpr a b c -> liftA2 (BinOpExpr a) (f b) (f c)
-      MemberExpr a b -> liftA2 MemberExpr (f a) (f b)
-      ComExpr a -> ComExpr <$> f a
-      NegExpr a -> NegExpr <$> f a
-      InfixExpr a b c -> liftA3 InfixExpr (f a) (f b) (f c)
-      PrefixExpr a b -> liftA2 PrefixExpr (f a) (traverse f b)
+      AST.LitExpr a b -> liftA2 AST.LitExpr (f a) (traverse f b)
+      AST.LVExpr a -> AST.LVExpr <$> f a
+      AST.ParExpr a -> AST.ParExpr <$> f a
+      AST.BinOpExpr a b c -> liftA2 (AST.BinOpExpr a) (f b) (f c)
+      AST.MemberExpr a b -> liftA2 AST.MemberExpr (f a) (f b)
+      AST.ComExpr a -> AST.ComExpr <$> f a
+      AST.NegExpr a -> AST.NegExpr <$> f a
+      AST.InfixExpr a b c -> liftA3 AST.InfixExpr (f a) (f b) (f c)
+      AST.PrefixExpr a b -> liftA2 AST.PrefixExpr (f a) (traverse f b)
 
-instance ASTmap hint Lit a b where
+instance ASTmap hint AST.Lit a b where
   astMapM _ _ = trivial
 
-instance (ASTmapCTX1 hint a b ParaType, Space hint a b Name) =>
-         ASTmap hint Type a b where
+instance (ASTmapCTX1 hint a b AST.ParaType, Space hint a b AST.Name) =>
+         ASTmap hint AST.Type a b where
   astMapM _ f =
     \case
-      TBits a -> pure $ TBits a
-      TName a -> TName <$> f a
-      TAuto a -> TAuto <$> traverse f a
-      TPar a -> TPar <$> f a
+      AST.TBits a -> pure $ AST.TBits a
+      AST.TName a -> AST.TName <$> f a
+      AST.TAuto a -> AST.TAuto <$> traverse f a
+      AST.TPar a -> AST.TPar <$> f a
 
-instance ASTmapCTX1 hint a b Type => ASTmap hint ParaType a b where
-  astMapM _ f (ParaType a b) = liftA2 ParaType (f a) (traverse f b)
+instance ASTmapCTX1 hint a b AST.Type => ASTmap hint AST.ParaType a b where
+  astMapM _ f (AST.ParaType a b) = liftA2 AST.ParaType (f a) (traverse f b)
 
-instance ASTmapCTX1 hint a b Name => ASTmap hint Asserts a b where
+instance ASTmapCTX1 hint a b AST.Name => ASTmap hint AST.Asserts a b where
   astMapM _ f =
     \case
-      AlignAssert a b -> AlignAssert a <$> traverse f b
-      InAssert a b -> liftA2 InAssert (traverse f a) (pure b)
+      AST.AlignAssert a b -> AST.AlignAssert a <$> traverse f b
+      AST.InAssert a b -> liftA2 AST.InAssert (traverse f a) (pure b)
 
-instance ASTmap hint Name a b where
+instance ASTmap hint AST.Name a b where
   astMapM _ _ = trivial
 
-instance ASTmap hint Pragma a b where
+instance ASTmap hint AST.Pragma a b where
   astMapM _ _ = trivial

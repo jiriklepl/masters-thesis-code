@@ -25,33 +25,7 @@ import safe Data.Traversable (Traversable(traverse))
 import safe Data.Tuple (fst)
 import safe GHC.Err (error)
 
-import safe CMM.AST
-  ( Actual(Actual)
-  , Arm(Arm)
-  , Body(Body)
-  , BodyItem(BodyDecl, BodyStackDecl, BodyStmt)
-  , CallAnnot(AliasAnnot, FlowAnnot)
-  , Datum(DatumLabel)
-  , Decl(ConstDecl, ImportDecl, RegDecl)
-  , Expr(BinOpExpr, ComExpr, InfixExpr, LVExpr, LitExpr, MemberExpr,
-     NegExpr, ParExpr, PrefixExpr)
-  , Flow(NeverReturns)
-  , Formal
-  , Import(Import)
-  , KindName
-  , LValue(LVName, LVRef)
-  , Name
-  , Procedure(Procedure)
-  , ProcedureDecl(ProcedureDecl)
-  , ProcedureHeader(ProcedureHeader)
-  , Range(Range)
-  , Registers(Registers)
-  , StackDecl(StackDecl)
-  , Stmt(AssignStmt, CallStmt, ContStmt, CutToStmt, EmptyStmt,
-     GotoStmt, IfStmt, JumpStmt, LabelStmt, PrimOpStmt, ReturnStmt,
-     SpanStmt, SwitchStmt)
-  , Targets(Targets)
-  )
+import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot, unAnnot)
 import safe CMM.AST.BlockAnnot
   ( BlockAnnot(Begins, NoBlock, PartOf, Unreachable)
@@ -64,22 +38,8 @@ import safe CMM.AST.Blockifier.Error
   , continuationFallthrough
   , duplicateSymbol
   )
-import safe CMM.AST.Blockifier.State
-  ( Blockifier
-  , BlockifierState
-  , blockData
-  , blocksTable
-  , clearBlockifier
-  , constants
-  , continuations
-  , controlFlow
-  , currentBlock
-  , currentData
-  , imports
-  , labels
-  , registers
-  , stackLabels
-  )
+import safe qualified CMM.AST.Blockifier.State as State
+import safe CMM.AST.Blockifier.State (Blockifier, BlockifierState)
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.AST.Maps (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Utils
@@ -104,33 +64,33 @@ lrAnalysisPrefix :: Text
 lrAnalysisPrefix = "LR"
 
 blockIsSet :: Blockifier Bool
-blockIsSet = uses currentBlock $ not . null
+blockIsSet = uses State.currentBlock $ not . null
 
 blocksCache :: Text -> Blockifier Int
 blocksCache name = do
-  table <- use blocksTable
+  table <- use State.blocksTable
   case name `Map.lookup` table of
     Just index -> return index
     Nothing ->
       let index = Map.size table
-       in index <$ (blocksTable .= Map.insert name index table)
+       in index <$ (State.blocksTable .= Map.insert name index table)
 
 setCurrentBlock :: Text -> Blockifier Int
 setCurrentBlock name = do
   index <- blocksCache name
-  currentBlock ?= index
+  State.currentBlock ?= index
   return index
 
 updateBlock :: Maybe Text -> Blockifier ()
 updateBlock mName = do
   mIndex <- traverse blocksCache mName
-  use currentBlock >>= \case
+  use State.currentBlock >>= \case
     Just oldName -> do
-      cData <- use currentData
-      blockData %= Map.insert oldName cData
-      currentBlock .= mIndex
-      currentData .= mempty
-    Nothing -> currentBlock .= mIndex
+      cData <- use State.currentData
+      State.blockData %= Map.insert oldName cData
+      State.currentBlock .= mIndex
+      State.currentData .= mempty
+    Nothing -> State.currentBlock .= mIndex
 
 setBlock :: Text -> Blockifier ()
 setBlock = updateBlock . Just
@@ -146,11 +106,11 @@ withNoBlockAnnot = withAnnot . withBlockAnnot NoBlock
 
 addControlFlow :: Text -> Blockifier ()
 addControlFlow destBlock =
-  use currentBlock >>= \case
+  use State.currentBlock >>= \case
     Nothing -> pure ()
     Just block -> do
       index <- blocksCache destBlock
-      controlFlow %= ((block, index) :)
+      State.controlFlow %= ((block, index) :)
 
 class MetadataType t =>
       Register t n
@@ -159,7 +119,7 @@ class MetadataType t =>
 
 instance Register ReadsVars Text where
   register _ var =
-    currentData %=
+    State.currentData %=
     Map.insertWith
       (\_ (reads, writes, lives) -> (not writes || reads, writes, lives))
       var
@@ -167,7 +127,7 @@ instance Register ReadsVars Text where
 
 instance Register WritesVars Text where
   register _ var =
-    currentData %=
+    State.currentData %=
     Map.insertWith
       (\_ (reads, _, lives) -> (reads, True, lives))
       var
@@ -195,16 +155,16 @@ instance NeverReturns (n a) => NeverReturns (Annot n a) where
 instance NeverReturns (n a) => NeverReturns [n a] where
   neverReturns = any neverReturns
 
-instance NeverReturns (CallAnnot a) where
+instance NeverReturns (AST.CallAnnot a) where
   neverReturns =
     \case
-      FlowAnnot flow -> neverReturns flow
-      AliasAnnot {} -> False
+      AST.FlowAnnot flow -> neverReturns flow
+      AST.AliasAnnot {} -> False
 
-instance NeverReturns (Flow a) where
+instance NeverReturns (AST.Flow a) where
   neverReturns =
     \case
-      NeverReturns -> True
+      AST.NeverReturns -> True
       _ -> False
 
 class GetTargetNames n t | n -> t where
@@ -213,33 +173,33 @@ class GetTargetNames n t | n -> t where
 instance GetTargetNames (n a) b => GetTargetNames (Annot n a) b where
   getTargetNames (Annot n _) = getTargetNames n
 
-instance GetTargetNames (Body a) (Maybe [Text]) where
+instance GetTargetNames (AST.Body a) (Maybe [Text]) where
   getTargetNames =
     \case
-      Body [bodyItem] -> getTargetNames bodyItem
+      AST.Body [bodyItem] -> getTargetNames bodyItem
       _ -> error "Does not have targets"
 
-instance GetTargetNames (BodyItem a) (Maybe [Text]) where
+instance GetTargetNames (AST.BodyItem a) (Maybe [Text]) where
   getTargetNames =
     \case
-      BodyStmt stmt -> getTargetNames stmt
+      AST.BodyStmt stmt -> getTargetNames stmt
       _ -> error "Does not have targets"
 
-instance GetTargetNames (Stmt a) (Maybe [Text]) where
+instance GetTargetNames (AST.Stmt a) (Maybe [Text]) where
   getTargetNames =
     \case
-      GotoStmt _ mTargets -> getTargetNames <$> mTargets
-      CallStmt _ _ _ _ mTargets _ -> getTargetNames <$> mTargets
-      JumpStmt _ _ _ mTargets -> getTargetNames <$> mTargets
+      AST.GotoStmt _ mTargets -> getTargetNames <$> mTargets
+      AST.CallStmt _ _ _ _ mTargets _ -> getTargetNames <$> mTargets
+      AST.JumpStmt _ _ _ mTargets -> getTargetNames <$> mTargets
       _ -> error "Does not have targets"
 
-instance GetTargetNames (Targets a) [Text] where
-  getTargetNames (Targets names) = getName <$> names
+instance GetTargetNames (AST.Targets a) [Text] where
+  getTargetNames (AST.Targets names) = getName <$> names
 
 addBlockAnnot ::
-     (HasPos a, WithBlockAnnot a b) => Annot Stmt a -> Blockifier (Annot Stmt b)
+     (HasPos a, WithBlockAnnot a b) => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
 addBlockAnnot stmt@(Annot n annot) =
-  use currentBlock >>= \case
+  use State.currentBlock >>= \case
     Nothing ->
       registerASTWarning stmt (UnreachableStatement . void $ unAnnot stmt) $>
       withAnnot (withBlockAnnot Unreachable annot) (noBlockAnnots n)
@@ -274,133 +234,133 @@ instance GetMetadata t n => GetMetadata t [n] where
 instance GetMetadata t (n a) => GetMetadata t (Annot n a) where
   getMetadata t (Annot n _) = getMetadata t n
 
-instance GetMetadata DeclaresVars (Decl a) where
+instance GetMetadata DeclaresVars (AST.Decl a) where
   getMetadata t =
     \case
-      RegDecl _ regs -> getMetadata t regs
+      AST.RegDecl _ regs -> getMetadata t regs
       _ -> []
 
-instance GetMetadata DeclaresVars (Registers a) where
-  getMetadata _ (Registers _ _ nameStrLits) = getName . fst <$> nameStrLits
+instance GetMetadata DeclaresVars (AST.Registers a) where
+  getMetadata _ (AST.Registers _ _ nameStrLits) = getName . fst <$> nameStrLits
 
-instance (GetMetadata t (BodyItem a), MetadataType t) =>
-         GetMetadata t (Body a) where
-  getMetadata t (Body bodyItems) = getMetadata t bodyItems
+instance (GetMetadata t (AST.BodyItem a), MetadataType t) =>
+         GetMetadata t (AST.Body a) where
+  getMetadata t (AST.Body bodyItems) = getMetadata t bodyItems
 
-instance GetMetadata ReadsVars (BodyItem a) where
+instance GetMetadata ReadsVars (AST.BodyItem a) where
   getMetadata t =
     \case
-      BodyStmt stmt -> getMetadata t stmt
+      AST.BodyStmt stmt -> getMetadata t stmt
       _ -> []
 
-instance GetMetadata WritesVars (BodyItem a) where
+instance GetMetadata WritesVars (AST.BodyItem a) where
   getMetadata t =
     \case
-      BodyStmt stmt -> getMetadata t stmt
+      AST.BodyStmt stmt -> getMetadata t stmt
       _ -> []
 
-instance GetMetadata WritesVars (Formal a) where
+instance GetMetadata WritesVars (AST.Formal a) where
   getMetadata _ formal = [getName formal]
 
-instance GetMetadata DeclaresVars (BodyItem a) where
+instance GetMetadata DeclaresVars (AST.BodyItem a) where
   getMetadata t =
     \case
-      BodyDecl stackDecl -> getMetadata t stackDecl
-      BodyStackDecl {} -> []
-      BodyStmt stmt -> getMetadata t stmt
+      AST.BodyDecl stackDecl -> getMetadata t stackDecl
+      AST.BodyStackDecl {} -> []
+      AST.BodyStmt stmt -> getMetadata t stmt
 
-instance GetMetadata ReadsVars (Actual a) where
-  getMetadata t (Actual _ expr) = getMetadata t expr
+instance GetMetadata ReadsVars (AST.Actual a) where
+  getMetadata t (AST.Actual _ expr) = getMetadata t expr
 
-instance GetMetadata ReadsVars (Stmt a) where
+instance GetMetadata ReadsVars (AST.Stmt a) where
   getMetadata t =
     \case
-      EmptyStmt -> []
-      IfStmt expr tBody eBody ->
+      AST.EmptyStmt -> []
+      AST.IfStmt expr tBody eBody ->
         getMetadata t expr <> getMetadata t tBody <> getMetadata t eBody
-      SwitchStmt expr arms -> getMetadata t expr <> getMetadata t arms
-      SpanStmt key value body ->
+      AST.SwitchStmt expr arms -> getMetadata t expr <> getMetadata t arms
+      AST.SpanStmt key value body ->
         getMetadata t key <> getMetadata t value <> getMetadata t body
-      AssignStmt _ exprs -> getMetadata t exprs
-      PrimOpStmt _ _ actuals _ -> getMetadata t actuals
-      CallStmt _ _ expr actuals _ _ ->
+      AST.AssignStmt _ exprs -> getMetadata t exprs
+      AST.PrimOpStmt _ _ actuals _ -> getMetadata t actuals
+      AST.CallStmt _ _ expr actuals _ _ ->
         getMetadata t expr <> getMetadata t actuals
-      JumpStmt _ expr actuals _ -> getMetadata t expr <> getMetadata t actuals
-      ReturnStmt _ _ actuals -> getMetadata t actuals
-      LabelStmt {} -> []
-      ContStmt {} -> []
-      GotoStmt expr _ -> getMetadata t expr
-      CutToStmt expr actuals _ -> getMetadata t expr <> getMetadata t actuals
+      AST.JumpStmt _ expr actuals _ -> getMetadata t expr <> getMetadata t actuals
+      AST.ReturnStmt _ _ actuals -> getMetadata t actuals
+      AST.LabelStmt {} -> []
+      AST.ContStmt {} -> []
+      AST.GotoStmt expr _ -> getMetadata t expr
+      AST.CutToStmt expr actuals _ -> getMetadata t expr <> getMetadata t actuals
 
-instance GetMetadata WritesVars (Stmt a) where
+instance GetMetadata WritesVars (AST.Stmt a) where
   getMetadata t =
     \case
-      IfStmt _ tBody eBody -> getMetadata t tBody <> getMetadata t eBody
-      SwitchStmt _ arms -> getMetadata t arms
-      SpanStmt _ _ body -> getMetadata t body
-      AssignStmt lvalues _ -> getMetadata t lvalues
-      PrimOpStmt name _ _ _ -> [getName name]
-      CallStmt kindNames _ _ _ _ _ -> getMetadata t kindNames
-      ContStmt _ kindNames -> getMetadata t kindNames
+      AST.IfStmt _ tBody eBody -> getMetadata t tBody <> getMetadata t eBody
+      AST.SwitchStmt _ arms -> getMetadata t arms
+      AST.SpanStmt _ _ body -> getMetadata t body
+      AST.AssignStmt lvalues _ -> getMetadata t lvalues
+      AST.PrimOpStmt name _ _ _ -> [getName name]
+      AST.CallStmt kindNames _ _ _ _ _ -> getMetadata t kindNames
+      AST.ContStmt _ kindNames -> getMetadata t kindNames
       _ -> []
 
-instance GetMetadata DeclaresVars (Stmt a) where
+instance GetMetadata DeclaresVars (AST.Stmt a) where
   getMetadata t =
     \case
-      IfStmt _ tBody eBody -> getMetadata t tBody <> getMetadata t eBody
-      SwitchStmt _ arms -> getMetadata t arms
-      SpanStmt _ _ body -> getMetadata t body
+      AST.IfStmt _ tBody eBody -> getMetadata t tBody <> getMetadata t eBody
+      AST.SwitchStmt _ arms -> getMetadata t arms
+      AST.SpanStmt _ _ body -> getMetadata t body
       _ -> []
 
-instance GetMetadata WritesVars (KindName a) where
+instance GetMetadata WritesVars (AST.KindName a) where
   getMetadata _ =
     \case
       kindName -> [getName kindName]
 
-instance GetMetadata ReadsVars (LValue a) where
+instance GetMetadata ReadsVars (AST.LValue a) where
   getMetadata t =
     \case
-      LVName name -> [getName name]
-      LVRef _ expr _ -> getMetadata t expr
+      AST.LVName name -> [getName name]
+      AST.LVRef _ expr _ -> getMetadata t expr
 
-instance GetMetadata WritesVars (LValue a) where
+instance GetMetadata WritesVars (AST.LValue a) where
   getMetadata _ =
     \case
-      LVName name -> [getName name]
-      LVRef {} -> []
+      AST.LVName name -> [getName name]
+      AST.LVRef {} -> []
 
-instance GetMetadata ReadsVars (Expr a) where
+instance GetMetadata ReadsVars (AST.Expr a) where
   getMetadata t =
     \case
-      LitExpr {} -> []
-      LVExpr lvalue -> getMetadata t lvalue
-      ParExpr expr -> getMetadata t expr
-      BinOpExpr _ left right -> getMetadata t left <> getMetadata t right
-      ComExpr expr -> getMetadata t expr
-      NegExpr expr -> getMetadata t expr
-      MemberExpr expr _ -> getMetadata t expr -- TODO: check whether this is correct
-      InfixExpr _ left right -> getMetadata t left <> getMetadata t right
-      PrefixExpr _ actuals -> getMetadata t actuals
+      AST.LitExpr {} -> []
+      AST.LVExpr lvalue -> getMetadata t lvalue
+      AST.ParExpr expr -> getMetadata t expr
+      AST.BinOpExpr _ left right -> getMetadata t left <> getMetadata t right
+      AST.ComExpr expr -> getMetadata t expr
+      AST.NegExpr expr -> getMetadata t expr
+      AST.MemberExpr expr _ -> getMetadata t expr -- TODO: check whether this is correct
+      AST.InfixExpr _ left right -> getMetadata t left <> getMetadata t right
+      AST.PrefixExpr _ actuals -> getMetadata t actuals
 
-instance GetMetadata ReadsVars (Arm a) where
+instance GetMetadata ReadsVars (AST.Arm a) where
   getMetadata t =
     \case
-      Arm ranges body -> getMetadata t ranges <> getMetadata t body
+      AST.Arm ranges body -> getMetadata t ranges <> getMetadata t body
 
-instance GetMetadata ReadsVars (Range a) where
+instance GetMetadata ReadsVars (AST.Range a) where
   getMetadata t =
     \case
-      Range left right -> getMetadata t left <> getMetadata t right
+      AST.Range left right -> getMetadata t left <> getMetadata t right
 
-instance GetMetadata WritesVars (Arm a) where
+instance GetMetadata WritesVars (AST.Arm a) where
   getMetadata t =
     \case
-      Arm _ body -> getMetadata t body
+      AST.Arm _ body -> getMetadata t body
 
-instance GetMetadata DeclaresVars (Arm a) where
+instance GetMetadata DeclaresVars (AST.Arm a) where
   getMetadata t =
     \case
-      Arm _ body -> getMetadata t body
+      AST.Arm _ body -> getMetadata t body
 
 class Blockify n a b where
   blockify :: (WithBlockAnnot a b, HasPos a) => n a -> Blockifier (n b)
@@ -419,7 +379,7 @@ class Blockify' a b n where
 instance Blockify (Annot n) a b => Blockify' a b (Annot n) where
   blockify' = blockify
 
-instance Blockify' a b Name where
+instance Blockify' a b AST.Name where
   blockify' n = return $ withBlockAnnot NoBlock <$> n
 
 instance {-# OVERLAPPABLE #-} ASTmap BlockifyHint n a b =>
@@ -427,48 +387,48 @@ instance {-# OVERLAPPABLE #-} ASTmap BlockifyHint n a b =>
   blockify (Annot n a) =
     withAnnot (withBlockAnnot NoBlock a) <$> astMapM BlockifyHint blockify' n
 
-instance Blockify (Annot Datum) a b where
+instance Blockify (Annot AST.Datum) a b where
   blockify datum@(datum' `Annot` _) =
     case datum' of
-      DatumLabel {} ->
-        storeSymbol stackLabels DatumLabelSymbol datum $> noBlockAnnots datum
+      AST.DatumLabel {} ->
+        storeSymbol State.stackLabels DatumLabelSymbol datum $> noBlockAnnots datum
       _ -> return $ noBlockAnnots datum
 
 blockifyProcedureHeader ::
      (HasPos a, WithBlockAnnot a b)
-  => Annotation ProcedureHeader a
-  -> Blockifier (Annot ProcedureHeader b)
-blockifyProcedureHeader (ProcedureHeader mConv name formals mType `Annot` a) = do
+  => Annotation AST.ProcedureHeader a
+  -> Blockifier (Annot AST.ProcedureHeader b)
+blockifyProcedureHeader (AST.ProcedureHeader mConv name formals mType `Annot` a) = do
   formals' <- traverse blockify formals
   traverse_ registerWrites formals
   return . withNoBlockAnnot a $
-    ProcedureHeader
+    AST.ProcedureHeader
       mConv
       (noBlockAnnots name)
       formals'
       (fmap noBlockAnnots <$> mType)
 
-instance Blockify (Annot Procedure) a b where
-  blockify procedure@(Procedure header body `Annot` a) = do
+instance Blockify (Annot AST.Procedure) a b where
+  blockify procedure@(AST.Procedure header body `Annot` a) = do
     index <- setCurrentBlock $ helperName "procedure"
     header' <- blockifyProcedureHeader header
     withAnnot (Begins index `withBlockAnnot` a) <$>
-      (Procedure header' <$> blockify body) <*
+      (AST.Procedure header' <$> blockify body) <*
       unsetBlock <*
       analyzeFlow procedure <*
-      clearBlockifier
+      State.clearBlockifier
 
-instance Blockify (Annot ProcedureDecl) a b where
-  blockify (ProcedureDecl header `Annot` a) = do
+instance Blockify (Annot AST.ProcedureDecl) a b where
+  blockify (AST.ProcedureDecl header `Annot` a) = do
     index <- setCurrentBlock $ helperName "procedure"
     header' <- blockifyProcedureHeader header
-    withAnnot (Begins index `withBlockAnnot` a) (ProcedureDecl header') <$
+    withAnnot (Begins index `withBlockAnnot` a) (AST.ProcedureDecl header') <$
       unsetBlock <*
-      clearBlockifier
+      State.clearBlockifier
 
-instance Blockify (Annot Body) a b where
-  blockify (Body bodyItems `Annot` a) =
-    withNoBlockAnnot a . Body <$> traverse blockify bodyItems
+instance Blockify (Annot AST.Body) a b where
+  blockify (AST.Body bodyItems `Annot` a) =
+    withNoBlockAnnot a . AST.Body <$> traverse blockify bodyItems
 
 constructBlockified ::
      ( Blockify (Annot n1) a1 b1
@@ -484,40 +444,40 @@ constructBlockified constr a n = do
   n' <- blockify n
   return . withAnnot (withBlockAnnot (getBlockAnnot n') a) $ constr n'
 
-instance Blockify (Annot BodyItem) a b where
+instance Blockify (Annot AST.BodyItem) a b where
   blockify (item `Annot` a) =
     case item of
-      BodyStmt stmt -> constructBlockified BodyStmt a stmt
-      BodyDecl decl -> constructBlockified BodyDecl a decl
-      BodyStackDecl stackDecl -> constructBlockified BodyStackDecl a stackDecl
+      AST.BodyStmt stmt -> constructBlockified AST.BodyStmt a stmt
+      AST.BodyDecl decl -> constructBlockified AST.BodyDecl a decl
+      AST.BodyStackDecl stackDecl -> constructBlockified AST.BodyStackDecl a stackDecl
 
-instance Blockify (Annot StackDecl) a b where
-  blockify (StackDecl datums `Annot` a) =
-    withNoBlockAnnot a . StackDecl <$> traverse blockify datums
+instance Blockify (Annot AST.StackDecl) a b where
+  blockify (AST.StackDecl datums `Annot` a) =
+    withNoBlockAnnot a . AST.StackDecl <$> traverse blockify datums
 
-instance Blockify (Annot Decl) a b where
+instance Blockify (Annot AST.Decl) a b where
   blockify decl@(decl' `Annot` a) =
     case decl' of
-      RegDecl invar regs -> constructBlockified (RegDecl invar) a regs
-      ImportDecl imports' ->
-        withNoBlockAnnot a . ImportDecl <$> traverse blockify imports'
-      ConstDecl {} ->
-        storeSymbol constants ConstDeclSymbol decl $> noBlockAnnots decl
+      AST.RegDecl invar regs -> constructBlockified (AST.RegDecl invar) a regs
+      AST.ImportDecl imports' ->
+        withNoBlockAnnot a . AST.ImportDecl <$> traverse blockify imports'
+      AST.ConstDecl {} ->
+        storeSymbol State.constants ConstDeclSymbol decl $> noBlockAnnots decl
       _ -> return $ noBlockAnnots decl
 
-instance Blockify (Annot Import) a b where
-  blockify import'@(Annot Import {} _) =
-    storeSymbol imports ImportSymbol import' $> noBlockAnnots import'
+instance Blockify (Annot AST.Import) a b where
+  blockify import'@(Annot AST.Import {} _) =
+    storeSymbol State.imports ImportSymbol import' $> noBlockAnnots import'
 
-instance Blockify (Annot Registers) a b where
-  blockify regs@(Registers _ _ nameStrLits `Annot` _) =
+instance Blockify (Annot AST.Registers) a b where
+  blockify regs@(AST.Registers _ _ nameStrLits `Annot` _) =
     traverse_ (storeRegister . fst) nameStrLits $> noBlockAnnots regs
 
-instance Blockify (Annot Formal) a b where
+instance Blockify (Annot AST.Formal) a b where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
 storeRegister :: (GetName n, HasPos n) => n -> Blockifier ()
-storeRegister = storeSymbol registers RegisterSymbol
+storeRegister = storeSymbol State.registers RegisterSymbol
 
 storeSymbol ::
      (GetName n, HasPos n)
@@ -531,19 +491,19 @@ storeSymbol symbolMap symbolName node = do
     then registerASTError node $ duplicateSymbol symbolName node
     else symbolMap .= Map.insert (getName node) (getPos node) symbols'
 
-instance Blockify (Annot Stmt) a b where
+instance Blockify (Annot AST.Stmt) a b where
   blockify stmt@(stmt' `Annot` a) =
     case stmt' of
-      LabelStmt {} -> do
+      AST.LabelStmt {} -> do
         addControlFlow $ getName stmt -- a possible fallthrough
-        storeSymbol labels LabelSymbol stmt
+        storeSymbol State.labels LabelSymbol stmt
         blockifyLabelStmt stmt
-      ContStmt {} -> do
-        storeSymbol continuations ContSymbol stmt
+      AST.ContStmt {} -> do
+        storeSymbol State.continuations ContSymbol stmt
         blockIsSet >>=
           (`when` registerASTError stmt (continuationFallthrough stmt))
         blockifyLabelStmt stmt <* registerWrites stmt
-      GotoStmt expr _ -> do
+      AST.GotoStmt expr _ -> do
         case (getExprLVName expr, getTargetNames stmt) of
           (Nothing, Just targets@(_:_)) -> traverse_ addControlFlow targets
           (Just name, Just targets@(_:_)) ->
@@ -553,16 +513,16 @@ instance Blockify (Annot Stmt) a b where
           (Just name, _) -> addControlFlow name
           (Nothing, _) -> registerASTError stmt . GotoWithoutTargets . void $ unAnnot stmt
         registerReads stmt *> addBlockAnnot stmt <* unsetBlock
-      CutToStmt {} ->
+      AST.CutToStmt {} ->
         error "'Cut to' statements are not currently implemented" -- TODO: implement `cut to` statements
-      ReturnStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
-      JumpStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
-      EmptyStmt {} ->
+      AST.ReturnStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
+      AST.JumpStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
+      AST.EmptyStmt {} ->
         addBlockAnnot stmt -- This should be completely redundant, included just for completeness
-      AssignStmt {} -> registerReadsWrites stmt *> addBlockAnnot stmt
-      PrimOpStmt {} -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
+      AST.AssignStmt {} -> registerReadsWrites stmt *> addBlockAnnot stmt
+      AST.PrimOpStmt {} -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
        -> registerReadsWrites stmt *> addBlockAnnot stmt
-      IfStmt _ tBody mEBody -> do
+      AST.IfStmt _ tBody mEBody -> do
         case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
           (Just left, Just (Just right)) -> do
             addControlFlow left
@@ -571,25 +531,25 @@ instance Blockify (Annot Stmt) a b where
             addControlFlow left
           _ -> flatteningError stmt
         addBlockAnnot stmt <* unsetBlock
-      SwitchStmt _ arms -> do
+      AST.SwitchStmt _ arms -> do
         case traverse getTrivialGotoTarget arms of
           Just names -> traverse_ addControlFlow names
           Nothing -> flatteningError stmt
         addBlockAnnot stmt <* unsetBlock
-      SpanStmt key value body ->
-        withNoBlockAnnot a . SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
+      AST.SpanStmt key value body ->
+        withNoBlockAnnot a . AST.SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
         blockify body
-      CallStmt _ _ _ _ _ callAnnots -- TODO: implement `cut to` statements
+      AST.CallStmt _ _ _ _ _ callAnnots -- TODO: implement `cut to` statements
        ->
         registerReadsWrites stmt *> addBlockAnnot stmt <*
         when (neverReturns callAnnots) unsetBlock
 
 -- This is here just for completeness
-flatteningError :: HasPos (Annot Stmt a) => Annot Stmt a -> Blockifier ()
+flatteningError :: HasPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()
 flatteningError stmt = registerASTError stmt . FlatteningInconsistency . void $ unAnnot stmt
 
 blockifyLabelStmt ::
-     WithBlockAnnot a b => Annot Stmt a -> Blockifier (Annot Stmt b)
+     WithBlockAnnot a b => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
 blockifyLabelStmt (Annot stmt a) = do
   let name = getName stmt
   setBlock name

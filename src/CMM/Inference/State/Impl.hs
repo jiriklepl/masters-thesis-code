@@ -39,6 +39,7 @@ import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
+import safe CMM.Inference.Settings ( InferencerSettings (InferencerSettings) )
 
 data InferencerState =
   InferencerState
@@ -74,8 +75,8 @@ data InferencerState =
     }
   deriving (Show)
 
-initInferencer :: InferencerState
-initInferencer =
+initInferencer :: InferencerSettings -> InferencerState
+initInferencer InferencerSettings {} =
   InferencerState
     { _subKinding = nullVal
     , _kindingBounds = nullVal

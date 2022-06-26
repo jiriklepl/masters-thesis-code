@@ -10,30 +10,7 @@ import safe qualified Data.Text as T
 import safe GHC.Err (error)
 import safe Text.Show (Show(show))
 
-import safe CMM.AST
-  ( Class(Class)
-  , Conv(Foreign)
-  , Datum(DatumLabel)
-  , Decl(ConstDecl, PragmaDecl)
-  , Export(Export)
-  , Formal(Formal)
-  , Import(Import)
-  , Instance(Instance)
-  , Kind(Kind)
-  , KindName(KindName)
-  , LValue(LVName)
-  , Name(Name)
-  , ParaName(ParaName)
-  , Procedure(Procedure)
-  , ProcedureDecl(ProcedureDecl)
-  , ProcedureHeader(ProcedureHeader)
-  , Stmt(ContStmt, LabelStmt)
-  , StrLit(StrLit)
-  , Struct(Struct)
-  , TopLevel(TopClass, TopDecl, TopInstance, TopProcedure, TopSection,
-         TopStruct)
-  , Type(TAuto, TBits, TName)
-  )
+import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
 class GetName n where
@@ -42,121 +19,121 @@ class GetName n where
 instance GetName Text where
   getName = id
 
-instance GetName (Name a) where
+instance GetName (AST.Name a) where
   getName =
     \case
-      Name n -> n
+      AST.Name n -> n
 
 instance GetName (n a) => GetName (Annot n a) where
   getName =
     \case
       Annot n _ -> getName n
 
-instance GetName (TopLevel a) where
+instance GetName (AST.TopLevel a) where
   getName =
     \case
-      TopProcedure p -> getName p
-      TopDecl d -> getName d
-      TopSection (StrLit n) _ -> n
-      TopClass c -> getName c
-      TopInstance i -> getName i
-      TopStruct s -> getName s
+      AST.TopProcedure p -> getName p
+      AST.TopDecl d -> getName d
+      AST.TopSection (AST.StrLit n) _ -> n
+      AST.TopClass c -> getName c
+      AST.TopInstance i -> getName i
+      AST.TopStruct s -> getName s
 
-instance GetName (Decl a) where
+instance GetName (AST.Decl a) where
   getName =
     \case
-      ConstDecl _ n _ -> getName n
-      PragmaDecl n _ -> getName n
+      AST.ConstDecl _ n _ -> getName n
+      AST.PragmaDecl n _ -> getName n
       _ -> error "This declaration does not have a name"
 
-instance GetName (Class a) where
+instance GetName (AST.Class a) where
   getName =
     \case
-      Class _ n _ -> getName n
+      AST.Class _ n _ -> getName n
 
-instance GetName (Instance a) where
+instance GetName (AST.Instance a) where
   getName =
     \case
-      Instance _ n _ -> getName n
+      AST.Instance _ n _ -> getName n
 
-instance GetName (Struct a) where
+instance GetName (AST.Struct a) where
   getName =
     \case
-      Struct n _ -> getName n
+      AST.Struct n _ -> getName n
 
-instance GetName ((ParaName param) a) where
+instance GetName ((AST.ParaName param) a) where
   getName =
     \case
-      ParaName n _ -> getName n
+      AST.ParaName n _ -> getName n
 
-instance GetName (Import a) where
+instance GetName (AST.Import a) where
   getName =
     \case
-      Import _ n -> getName n
+      AST.Import _ n -> getName n
 
-instance GetName (Export a) where
+instance GetName (AST.Export a) where
   getName =
     \case
-      Export n _ -> getName n
+      AST.Export n _ -> getName n
 
-instance GetName (Datum a) where
+instance GetName (AST.Datum a) where
   getName =
     \case
-      DatumLabel n -> getName n
+      AST.DatumLabel n -> getName n
       _ -> error "This datum does not have a name"
 
-instance GetName (Procedure a) where
+instance GetName (AST.Procedure a) where
   getName =
     \case
-      Procedure h _ -> getName h
+      AST.Procedure h _ -> getName h
 
-instance GetName (ProcedureDecl a) where
+instance GetName (AST.ProcedureDecl a) where
   getName =
     \case
-      ProcedureDecl h -> getName h
+      AST.ProcedureDecl h -> getName h
 
-instance GetName (ProcedureHeader a) where
+instance GetName (AST.ProcedureHeader a) where
   getName =
     \case
-      ProcedureHeader _ n _ _ -> getName n
+      AST.ProcedureHeader _ n _ _ -> getName n
 
-instance GetName (Formal a) where
+instance GetName (AST.Formal a) where
   getName =
     \case
-      Formal _ _ _ n -> getName n
+      AST.Formal _ _ _ n -> getName n
 
-instance GetName Kind where
+instance GetName AST.Kind where
   getName =
     \case
-      Kind (StrLit n) -> n
+      AST.Kind (AST.StrLit n) -> n
 
-instance GetName (Stmt a) where
+instance GetName (AST.Stmt a) where
   getName =
     \case
-      LabelStmt n -> getName n
-      ContStmt n _ -> getName n
+      AST.LabelStmt n -> getName n
+      AST.ContStmt n _ -> getName n
       _ -> error "This statement does not have a name"
 
-instance GetName (KindName a) where
+instance GetName (AST.KindName a) where
   getName =
     \case
-      KindName _ n -> getName n
+      AST.KindName _ n -> getName n
 
-instance GetName (LValue a) where
+instance GetName (AST.LValue a) where
   getName =
     \case
-      LVName n -> getName n
+      AST.LVName n -> getName n
       _ -> error "This lvalue does not have a name"
 
-instance GetName (Type a) where
+instance GetName (AST.Type a) where
   getName =
     \case
-      TName n -> getName n
-      TBits n -> T.pack $ "bits" ++ show n
-      TAuto (Just n) -> getName n
+      AST.TName n -> getName n
+      AST.TBits n -> T.pack $ "bits" ++ show n
+      AST.TAuto (Just n) -> getName n
       _ -> error "This type does not have a name"
 
-instance GetName Conv where
+instance GetName AST.Conv where
   getName =
     \case
-      Foreign (StrLit n) -> n
+      AST.Foreign (AST.StrLit n) -> n

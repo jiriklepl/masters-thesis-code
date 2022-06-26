@@ -39,18 +39,21 @@ registerASTInfo ::
   => n
   -> err
   -> m ()
-registerASTInfo n err = registerInfo $ getPos n `ASTError` err
+registerASTInfo n err = registerInfo $ n `makeASTError` err
 
 registerASTError ::
      (IsError err, HasErrorState s ErrorState, MonadState s m, HasPos n)
   => n
   -> err
   -> m ()
-registerASTError n err = registerError $ getPos n `ASTError` err
+registerASTError n err = registerError $ n `makeASTError` err
 
 registerASTWarning ::
      (IsError err, HasErrorState s ErrorState, MonadState s m, HasPos n)
   => n
   -> err
   -> m ()
-registerASTWarning n err = registerWarning $ getPos n `ASTError` err
+registerASTWarning n err = registerWarning $ n `makeASTError` err
+
+makeASTError :: HasPos a => a -> err -> ASTError err
+makeASTError n err = getPos n `ASTError` err

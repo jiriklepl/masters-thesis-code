@@ -52,7 +52,7 @@ import safe CMM.Pretty
   , maybeSpacedL
   , maybeSpacedR
   )
-import safe CMM.Utils (backQuote)
+import safe CMM.Utils (backQuote, HasCallStack)
 import safe Data.Monoid (Monoid(mempty))
 
 newtype Unit a =
@@ -517,7 +517,7 @@ instance Pretty (Stmt a) where
         pretty expr <>
         parens (commaPretty actuals) <> hsep (pretty <$> flows) <> semi
 
-prettyCallStmtRest :: Stmt a -> Doc ann
+prettyCallStmtRest :: HasCallStack => Stmt a -> Doc ann
 prettyCallStmtRest =
   \case
     CallStmt _ _ expr actuals mTargets flowOrAliases ->

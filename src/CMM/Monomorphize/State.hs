@@ -6,8 +6,8 @@ module CMM.Monomorphize.State
   , module CMM.Monomorphize.State.Impl
   ) where
 
-import safe Control.Lens.Getter (uses)
-import safe Control.Lens.Setter (ASetter', (%=), (%~), (.=), (<>=))
+import safe Control.Lens.Getter (uses, use)
+import safe Control.Lens.Setter (ASetter', (%=), (%~), (.=), (<>=), (+=))
 import safe Control.Lens.Tuple (Field1(_1), Field2(_2))
 import safe Control.Monad (Monad(return), unless, when)
 import safe Data.Bool (Bool(False), not)
@@ -16,17 +16,21 @@ import safe Data.Functor (Functor(fmap), (<$>))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (maybe)
-import safe Data.Monoid (Monoid(mempty))
+import safe Data.Monoid (Monoid(mempty, mappend))
 import safe Data.Semigroup (Semigroup)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Control.Lens.Lens (Lens')
+import safe Data.Int ( Int )
 
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Monomorphize.Schematized (Schematized)
+import safe CMM.Parser.HasPos ( HasPos(getPos) )
+import safe CMM.AST.Wrap ( ASTWrapper )
+import safe CMM.AST.Annot ( Annot )
 
 import safe CMM.Monomorphize.State.Impl
   ( MonomorphizeState
@@ -42,6 +46,8 @@ import safe CMM.Monomorphize.State.Impl
   , polyMethods
   , polySchemes
   , polyStorage
+  , polyWaves
+  , maxPolyWaves, PolyMemory (PolyMemory, getPolyMemory)
   )
 
 renewPolyData :: Map TypeVar TypeVar -> Monomorphizer a ()
@@ -66,8 +72,8 @@ addImpl ::
 addImpl which scheme inst =
   (<>= which (Map.singleton scheme $ Set.singleton inst))
 
-memorizeImpl :: Lens' (MonomorphizeState a) PolyGenerate -> TypeVar -> TypeVar -> Monomorphizer a ()
-memorizeImpl toWhere scheme inst = addImpl PolyGenerate scheme inst toWhere
+memorizeImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> TypeVar -> Monomorphizer a ()
+memorizeImpl toWhere scheme inst = addImpl PolyMemory scheme inst toWhere
 
 memorize :: TypeVar -> TypeVar -> Monomorphizer a ()
 memorize = memorizeImpl polyMemory
@@ -75,15 +81,19 @@ memorize = memorizeImpl polyMemory
 store :: TypeVar -> TypeVar -> Monomorphizer a ()
 store = memorizeImpl polyStorage
 
-memorizeStrong :: TypeVar -> TypeVar -> Monomorphizer a ()
-memorizeStrong scheme inst = do
-  memorize scheme inst
-  removeGenerate scheme inst
+incWaves :: Monomorphizer a Int
+incWaves = do
+  polyWaves += 1
+  use polyWaves
 
-isMemorizedImpl :: Lens' (MonomorphizeState a) PolyGenerate -> TypeVar -> TypeVar -> Monomorphizer a Bool
+getMaxWaves :: Monomorphizer a Int
+getMaxWaves =
+  use maxPolyWaves
+
+isMemorizedImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> TypeVar -> Monomorphizer a Bool
 isMemorizedImpl inWhere scheme inst =
   uses inWhere $ maybe False (Set.member inst) . Map.lookup scheme .
-  getPolyGenerate
+  getPolyMemory
 
 isMemorized :: TypeVar -> TypeVar -> Monomorphizer a Bool
 isMemorized = isMemorizedImpl polyMemory
@@ -91,7 +101,7 @@ isMemorized = isMemorizedImpl polyMemory
 isStored :: TypeVar -> TypeVar -> Monomorphizer a Bool
 isStored = isMemorizedImpl polyStorage
 
-tryMemorizeImpl :: Lens' (MonomorphizeState a) PolyGenerate -> TypeVar -> TypeVar -> Monomorphizer a Bool
+tryMemorizeImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> TypeVar -> Monomorphizer a Bool
 tryMemorizeImpl toWhere scheme inst = do
   memorized <- isMemorizedImpl toWhere scheme inst
   unless memorized $ memorizeImpl toWhere scheme inst
@@ -103,15 +113,10 @@ tryMemorize  = tryMemorizeImpl polyMemory
 tryStore :: TypeVar -> TypeVar -> Monomorphizer a Bool
 tryStore = tryMemorizeImpl polyStorage
 
-addGenerate :: TypeVar -> TypeVar -> Monomorphizer a ()
-addGenerate scheme inst = do
+addGenerate :: HasPos a => Annot ASTWrapper a -> TypeVar -> TypeVar -> Monomorphizer a ()
+addGenerate n scheme inst = do
   success <- tryMemorize scheme inst
-  when success $ addImpl PolyGenerate scheme inst polyGenerate
-
-removeGenerate :: TypeVar -> TypeVar -> Monomorphizer a ()
-removeGenerate scheme inst =
-  polyGenerate %= PolyGenerate . Map.adjust (Set.delete inst) scheme .
-  getPolyGenerate
+  when success $ polyGenerate %= PolyGenerate . Map.insertWith mappend scheme [(inst, getPos <$> n)] . getPolyGenerate
 
 addPolyScheme :: TypeVar -> Scheme Type -> Schematized a -> Monomorphizer a ()
 addPolyScheme tVar scheme schematized =

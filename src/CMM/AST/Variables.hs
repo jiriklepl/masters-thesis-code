@@ -14,41 +14,13 @@ import safe Data.Maybe (Maybe(Just, Nothing))
 import safe qualified Data.Set as Set
 import safe Data.Tuple (fst)
 
-import safe CMM.AST
-  ( Class(Class)
-  , Datum(DatumLabel)
-  , Decl(ConstDecl, TypedefDecl)
-  , Formal
-  , Import
-  , Instance
-  , ParaName(ParaName)
-  , Procedure
-  , ProcedureDecl
-  , Registers(Registers)
-  , Section
-  , Stmt(LabelStmt)
-  , Struct(Struct)
-  , Type(TAuto)
-  , Unit
-  )
+import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.GetName (GetName, getName)
 import safe CMM.AST.Variables.State
   ( Collector
-  , CollectorState
-  , addFIVar
-  , addFVar
-  , addFVarTrivial
-  , addSMemTrivial
-  , addTAlias
-  , addTClass
-  , addTCon
-  , addTVar
-  , addTVarTrivial
-  , addVar
-  , addVarTrivial
-  , initCollector
-  )
+  , CollectorState)
+import safe qualified CMM.AST.Variables.State as State
 import safe CMM.Data.Generics ((<*|*>))
 import safe CMM.Inference.TypeKind
   ( TypeKind((:->), Constraint, GenericType, Star)
@@ -62,7 +34,7 @@ localVariables n = variablesCommon . go $ getPos <$> n
     go :: Data d => d -> Collector d
     go = addTAutoCases $ addCommonCases $ gmapM go
 
-globalVariables :: HasPos a => Unit a -> CollectorState
+globalVariables :: HasPos a => AST.Unit a -> CollectorState
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
@@ -70,21 +42,21 @@ globalVariables n = variablesCommon . go $ getPos <$> n
 
 addParaNameTVars ::
      (HasPos annot, GetName (param annot))
-  => Annot (ParaName param) annot
+  => Annot (AST.ParaName param) annot
   -> Collector ()
-addParaNameTVars (Annot (ParaName _ params) _) =
-  traverse_ (`addTVarTrivial` GenericType) params
+addParaNameTVars (Annot (AST.ParaName _ params) _) =
+  traverse_ (`State.addTVarTrivial` GenericType) params
 
-structVariables :: HasPos a => Struct a -> CollectorState
-structVariables (Struct paraName datums) =
+structVariables :: HasPos a => AST.Struct a -> CollectorState
+structVariables (AST.Struct paraName datums) =
   variablesCommon $ do
     traverse_
-      (`addSMemTrivial` Star)
-      [label | label@(Annot DatumLabel {} _) <- datums]
+      (`State.addSMemTrivial` Star)
+      [label | label@(Annot AST.DatumLabel {} _) <- datums]
     addParaNameTVars paraName
 
-classVariables :: HasPos a => Class a -> CollectorState
-classVariables class'@(Class _ paraName _) =
+classVariables :: HasPos a => AST.Class a -> CollectorState
+classVariables class'@(AST.Class _ paraName _) =
   variablesCommon $ do
     addParaNameTVars paraName
     gmapM go $ getPos <$> class'
@@ -92,14 +64,14 @@ classVariables class'@(Class _ paraName _) =
     go :: Data d => d -> Collector d
     go = addProcedureDeclCases $ gmapM go
 
-instanceVariables :: HasPos a => Instance a -> CollectorState
+instanceVariables :: HasPos a => AST.Instance a -> CollectorState
 instanceVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
     go = addTAutoCases $ addProcedureCases $ gmapM go
 
 variablesCommon :: Collector a -> CollectorState
-variablesCommon = (`execState` initCollector)
+variablesCommon = (`execState` State.initCollector)
 
 type CasesAdder m a
    = Data a =>
@@ -114,28 +86,28 @@ addCommonCases go =
   where
     goFormal =
       \case
-        (formal :: Annot Formal SourcePos) ->
-          gmapM go formal *> addVarTrivial formal Star
+        (formal :: Annot AST.Formal SourcePos) ->
+          gmapM go formal *> State.addVarTrivial formal Star
     goDecl =
       \case
-        decl@(Annot ConstDecl {} (_ :: SourcePos)) -> addVarTrivial decl Star
-        decl@(Annot (TypedefDecl _ names) (_ :: SourcePos)) ->
-          decl <$ traverse_ (`addTAlias` GenericType) names
+        decl@(Annot AST.ConstDecl {} (_ :: SourcePos)) -> State.addVarTrivial decl Star
+        decl@(Annot (AST.TypedefDecl _ names) (_ :: SourcePos)) ->
+          decl <$ traverse_ (`State.addTAlias` GenericType) names
         decl -> gmapM go decl
     goImport =
       \case
-        (import' :: Annot Import SourcePos) -> addVarTrivial import' Star
+        (import' :: Annot AST.Import SourcePos) -> State.addVarTrivial import' Star
     goRegisters =
       \case
-        registers@(Annot (Registers _ _ nameStrLits) (_ :: SourcePos)) ->
-          registers <$ traverse_ (`addVar` Star) (fst <$> nameStrLits)
+        registers@(Annot (AST.Registers _ _ nameStrLits) (_ :: SourcePos)) ->
+          registers <$ traverse_ (`State.addVar` Star) (fst <$> nameStrLits)
     goDatum =
       \case
-        datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum Star
+        datum@(Annot AST.DatumLabel {} (_ :: SourcePos)) -> State.addVarTrivial datum Star
         datum -> gmapM go datum
     goStmt =
       \case
-        stmt@(Annot LabelStmt {} (_ :: SourcePos)) -> addVarTrivial stmt Star
+        stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) -> State.addVarTrivial stmt Star
         stmt -> gmapM go stmt
 
 addGlobalCases :: CasesAdder m a
@@ -145,35 +117,35 @@ addGlobalCases go =
   where
     goClass =
       \case
-        class'@(Annot (Class _ (Annot (ParaName _ args) _) methods) (_ :: SourcePos)) -> do
+        class'@(Annot (AST.Class _ (Annot (AST.ParaName _ args) _) methods) (_ :: SourcePos)) -> do
           traverse_ addMethod methods
           class' <$
-            addTClass
+            State.addTClass
               class'
               (foldr (:->) Constraint (Star <$ args))
               (Set.fromList $ getName <$> methods) -- TODO: add less trivial kind analysis (should be a simple bunch of unifs)
       where
         addMethod node = do
-          addFVar node Star
-          addFIVar node Star
+          State.addFVar node Star
+          State.addFIVar node Star
     goInstance =
       \case
-        (instance' :: Annot Instance SourcePos) -> return instance'
+        (instance' :: Annot AST.Instance SourcePos) -> return instance'
     goStruct =
       \case
-        struct@(Annot (Struct (Annot (ParaName _ args) _) decls) (_ :: SourcePos)) -> do
-          addTCon struct (foldr (:->) Star (Star <$ args)) -- TODO: add less trivial kind analysis
+        struct@(Annot (AST.Struct (Annot (AST.ParaName _ args) _) decls) (_ :: SourcePos)) -> do
+          State.addTCon struct (foldr (:->) Star (Star <$ args)) -- TODO: add less trivial kind analysis
           traverse_
-            (`addSMemTrivial` Star)
-            [label | label@(Annot DatumLabel {} _) <- decls]
+            (`State.addSMemTrivial` Star)
+            [label | label@(Annot AST.DatumLabel {} _) <- decls]
           return struct
     goSection =
       \case
-        (section :: Annot Section SourcePos) -> gmapM goSectionItems section
+        (section :: Annot AST.Section SourcePos) -> gmapM goSectionItems section
     goProcedure =
       \case
-        (procedure :: Annot Procedure SourcePos) ->
-          addFVarTrivial procedure Star
+        (procedure :: Annot AST.Procedure SourcePos) ->
+          State.addFVarTrivial procedure Star
     goSectionItems :: Data d => d -> Collector d
     goSectionItems = addSectionCases $ addCommonCases $ gmapM goSectionItems
 
@@ -182,8 +154,8 @@ addSectionCases go = goProcedure <*|*> go
   where
     goProcedure =
       \case
-        (procedure :: Annot Procedure SourcePos) ->
-          addFVarTrivial procedure Star <* gmapM goLabels procedure
+        (procedure :: Annot AST.Procedure SourcePos) ->
+          State.addFVarTrivial procedure Star <* gmapM goLabels procedure
     goLabels :: Data d => d -> Collector d
     goLabels = addLabelCases $ gmapM goLabels
 
@@ -192,27 +164,27 @@ addProcedureDeclCases go = goProcedureDecl <*|*> go
   where
     goProcedureDecl =
       \case
-        (procedureDecl :: Annot ProcedureDecl SourcePos) ->
-          addFVarTrivial procedureDecl Star
+        (procedureDecl :: Annot AST.ProcedureDecl SourcePos) ->
+          State.addFVarTrivial procedureDecl Star
 
 addProcedureCases :: CasesAdder m a
 addProcedureCases go = goProcedure <*|*> go
   where
     goProcedure =
       \case
-        (procedureDecl :: Annot Procedure SourcePos) ->
-          addFVarTrivial procedureDecl Star
+        (procedureDecl :: Annot AST.Procedure SourcePos) ->
+          State.addFVarTrivial procedureDecl Star
 
 addLabelCases :: CasesAdder m a
 addLabelCases go = goStmt <*|*> goDatum <*|*> go
   where
     goStmt =
       \case
-        stmt@(Annot LabelStmt {} (_ :: SourcePos)) -> addVarTrivial stmt Star
+        stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) -> State.addVarTrivial stmt Star
         stmt -> gmapM go stmt
     goDatum =
       \case
-        datum@(Annot DatumLabel {} (_ :: SourcePos)) -> addVarTrivial datum Star
+        datum@(Annot AST.DatumLabel {} (_ :: SourcePos)) -> State.addVarTrivial datum Star
         datum -> gmapM go datum
 
 addTAutoCases :: CasesAdder m a
@@ -220,7 +192,7 @@ addTAutoCases go = goTAuto <*|*> go
   where
     goTAuto =
       \case
-        tAuto@(Annot (TAuto Nothing) (_ :: SourcePos)) -> return tAuto
-        tAuto@(Annot (TAuto Just {}) (_ :: SourcePos)) ->
-          tAuto <$ addTVar tAuto GenericType
+        tAuto@(Annot (AST.TAuto Nothing) (_ :: SourcePos)) -> return tAuto
+        tAuto@(Annot (AST.TAuto Just {}) (_ :: SourcePos)) ->
+          tAuto <$ State.addTVar tAuto GenericType
         type' -> gmapM go type'

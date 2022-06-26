@@ -61,6 +61,11 @@ import qualified Data.Set as Set
 import Data.Tuple
 import GHC.Show
 import CMM.Err.State
+import qualified CMM.Inference.State.Impl as InferState
+import CMM.Inference.Preprocess.Settings
+import CMM.Inference.Settings
+import CMM.Monomorphize.Settings (MonomorphizerSettings(MonomorphizerSettings))
+import CMM.Inference.State.Impl
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -72,7 +77,7 @@ main = do
   let ast = either undefined id $ parse unit tokens'
   -- let flattened = flatten ast
   -- print $ pretty flattened
-  let (mined, miner) = runState (preprocess ast) initPreprocessor
+  let (mined, miner) = runState (preprocess ast) $ initPreprocessor PreprocessorSettings {}
   -- let (_, _) = runState (blockify flattened) B.initBlockifier
   -- let translated =
   --       ppllvm $
@@ -93,21 +98,21 @@ main = do
       fs = reverse . head $ view CMM.Inference.Preprocess.State.facts miner
   print . sep $ pretty <$> fs
   let (fs', inferencer) =
-        (`runState` InferState.initInferencer) $ do
+        (`runState` InferState.initInferencer InferencerSettings {}) $ do
           setHandleCounter oldCounter
           mineAST mined
           reduce fs
   let (msg, (inferencer', monomorphizer)) =
-        (`runState` (inferencer, Infer.initMonomorphizeState)) $ do
+        (`runState` (inferencer, Infer.initMonomorphizeState MonomorphizerSettings)) $ do
           monomorphize mempty mined <&> \case
             Left what -> show what
             Right mined' -> show $ pretty mined'
   putStrLn msg
-  print .
-    vsep .
-    fmap (uncurry mappend . bimap pretty (list . fmap pretty . Set.toList)) .
-    Map.toList . Infer.getPolyGenerate $
-    monomorphizer ^. Infer.polyMemory
+  -- print .
+  --   vsep .
+  --   fmap (uncurry mappend . bimap pretty (list . fmap pretty . Set.toList)) .
+  --   Map.toList . Infer.getPolyGenerate $
+  --   monomorphizer ^. Infer.polyMemory
   print "ERRORS:"
   print . vsep . fmap pretty . view errors $ inferencer ^. errorState
   print "CLASS_SCHEMES:"

@@ -66,7 +66,7 @@ import safe CMM.Inference.Fact
 import safe CMM.Inference.GetParent (makeAdoption)
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
-  ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx)
+  ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx, ctxFunctionHandle, ctxConstraint, ctxSupers)
   )
 import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, MethodTypeHole, SimpleTypeHole)
@@ -244,7 +244,7 @@ beginProc name hole collector mConv = do
     [ constExprConstraint currentReturn
     , tVarId (handleId currentReturn) `tupleKind` currentReturn
     ]
-  pushContext $ FunctionCtx (name, hole) currentReturn mConv
+  pushContext $ FunctionCtx name hole currentReturn mConv
 
 openProc :: CollectorState -> Preprocessor ()
 openProc collector = do
@@ -279,7 +279,7 @@ lookupCtxFVar name = use currentContext >>= go
     go =
       \case
         ClassCtx {}:_ -> lookupFVar name
-        FunctionCtx (name', handle) _ _:others
+        FunctionCtx name' handle _ _:others
           | name == name' -> return handle
           | otherwise -> go others
         GlobalCtx:_ -> lookupFVar name
@@ -292,7 +292,7 @@ getCurrentReturn = uses currentContext $ go . head
   where
     go =
       \case
-        FunctionCtx _ handle _ -> SimpleTypeHole handle
+        FunctionCtx {ctxFunctionHandle} -> SimpleTypeHole ctxFunctionHandle
         _ -> noCurrentReturn
 
 getCtxName :: Preprocessor Text
@@ -307,8 +307,8 @@ getCtxClassConstraint = uses currentContext go
     go =
       \case
         GlobalCtx:_ -> (mempty, noType)
-        ClassCtx _ classConstraint' _:_ -> classConstraint'
-        InstanceCtx _ classConstraint' _:_ -> classConstraint'
+        ClassCtx {ctxConstraint}:_ -> ctxConstraint
+        InstanceCtx {ctxConstraint}:_ -> ctxConstraint
         FunctionCtx {}:others -> go others
         StructCtx {}:others -> go others
         [] -> poppedGlobalCtxError
@@ -323,14 +323,14 @@ storeProc name fs x = do
       hole <- lookupFVar name
       storeFact . apply subst $ forall tVars' [hole `typeUnion` t] fs
       return hole
-    ClassCtx _ classConstraint' _ ->
+    ClassCtx {ctxConstraint} ->
       storeElaboratedProc subst tVars' $
-      Fact (uncurry classConstraint classConstraint') :
+      Fact (uncurry classConstraint ctxConstraint) :
       fs
-    InstanceCtx _ classConstraint' superConstraints ->
+    InstanceCtx {ctxConstraint, ctxSupers} ->
       storeElaboratedProc subst tVars' $
-      Fact (uncurry classFact classConstraint') :
-      (Fact . uncurry classFact <$> superConstraints) <>
+      Fact (uncurry classFact ctxConstraint) :
+      (Fact . uncurry classFact <$> ctxSupers) <>
       fs
     FunctionCtx {} -> goIllegal
     StructCtx {} -> goIllegal
@@ -392,38 +392,38 @@ collectTVars =
 
 -- TODO
 pushStruct :: (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
-pushStruct handle mainHandle = do
+pushStruct (name, hole) constraint@(_, t) = do
   tVars <- collectTVars
-  pushContext $ StructCtx handle mainHandle
+  pushContext $ StructCtx name hole constraint
   storeFact $
     forall
       tVars
-      [snd handle `typeUnion` snd mainHandle]
-      [Fact . regularExprConstraint $ snd mainHandle]
+      [hole `typeUnion` t]
+      [Fact $ regularExprConstraint t]
 
 pushClass ::
-     (Text, TypeHole) -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
-pushClass handle mainHandle supHandles -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
+     Text -> TypeHole -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
+pushClass name hole constraint supers -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
  = do
   tVars <- collectTVars
   storeFact $
     forall
       tVars
-      [uncurry classConstraint mainHandle]
-      (Fact . uncurry classFact <$> supHandles)
-  pushContext $ ClassCtx handle mainHandle supHandles
+      [uncurry classConstraint constraint]
+      (Fact . uncurry classFact <$> supers)
+  pushContext $ ClassCtx name hole constraint supers
 
 pushInstance ::
-     (Text, TypeHole) -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
-pushInstance handle mainHandle supHandles -- TODO: solve type variables not in scope in superclasses
+     Text -> TypeHole -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
+pushInstance name hole constraint supers -- TODO: solve type variables not in scope in superclasses
  = do
   tVars <- collectTVars
   storeFact $
     forall
       tVars
-      [uncurry classFact mainHandle]
-      (Fact . uncurry classFact <$> supHandles)
-  pushContext $ InstanceCtx handle mainHandle supHandles
+      [uncurry classFact constraint]
+      (Fact . uncurry classFact <$> supers)
+  pushContext $ InstanceCtx name hole constraint supers
 
 popContext :: Preprocessor ()
 popContext = currentContext %= tail

@@ -57,11 +57,20 @@ instance Eq Error where
 instance Pretty Error where
   pretty Error {_errSeverity = severity, _errContent = content} = pretty severity <> ":" <+> pretty content
 
+makeInfo :: IsError err => err -> Error
+makeInfo = Error InfoLevel
+
 isInfo :: Error -> Bool
 isInfo Error {_errSeverity = severity} = severity == InfoLevel
 
+makeWarning :: IsError err => err -> Error
+makeWarning = Error WarningLevel
+
 isWarning :: Error -> Bool
 isWarning Error {_errSeverity = severity} = severity == WarningLevel
+
+makeError :: IsError err => err -> Error
+makeError = Error ErrorLevel
 
 isError :: Error -> Bool
 isError Error {_errSeverity = severity} = severity == ErrorLevel

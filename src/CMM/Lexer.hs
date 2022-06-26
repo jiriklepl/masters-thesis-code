@@ -2,8 +2,6 @@
 
 module CMM.Lexer
   ( Lexer
-  , Reserved(..)
-  , Token(..)
   , tokenize
   ) where
 
@@ -15,14 +13,12 @@ import safe Control.Applicative
   )
 import safe Data.Bool (Bool(False, True))
 import safe Data.Char (Char)
-import safe Data.Eq (Eq)
 import safe Data.Function (($), (.), flip)
-import safe Data.Functor (Functor, ($>), (<$>), void)
+import safe Data.Functor (($>), (<$>), void)
 import safe Data.Int (Int)
 import safe Data.List ((++))
 import safe Data.Maybe (isNothing)
-import safe Data.Ord (Ord)
-import safe Data.String (String, IsString)
+import safe Data.String (String)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
 import safe Data.Void (Void)
@@ -44,12 +40,10 @@ import safe Text.Megaparsec.Char
   , string
   )
 import safe qualified Text.Megaparsec.Char.Lexer as L
-import safe Text.Show (Show)
 
-import safe CMM.Data.Float (Float)
 import safe CMM.Data.Num (Num(negate))
-import Data.Monoid
-import CMM.Lexer.Token
+import safe qualified CMM.Lexer.Token as T
+import safe CMM.Lexer.Token (Token)
 
 type Lexer = Parsec Void Text
 
@@ -72,15 +66,15 @@ keyword k = void . label (T.unpack k) . lexeme $ try (string k <* notFollowedBy 
 
 stringLiteral :: ULocLexer
 stringLiteral =
-  lexeme $ char '"' *> (StrLit . T.pack <$> manyTill L.charLiteral (char '"'))
+  lexeme $ char '"' *> (T.StrLit . T.pack <$> manyTill L.charLiteral (char '"'))
 
 charLiteral :: ULocLexer
-charLiteral = lexeme $ char '\'' *> (CharLit <$> L.charLiteral) <* char '\''
+charLiteral = lexeme $ char '\'' *> (T.CharLit <$> L.charLiteral) <* char '\''
 
 identifier :: ULocLexer
 identifier =
   lexeme $
-  Ident . T.pack <$> liftA2 (:) (letterChar <|> otherIdentChars) identifierRest
+  T.Ident . T.pack <$> liftA2 (:) (letterChar <|> otherIdentChars) identifierRest
 
 identifierRest :: Lexer String
 identifierRest = many $ alphaNumChar <|> otherIdentChars
@@ -92,7 +86,7 @@ withSourcePos :: ULocLexer -> SourceLexer
 withSourcePos = liftA2 withAnnot getSourcePos
 
 int :: ULocLexer
-int = IntLit <$> (signedInt <|> unsignedInt)
+int = T.IntLit <$> (signedInt <|> unsignedInt)
 
 signedInt :: Lexer (Int, Bool)
 signedInt = lexeme (char '-' *> ((, True) . negate <$> L.decimal))
@@ -113,96 +107,96 @@ unsignedSpec :: Lexer Bool
 unsignedSpec = isNothing <$> optional (oneOf ['u', 'U'])
 
 float :: ULocLexer
-float = FloatLit <$> lexeme L.float
+float = T.FloatLit <$> lexeme L.float
 
 token :: SourceLexer
 token =
   withSourcePos $
   choice
-    [ keyword abortsName $> Keyword Aborts
-    , keyword alignName $> Keyword Align
-    , keyword alignedName $> Keyword Aligned
-    , keyword alsoName $> Keyword Also
-    , keyword asName $> Keyword As
-    , keyword autoName $> Keyword Auto
-    , keyword bigName $> Keyword Big
-    , keyword byteorderName $> Keyword Byteorder
-    , keyword caseName $> Keyword Case
-    , keyword className $> Keyword Class
-    , keyword constName $> Keyword Const
-    , keyword continuationName $> Keyword Continuation
-    , keyword cutName $> Keyword Cut
-    , keyword cutsName $> Keyword Cuts
-    , keyword elseName $> Keyword Else
-    , keyword equalName $> Keyword Equal
-    , keyword exportName $> Keyword Export
-    , keyword foreignName $> Keyword Foreign
-    , keyword gotoName $> Keyword Goto
-    , keyword ifName $> Keyword If
-    , keyword importName $> Keyword Import
-    , keyword inName $> Keyword In
-    , keyword instanceName $> Keyword Instance
-    , keyword invariantName $> Keyword Invariant
-    , keyword invisibleName $> Keyword Invisible
-    , keyword jumpName $> Keyword Jump
-    , keyword littleName $> Keyword Little
-    , keyword memsizeName $> Keyword Memsize
-    , keyword neverName $> Keyword Never
-    , keyword pointersizeName $> Keyword Pointersize
-    , keyword pragmaName $> Keyword Pragma
-    , keyword readsName $> Keyword Reads
-    , keyword registerName $> Keyword Register
-    , keyword returnName $> Keyword Return
-    , keyword returnsName $> Keyword Returns
-    , keyword sectionName $> Keyword Section
-    , keyword semiName $> Keyword Semi
-    , keyword spanName $> Keyword Span
-    , keyword stackdataName $> Keyword Stackdata
-    , keyword structName $> Keyword Struct
-    , keyword switchName $> Keyword Switch
-    , keyword targetName $> Keyword Target
-    , keyword targetsName $> Keyword Targets
-    , keyword toName $> Keyword To
-    , keyword typedefName $> Keyword Typedef
-    , keyword unicodeName $> Keyword Unicode
-    , keyword unwindsName $> Keyword Unwinds
-    , keyword wordsizeName $> Keyword Wordsize
-    , keyword writesName $> Keyword Writes
-    , symbol "{" $> LBrace
-    , symbol "}" $> RBrace
-    , symbol "(" $> LParen
-    , symbol ")" $> RParen
-    , symbol "[" $> LBracket
-    , symbol "]" $> RBracket
-    , symbol "<" *> choice [symbol "<" $> ShL, symbol "=" $> Leq, pure Lt]
-    , symbol ">" *> choice [symbol ">" $> ShR, symbol "=" $> Geq, pure Gt]
-    , symbol "]" $> RBracket
-    , symbol "," $> Comma
-    , symbol ".." $> DotDot
-    , symbol ":" *> choice [symbol ":" $> DColon, pure Colon]
-    , symbol ";" $> Semicolon
-    , symbol "`" $> Backtick
-    , symbol "%" *> choice [symbol "%" $> DPercent, pure Percent]
-    , symbol "~" $> Tilde
-    , symbol "-" *> choice [symbol ">" $> Arr, pure Minus]
-    , symbol "+" $> Plus
-    , symbol "/" $> Slash
-    , symbol "*" $> Star
-    , symbol "&" $> Ampersand
-    , symbol "|" $> Pipe
-    , symbol "^" $> Caret
-    , symbol "!=" $> Neq
-    , symbol "=" *> choice [symbol "=" $> Eq, symbol ">" $> DArr, pure EqSign]
+    [ keyword T.abortsName $> T.Keyword T.Aborts
+    , keyword T.alignName $> T.Keyword T.Align
+    , keyword T.alignedName $> T.Keyword T.Aligned
+    , keyword T.alsoName $> T.Keyword T.Also
+    , keyword T.asName $> T.Keyword T.As
+    , keyword T.autoName $> T.Keyword T.Auto
+    , keyword T.bigName $> T.Keyword T.Big
+    , keyword T.byteorderName $> T.Keyword T.Byteorder
+    , keyword T.caseName $> T.Keyword T.Case
+    , keyword T.className $> T.Keyword T.Class
+    , keyword T.constName $> T.Keyword T.Const
+    , keyword T.continuationName $> T.Keyword T.Continuation
+    , keyword T.cutName $> T.Keyword T.Cut
+    , keyword T.cutsName $> T.Keyword T.Cuts
+    , keyword T.elseName $> T.Keyword T.Else
+    , keyword T.equalName $> T.Keyword T.Equal
+    , keyword T.exportName $> T.Keyword T.Export
+    , keyword T.foreignName $> T.Keyword T.Foreign
+    , keyword T.gotoName $> T.Keyword T.Goto
+    , keyword T.ifName $> T.Keyword T.If
+    , keyword T.importName $> T.Keyword T.Import
+    , keyword T.inName $> T.Keyword T.In
+    , keyword T.instanceName $> T.Keyword T.Instance
+    , keyword T.invariantName $> T.Keyword T.Invariant
+    , keyword T.invisibleName $> T.Keyword T.Invisible
+    , keyword T.jumpName $> T.Keyword T.Jump
+    , keyword T.littleName $> T.Keyword T.Little
+    , keyword T.memsizeName $> T.Keyword T.Memsize
+    , keyword T.neverName $> T.Keyword T.Never
+    , keyword T.pointersizeName $> T.Keyword T.Pointersize
+    , keyword T.pragmaName $> T.Keyword T.Pragma
+    , keyword T.readsName $> T.Keyword T.Reads
+    , keyword T.registerName $> T.Keyword T.Register
+    , keyword T.returnName $> T.Keyword T.Return
+    , keyword T.returnsName $> T.Keyword T.Returns
+    , keyword T.sectionName $> T.Keyword T.Section
+    , keyword T.semiName $> T.Keyword T.Semi
+    , keyword T.spanName $> T.Keyword T.Span
+    , keyword T.stackdataName $> T.Keyword T.Stackdata
+    , keyword T.structName $> T.Keyword T.Struct
+    , keyword T.switchName $> T.Keyword T.Switch
+    , keyword T.targetName $> T.Keyword T.Target
+    , keyword T.targetsName $> T.Keyword T.Targets
+    , keyword T.toName $> T.Keyword T.To
+    , keyword T.typedefName $> T.Keyword T.Typedef
+    , keyword T.unicodeName $> T.Keyword T.Unicode
+    , keyword T.unwindsName $> T.Keyword T.Unwinds
+    , keyword T.wordsizeName $> T.Keyword T.Wordsize
+    , keyword T.writesName $> T.Keyword T.Writes
+    , symbol "{" $> T.LBrace
+    , symbol "}" $> T.RBrace
+    , symbol "(" $> T.LParen
+    , symbol ")" $> T.RParen
+    , symbol "[" $> T.LBracket
+    , symbol "]" $> T.RBracket
+    , symbol "<" *> choice [symbol "<" $> T.ShL, symbol "=" $> T.Leq, pure T.Lt]
+    , symbol ">" *> choice [symbol ">" $> T.ShR, symbol "=" $> T.Geq, pure T.Gt]
+    , symbol "]" $> T.RBracket
+    , symbol "," $> T.Comma
+    , symbol ".." $> T.DotDot
+    , symbol ":" *> choice [symbol ":" $> T.DColon, pure T.Colon]
+    , symbol ";" $> T.Semicolon
+    , symbol "`" $> T.Backtick
+    , symbol "%" *> choice [symbol "%" $> T.DPercent, pure T.Percent]
+    , symbol "~" $> T.Tilde
+    , symbol "-" *> choice [symbol ">" $> T.Arr, pure T.Minus]
+    , symbol "+" $> T.Plus
+    , symbol "/" $> T.Slash
+    , symbol "*" $> T.Star
+    , symbol "&" $> T.Ampersand
+    , symbol "|" $> T.Pipe
+    , symbol "^" $> T.Caret
+    , symbol "!=" $> T.Neq
+    , symbol "=" *> choice [symbol "=" $> T.Eq, symbol ">" $> T.DArr, pure T.EqSign]
     , stringLiteral
     , charLiteral
     , try float
     , int
     , lexeme $
-      string bitsName *>
+      string T.bitsName *>
       choice
-        [ BitsType <$> L.decimal
-        , Ident . T.pack . (bitsName ++) <$> identifierRest
-        , pure $ Keyword Bits
+        [ T.BitsType <$> L.decimal
+        , T.Ident . T.pack . (T.bitsName ++) <$> identifierRest
+        , pure $ T.Keyword T.Bits
         ]
     , identifier
     ]

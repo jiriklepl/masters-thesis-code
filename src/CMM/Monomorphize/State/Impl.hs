@@ -21,12 +21,28 @@ import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Monomorphize.Schematized (Schematized)
+import CMM.Monomorphize.Settings ( MonomorphizerSettings(MonomorphizerSettings) )
+import CMM.Parser.HasPos ( SourcePos )
+import CMM.AST.Wrap ( ASTWrapper )
+import CMM.AST.Annot ( Annot )
+
+newtype PolyMemory =
+  PolyMemory
+    { getPolyMemory :: Map TypeVar (Set TypeVar)
+    }
+  deriving (Eq, Ord, Show)
+
+instance Semigroup PolyMemory where
+  PolyMemory a <> PolyMemory b = PolyMemory $ Map.unionWith mappend a b
+
+instance Monoid PolyMemory where
+  mempty = PolyMemory mempty
 
 newtype PolyGenerate =
   PolyGenerate
-    { getPolyGenerate :: Map TypeVar (Set TypeVar)
+    { getPolyGenerate :: Map TypeVar [(TypeVar, Annot ASTWrapper SourcePos)]
     }
-  deriving (Eq, Ord, Show)
+  deriving (Show)
 
 instance Semigroup PolyGenerate where
   PolyGenerate a <> PolyGenerate b = PolyGenerate $ Map.unionWith mappend a b
@@ -61,21 +77,22 @@ instance Monoid PolyData where
 type PolySchemes a = Map TypeVar (Scheme Type, Schematized a)
 
 data MonomorphizeState a =
-  MonoMorphizeState
+  MonomorphizeState
     { _polyMethods :: PolyMethods
     , _polyData :: PolyData
     , _polyGenerate :: PolyGenerate
-    , _polyMemory :: PolyGenerate
-    , _polyStorage :: PolyGenerate
+    , _polyMemory :: PolyMemory
+    , _polyStorage :: PolyMemory
     , _polyWaves :: Int
+    , _maxPolyWaves :: Int
     , _polySchemes :: PolySchemes a
     }
 
 makeLenses ''MonomorphizeState
 
-initMonomorphizeState :: MonomorphizeState a
-initMonomorphizeState =
-  MonoMorphizeState
+initMonomorphizeState :: MonomorphizerSettings -> MonomorphizeState a
+initMonomorphizeState MonomorphizerSettings {} =
+  MonomorphizeState
     { _polyGenerate = mempty
     , _polyData = mempty
     , _polyMethods = mempty
@@ -83,6 +100,7 @@ initMonomorphizeState =
     , _polyMemory = mempty
     , _polyStorage = mempty
     , _polyWaves = 0
+    , _maxPolyWaves = 0
     }
 
 type Monomorphizer a = State (MonomorphizeState a)
