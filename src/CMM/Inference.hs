@@ -4,59 +4,41 @@
 -- TODO: add the overlap check for instances
 module CMM.Inference where
 
-import safe Control.Applicative (Applicative((*>), (<*), (<*>), liftA2, pure))
+
+import Prelude
+import safe Control.Applicative (Applicative(liftA2))
 import safe Control.Lens (Lens')
 import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Monad (Monad((>>=), return), (>=>), sequence, when)
+import safe Control.Monad ((>=>), when)
 import safe Data.Bifunctor (second)
-import safe Data.Bool (Bool(False, True), (&&), (||), not, otherwise)
 import safe Data.Data (Data(gmapT))
-import safe Data.Either (Either(Left, Right))
-import safe Data.Eq (Eq((/=), (==)))
 import safe Data.Foldable (Foldable(foldl'), for_, traverse_)
-import safe Data.Function (($), (.), const, flip, id)
-import safe Data.Functor (Functor((<$), fmap), ($>), (<$>), (<&>), void)
+import safe Data.Functor (($>), (<&>), void)
 import safe Data.Graph (SCC(AcyclicSCC, CyclicSCC), stronglyConnCompR)
 import safe qualified Data.Graph as Graph
-import safe Data.Int (Int)
 import safe Data.List
-  ( all
-  , any
-  , concat
-  , filter
-  , foldr
-  , head
-  , null
-  , or
-  , partition
-  , unzip
-  , zip
-  , zip3
-  , zipWith
+  ( partition
+
+
+
+
   )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe, maybe)
-import safe Data.Monoid (Monoid(mappend, mconcat, mempty))
-import safe Data.Ord (Ord((<), (>)))
+import safe Data.Maybe (fromMaybe)
 import safe Data.PartialOrd (PartialOrd)
-import safe Data.Semigroup (Semigroup())
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.String (fromString)
 import safe Data.Text (Text)
-import safe Data.Traversable (Traversable(traverse))
-import safe Data.Tuple (snd, swap, uncurry)
+import safe Data.Tuple (swap)
 import safe Data.Tuple.Extra (dupe)
-import safe GHC.Err (undefined)
 
-import safe Prettyprinter ((<>))
 
 import safe qualified CMM.Data.Bimap as Bimap
-import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds
   ( Bounds(Bounds)
   , isTrivialOrAbsurd
@@ -68,7 +50,6 @@ import safe CMM.Data.Function (fOr)
 import safe CMM.Data.Generics ((*|*))
 import safe CMM.Data.Lattice (Lattice)
 import safe CMM.Data.Nullable (Nullable(nullVal))
-import safe CMM.Data.Num (Num((+)))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.OrderedBounds ()
 import safe CMM.Data.Trilean (trilean)
@@ -328,7 +309,6 @@ unsafeHandlizeUpdate change =
 isSingleton :: Set a -> Bool
 isSingleton = (== 1) . Set.size
 
--- TODO: reduce duplication
 safeHandlizeUpdate ::
      ((TypeVar, TypeHandle) -> (TypeVar, TypeHandle)) -> Inferencer Bool
 safeHandlizeUpdate change = do
@@ -646,11 +626,10 @@ reduceConstraint (fact:facts) =
         Just (tVars :. facts' :=> t') -> do
           subst <- refresher tVars
           State.addClassFact name $ mempty :. [] :=> t
-          -- continueWith $
-          --   (Fact <$> typeUnion t (subst `apply` t') :
-          --    (apply subst <$> facts')) <>
-          --   facts
-          continue
+          continueWith $
+            (Fact <$> typeUnion t (subst `apply` t') :
+             (apply subst <$> facts')) <>
+            facts
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceConstraint nesteds
       (_1 %~ (|| changed)) <$>
@@ -660,7 +639,6 @@ reduceConstraint (fact:facts) =
   where
     skip = skipWith fact
     skipWith fact' = (_2 %~ (fact' :)) <$> reduceConstraint facts
-    continue = continueWith facts
     continueWith = ((_1 .~ True) <$>) . reduceConstraint
 
 reduceMany :: Facts -> Inferencer (Bool, Facts)
@@ -788,9 +766,14 @@ minimizeBounds what tVar = do
   low <- uses what (tVar `State.readLowerBound`)
   what %= Map.insert tVar (low `Bounds` low)
 
--- TODO: remove parent (implicit)
-freeParented :: TypeVar -> Set TypeVar -> Inferencer ([TypeVar], [TypeVar])
-freeParented parent ts = do
+freeParented :: Set TypeVar -> Inferencer ([TypeVar], [TypeVar])
+freeParented ts = do
+  parent <- getParent
+  let
+    isFreeParented tIngs with tVar@TypeVar {} =
+      not (tVar `Map.member` with) && tVarParent tVar == parent &&
+      not (tVar `Set.member` tIngs)
+    isFreeParented _ _ NoType = False
   (consts, kinds) <- uses State.handlize $ unzip . fmap mineSubs . Bimap.elems
   subConsts <- use State.subConsting
   subKinds <- use State.subKinding
@@ -800,22 +783,17 @@ freeParented parent ts = do
     ( filter (isFreeParented tConsts subConsts) consts
     , filter (isFreeParented tKinds subKinds) kinds)
   where
-    isFreeParented tIngs with tVar@TypeVar {} =
-      not (tVar `Map.member` with) && tVarParent tVar == parent &&
-      not (tVar `Set.member` tIngs)
-    isFreeParented _ _ NoType = False
     mineSubs handle = (handle ^. consting, handle ^. kinding)
 
-minimizeFree :: TypeVar -> Set TypeVar -> Inferencer ()
-minimizeFree parent ts = do
-  (consts, kinds) <- freeParented parent ts
+minimizeFree :: Set TypeVar -> Inferencer ()
+minimizeFree ts = do
+  (consts, kinds) <- freeParented ts
   minimizeBounds State.constingBounds `traverse_` consts
   minimizeBounds State.kindingBounds `traverse_` kinds
 
--- TODO: remove parent (implicit)
-floatSubs :: TypeVar -> Set TypeVar -> Inferencer ()
-floatSubs parent ts = do
-  (consts, kinds) <- (both %~ Set.fromList) <$> freeParented parent ts
+floatSubs :: Set TypeVar -> Inferencer ()
+floatSubs ts = do
+  (consts, kinds) <- (both %~ Set.fromList) <$> freeParented ts
   constBounds <- use State.constingBounds
   kindBounds <- use State.kindingBounds
   Set.intersection consts kinds `for_` \tVar -> do
@@ -833,7 +811,6 @@ floatSubs parent ts = do
       int <- nextHandleCounter
       return tVar {tVarId = int, tVarParent = NoType}
 
--- TODO: remove newParent (implicit)
 reParent :: Data d => TypeVar -> Set TypeVar -> d -> d
 reParent newParent oldParents
   | oldParents == Set.singleton newParent = id
@@ -889,7 +866,6 @@ schematize facts tVars = do
         | (t', t) <- zip (kindingsSubst `apply` fmap toType kindings) reX
         , t' /= t
         ]
-  -- when (tVars == Set.fromList [TypeVar 2 Star NoType]) . error $ show constingsSubst <> "\n" <> show kindingsSubst
   constFacts <-
     translateSubs
       State.constingBounds
@@ -945,7 +921,6 @@ schematize facts tVars = do
             (freeTypeVars facts' <> freeTypeVars t) :.
           facts' :=>
           t
-    -- registerScheme tVar scheme -- TODO: swap those
     State.addScheme tVar scheme
   return factsRest
   where
@@ -961,7 +936,6 @@ schematize facts tVars = do
         translateOthers =
           translateSubs bounds reconstructor subConstr boundsConstr others
         facts' = subConstr t . apply reconstructor . toType <$> limits'
-    keyParentedBy parent (key, _) = tVarParent key `overLeaf` parent
     parentedBy parent TypeVar {tVarParent = par} = par `overLeaf` parent
     parentedBy _ _ = False
     presentIn where' (key, _) = key `Set.member` Set.fromList where'
@@ -1005,11 +979,11 @@ closeSCCs facts (scc:others) =
       x <- Set.unions <$> State.collectPrimeTVarsAll `traverse` parents'
       --  error $ show x
       minimizeSubs parent x
-      minimizeFree parent x
+      minimizeFree x
       _ <- fixAll
       parent' <- uses State.unifs (`apply` parent)
       State.popParent *> State.pushParent parent'
-      floatSubs parent' x
+      floatSubs x
       _ <- fixAll
       parent'' <- uses State.unifs (`apply` parent')
       State.popParent *> State.pushParent parent''

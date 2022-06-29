@@ -16,7 +16,6 @@ import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe Data.Traversable (Traversable)
-import safe GHC.Err (error, undefined)
 import safe Text.Show (Show(show))
 
 import safe Prettyprinter
@@ -33,7 +32,7 @@ import safe CMM.Inference.TypeKind
   , TypeKind((:->), ErrorKind, GenericType, Star)
   , setTypeKindInvariantLogicError
   )
-import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar))
+import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Utils (backQuote)
 
 data TypeCompl a
@@ -41,7 +40,6 @@ data TypeCompl a
   | FunctionType [a] a
   | AppType a a
   | AddrType a
-  | LamType Int TypeKind TypeVar
   | ConstType Text TypeKind TypeVar
   | StringType
   | String16Type
@@ -62,8 +60,6 @@ instance Eq a => Eq (TypeCompl a) where
     , AppType app' arg' <- t' = app == app' && arg == arg'
     | AddrType addr <- t
     , AddrType addr' <- t' = addr == addr'
-    | LamType int _ _ <- t
-    , LamType int' _ _ <- t' = int == int'
     | ConstType text _ _ <- t
     , ConstType text' _ _ <- t' = text == text'
     | StringType <- t
@@ -91,8 +87,6 @@ instance Ord a => Ord (TypeCompl a) where
     , AppType app' arg' <- t' = compare app app' <> compare arg arg'
     | AddrType addr <- t
     , AddrType addr' <- t' = addr `compare` addr'
-    | LamType int _ _ <- t
-    , LamType int' _ _ <- t' = int `compare` int'
     | ConstType text _ _ <- t
     , ConstType text' _ _ <- t' = text `compare` text'
     | StringType <- t
@@ -113,8 +107,6 @@ instance Ord a => Ord (TypeCompl a) where
     | AppType {} <- t' = GT
     | AddrType {} <- t = LT
     | AddrType {} <- t' = GT
-    | LamType {} <- t = LT
-    | LamType {} <- t' = GT
     | ConstType {} <- t = LT
     | ConstType {} <- t' = GT
     | StringType {} <- t = LT
@@ -140,13 +132,11 @@ instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
           _ ->
             ErrorKind $
             T.pack ("Kind " ++ backQuote (show t) ++ " cannot be applied.")
-      LamType _ kind _ -> kind
       ConstType _ kind _ -> kind
       _ -> Star
   setTypeKind kind =
     \case
       AppType t t' -> AppType (setTypeKind (kind :-> getTypeKind t') t) t'
-      LamType int _ parent -> LamType int kind parent
       ConstType int _ parent -> ConstType int kind parent
       tCompl
         | kind == Star -> tCompl
@@ -161,7 +151,6 @@ instance Pretty a => Pretty (TypeCompl a) where
         brackets mempty <> tupled (pretty <$> args) <+> arrowNice <+> pretty ret
       AppType app arg -> parens $ pretty app <+> pretty arg
       AddrType t -> "addr" <+> pretty t
-      LamType {} -> error "obsolete" -- TODO: remove safely
       ConstType name kind _ -> pretty name <> "@" <> parens (pretty kind)
       StringType -> "str"
       String16Type -> "str16"
@@ -169,12 +158,6 @@ instance Pretty a => Pretty (TypeCompl a) where
       TBitsType n -> "bits" <> pretty n
       BoolType -> "bool"
       VoidType -> "void"
-
-toLam :: TypeVar -> TypeCompl a
-toLam =
-  \case
-    NoType -> undefined -- logic error
-    TypeVar int kind parent -> LamType int kind parent
 
 -- | Transforms the two given `Type`s into a function `Type`
 makeFunction :: [a] -> a -> TypeCompl a

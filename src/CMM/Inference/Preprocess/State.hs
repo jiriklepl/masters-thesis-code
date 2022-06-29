@@ -1,7 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE Rank2Types #-}
 
--- TODO: reduce the number of "_2 %~ handleId"
 module CMM.Inference.Preprocess.State
   ( module CMM.Inference.Preprocess.State
   , module CMM.Inference.Preprocess.State.Impl
@@ -335,7 +334,7 @@ storeProc name fs x = do
     FunctionCtx {} -> goIllegal
     StructCtx {} -> goIllegal
   where
-    goIllegal = error "(internal) Illegal local function encountered." -- TODO: reword this (consolidate)
+    goIllegal = error "(internal) Illegal local function encountered." -- NOTE: not possible within the bounds of the syntax
     t = toType x
     storeElaboratedProc subst tVars facts' = do
       handle <- holeHandle <$> lookupCtxFVar name
@@ -390,7 +389,6 @@ collectTVars :: Preprocessor (Set TypeVar)
 collectTVars =
   uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
 
--- TODO
 pushStruct :: (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
 pushStruct (name, hole) constraint@(_, t) = do
   tVars <- collectTVars
@@ -403,7 +401,7 @@ pushStruct (name, hole) constraint@(_, t) = do
 
 pushClass ::
      Text -> TypeHole -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
-pushClass name hole constraint supers -- TODO: solve type variables not in scope in superclasses (and in functions somehow)
+pushClass name hole constraint supers
  = do
   tVars <- collectTVars
   storeFact $

@@ -18,13 +18,6 @@ import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
 import safe CMM.Parser.HasPos (HasPos(getPos))
 
--- TODO :
--- | Returns the unannotated version of the given annotated node
--- unAnnot :: Annot n a -> n a
--- -- | Returns the annotation of the given annotated node
--- takeAnnot :: Annot n a -> a
-
--- | Annotation used as a wrapper for nodes, can contain 'SourcePos', for example
 data Annotation node annot =
   Annot { unAnnot :: node annot, takeAnnot :: annot }
   deriving (Show, Foldable, Traversable, Functor, Data)

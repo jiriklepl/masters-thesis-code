@@ -338,7 +338,7 @@ instance GetMetadata ReadsVars (AST.Expr a) where
       AST.BinOpExpr _ left right -> getMetadata t left <> getMetadata t right
       AST.ComExpr expr -> getMetadata t expr
       AST.NegExpr expr -> getMetadata t expr
-      AST.MemberExpr expr _ -> getMetadata t expr -- TODO: check whether this is correct
+      AST.MemberExpr expr _ -> getMetadata t expr
       AST.InfixExpr _ left right -> getMetadata t left <> getMetadata t right
       AST.PrefixExpr _ actuals -> getMetadata t actuals
 
@@ -514,13 +514,13 @@ instance Blockify (Annot AST.Stmt) a b where
           (Nothing, _) -> registerASTError stmt . GotoWithoutTargets . void $ unAnnot stmt
         registerReads stmt *> addBlockAnnot stmt <* unsetBlock
       AST.CutToStmt {} ->
-        error "'Cut to' statements are not currently implemented" -- TODO: implement `cut to` statements
+        error "'Cut to' statements are not currently implemented"
       AST.ReturnStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
       AST.JumpStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
       AST.EmptyStmt {} ->
         addBlockAnnot stmt -- This should be completely redundant, included just for completeness
       AST.AssignStmt {} -> registerReadsWrites stmt *> addBlockAnnot stmt
-      AST.PrimOpStmt {} -- FIXME: In the future, this may end a basic block if given `NeverReturns` flow annotation
+      AST.PrimOpStmt {} -- NOTE: In the future, this may end a basic block if given `NeverReturns` flow annotation
        -> registerReadsWrites stmt *> addBlockAnnot stmt
       AST.IfStmt _ tBody mEBody -> do
         case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
@@ -539,7 +539,7 @@ instance Blockify (Annot AST.Stmt) a b where
       AST.SpanStmt key value body ->
         withNoBlockAnnot a . AST.SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
         blockify body
-      AST.CallStmt _ _ _ _ _ callAnnots -- TODO: implement `cut to` statements
+      AST.CallStmt _ _ _ _ _ callAnnots -- NOTE: `cut to` statements not supported
        ->
         registerReadsWrites stmt *> addBlockAnnot stmt <*
         when (neverReturns callAnnots) unsetBlock
@@ -553,5 +553,5 @@ blockifyLabelStmt ::
 blockifyLabelStmt (Annot stmt a) = do
   let name = getName stmt
   setBlock name
-  index <- blocksCache name -- TODO: this is not optimal
+  index <- blocksCache name
   return . withAnnot (withBlockAnnot (Begins index) a) $ noBlockAnnots stmt

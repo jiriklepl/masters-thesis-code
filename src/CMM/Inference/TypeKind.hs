@@ -124,4 +124,4 @@ combineTypeKind a b = getTypeKind a `go` getTypeKind b
     GenericType `go` kind = kind
     kind `go` GenericType = kind
     (l :-> r) `go` (l' :-> r') = go l l' :-> go r r'
-    _ `go` _ = undefined -- TODO: logic error
+    _ `go` _ = undefined

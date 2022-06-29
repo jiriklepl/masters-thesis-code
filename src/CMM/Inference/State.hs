@@ -199,12 +199,11 @@ sanitizeClosed scheme = do
       " is open, free variables: " <> show (pretty freeVars)
 
 addClassFact ::
-     (HasCallStack, Pretty DataKind) => Text -> Scheme Type -> Inferencer ()
+     HasCallStack => Text -> Scheme Type -> Inferencer ()
 addClassFact name scheme =
   case scheme of
     tVars :. _ :=> t -> do
       lockVars t tVars
-    -- sanitizeClosed scheme -- TODO: turn this on!!!
       State.classFacts %= Map.insertWith mappend name [scheme]
 
 addScheme ::

@@ -26,9 +26,9 @@ data BlockifierError
   | UnreachableStatement (Stmt ())  -- ^ Unreachable statement in a function
   | UninitializedRegisters [Text]  -- ^ List of uninitialized registers in a certain function
   | DuplicateSymbol SymbolType Text  -- ^ Duplicate variable symbol of type `SymbolType` (in a function)
-  | ContinuationFallthrough Text  -- TODO: print "Fallthrough to a continuation is forbidden"
-  | GotoWithoutTargets (Stmt ())   -- TODO: print "Indirect goto statement without specified targets is illegal"
-  | FlatteningInconsistency (Stmt ())  -- TODO: print "Compilation internal failure in the flattening phase"
+  | ContinuationFallthrough Text  -- ^ Fallthrough to a continuation is forbidden
+  | GotoWithoutTargets (Stmt ())   -- ^ Indirect goto statement without specified targets is illegal
+  | FlatteningInconsistency (Stmt ())  -- ^ Compilation internal failure in the flattening phase
   deriving (Eq, Show, IsError, Data)
 
 instance Pretty BlockifierError where

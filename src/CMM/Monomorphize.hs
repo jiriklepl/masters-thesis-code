@@ -4,28 +4,21 @@
 -- TODO: add the overload resolution for instances to monomorphization
 module CMM.Monomorphize where
 
-import safe Control.Applicative (Applicative(pure, (*>)), liftA2, liftA3)
+import Prelude hiding (map, fail)
+
+import safe Control.Applicative (liftA2, liftA3)
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Lens.Zoom (zoom)
-import safe Control.Monad (Monad((>>=), return), sequence, zipWithM_)
+import safe Control.Monad (zipWithM_)
 import safe Control.Monad.State (State)
 import safe Data.Bifunctor (first)
-import safe Data.Bool (otherwise, Bool (True, False))
-import safe Data.Either (Either(Left, Right))
-import safe Data.Foldable (fold, or, any)
-import safe Data.Function (($),  (.), const)
-import safe Data.Functor ((<$), (<$>), (<&>), fmap, void)
-import safe Data.List (concatMap, head, null, zipWith)
+import safe Data.Foldable (fold)
+import safe Data.Functor ((<&>), void)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Just, Nothing), catMaybes, maybe, isNothing, fromJust)
-import safe Data.Monoid ((<>), mappend, mempty)
-import safe Data.Ord (Ord((<)))
+import safe Data.Maybe (catMaybes)
 import safe qualified Data.Set as Set
-import safe Data.Traversable (for, traverse)
-import safe Data.Tuple (uncurry, fst)
-import safe GHC.Err (error, undefined)
-import safe Text.Show (Show(show))
+import safe Data.Traversable (for)
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot, takeAnnot), withAnnot, mapAnnot)
@@ -36,7 +29,6 @@ import safe CMM.Data.Either (oneRight)
 import safe CMM.Data.Nullable (nullVal)
 import safe CMM.Data.Tuple (submergeTuple)
 import safe CMM.Inference (simplify)
-import safe CMM.Inference.Fact ()
 import safe CMM.Inference.Preprocess.TypeHole
   ( HasTypeHole(getTypeHole)
   , TypeHole(LVInstTypeHole, MemberTypeHole, MethodTypeHole,
@@ -53,7 +45,7 @@ import safe CMM.Inference.Type as Type
   )
 import safe CMM.Inference.TypeCompl
   ( TypeCompl(AddrType, AppType, BoolType, ConstType, FunctionType,
-          LabelType, LamType, String16Type, StringType, TBitsType, TupleType,
+          LabelType, String16Type, StringType, TBitsType, TupleType,
           VoidType)
   )
 import safe CMM.Inference.TypeVar as Type (ToTypeVar(toTypeVar), TypeVar)
@@ -90,8 +82,6 @@ import safe CMM.Inference.Unify.Error ( UnificationError )
 import safe qualified CMM.Monomorphize.State as State
 import safe CMM.Monomorphize.State.Impl
     ( Monomorphizer, MonomorphizeState )
-import CMM.Utils
-import CMM.Monomorphize.MakeSignature
 
 type InferMonomorphizer a = State (InferencerState, MonomorphizeState a)
 
@@ -145,8 +135,7 @@ monomorphizeTrivials ::
   -> InferMonomorphizer a (Error `Either` Maybe (Annot n a))
 monomorphizeTrivials = ((. (Just .)) .) . monomorphizeMaybes
 
-ensureJustMonomorphized :: (HasCallStack, HasPos a, MakeWrapped n) =>
-     Annot n a
+ensureJustMonomorphized :: ( HasPos a, MakeWrapped n) =>Annot n a
   -> Error `Either` Maybe (Annot n a) -> InferMonomorphizer a (Error `Either` Maybe (Annot n a))
 ensureJustMonomorphized poly mono = do
   return $ do
@@ -156,8 +145,8 @@ ensureJustMonomorphized poly mono = do
       Just _ -> mono
 
 ensuredJustMonomorphize ::
-     (HasCallStack, Monomorphize (Annotation n) a, HasPos a, HasTypeHole a, MakeWrapped n)
-  => Subst Type
+     ( Monomorphize (Annotation n) a, HasPos a, HasTypeHole a, MakeWrapped n)
+  =>Subst Type
   -> Annotation n a
   -> InferMonomorphizer a (Either Error (Maybe (Annot n a)))
 ensuredJustMonomorphize subst n =
@@ -507,7 +496,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
           -- error . show $ () <$ lValue -- TODO: lValue cannot be a polytype
            -> do
             succeed . Just $ annotated
-          Absurd absurdity -> error $ show absurdity -- TODO: lValue cannot have an illegal type
+          Absurd absurdity -> fail $ absurdity `absurdType` annotated -- TODO: lValue cannot have an illegal type
           Mono ->
             case lValue of
               AST.LVName _ ->
@@ -606,8 +595,8 @@ instantiateType ::
      Type.Type -> InferMonomorphizer a (Error `Either` ())
 instantiateType =
   \case
-    ErrorType {} -> fail undefined -- TODO: encountered error type
-    VarType {} -> fail undefined -- TODO: type is not a monotype
+    ErrorType {} -> fail undefined
+    VarType {} -> fail undefined
     ComplType type' ->
       case type' of
         TupleType args -> fmap fold . sequence <$> traverse instantiateType args
@@ -616,8 +605,7 @@ instantiateType =
         AppType t t' ->
           liftA2 (liftA2 mappend) (instantiateType t) (instantiateType t')
         AddrType t -> instantiateType t
-        LamType {} -> undefined
-        ConstType {} -> undefined
+        ConstType {} -> succeed mempty
         StringType -> succeed mempty
         String16Type -> succeed mempty
         LabelType -> succeed mempty

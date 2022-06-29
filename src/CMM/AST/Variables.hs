@@ -123,7 +123,7 @@ addGlobalCases go =
             State.addTClass
               class'
               (foldr (:->) Constraint (Star <$ args))
-              (Set.fromList $ getName <$> methods) -- TODO: add less trivial kind analysis (should be a simple bunch of unifs)
+              (Set.fromList $ getName <$> methods)
       where
         addMethod node = do
           State.addFVar node Star
@@ -134,7 +134,7 @@ addGlobalCases go =
     goStruct =
       \case
         struct@(Annot (AST.Struct (Annot (AST.ParaName _ args) _) decls) (_ :: SourcePos)) -> do
-          State.addTCon struct (foldr (:->) Star (Star <$ args)) -- TODO: add less trivial kind analysis
+          State.addTCon struct (foldr (:->) Star (Star <$ args))
           traverse_
             (`State.addSMemTrivial` Star)
             [label | label@(Annot AST.DatumLabel {} _) <- decls]
