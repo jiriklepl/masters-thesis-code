@@ -168,6 +168,9 @@ cradle:
     - path: "src/CMM/Inference/Preprocess.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Inference/PreprocessClass.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Inference/Preprocess/ClassData.hs"
       component: "Compiler:exe:Compiler"
 
@@ -250,6 +253,9 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Mangle.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Monomorphize/MakeSignature.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Polytypeness.hs"
