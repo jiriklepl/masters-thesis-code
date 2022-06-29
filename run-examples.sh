@@ -11,6 +11,7 @@ find examples -maxdepth 1 -mindepth 1 -name "*.chmmm" | {
     while read -r file; do
         TOTAL=$((TOTAL+1))
         out="examples/out/$(basename "$file")"
+        echo "doing $file" > /dev/stderr
         if cabal run -v0 Compiler < "$file" > "$out"; then
             SUCCESS=$((SUCCESS+1))
         else

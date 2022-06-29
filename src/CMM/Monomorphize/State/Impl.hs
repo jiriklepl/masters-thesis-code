@@ -100,7 +100,7 @@ initMonomorphizeState MonomorphizerSettings {} =
     , _polyMemory = mempty
     , _polyStorage = mempty
     , _polyWaves = 0
-    , _maxPolyWaves = 0
+    , _maxPolyWaves = 50
     }
 
 type Monomorphizer a = State (MonomorphizeState a)

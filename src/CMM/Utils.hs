@@ -2,32 +2,24 @@
 {-# LANGUAGE CPP #-}
 
 module CMM.Utils where
+import Prelude
 
-import safe Control.Applicative (Applicative((*>)))
-import safe Control.Monad (Monad((>>=)), unless, when)
+import safe Control.Monad (unless, when)
 import safe Data.Bifunctor (Bifunctor(second))
-import safe Data.Bool (Bool, otherwise)
-import safe Data.Char (Char)
-import safe Data.Eq (Eq((/=), (==)))
-import safe Data.Function ((.), flip)
-import safe Data.List (elem, init)
 import safe Data.Maybe (isJust)
-import safe Data.Semigroup (Semigroup((<>)))
-import safe Data.String (IsString, String)
+import safe Data.String (IsString)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
-import safe Text.Show (Show(show))
-#ifdef USE_GHC_STACK
-import safe qualified GHC.Stack
-#endif
 
 #ifdef USE_GHC_STACK
+import safe qualified GHC.Stack
 type HasCallStack = GHC.Stack.HasCallStack
 #else
 class HasCallStack
 
 instance HasCallStack
 #endif
+
 prefixSeparator :: Char
 prefixSeparator = ':'
 
@@ -55,6 +47,9 @@ prefixesElem prefix = elem prefix . init . splitName
 -- | Checks whether the given name has a layer prefix
 hasPrefix :: Text -> Bool
 hasPrefix = isJust . T.find (== prefixSeparator)
+
+fmapTrivial :: Functor f => f a -> f b
+fmapTrivial = fmap $ error "The provided functor is not trivial"
 
 -- | Implementation of the standard while loop
 while :: Monad m => m Bool -> m a -> m ()

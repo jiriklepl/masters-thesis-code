@@ -69,10 +69,6 @@ makeError n = Error.makeError . makeASTError n
 mapWrapped :: MakeWrapped n => Annot n a -> Annotation ASTWrapper ()
 mapWrapped = void . mapAnnot makeWrapped
 
-instantiatesToNothing :: (HasPos a, MakeWrapped n) => Annotation n a -> Error
-instantiatesToNothing annotated@Annot{takeAnnot} =
-  makeError takeAnnot . InstantiatesToNothing $ mapWrapped annotated
-
 illegalNothing :: (HasPos a, MakeWrapped n) => Annot n a -> Error
 illegalNothing annotated@Annot{takeAnnot} =
   makeError takeAnnot . InstantiatesToNothing $ mapWrapped annotated

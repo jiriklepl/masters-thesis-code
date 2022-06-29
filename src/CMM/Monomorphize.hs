@@ -23,7 +23,7 @@ import safe Data.Monoid ((<>), mappend, mempty)
 import safe Data.Ord (Ord((<)))
 import safe qualified Data.Set as Set
 import safe Data.Traversable (for, traverse)
-import safe Data.Tuple (uncurry)
+import safe Data.Tuple (uncurry, fst)
 import safe GHC.Err (error, undefined)
 import safe Text.Show (Show(show))
 
@@ -75,14 +75,13 @@ import safe CMM.Err.Error
     ( Error, )
 import safe qualified CMM.Err.Error as Error
 import safe CMM.Monomorphize.Error
-    ( MonomorphizeError(IllegalScheme, NoInstance, ReachedMaxWaves,
+    ( MonomorphizeError(IllegalScheme, ReachedMaxWaves,
                         CannotInstantiate),
       illegalNothing,
       illegalPolyType,
       illegalHole,
       isNotScheme,
       makeError,
-      instantiatesToNothing,
       absurdType )
 import safe CMM.AST.Wrap
     ( ASTWrapper(WrappedExpr, WrappedLValue), MakeWrapped )
@@ -91,6 +90,8 @@ import safe CMM.Inference.Unify.Error ( UnificationError )
 import safe qualified CMM.Monomorphize.State as State
 import safe CMM.Monomorphize.State.Impl
     ( Monomorphizer, MonomorphizeState )
+import CMM.Utils
+import CMM.Monomorphize.MakeSignature
 
 type InferMonomorphizer a = State (InferencerState, MonomorphizeState a)
 
@@ -144,7 +145,7 @@ monomorphizeTrivials ::
   -> InferMonomorphizer a (Error `Either` Maybe (Annot n a))
 monomorphizeTrivials = ((. (Just .)) .) . monomorphizeMaybes
 
-ensureJustMonomorphized :: (HasPos a, MakeWrapped n) =>
+ensureJustMonomorphized :: (HasCallStack, HasPos a, MakeWrapped n) =>
      Annot n a
   -> Error `Either` Maybe (Annot n a) -> InferMonomorphizer a (Error `Either` Maybe (Annot n a))
 ensureJustMonomorphized poly mono = do
@@ -155,7 +156,7 @@ ensureJustMonomorphized poly mono = do
       Just _ -> mono
 
 ensuredJustMonomorphize ::
-     (Monomorphize (Annotation n) a, HasPos a, HasTypeHole a, MakeWrapped n)
+     (HasCallStack, Monomorphize (Annotation n) a, HasPos a, HasTypeHole a, MakeWrapped n)
   => Subst Type
   -> Annotation n a
   -> InferMonomorphizer a (Either Error (Maybe (Annot n a)))
@@ -205,7 +206,7 @@ eliminateClasses (topLevel:topLevels) =
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Unit) a where
   monomorphize subst unit@(AST.Unit topLevels `Annot` a) =
     monomorphizeTrivials subst a AST.Unit (eliminateClasses topLevels) `reThrowM` \case
-      Nothing ->  fail $ instantiatesToNothing unit
+      Nothing ->  fail $ illegalNothing unit
       Just node ->  fmap Just <$> cycleWaves node
 cycleWaves :: (HasPos a, HasTypeHole a) => Annot AST.Unit a
   -> InferMonomorphizer a (Either Error (Annot AST.Unit a))
@@ -218,9 +219,6 @@ cycleWaves node = do
   sequence more' `reThrow` \case
     [] -> succeed node
     mores
-      | any isNothing mores ->
-        let (scheme, (inst, pos)) = head . catMaybes $ zipWith (\m -> Just m `maybe` const Nothing) more mores
-        in returnError pos . NoInstance scheme inst $ void pos
       | otherwise -> do
         waves <- useMonomorphizer State.incWaves
         useMonomorphizer State.getMaxWaves >>= \maxWaves ->
@@ -232,7 +230,7 @@ cycleWaves node = do
               returnError (head topLevels') $ ReachedMaxWaves waves
       where
         topLevels' =
-          schematized2topLevel . fromJust <$> mores
+          schematized2topLevel  <$> catMaybes mores
         unit = addTopLevels topLevels'
 
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.TopLevel) a where
@@ -243,7 +241,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.TopLevel) a where
       AST.TopDecl decl ->
         monomorphizeMaybeWithFailure
           subst
-          (Left $ instantiatesToNothing decl)
+          (Left $ illegalNothing decl)
           (Right . Just . withAnnot a . AST.TopDecl)
           decl
       AST.TopSection name items ->
@@ -642,7 +640,21 @@ monomorphizePolyType scheme inst =
             Nothing -> go actions
             Just result -> return result
         [] -> fallback
-    fallback = monomorphizeMethodInner scheme inst
+    fallback = recallMethod scheme (fst inst) >>= \case
+       False -> monomorphizeMethodInner scheme inst
+       True -> return $ Right Nothing
+
+
+-- recallMethod
+recallMethod :: TypeVar
+  -> TypeVar
+  -> InferMonomorphizer a Bool
+recallMethod scheme item = do
+  inst' <-
+    useInferencer $
+    State.reconstructOld (toTypeVar item) >>= simplify . makeAddrType >>=
+    fmap toTypeVar . State.getHandle
+  useMonomorphizer $ State.isMemorized scheme inst'
 
 monomorphizeMethod ::
      (HasPos a, HasTypeHole a)
@@ -653,20 +665,24 @@ monomorphizeMethod scheme inst = do
   useMonomorphizer (uses State.polyMethods $ Map.lookup scheme . State.getPolyMethods) >>= \case
     Nothing -> return Nothing
     Just set -> do
-      isDone <- fmap or $ recall `traverse` Set.toList set
+      isDone <- fmap or $ recallMethod scheme `traverse` Set.toList set
       if isDone
         then return . Just $ Right Nothing
         else Just <$> go set
   where
-    recall item = do
-      inst' <-
-        useInferencer $
-        State.reconstructOld (toTypeVar item) >>= simplify . makeAddrType >>=
-        fmap toTypeVar . State.getHandle
-      useMonomorphizer $ State.isMemorized scheme inst'
     go set = do
       set' <- Set.toList set `for` \item -> monomorphizeMethodInner item inst
       return $ first (error . show) $ oneRight set' -- TODO: Ambiguity + Nihility
+
+recallField :: TypeVar
+  -> TypeVar
+  -> InferMonomorphizer a Bool
+recallField scheme item = do
+  inst' <-
+    useInferencer $
+    State.reconstructOld (toTypeVar item) >>= simplify >>=
+    fmap toTypeVar . State.getHandle
+  useMonomorphizer $ State.isMemorized scheme inst'
 
 monomorphizeField ::
      (HasPos a, HasTypeHole a)
@@ -677,17 +693,11 @@ monomorphizeField scheme inst =
   useMonomorphizer (uses State.polyData $ Map.lookup scheme . State.getPolyData) >>= \case
     Nothing -> return Nothing
     Just map -> do
-      isDone <- fmap or $ recall `traverse` Map.keys map
+      isDone <- fmap or $ recallField scheme `traverse` Map.keys map
       if isDone
         then return . Just $ Right Nothing
         else Just <$> go map
   where
-    recall item = do
-      inst' <-
-        useInferencer $
-        State.reconstructOld (toTypeVar item) >>= simplify >>=
-        fmap toTypeVar . State.getHandle
-      useMonomorphizer $ State.isMemorized scheme inst'
     go map = do
       map' <-
         Map.toList map `for` \(item, struct) ->
@@ -751,9 +761,8 @@ monomorphizeMethodInner scheme (inst, instWrapper) = do
             Nothing -> error $ show scheme
             Just (_, schematized) ->
               case schematized of
-                FuncScheme procedure ->
-                  ensuredJustMonomorphize subst procedure <&>
-                  fmap (fmap FuncScheme)
+                FuncScheme procedure -> do
+                  monomorphize subst procedure <&> fmap (fmap FuncScheme)
                 StructScheme {} -> illegalScheme schematized instWrapper
 
 illegalScheme :: (Monad m, HasPos a1) =>
