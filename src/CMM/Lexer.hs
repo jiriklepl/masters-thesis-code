@@ -8,17 +8,11 @@ module CMM.Lexer
 import safe CMM.AST.Annot (Annot, withAnnot)
 import safe Control.Applicative
   ( Alternative((<|>))
-  , Applicative((*>), (<*), liftA2, pure)
+  , Applicative(liftA2)
   , optional
   )
-import safe Data.Bool (Bool(False, True))
-import safe Data.Char (Char)
-import safe Data.Function (($), (.), flip)
-import safe Data.Functor (($>), (<$>), void)
-import safe Data.Int (Int)
-import safe Data.List ((++))
+import safe Data.Functor (($>), void)
 import safe Data.Maybe (isNothing)
-import safe Data.String (String)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
 import safe Data.Void (Void)
@@ -41,7 +35,6 @@ import safe Text.Megaparsec.Char
   )
 import safe qualified Text.Megaparsec.Char.Lexer as L
 
-import safe CMM.Data.Num (Num(negate))
 import safe qualified CMM.Lexer.Token as T
 import safe CMM.Lexer.Token (Token)
 

@@ -2,9 +2,7 @@
 
 module CMM.Data.Generics where
 
-import safe Control.Monad (Monad)
 import safe Data.Data (Typeable)
-import safe Data.Function (flip)
 import safe Data.Generics.Aliases (extM, extT)
 
 infixr 3 <*|*>

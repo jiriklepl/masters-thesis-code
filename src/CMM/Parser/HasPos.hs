@@ -7,7 +7,6 @@ module CMM.Parser.HasPos
   , sourcePosPretty
   ) where
 
-import safe Data.Function (id)
 import safe Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
 
 class HasPos a where

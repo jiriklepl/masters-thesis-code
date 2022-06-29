@@ -5,20 +5,10 @@ module CMM.Inference.BuiltIn where
 
 import safe Control.Lens.Setter ((%~))
 import safe Control.Lens.Tuple (_2)
-import safe Data.Bool (otherwise)
-import safe Data.Eq (Eq((==)))
-import safe Data.Function (($), (.))
-import safe Data.Functor ((<$>))
-import safe Data.Int (Int)
-import safe Data.List (zip)
-import safe Data.Maybe (Maybe, maybe)
-import safe Data.Monoid (Monoid(mempty), (<>))
-import safe Data.Semigroup (Semigroup)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Data.String (IsString(fromString), String)
+import safe Data.String (IsString(fromString))
 import safe Data.Text (Text)
-import safe GHC.Err (error, undefined)
 
 import safe Prettyprinter (Pretty(pretty), dquotes)
 

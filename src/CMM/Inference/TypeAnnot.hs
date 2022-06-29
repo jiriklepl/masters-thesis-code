@@ -2,24 +2,17 @@
 
 module CMM.Inference.TypeAnnot where
 
-import safe Data.Bool (otherwise)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq((==)))
-import safe Data.Function (($), (.))
-import safe Data.Monoid (Monoid(mempty))
-import safe Data.Ord (Ord)
-import safe Data.Semigroup (Semigroup())
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Text.Show (Show)
+
+import safe Prettyprinter (Pretty(pretty), dquotes, parens)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Parser.HasPos (SourcePos)
 import CMM.Pretty (commaSep, genSymbol)
-import safe Data.Functor (Functor(fmap))
-import safe Prettyprinter (Pretty(pretty), (<>), dquotes, parens)
 
 data TypeAnnot
   = NoTypeAnnot

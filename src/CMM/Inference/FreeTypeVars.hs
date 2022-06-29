@@ -3,9 +3,7 @@
 module CMM.Inference.FreeTypeVars where
 
 import safe Data.Data (Data(gmapQ))
-import safe Data.Function (($), (.))
 import safe Data.Generics.Aliases (extQ)
-import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 

@@ -3,7 +3,6 @@
 module CMM.Inference.Preprocess.Context where
 
 import safe Data.Data (Data)
-import safe Data.Maybe (Maybe(Nothing))
 import safe Data.Text (Text)
 
 import safe CMM.AST (Conv)

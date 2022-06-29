@@ -1,15 +1,8 @@
-{-# LANGUAGE Safe #-}
-{-# OPTIONS_GHC -w #-}
 
 module Main where
 
-import Control.Lens.Getter ((^.), use, view)
-import Control.Monad.State as State (Monad(return), runState)
-import Data.Either (Either(Left, Right), either)
-import Data.Function (($), (.), id)
-import Data.List (head, reverse)
-import Data.Monoid (Monoid(mappend, mempty))
-import GHC.Err (undefined)
+import Control.Lens.Getter ((^.), view)
+import Control.Monad.State as State (Monad(return), runState, evalState, (>>=), MonadState (get), sequence, MonadTrans (lift), liftM, StateT (runStateT))
 
 import qualified Data.Text.IO as TS
 
@@ -19,7 +12,12 @@ import qualified Data.Text.IO as TS
 -- import qualified Data.Map as Map
 -- import Control.Lens
 -- import Data.Text as T
-import safe System.IO (IO, print, putStrLn)
+-- import qualified Data.Map as Map
+-- import Control.Lens
+-- import Data.Text as T
+-- import qualified Data.Map as Map
+-- import Control.Lens
+-- import Data.Text as T
 
 -- import Data.Tuple
 import Text.Megaparsec hiding (parse)
@@ -42,7 +40,7 @@ import CMM.Inference.Preprocess.State as Infer
 import qualified CMM.Inference.Preprocess.State
 import CMM.Inference.State as InferState
 
-import safe CMM.Inference.HandleCounter
+import CMM.Inference.HandleCounter
   ( HasHandleCounter(handleCounter)
   , setHandleCounter
   )
@@ -66,6 +64,14 @@ import CMM.Inference.Preprocess.Settings
 import CMM.Inference.Settings
 import CMM.Monomorphize.Settings (MonomorphizerSettings(MonomorphizerSettings))
 import CMM.Inference.State.Impl
+import qualified CMM.Translator.State as Tr
+import qualified Data.Text.Lazy.IO as T
+import Data.Maybe
+import LLVM.Pretty
+import LLVM.IRBuilder
+import CMM.Translator
+import LLVM.IRBuilder.Internal.SnocList (SnocList(SnocList))
+import LLVM.AST
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -75,24 +81,8 @@ main = do
   contents <- TS.getContents
   let tokens' = either undefined id $ parse tokenize contents
   let ast = either undefined id $ parse unit tokens'
-  -- let flattened = flatten ast
   -- print $ pretty flattened
   let (mined, miner) = runState (preprocess ast) $ initPreprocessor PreprocessorSettings {}
-  -- let (_, _) = runState (blockify flattened) B.initBlockifier
-  -- let translated =
-  --       ppllvm $
-  --       flip
-  --         evalState
-  --         Tr.initTranslState
-  --           { Tr._controlFlow = B._controlFlow blockifier
-  --           , Tr._blockData = B._blockData blockifier
-  --           , Tr._blocksTable =
-  --               Map.fromList . (swap <$>) . Map.toList $
-  --               B._blocksTable blockifier
-  --           } $
-  --       buildModuleT "llvm" $
-  --       runIRBuilderT emptyIRBuilder $ translate blockified
-  -- T.putStr translated
   let _ = globalVariables $ unAnnot ast
       oldCounter = view handleCounter miner
       fs = reverse . head $ view CMM.Inference.Preprocess.State.facts miner
@@ -105,14 +95,26 @@ main = do
   let (msg, (inferencer', monomorphizer)) =
         (`runState` (inferencer, Infer.initMonomorphizeState MonomorphizerSettings)) $ do
           monomorphize mempty mined <&> \case
-            Left what -> show what
-            Right mined' -> show $ pretty mined'
-  putStrLn msg
-  -- print .
-  --   vsep .
-  --   fmap (uncurry mappend . bimap pretty (list . fmap pretty . Set.toList)) .
-  --   Map.toList . Infer.getPolyGenerate $
-  --   monomorphizer ^. Infer.polyMemory
+            Left what -> undefined
+            Right mined' -> fromJust mined'
+  let flattened = flatten msg
+  let (blockified, blockifier) = blockify flattened `runState` B.initBlockifier
+  let moduleBuilder = runFreshIRBuilderT $ translate blockified
+      translator = execFreshModuleBuilderT moduleBuilder
+      translated =
+        evalState translator $
+          Tr.initTranslState
+            { Tr._controlFlow = B._controlFlow blockifier
+            , Tr._blockData = B._blockData blockifier
+            , Tr._blocksTable =
+                Map.fromList . (swap <$>) . Map.toList $
+                B._blocksTable blockifier
+            }
+
+      module' = defaultModule { moduleName = "", moduleDefinitions = translated }
+      prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
+
+  T.putStr prettyprinted
   print "ERRORS:"
   print . vsep . fmap pretty . view errors $ inferencer ^. errorState
   print "CLASS_SCHEMES:"

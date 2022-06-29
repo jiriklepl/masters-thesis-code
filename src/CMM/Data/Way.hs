@@ -2,11 +2,6 @@
 
 module CMM.Data.Way where
 
-import safe Data.Eq (Eq)
-import safe Data.Semigroup (Semigroup((<>)))
-import safe Text.Read (Read)
-import safe Text.Show (Show)
-
 data Way
   = Backward
   | Both

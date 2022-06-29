@@ -2,16 +2,12 @@
 
 module CMM.Data.Nullable where
 
-import safe Data.Bool (Bool(False), (||))
-import safe Data.Either (Either(Left))
 import safe Data.Map (Map)
-import safe Data.Maybe (Maybe(Nothing))
-import safe Data.Monoid (Monoid(mempty), Sum)
+import safe Data.Monoid (Sum)
 import safe Data.Set (Set)
 
 import safe CMM.Data.Bimap (Bimap)
 import safe qualified CMM.Data.Bimap as Bimap
-import safe CMM.Data.Num (Num)
 import safe qualified Data.Map as Map
 import safe qualified Data.Set as Set
 

@@ -2,21 +2,11 @@
 
 module CMM.AST.Flattener where
 
-import safe Control.Applicative (Applicative(pure), liftA2)
-import safe Control.Monad (Monad(return), sequence)
+import safe Control.Applicative (liftA2)
 import safe Control.Monad.State (State, evalState, get, put)
 import safe Data.Data (Data(gmapT), Typeable)
-import safe Data.Function (($), (.), flip)
-import safe Data.Functor ((<$>))
-import safe Data.Int (Int)
-import safe Data.List ((++), concat, length, reverse, take, zip)
-import safe Data.Maybe (Maybe(Just, Nothing))
-import safe Data.Monoid ((<>))
-import safe Data.String (String)
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe GHC.Err (error)
-import safe Text.Show (Show(show))
 
 import safe CMM.AST
   ( Arm(Arm)
@@ -29,7 +19,6 @@ import safe CMM.AST
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Data.Generics ((*|*))
-import safe CMM.Data.Num (Num((+)))
 import safe CMM.Utils (addPrefix)
 
 -- | Flattens the given AST node, more specifically nested blocks

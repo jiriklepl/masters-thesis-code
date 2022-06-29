@@ -6,15 +6,9 @@ module CMM.Inference.Preprocess.State.Impl where
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
 import safe Control.Lens.Getter (uses)
-import safe Control.Monad (Monad((>>=)), sequence)
 import safe Control.Monad.State (State)
 import safe Data.Data (Data)
-import safe Data.Function (($), (.))
-import safe Data.Functor (Functor(fmap))
-import safe Data.List (head)
 import safe Data.Map (Map)
-import safe Data.Maybe (Maybe)
-import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
 import safe qualified Data.Map as Map
 

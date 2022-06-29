@@ -2,8 +2,6 @@
 
 module CMM.Monomorphize.MakeSignature where
 
-import Prelude
-
 import CMM.Inference.Preprocess.TypeHole
 import CMM.Monomorphize.Schematized
 import CMM.AST.Annot

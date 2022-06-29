@@ -2,21 +2,12 @@
 
 module CMM.Inference.Unify where
 
-import safe Control.Applicative (Applicative(pure), (<$>))
 import safe Control.Lens ((%~))
 import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Monad (Functor(fmap), Monad(return))
-import safe Data.Bool (Bool, not, otherwise)
-import safe Data.Either (Either(Left, Right), isRight)
-import safe Data.Eq (Eq((/=), (==)))
-import safe Data.Function (($), (.), flip)
+import safe Data.Either (isRight)
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
-import safe Data.Maybe (Maybe(Just, Nothing))
-import safe Data.Monoid (Monoid(mempty), (<>))
-import safe Data.Ord (Ord((<), (>)))
 import safe qualified Data.Set as Set
-import safe GHC.Err (undefined)
 
 import safe CMM.Data.Way (Way(Backward, Both, Forward), otherWay)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)

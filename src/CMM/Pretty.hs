@@ -3,11 +3,6 @@
 
 module CMM.Pretty where
 
-import safe Data.Bool (Bool)
-import safe Data.Function (($), (.))
-import safe Data.Functor (Functor(fmap), (<$>))
-import safe Data.Maybe (Maybe, maybe)
-import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.String (IsString)
 
 import safe Prettyprinter

@@ -8,15 +8,11 @@ import safe Control.Lens.TH (makeFieldsNoPrefix)
 import safe qualified CMM.Data.Bimap as Bimap
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Setter ((%=))
-import safe Control.Monad (Monad((>>=), return), sequence)
 import safe Control.Monad.State (State)
-import safe Data.Function (($))
-import safe Data.List (head)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe Data.Text (Text)
-import safe Text.Show (Show)
 
 import safe CMM.Data.Bimap (Bimap)
 import safe CMM.Data.Bounds (Bounds)

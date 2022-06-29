@@ -6,7 +6,6 @@ module CMM.AST.Variables.State.Impl where
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
 import safe Data.Map (Map)
-import safe Data.Monoid (Monoid(mempty))
 import safe Data.Set (Set)
 import safe Data.Text (Text)
 

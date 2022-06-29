@@ -2,14 +2,10 @@
 
 module CMM.Err.Severity where
 
-import safe Data.Eq (Eq)
-import safe Data.Ord (Ord)
-import safe Text.Show (Show)
 import safe Data.Data ( Data )
 
 import safe Prettyprinter ( Pretty(pretty) )
 
-import safe CMM.Data.Bounded (Bounded)
 
 data Severity
   = InfoLevel

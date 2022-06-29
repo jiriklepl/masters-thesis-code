@@ -2,7 +2,6 @@
 {-# LANGUAGE CPP #-}
 
 module CMM.Utils where
-import Prelude
 
 import safe Control.Monad (unless, when)
 import safe Data.Bifunctor (Bifunctor(second))

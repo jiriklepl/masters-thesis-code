@@ -1,6 +1,5 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# OPTIONS_GHC -w #-}
 
 {-|
 Module      : CMM.Translator
@@ -11,8 +10,6 @@ This module follows the `CMM.AST.LRAnalysis` module and translates the AST using
 There is no AST-aware module that would follow this module.
 -}
 module CMM.Translator where
-
-import safe Prelude
 
 import safe Control.Applicative
 import safe Control.Monad.State
@@ -100,6 +97,17 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
   translate (Annot formal _) = return . (L.i32, ) . translateParName $ formal
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
+         Translate m TopLevel a (m L.Operand) where
+  translate (topLevel `Annot` _) = case topLevel of
+    TopSection sl ans -> undefined
+    TopDecl an -> undefined
+    TopProcedure procedure -> translate procedure
+    TopClass an -> undefined
+    TopInstance an -> undefined
+    TopStruct an -> undefined
+
+
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
          Translate m Procedure a (m L.Operand) where
   translate (Annot (Procedure (Annot (ProcedureHeader _ name formals _) _) body) annot) =
     go $ getBlockAnnot annot
@@ -175,6 +183,11 @@ Guarantees:
 - Every IfStmt has two bodies consisting of trivial goto statements
 - Every SwitchStmt's arm consists of a trivial goto statement
 -}
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
+         Translate m Unit a (m ()) where
+  translate (Unit topLevels `Annot` _) =
+    traverse_ translate topLevels
+
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
          Translate m Stmt a (m OutVars) where
   translate (Annot EmptyStmt _) = return mempty

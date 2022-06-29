@@ -3,10 +3,8 @@
 
 module CMM.Inference.GetParent where
 
-import safe Control.Monad (Monad)
-import safe Control.Monad.State (Monad((>>=), return), MonadState(get, put))
+import safe Control.Monad.State (MonadState(get, put))
 import safe Data.Data (Data)
-import safe Data.Function (($), (.))
 import safe qualified Data.Set as Set
 
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)

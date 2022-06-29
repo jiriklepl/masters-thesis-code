@@ -3,8 +3,6 @@
 
 module CMM.Inference.Refresh where
 
-import safe Control.Monad (Monad(return))
-import safe Data.Functor ((<$>))
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set

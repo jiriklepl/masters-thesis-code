@@ -5,10 +5,6 @@
 module CMM.Data.Ordered where
 
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
-import safe Data.Function ((.))
-import safe Data.Ord (Ord)
-import safe Text.Show (Show)
 
 import safe Prettyprinter (Pretty(pretty))
 

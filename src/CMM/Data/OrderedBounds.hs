@@ -5,10 +5,6 @@ module CMM.Data.OrderedBounds
   (
   ) where
 
-import safe Data.Eq (Eq)
-import safe Data.Monoid ((<>))
-import safe Data.Ord (Ord(compare))
-
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 

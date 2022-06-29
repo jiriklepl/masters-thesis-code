@@ -2,17 +2,11 @@
 
 module CMM.AST.BlockAnnot where
 
-import safe Data.Bool (Bool)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
-import safe Data.Function ((.), flip, id)
-import safe Data.Int (Int)
 import safe Data.Map (Map)
 import safe Data.Text (Text)
-import safe Text.Show (Show)
 
 import safe CMM.AST.Annot (Annot, takeAnnot)
-import safe Data.Tuple (snd)
 
 -- | Contains information about basic-block structure
 data BlockAnnot

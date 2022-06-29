@@ -2,8 +2,6 @@
 
 module CMM.Inference.Preprocess.WithTypeHole where
 
-import safe Data.Function (flip)
-
 import safe CMM.Inference.Preprocess.TypeHole
   ( HasTypeHole
   , TypeHole(EmptyTypeHole)

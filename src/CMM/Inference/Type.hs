@@ -2,17 +2,9 @@
 
 module CMM.Inference.Type where
 
-import safe Data.Bool (otherwise)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq((==)))
-import safe Data.Function (($), (.), id)
-import safe Data.Functor (Functor(fmap))
-import safe Data.Int (Int)
-import safe Data.List (foldl', reverse)
-import safe Data.Monoid ((<>))
-import safe Data.Ord (Ord)
+import safe Data.List (foldl')
 import safe Data.Text (Text)
-import safe Text.Show (Show)
 
 import safe Prettyprinter (Pretty(pretty), dquotes)
 

@@ -3,19 +3,11 @@
 module CMM.Inference.Preprocess.TypeHole where
 
 import safe Data.Data (Data)
-import safe Data.Function ((.), id, ($))
-import safe Data.Functor (Functor(fmap))
-import safe Data.Maybe (Maybe(Just, Nothing))
 import Data.Text (Text)
-import safe Text.Show (Show)
-import safe Data.Eq ( Eq ((==)) )
-import safe Data.Ord ( Ord(compare), Ordering(GT, EQ, LT) )
 import safe Control.Lens.Getter (view)
 import safe Control.Lens.Tuple (_2)
-import safe Data.Bool ( Bool(False, True) )
-import safe Data.List ( zipWith3 )
 
-import safe Prettyprinter ( (<>), Pretty(pretty), (<+>), parens )
+import safe Prettyprinter ( Pretty(pretty), (<+>), parens )
 
 import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)

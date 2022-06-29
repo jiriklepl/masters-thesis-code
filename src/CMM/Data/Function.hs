@@ -2,7 +2,6 @@
 
 module CMM.Data.Function where
 
-import safe Data.Bool (Bool, (&&), (||))
 import safe Data.Foldable (Foldable(foldl'))
 import safe Data.Function ((&))
 

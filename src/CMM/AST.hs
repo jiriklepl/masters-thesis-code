@@ -2,25 +2,14 @@
 
 module CMM.AST where
 
-import safe Data.Bool (Bool, not)
-import safe Data.Char (Char)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (Foldable(null))
-import safe Data.Function (($), (.))
-import safe Data.Functor (Functor, (<$>))
-import safe Data.Int (Int)
-import safe Data.Maybe (Maybe(Just, Nothing), maybe)
 import safe Data.Text (Text)
-import safe Data.Traversable (Traversable)
-import safe GHC.Err (error)
-import safe Text.Show (Show(show))
 
 import safe Prettyprinter
   ( Doc
   , Pretty(pretty)
   , (<+>)
-  , (<>)
+
   , angles
   , braces
   , brackets
@@ -37,7 +26,6 @@ import safe Prettyprinter
   )
 
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
-import safe CMM.Data.Float (Float)
 import safe CMM.Pretty
   ( arrow
   , bquotes
@@ -53,7 +41,6 @@ import safe CMM.Pretty
   , maybeSpacedR
   )
 import safe CMM.Utils (backQuote, HasCallStack)
-import safe Data.Monoid (Monoid(mempty))
 
 newtype Unit a =
   Unit [Annot TopLevel a]

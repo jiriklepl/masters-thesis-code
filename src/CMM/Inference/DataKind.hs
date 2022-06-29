@@ -2,22 +2,12 @@
 
 module CMM.Inference.DataKind where
 
-import safe Data.Bool (Bool(False, True), otherwise)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
-import safe Data.Foldable (Foldable(null))
-import safe Data.Function (($))
-import safe Data.Int (Int)
-import safe Data.Monoid (Monoid(mempty), (<>))
-import safe Data.Ord (Ord(compare, min), Ordering(EQ, GT, LT))
 import safe Data.PartialOrd (PartialOrd)
 import safe qualified Data.PartialOrd as PartialOrd
-import safe Data.Semigroup (Semigroup)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Text.Show (Show)
 
-import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Dioid (Dioid((<.>), mfull))
 import safe CMM.Data.Lattice (Lattice((/\), (\/)))
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))

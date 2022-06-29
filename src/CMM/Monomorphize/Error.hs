@@ -5,12 +5,10 @@
 module CMM.Monomorphize.Error where
 
 import safe Data.Data ( Data )
-import safe Data.Eq ( Eq )
-import safe Data.Int ( Int )
-import safe Text.Show ( Show )
+import safe Data.Functor ( void )
 
 import safe Prettyprinter
-    ( (<>), Pretty(pretty), (<+>), list, parens )
+    ( Pretty(pretty), (<+>), list, parens )
 
 import safe CMM.Err.IsError ( IsError )
 import safe CMM.Monomorphize.Polytypeness ( PolyWhat, Absurdity )
@@ -24,8 +22,6 @@ import CMM.Inference.Unify.Error (UnificationError)
 import safe CMM.Parser.HasPos ( HasPos )
 import CMM.Err.Error (Error)
 import qualified CMM.Err.Error as Error
-import safe Data.Functor ( (<$>), void )
-import safe Data.Function ( ($), (.) )
 import safe CMM.Parser.ASTError ( makeASTError )
 import safe CMM.Monomorphize.Schematized ( Schematized (FuncScheme, StructScheme) )
 

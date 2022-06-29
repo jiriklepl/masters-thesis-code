@@ -27,7 +27,7 @@ common common-options
                        KindSignatures
                        LambdaCase
                        NamedFieldPuns
-                       NoImplicitPrelude
+                       ImplicitPrelude
                        OverloadedStrings
                        ScopedTypeVariables
                        StandaloneDeriving
@@ -40,7 +40,7 @@ common common-options
                        -Wextra
                        -Wcpp-undef
                        -Widentities
-                       -Wimplicit-prelude
+                       -Wno-implicit-prelude
                        -Wmissing-import-lists
                        -Wredundant-constraints
                        -Wsafe
@@ -78,7 +78,6 @@ executable Compiler
                        CMM.Control.Applicative,
                        CMM.Control.Monad,
                        CMM.Data.Bimap,
-                       CMM.Data.Bounded,
                        CMM.Data.Bounds,
                        CMM.Data.Bounds.Impl,
                        CMM.Data.Church,
@@ -90,13 +89,11 @@ executable Compiler
                        CMM.Data.Lattice,
                        CMM.Data.List,
                        CMM.Data.Nullable,
-                       CMM.Data.Num,
                        CMM.Data.Ordered,
                        CMM.Data.OrderedBounds,
                        CMM.Data.Trilean,
                        CMM.Data.Tuple,
                        CMM.Data.Way,
-                       CMM.Data.Zippable,
                        CMM.Err.Error,
                        CMM.Err.IsError,
                        CMM.Err.Severity,

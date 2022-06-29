@@ -5,11 +5,7 @@ module CMM.Inference.HandleCounter where
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Setter ((+=), (.=))
 import safe Control.Lens.Type (Lens')
-import safe Control.Monad (Monad((>>)))
 import safe Control.Monad.State (MonadState)
-import safe Data.Function ((.), id)
-import safe Data.Functor ((<$>))
-import safe Data.Int (Int)
 import safe Data.Monoid (Sum(getSum))
 
 import safe CMM.Inference.TypeAnnot (TypeAnnot)

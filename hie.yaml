@@ -63,9 +63,6 @@ cradle:
     - path: "src/CMM/Data/Bimap.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Data/Bounded.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Data/Bounds.hs"
       component: "Compiler:exe:Compiler"
 
@@ -99,9 +96,6 @@ cradle:
     - path: "src/CMM/Data/Nullable.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Data/Num.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Data/Ordered.hs"
       component: "Compiler:exe:Compiler"
 
@@ -115,9 +109,6 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Data/Way.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/Zippable.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Err/Error.hs"

@@ -5,12 +5,10 @@ module CMM.Pipeline where
 import Text.Megaparsec hiding (Token)
 import CMM.Lexer
 import Control.Monad
-import Data.Either
-import Data.Function
 import Data.Bifunctor
-import CMM.AST.Annot
 import Data.Text
-import Data.String
+
+import CMM.AST.Annot
 import CMM.Parser
 import CMM.AST
 import CMM.Inference.Preprocess.Settings

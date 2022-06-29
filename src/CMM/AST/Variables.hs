@@ -3,16 +3,10 @@
 
 module CMM.AST.Variables where
 
-import safe Control.Applicative (Applicative((*>), (<*)))
-import safe Control.Monad (Monad(return))
 import safe Control.Monad.State (execState)
 import safe Data.Data (Data(gmapM))
-import safe Data.Foldable (Foldable(foldr), traverse_)
-import safe Data.Function (($), (.))
-import safe Data.Functor (Functor((<$)), (<$>))
-import safe Data.Maybe (Maybe(Just, Nothing))
 import safe qualified Data.Set as Set
-import safe Data.Tuple (fst)
+import safe Data.Foldable (traverse_)
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot))

@@ -3,20 +3,10 @@
 
 module CMM.Inference.Fact where
 
-import safe Control.Applicative (Applicative(pure))
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
-import safe Data.Foldable (Foldable(null))
-import safe Data.Function (($), (.))
-import safe Data.Functor (Functor(fmap), (<$>))
-import safe Data.Int (Int)
-import safe Data.Monoid (Monoid(mempty), (<>))
-import safe Data.Ord (Ord)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Traversable (Traversable)
-import safe Text.Show (Show)
 
 import safe Prettyprinter
   ( Pretty(pretty)
@@ -28,7 +18,6 @@ import safe Prettyprinter
   , tupled
   )
 
-import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.Trilean (Trilean)

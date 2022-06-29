@@ -2,19 +2,13 @@
 
 module CMM.Inference.FunDeps where
 
-import safe Data.Bool (Bool, bool, otherwise)
 import safe qualified Data.Bool as B
-import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (or)
-import safe Data.Function (($), (.), const, id)
-import safe Data.Functor (Functor(fmap, (<$)), (<$>))
-import safe Data.Int (Int)
-import safe Data.List ((++), sortOn, zipWith)
 import safe Data.Tuple ()
 import safe Data.Tuple.Extra (first3, thd3)
+import safe Data.Bool (bool)
+import safe Data.List (sortOn)
 
 import safe CMM.Data.List (count)
-import safe CMM.Data.Num (Num((-)))
 import safe CMM.Data.Trilean (Trilean, trilean)
 import safe qualified CMM.Data.Trilean as T
 

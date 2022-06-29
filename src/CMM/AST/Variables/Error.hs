@@ -3,10 +3,7 @@
 
 module CMM.AST.Variables.Error where
 
-import safe Data.Eq (Eq)
-import safe Data.Function ((.))
 import safe Data.Text (Text)
-import safe Text.Show (Show)
 import safe Data.Data ( Data )
 
 import safe Prettyprinter ( Pretty(pretty), (<+>) )

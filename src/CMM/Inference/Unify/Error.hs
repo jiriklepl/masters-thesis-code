@@ -3,9 +3,7 @@
 
 module CMM.Inference.Unify.Error where
 
-import safe Data.Eq (Eq)
 import safe Data.Text (Text)
-import safe Text.Show (Show)
 import safe Data.Data ( Data )
 
 import safe Prettyprinter ( Pretty(pretty), (<+>), parens )

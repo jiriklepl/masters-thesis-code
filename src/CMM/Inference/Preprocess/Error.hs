@@ -3,8 +3,6 @@
 
 module CMM.Inference.Preprocess.Error where
 
-import Prelude
-
 import safe Data.Text (Text)
 import safe Data.Data ( Data )
 

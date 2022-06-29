@@ -2,13 +2,8 @@
 
 module CMM.AST.GetName where
 
-import safe Data.Function (($), id)
-import safe Data.List ((++))
-import safe Data.Maybe (Maybe(Just))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe GHC.Err (error)
-import safe Text.Show (Show(show))
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot))

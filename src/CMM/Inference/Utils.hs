@@ -2,11 +2,9 @@
 
 module CMM.Inference.Utils where
 
-import safe Data.Bool (otherwise)
 import safe Data.Data (Data(gmapT))
 import safe qualified Data.Set as Set
 import safe Data.Set (Set)
-import safe Data.String (String)
 import safe Data.Text (Text)
 
 import safe CMM.Data.Generics ((*|*))

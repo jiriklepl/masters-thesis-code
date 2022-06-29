@@ -3,20 +3,9 @@
 module CMM.Inference.TypeCompl where
 
 import safe CMM.Pretty (arrowNice)
-import safe Data.Bool (Bool(False, True), (&&), otherwise)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (Foldable, and)
-import safe Data.Function (($))
-import safe Data.Functor (Functor, (<$>))
-import safe Data.Int (Int)
-import safe Data.List ((++), zipWith)
-import safe Data.Monoid (Monoid(mconcat, mempty), (<>))
-import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe Data.Traversable (Traversable)
-import safe Text.Show (Show(show))
 
 import safe Prettyprinter
   ( Pretty(pretty)

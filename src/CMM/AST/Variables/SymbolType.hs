@@ -2,8 +2,6 @@
 
 module CMM.AST.Variables.SymbolType where
 
-import safe Data.Eq (Eq)
-import safe Text.Show (Show)
 import safe Data.Data ( Data )
 
 import safe Prettyprinter ( Pretty(pretty) )

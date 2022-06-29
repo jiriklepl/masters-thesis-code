@@ -2,20 +2,12 @@
 
 module CMM.Inference.TypeKind where
 
-import safe Data.Bool (Bool(False, True), (&&), otherwise)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq((==)))
-import safe Data.Function (($), const, id)
-import safe Data.List ((++))
-import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
 import safe Data.Text (Text)
-import safe GHC.Err (error, undefined)
-import safe Text.Show (Show(show))
 
-import safe Prettyprinter (Pretty(pretty), (<>), parens)
+import safe Prettyprinter (Pretty(pretty), parens)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
-import safe CMM.Data.Num (Num((+)))
 import safe CMM.Inference.Arity (Arity(arity))
 import safe CMM.Pretty (arrowNice, bang, deltaBig, question, star)
 import safe CMM.Utils (backQuote)

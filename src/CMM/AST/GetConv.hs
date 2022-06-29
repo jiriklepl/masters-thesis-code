@@ -2,9 +2,6 @@
 
 module CMM.AST.GetConv where
 
-import safe Data.Function ((.))
-import safe Data.Maybe (Maybe(Just, Nothing))
-
 import safe CMM.AST
   ( BodyItem(BodyStmt)
   , Conv

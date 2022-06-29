@@ -3,8 +3,6 @@
 
 module CMM.Inference.Preprocess where
 
-import Prelude
-
 import safe Control.Applicative (liftA2)
 import safe Control.Lens.Getter ((^.), uses)
 import safe Control.Lens.Setter ((%~), (<>=))

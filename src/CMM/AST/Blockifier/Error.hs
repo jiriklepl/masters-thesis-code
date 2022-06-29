@@ -3,15 +3,10 @@
 
 module CMM.AST.Blockifier.Error where
 
-import safe Data.Eq (Eq)
-import safe Data.Function ((.))
 import safe Data.Text (Text)
-import safe Text.Show (Show)
-import safe Data.Bool ( otherwise )
-import safe Data.Functor ( (<$>) )
 import safe Data.Data ( Data )
 
-import safe Prettyprinter ( (<>), Pretty(pretty), (<+>) )
+import safe Prettyprinter ( Pretty(pretty), (<+>) )
 
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.AST.Variables.SymbolType (SymbolType)

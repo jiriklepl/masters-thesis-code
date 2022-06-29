@@ -3,12 +3,6 @@
 module CMM.Monomorphize.Schematized where
 
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
-import safe Data.Foldable (Foldable)
-import safe Data.Function (($))
-import safe Data.Functor (Functor)
-import safe Data.Traversable (Traversable)
-import safe Text.Show (Show)
 
 import safe CMM.AST (Procedure, Struct, TopLevel(TopProcedure, TopStruct))
 import safe CMM.AST.Annot (Annot, copyAnnot)

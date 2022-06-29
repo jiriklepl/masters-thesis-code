@@ -2,9 +2,6 @@
 
 module CMM.Inference.Preprocess.HasTypeHandle where
 
-import safe Data.Function ((.), id)
-import safe Data.Tuple (snd)
-
 import safe CMM.AST.Annot (Annot, takeAnnot)
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeVar (TypeVar)

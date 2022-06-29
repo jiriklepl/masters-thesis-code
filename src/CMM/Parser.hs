@@ -4,26 +4,17 @@ module CMM.Parser where
 
 import safe Control.Applicative
   ( Alternative((<|>))
-  , Applicative((*>), (<*), (<*>), liftA2, pure)
+  , Applicative(liftA2)
   , (<**>)
   , liftA2
   , liftA3
   , optional
   )
-import safe Control.Monad (Monad(return))
-import safe Data.Bool (Bool(False, True))
-import safe Data.Char (Char)
-import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (Foldable(foldl1))
-import safe Data.Function (($), (.), flip, id)
-import safe Data.Functor (($>), ($>), (<$>))
-import safe Data.Int (Int)
-import safe Data.Maybe (Maybe(Just, Nothing), fromMaybe)
+import safe Data.Functor (($>))
+import safe Data.Maybe (fromMaybe)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Tuple (fst, uncurry)
 import safe Data.Void (Void)
-import safe GHC.Err (error)
 import safe Text.Megaparsec
   ( MonadParsec(lookAhead, token, try)
   , Parsec
@@ -39,7 +30,6 @@ import safe Text.Megaparsec
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
 import safe CMM.Control.Applicative ((<*<), (>*>), liftA4, liftA6)
-import safe CMM.Data.Float (Float)
 import safe qualified CMM.Lexer.Token as T
 
 type Parser = Parsec Void [Annot T.Token SourcePos]

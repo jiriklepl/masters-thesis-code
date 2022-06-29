@@ -2,10 +2,6 @@
 
 module CMM.Inference.Arity where
 
-import safe Data.Bool (Bool)
-import safe Data.Eq (Eq((==)))
-import safe Data.Function ((.))
-import safe Data.Int (Int)
 
 class Arity a where
   arity :: a -> Int

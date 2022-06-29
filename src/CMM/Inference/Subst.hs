@@ -5,15 +5,10 @@
 module CMM.Inference.Subst where
 
 import safe Control.Lens.Setter ((%~))
-import safe Data.Bool (otherwise)
 import safe Data.Data (Data(gmapT), Typeable)
-import safe Data.Foldable (Foldable(foldr, null))
-import safe Data.Function (($), (.))
-import safe Data.Functor ((<$>))
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (fromMaybe, maybe)
-import safe Data.Monoid (Monoid(mempty), (<>))
+import safe Data.Maybe (fromMaybe)
 
 import safe CMM.Data.Generics ((*|*))
 import safe CMM.Inference.Fact (Fact, FlatFact, NestedFact, Qual, Scheme((:.)))

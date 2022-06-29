@@ -5,11 +5,7 @@ module CMM.Data.Bounds
   , module CMM.Data.Bounds.Impl
   ) where
 
-import safe Data.Bool (Bool)
-import safe Data.Eq (Eq((==)))
-import safe Data.PartialOrd (PartialOrd((<=), (>), (>=)))
-
-import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
+import safe Data.PartialOrd as PO (PartialOrd((<=), (>), (>=)))
 
 import safe CMM.Data.Bounds.Impl (Bounds(Bounds), lowerBound, upperBound)
 
@@ -20,13 +16,13 @@ isTrivial :: Eq a => Bounds a -> Bool
 isTrivial (Bounds low high) = low == high
 
 isAbsurd :: PartialOrd a => Bounds a -> Bool
-isAbsurd (Bounds low high) = low > high
+isAbsurd (Bounds low high) = low PO.> high
 
 isTrivialOrAbsurd :: PartialOrd a => Bounds a -> Bool
-isTrivialOrAbsurd (Bounds low high) = low >= high
+isTrivialOrAbsurd (Bounds low high) = low PO.>= high
 
 normalizeAbsurd :: (PartialOrd a, Bounded a) => Bounds a -> Bounds a
 normalizeAbsurd bounds@(Bounds low high) =
-  if low <= high
+  if low PO.<= high
     then bounds
     else absurdBounds

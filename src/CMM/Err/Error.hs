@@ -6,11 +6,7 @@ module CMM.Err.Error where
 
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
-import safe Data.Bool (Bool(False), otherwise)
 import safe Data.Data (cast, Data)
-import safe Data.Eq (Eq((==)))
-import safe Data.Maybe (Maybe(Just, Nothing))
-import safe Text.Show (Show)
 import safe Data.Generics
     ( Data(gfoldl, dataTypeOf, toConstr, gunfold),
       Constr,
@@ -18,9 +14,8 @@ import safe Data.Generics
       mkConstr,
       mkDataType,
       Fixity(Prefix))
-import safe GHC.Err ( undefined )
 
-import safe Prettyprinter ( Pretty(pretty), (<+>), (<>) )
+import safe Prettyprinter ( Pretty(pretty), (<+>))
 
 import safe CMM.Err.IsError (IsError)
 import safe CMM.Err.Severity (Severity (InfoLevel, WarningLevel, ErrorLevel))

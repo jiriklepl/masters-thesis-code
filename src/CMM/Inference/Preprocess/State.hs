@@ -6,31 +6,20 @@ module CMM.Inference.Preprocess.State
   , module CMM.Inference.Preprocess.State.Impl
   ) where
 
-import safe Control.Applicative (Applicative(pure), (<|>))
+import safe Control.Applicative ( (<|>))
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((%=), (.=), (<~), (<>=))
 import safe Control.Lens.Tuple (_3)
 import safe Control.Lens.Type (Lens')
-import safe Control.Monad (Functor((<$), fmap), Monad((>>=), return))
 import safe Control.Monad.State (MonadState)
 import safe Data.Bifunctor (Bifunctor(bimap, second))
-import safe Data.Bool (otherwise)
-import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (Foldable(foldr), for_, traverse_)
-import safe Data.Function (($), (.), id)
-import safe Data.Functor ((<$>))
+import safe Data.Foldable (for_, traverse_)
 import safe Data.Generics.Aliases (extT)
-import safe Data.List (head, init, last, reverse, tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Nothing), maybe)
-import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Tuple (snd, uncurry)
-
-import safe GHC.Err (error)
 
 import safe CMM.AST (Conv)
 import safe CMM.AST.GetConv (GetConv(getConv))

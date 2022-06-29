@@ -5,7 +5,6 @@
 module CMM.Inference where
 
 
-import Prelude
 import safe Control.Applicative (Applicative(liftA2))
 import safe Control.Lens (Lens')
 import safe Control.Lens.Getter (Getter, (^.), use, uses, view)

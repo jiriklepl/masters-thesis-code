@@ -2,15 +2,11 @@
 
 module CMM.Data.Trilean where
 
-import safe Data.Bool (Bool)
+import Prelude (Eq, Show, Ord, Read, Bounded(minBound,maxBound), Bool)
+
 import safe qualified Data.Bool as B
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
-import safe Data.Ord (Ord)
-import safe Text.Read (Read)
-import safe Text.Show (Show)
 
-import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 
 -- | Data type used for three-valued logic (with added 'Unknown' value)

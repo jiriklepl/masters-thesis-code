@@ -3,23 +3,12 @@
 
 module CMM.Monomorphize.Polytypeness where
 
-import safe Control.Applicative (Applicative(pure, liftA2))
-import safe Data.Eq (Eq)
-import safe Data.Function (($), (.))
-import safe Data.Monoid (Monoid(mempty, mappend))
+import safe Control.Applicative (Applicative(liftA2))
 import safe Data.Set (Set)
-import safe Text.Show (Show, show)
 import safe Data.Data (Data)
 import safe qualified Data.Set as Set
-import safe Data.Functor ( Functor(fmap), (<$>) )
-import safe Data.Semigroup ( Semigroup((<>)) )
 import safe qualified Data.PartialOrd as PartialOrd
-import safe Data.Ord ( Ord((>=), compare), Ordering(GT, LT, EQ) )
-import safe Data.Maybe ( Maybe(Nothing, Just) )
 import safe Control.Lens.Getter ((^.))
-import safe GHC.Err (error)
-import safe Control.Monad ( Monad((>>=)) )
-import safe Data.Foldable ( Foldable(null) )
 
 import safe Prettyprinter
     ( Pretty(pretty), (<+>), list, Doc )
@@ -51,10 +40,10 @@ data Absurdity =
   deriving (Eq, Show, Data)
 
 instance Semigroup Absurdity where
-  Absurdity {absurdKind = kind, absurdConst = const} <> Absurdity { absurdKind = kind'
-                                                                  , absurdConst = const'
+  Absurdity {absurdKind = kind, absurdConst = const'} <> Absurdity { absurdKind = kind'
+                                                                  , absurdConst = const''
                                                                   } =
-    Absurdity {absurdKind = kind <> kind', absurdConst = const <> const'}
+    Absurdity {absurdKind = kind <> kind', absurdConst = const' <> const''}
 
 instance Pretty Absurdity where
   pretty Absurdity {absurdKind, absurdConst} =
@@ -79,13 +68,13 @@ data PolyWhat =
   deriving (Eq, Show, Data)
 
 instance Semigroup PolyWhat where
-  PolyWhat {polyKind = kind, polyConst = const, polyType = typ} <> PolyWhat { polyKind = kind'
-                                                                            , polyConst = const'
+  PolyWhat {polyKind = kind, polyConst = const', polyType = typ} <> PolyWhat { polyKind = kind'
+                                                                            , polyConst = const''
                                                                             , polyType = typ'
                                                                             } =
     PolyWhat
       { polyKind = kind <> kind'
-      , polyConst = const <> const'
+      , polyConst = const' <> const''
       , polyType = typ <> typ'
       }
 

@@ -5,12 +5,8 @@ module CMM.AST.Blockifier.State where
 
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
-import safe Data.Int (Int)
 import safe Data.Map (Map)
-import safe Data.Maybe (Maybe(Nothing))
-import safe Data.Monoid (Monoid(mempty))
 import safe Data.Text (Text)
-import safe Text.Show (Show)
 import safe Control.Monad.State ( State )
 import safe Control.Lens.Setter ((.=))
 

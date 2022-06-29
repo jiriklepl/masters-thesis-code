@@ -4,12 +4,6 @@
 module CMM.Parser.ASTError where
 
 import safe Control.Monad.State (MonadState)
-import safe Data.Eq (Eq)
-import safe Data.Foldable (Foldable)
-import safe Data.Function (($))
-import safe Data.Functor (Functor)
-import safe Data.Traversable (Traversable)
-import safe Text.Show (Show)
 import safe Data.Data ( Data )
 
 import safe Prettyprinter ( Pretty(pretty), (<+>) )

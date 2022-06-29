@@ -3,14 +3,11 @@
 module CMM.Inference.Constness where
 
 import safe Data.Data (Data)
-import safe Data.Eq (Eq)
-import safe Data.Ord as Ord (Ord((<=), compare, max, min), Ordering(EQ, GT, LT))
+import safe Data.Ord as Ord (Ord((<=)))
 import safe Data.PartialOrd (PartialOrd((<=)))
-import safe Text.Show (Show)
 
 import safe Prettyprinter (Pretty(pretty))
 
-import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Lattice (Lattice((/\), (\/)))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 

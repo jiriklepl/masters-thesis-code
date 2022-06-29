@@ -4,11 +4,6 @@ module CMM.AST.Wrap where
 
 import safe qualified CMM.AST as AST
 import safe Data.Data ( Data )
-import safe Text.Show ( Show )
-import safe Data.Functor ( Functor )
-import safe Data.Foldable ( Foldable )
-import safe Data.Traversable ( Traversable )
-import safe Data.Eq ( Eq )
 import safe Prettyprinter ( Pretty(pretty) )
 
 data ASTWrapper a
@@ -64,7 +59,7 @@ instance (Pretty (ASTWrapper a)) where
     WrappedImport import' ->  pretty import'
     WrappedExport export ->  pretty export
     WrappedDatum datum ->  pretty datum
-    WrappedInit init ->  pretty init
+    WrappedInit init' ->  pretty init'
     WrappedRegisters registers ->  pretty registers
     WrappedBody body ->  pretty body
     WrappedBodyItem bodyItem ->  pretty bodyItem

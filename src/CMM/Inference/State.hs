@@ -5,33 +5,22 @@ module CMM.Inference.State
   , module CMM.Inference.State
   ) where
 
-import safe Control.Applicative (Applicative((<*>)))
 import safe Control.Lens.Getter ((^.), uses, view)
 import safe Control.Lens.Setter ((%=), (<>=))
-import safe Control.Monad (Monad((>>=), return), filterM, unless)
-import safe Data.Bool (Bool, not)
+import safe Control.Monad (filterM, unless)
 import safe Data.Data (Data)
-import safe Data.Foldable (Foldable, fold, traverse_)
+import safe Data.Foldable (fold, traverse_)
 import safe Data.Foldable.Extra (anyM)
-import safe Data.Function (($), (.), flip)
-import safe Data.Functor (Functor(fmap), (<$>))
-import safe Data.List (tail)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe, isJust)
-import safe Data.Monoid (mappend)
-import safe Data.Ord (Ord)
+import safe Data.Maybe (fromJust, fromMaybe, isJust)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe Data.Traversable (Traversable(traverse))
-import safe GHC.Err (error)
-import safe Text.Show (Show(show))
 
-import safe Prettyprinter (Pretty(pretty), (<>))
+import safe Prettyprinter (Pretty(pretty))
 
 import safe qualified CMM.Data.Bimap as Bimap
-import safe CMM.Data.Bounded (Bounded(maxBound, minBound))
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Data.Trilean (Trilean)
 import safe CMM.Err.Error (Error(Error))

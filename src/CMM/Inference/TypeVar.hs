@@ -2,21 +2,13 @@
 
 module CMM.Inference.TypeVar where
 
-import safe Data.Bool (Bool(False, True), otherwise)
 import safe Data.Data (Data)
-import safe Data.Eq (Eq((==)))
 import safe Data.Foldable ()
-import safe Data.Function ((.), const, id)
 import safe Data.Functor ()
-import safe Data.Int (Int)
-import Data.Monoid ((<>), mempty)
-import safe Data.Ord (Ord(compare), Ordering(EQ, GT, LT))
-import safe Text.Show (Show)
 
 import safe Prettyprinter (Pretty(pretty), (<+>), parens)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
-import safe CMM.Data.Num (Num((+)))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
   , TypeKind(GenericType)

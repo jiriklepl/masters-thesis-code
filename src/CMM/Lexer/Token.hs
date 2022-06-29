@@ -3,19 +3,10 @@
 module CMM.Lexer.Token where
 
 import safe Data.String ( IsString )
-import safe Data.Functor ( Functor(fmap) )
-import safe Data.Eq ( Eq )
-import safe Data.Ord ( Ord((<=)) )
-import safe Text.Show ( Show(show) )
 import safe Data.Text ( Text )
-import safe CMM.Data.Float ( Float )
-import safe Data.Int ( Int )
-import safe Data.Char ( Char )
-import safe Data.Bool ( otherwise, Bool )
 import safe Prettyprinter
-    ( (<>), Pretty(pretty), hsep, dquotes, squotes )
+    ( Pretty(pretty), hsep, dquotes, squotes )
 
-import safe Data.Function ( ($), (.) )
 import safe CMM.AST.Annot ( takeAnnot, Annot )
 import safe Text.Megaparsec
     ( SourcePos,
@@ -23,9 +14,6 @@ import safe Text.Megaparsec
       VisualStream (showTokens, tokensLength),
       PosState(PosState) )
 import safe Data.List.NonEmpty ( toList )
-import safe Data.Foldable ( Foldable(length) )
-import safe CMM.Data.Num ( Num((+)) )
-import safe Data.Maybe ( Maybe(Just, Nothing) )
 
 data Reserved
   = Aborts

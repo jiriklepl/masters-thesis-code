@@ -4,23 +4,15 @@ module CMM.FlowAnalysis
   ( analyzeFlow
   ) where
 
-import safe Control.Applicative ((<$), (<$>), (<*>))
 import safe Control.Lens.Getter ((^.), use, uses)
 import safe Control.Lens.Setter ((.=))
 import safe Control.Lens.Tuple (_3)
-import safe Control.Monad (fmap, return, unless)
-import safe Data.Bool (Bool(False), (&&), (||), not)
-import safe Data.Eq ((/=))
-import safe Data.Foldable (null, or)
-import safe Data.Function (($), (.), flip)
+import safe Control.Monad (unless)
 import safe qualified Data.Graph as Graph
-import safe Data.Int (Int)
-import safe Data.List (elemIndex, filter, sortOn, zip, zipWith)
+import safe Data.List (elemIndex, sortOn )
 import safe qualified Data.Map as Map
-import safe Data.Monoid ((<>), mempty)
 import safe qualified Data.Set as Set
-import safe Data.Traversable (traverse)
-import safe Data.Tuple (fst, swap)
+import safe Data.Tuple (swap)
 
 import safe CMM.AST (Procedure)
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
@@ -30,7 +22,6 @@ import CMM.AST.Blockifier.Error
   )
 import safe qualified CMM.AST.Blockifier.State as State
 import safe CMM.AST.Blockifier.State (Blockifier)
-import safe CMM.Data.Num ((-))
 import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()

@@ -2,8 +2,6 @@
 
 module CMM.Data.Tuple where
 
-import safe Control.Applicative ((<$>))
-
 uncurry4 :: (a -> b -> c -> d -> e) -> (a, b, c, d) -> e
 uncurry4 f (a, b, c, d) = f a b c d
 
