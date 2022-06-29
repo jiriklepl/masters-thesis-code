@@ -28,7 +28,7 @@ import CMM.AST.Annot ( Annot )
 
 newtype PolyMemory =
   PolyMemory
-    { getPolyMemory :: Map TypeVar (Set TypeVar)
+    { getPolyMemory :: Map TypeVar (Set Type)
     }
   deriving (Eq, Ord, Show)
 

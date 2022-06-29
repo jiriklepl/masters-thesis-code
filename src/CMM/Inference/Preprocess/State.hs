@@ -384,7 +384,6 @@ popTypeVariables :: Preprocessor ()
 popTypeVariables = do
   typeVariables %= init
 
--- TODO: renew in all context where used
 collectTVars :: Preprocessor (Set TypeVar)
 collectTVars =
   uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
@@ -413,7 +412,7 @@ pushClass name hole constraint supers
 
 pushInstance ::
      Text -> TypeHole -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
-pushInstance name hole constraint supers -- TODO: solve type variables not in scope in superclasses
+pushInstance name hole constraint supers
  = do
   tVars <- collectTVars
   storeFact $

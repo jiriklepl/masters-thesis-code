@@ -72,13 +72,13 @@ addImpl ::
 addImpl which scheme inst =
   (<>= which (Map.singleton scheme $ Set.singleton inst))
 
-memorizeImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> TypeVar -> Monomorphizer a ()
+memorizeImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> Type -> Monomorphizer a ()
 memorizeImpl toWhere scheme inst = addImpl PolyMemory scheme inst toWhere
 
-memorize :: TypeVar -> TypeVar -> Monomorphizer a ()
+memorize :: TypeVar -> Type -> Monomorphizer a ()
 memorize = memorizeImpl polyMemory
 
-store :: TypeVar -> TypeVar -> Monomorphizer a ()
+store :: TypeVar -> Type -> Monomorphizer a ()
 store = memorizeImpl polyStorage
 
 incWaves :: Monomorphizer a Int
@@ -90,32 +90,32 @@ getMaxWaves :: Monomorphizer a Int
 getMaxWaves =
   use maxPolyWaves
 
-isMemorizedImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> TypeVar -> Monomorphizer a Bool
+isMemorizedImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> Type -> Monomorphizer a Bool
 isMemorizedImpl inWhere scheme inst =
   uses inWhere $ maybe False (Set.member inst) . Map.lookup scheme .
   getPolyMemory
 
-isMemorized :: TypeVar -> TypeVar -> Monomorphizer a Bool
+isMemorized :: TypeVar -> Type -> Monomorphizer a Bool
 isMemorized = isMemorizedImpl polyMemory
 
-isStored :: TypeVar -> TypeVar -> Monomorphizer a Bool
+isStored :: TypeVar -> Type -> Monomorphizer a Bool
 isStored = isMemorizedImpl polyStorage
 
-tryMemorizeImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> TypeVar -> Monomorphizer a Bool
+tryMemorizeImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> Type -> Monomorphizer a Bool
 tryMemorizeImpl toWhere scheme inst = do
   memorized <- isMemorizedImpl toWhere scheme inst
   unless memorized $ memorizeImpl toWhere scheme inst
   return $ not memorized
 
-tryMemorize :: TypeVar -> TypeVar -> Monomorphizer a Bool
+tryMemorize :: TypeVar -> Type -> Monomorphizer a Bool
 tryMemorize  = tryMemorizeImpl polyMemory
 
-tryStore :: TypeVar -> TypeVar -> Monomorphizer a Bool
+tryStore :: TypeVar -> Type -> Monomorphizer a Bool
 tryStore = tryMemorizeImpl polyStorage
 
-addGenerate :: HasPos a => Annot ASTWrapper a -> TypeVar -> TypeVar -> Monomorphizer a ()
-addGenerate n scheme inst = do
-  success <- tryMemorize scheme inst
+addGenerate :: HasPos a => Annot ASTWrapper a -> TypeVar -> TypeVar -> Type -> Monomorphizer a ()
+addGenerate n scheme inst instType = do
+  success <- tryMemorize scheme instType
   when success $ polyGenerate %= PolyGenerate . Map.insertWith mappend scheme [(inst, getPos <$> n)] . getPolyGenerate
 
 addPolyScheme :: TypeVar -> Scheme Type -> Schematized a -> Monomorphizer a ()

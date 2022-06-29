@@ -37,7 +37,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   , holeHandle
   )
 import safe qualified CMM.Inference.State as State
-import safe CMM.Inference.State (InferencerState, lookupScheme)
+import safe CMM.Inference.State (InferencerState, lookupScheme, getTyping)
 import safe CMM.Inference.Subst (Subst, apply)
 import safe CMM.Inference.Type as Type
   ( Type(ComplType, ErrorType, VarType)
@@ -82,6 +82,7 @@ import safe CMM.Inference.Unify.Error ( UnificationError )
 import safe qualified CMM.Monomorphize.State as State
 import safe CMM.Monomorphize.State.Impl
     ( Monomorphizer, MonomorphizeState )
+import CMM.Monomorphize.MakeSignature
 
 type InferMonomorphizer a = State (InferencerState, MonomorphizeState a)
 
@@ -348,11 +349,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
       Mono -> do
         handle <- useInferencer $ State.getHandle schemeName
         hole <- return . toTypeVar $ getTypeHole a
-        inst <-
-          useInferencer $
-          State.reconstructOld (toTypeVar handle) >>=
-          simplify . makeAddrType . apply subst >>=
-          fmap toTypeVar . State.getHandle
+        inst <- getTypingUnder subst handle
 
         stored <- useMonomorphizer $
           case getTypeHole a of
@@ -514,7 +511,8 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
                           State.reconstructOld (toTypeVar handle) >>=
                           simplify . apply subst >>=
                           fmap toTypeVar . State.getHandle
-                        useMonomorphizer $ State.addGenerate (mapAnnot WrappedLValue annotated) (toTypeVar scheme) inst
+                        instType <- getTypingUnder subst handle
+                        useMonomorphizer $ State.addGenerate (mapAnnot WrappedLValue annotated) (toTypeVar scheme) inst instType
                         succeed . Just $ annotated
                   hole -> fail $ hole `illegalHole` annotated
               AST.LVRef mType expr mAsserts -> do
@@ -568,8 +566,11 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
                   useInferencer $
                   State.reconstructOld (toTypeVar inst) >>= simplify . apply subst >>=
                   fmap toTypeVar . State.getHandle
+                instType <-
+                  useInferencer $
+                  State.reconstructOld (toTypeVar inst) <&> apply subst
                 useMonomorphizer $
-                  State.addGenerate (mapAnnot WrappedExpr annotated) (toTypeVar scheme) (toTypeVar inst')
+                  State.addGenerate (mapAnnot WrappedExpr annotated) (toTypeVar scheme) (toTypeVar inst') instType
                 return $ do
                   expr''' <- expr''
                   return $ withAnnot a . (`AST.MemberExpr` field) <$> expr'''
@@ -640,8 +641,7 @@ recallMethod :: TypeVar
 recallMethod scheme item = do
   inst' <-
     useInferencer $
-    State.reconstructOld (toTypeVar item) >>= simplify . makeAddrType >>=
-    fmap toTypeVar . State.getHandle
+    State.reconstructOld (toTypeVar item) <&> makeAddrType
   useMonomorphizer $ State.isMemorized scheme inst'
 
 monomorphizeMethod ::
@@ -668,8 +668,7 @@ recallField :: TypeVar
 recallField scheme item = do
   inst' <-
     useInferencer $
-    State.reconstructOld (toTypeVar item) >>= simplify >>=
-    fmap toTypeVar . State.getHandle
+    State.reconstructOld (toTypeVar item)
   useMonomorphizer $ State.isMemorized scheme inst'
 
 monomorphizeField ::
@@ -763,3 +762,7 @@ instance Monomorphize (Annot AST.CallAnnot) a where
 
 instance Monomorphize (Annot AST.Asserts) a where
   monomorphize = undefined
+
+getTypingUnder :: ToTypeVar t => Subst Type -> t -> InferMonomorphizer a Type
+getTypingUnder subst handle =
+  useInferencer $ State.reconstructOld (toTypeVar handle) >>= simplify . apply subst >>= getTyping

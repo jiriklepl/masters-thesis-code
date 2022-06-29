@@ -159,7 +159,7 @@ constnessPolytypeness tVar = go <$> State.readConstingBounds tVar
             then Mono
             else constPolymorphism tVar bounds
         EQ -> Mono
-        GT -> constAbsurdity tVar bounds
+        GT -> Mono
 
 kindingPolytypeness :: TypeVar -> Inferencer Polytypeness
 kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
@@ -169,7 +169,7 @@ kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
         then if high PartialOrd.<= low
                then Mono
                else kindPolymorphism tVar bounds
-        else kindAbsurdity tVar bounds
+        else Mono
 
 typePolytypeness :: Subst Type -> TypeVar -> Inferencer Polytypeness
 typePolytypeness subst tVar =
