@@ -2,7 +2,7 @@
 
 -- TODO: rename to GetPos?
 module CMM.Parser.HasPos
-  ( HasPos(..)
+  ( HasPos(getPos)
   , SourcePos
   , sourcePosPretty
   ) where
@@ -20,8 +20,5 @@ instance HasPos SourcePos where
 instance HasPos (SourcePos, b) where
   getPos (pos, _) = pos
 
-instance HasPos (SourcePos, b, c) where
-  getPos (pos, _, _) = pos
-
-instance HasPos (SourcePos, b, c, d) where
-  getPos (pos, _, _, _) = pos
+instance HasPos ((SourcePos, b), c) where
+  getPos ((pos, _), _) = pos
