@@ -16,6 +16,7 @@ import CMM.AST.Wrap (ASTWrapper)
 data PreprocessError
   = UndefinedForeign Text
   | IllegalTypeHole TypeHole
+  | LVNotFound Text
   | NotImplemented (ASTWrapper ())
   deriving (Eq, Show, IsError, Data)
 
@@ -24,3 +25,4 @@ instance Pretty PreprocessError where
     UndefinedForeign text -> "Foreign" <+> dquotes (pretty text) <+> "is not recognized by the language, the only foreign recognized currently is" <+> dquotes "C" <> dot
     IllegalTypeHole hole -> "Illegal type hole" <+> pretty hole <+>"encountered, report bug in inference preprocessing"
     NotImplemented node -> "The following feature has not yet been implemented:" <+> pretty node
+    LVNotFound name -> "Variable" <+> pretty name <+> "cannot be found"

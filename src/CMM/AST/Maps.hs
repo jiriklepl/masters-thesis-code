@@ -133,7 +133,7 @@ instance (ASTmapCTX3 hint a b AST.Init AST.Size AST.Type, Space hint a b AST.Nam
     \case
       AST.DatumLabel a -> AST.DatumLabel <$> f a
       AST.DatumAlign a -> pure $ AST.DatumAlign a
-      AST.Datum a b c -> liftA3 AST.Datum (f a) (traverse f b) (traverse f c)
+      AST.Datum a b c d -> liftA3 (AST.Datum a) (f b) (traverse f c) (traverse f d)
 
 instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Init a b where
   astMapM _ f =

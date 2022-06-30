@@ -12,7 +12,7 @@ import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Monad ((>=>), when)
-import safe Data.Bifunctor (second)
+import safe Data.Bifunctor (second, Bifunctor (first))
 import safe Data.Data (Data(gmapT))
 import safe Data.Foldable (Foldable(foldl'), for_, traverse_)
 import safe Data.Functor (($>), (<&>), void)
@@ -27,7 +27,7 @@ import safe Data.List
   )
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (fromMaybe)
+import safe Data.Maybe (fromMaybe, fromJust)
 import safe Data.PartialOrd (PartialOrd)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
@@ -505,8 +505,8 @@ reduceTemplates (fact:facts) =
     skip = (fact :) <$> continue
     continue = reduceTemplates facts
 
-reduceTrivial :: Facts -> Inferencer Facts
-reduceTrivial [] = fixAll $> []
+reduceTrivial :: Facts -> Inferencer (Bool, Facts)
+reduceTrivial [] = fixAll $> (False, [])
 reduceTrivial (fact:facts) =
   case fact of
     Fact (SubType t t') -> do
@@ -572,14 +572,14 @@ reduceTrivial (fact:facts) =
         [ClassConstraint {}] -> skip
         [ClassFact {}] -> skip
         _ -> do
-          nesteds' <- wrapParent facts' $ reduceTrivial nesteds
-          skipWith . NestedFact $ tVars :. facts' :=> nesteds'
+          (change, nesteds') <- wrapParent facts' $ reduceTrivial nesteds
+          fmap (first (change ||)) . skipWith . NestedFact $ tVars :. facts' :=> nesteds'
     _ -> skip
   where
     skip = skipWith fact
-    skipWith fact' = (fact' :) <$> reduceTrivial facts
+    skipWith fact' = second (fact' :) <$> reduceTrivial facts
     continue = continueWith facts
-    continueWith = reduceTrivial
+    continueWith = fmap (first $ const True) . reduceTrivial
 
 reduceConstraint :: Facts -> Inferencer (Bool, Facts)
 reduceConstraint [] = fixAll $> (False, [])
@@ -591,7 +591,7 @@ reduceConstraint (fact:facts) =
       , prefix == fieldClassPrefix || prefix == funDepsClassPrefix ->
         State.lookupFunDep name >>= \case
           Nothing -> undefined -- TODO: logic error
-          Just rules -> continueWith $ fmap go rules <> facts
+          Just rules -> continueWith $ fmap go rules
             where go rule =
                     Fact $
                     classConstraint
@@ -616,7 +616,7 @@ reduceConstraint (fact:facts) =
                         else go accum others
                     [] ->
                       case accum of
-                        [h] -> continueWith $ h <> facts
+                        [h] -> continueWith h
                         _ -> skip
             go mempty schemes'
     Fact (ClassFact name t) ->
@@ -626,9 +626,8 @@ reduceConstraint (fact:facts) =
           subst <- refresher tVars
           State.addClassFact name $ mempty :. [] :=> t
           continueWith $
-            (Fact <$> typeUnion t (subst `apply` t') :
-             (apply subst <$> facts')) <>
-            facts
+            Fact <$> typeUnion t (subst `apply` t') :
+             (apply subst <$> facts')
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceConstraint nesteds
       (_1 %~ (|| changed)) <$>
@@ -638,15 +637,20 @@ reduceConstraint (fact:facts) =
   where
     skip = skipWith fact
     skipWith fact' = (_2 %~ (fact' :)) <$> reduceConstraint facts
-    continueWith = ((_1 .~ True) <$>) . reduceConstraint
+    continueWith facts' = return (True, facts' <> facts)
 
 reduceMany :: Facts -> Inferencer (Bool, Facts)
-reduceMany = reduceTrivial >=> reduceTemplates >=> go
+reduceMany = repeat reduceTrivial >=> reduceTemplates . snd >=> go
   where
     go facts = do
-      result@(change, facts') <- reduceTrivial facts >>= reduceConstraint
+      result@(change, facts') <- repeat reduceTrivial facts >>= reduceConstraint . snd
       if change
         then go facts'
+        else return result
+    repeat what facts = do
+      result@(change, facts') <- what facts
+      if change
+        then repeat what facts'
         else return result
 
 reduce :: Facts -> Inferencer (Bool, Facts)
@@ -746,12 +750,10 @@ laundry parent pTypeThings boundsMap subGraph =
           | tVarParent tVar' == parent && not (tVar' `Set.member` pTypeThings) =
             Set.filter relevant . view _2 . fromMaybe (mempty, mempty) $ tVar' `Map.lookup`
             acc
-          | parent `predecessor` tVarParent tVar' ||
-              not (tVar' `Set.member` pTypeThings) =
+          | otherwise =
             if relevant tVar'
               then Set.singleton tVar'
               else mempty
-          | otherwise = undefined -- TODO: error
         relevant tVar' =
           not . isTrivialOrAbsurd $ State.readBoundsFrom tVar' boundsMap <> bounds
     getDepends _ _ = undefined -- TODO: error
@@ -1028,7 +1030,7 @@ collectCounts = foldr countIn mempty
         _ -> id
 
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]
-collectPairs way handles from = pairs <&> both %~ \i -> varMap Map.! i
+collectPairs way handles from = pairs <&> both %~ \i -> fromJust $ i `Map.lookup` varMap
   where
     edges = concat ((\(f, t) -> (f, ) <$> Set.toList t) <$> Map.toList from)
     varMap =

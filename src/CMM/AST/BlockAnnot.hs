@@ -26,6 +26,9 @@ instance HasBlockAnnot BlockAnnot where
 instance HasBlockAnnot (a, BlockAnnot) where
   getBlockAnnot = snd
 
+instance HasBlockAnnot ((a, BlockAnnot), b) where
+  getBlockAnnot = snd . fst
+
 instance HasBlockAnnot a => HasBlockAnnot (Annot n a) where
   getBlockAnnot = getBlockAnnot . takeAnnot
 

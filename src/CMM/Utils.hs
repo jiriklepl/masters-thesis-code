@@ -20,7 +20,7 @@ instance HasCallStack
 #endif
 
 prefixSeparator :: Char
-prefixSeparator = ':'
+prefixSeparator = '$'
 
 -- | Adds a layer prefix to a name
 addPrefix :: Text -> Text -> Text

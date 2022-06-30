@@ -46,6 +46,8 @@ data Reserved
   | Little
   | Memsize
   | Never
+  | New
+  | Ptr
   | Pointersize
   | Pragma
   | Reads
@@ -100,6 +102,8 @@ instance Pretty Reserved where
     Little -> littleName
     Memsize -> memsizeName
     Never -> neverName
+    New -> newName
+    Ptr -> ptrName
     Pointersize -> pointersizeName
     Pragma -> pragmaName
     Reads -> readsName
@@ -316,6 +320,12 @@ memsizeName = "memsize"
 
 neverName :: IsString a => a
 neverName = "never"
+
+newName :: IsString a => a
+newName = "new"
+
+ptrName :: IsString a => a
+ptrName = "ptr"
 
 pointersizeName :: IsString a => a
 pointersizeName = "pointersize"

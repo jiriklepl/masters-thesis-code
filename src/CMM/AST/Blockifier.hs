@@ -5,25 +5,14 @@
 
 module CMM.AST.Blockifier where
 
-import safe Control.Applicative (Applicative((*>), (<*), pure))
 import safe Control.Lens.Getter (use, uses)
 import safe Control.Lens.Setter ((%=), (.=), (?=))
 import safe Control.Lens.Type (Lens)
-import safe Control.Monad (Monad((>>=), return))
 import safe Control.Monad.State (when)
-import safe Data.Bool (Bool(False, True), (||), not)
-import safe Data.Eq (Eq)
-import safe Data.Foldable (Foldable(elem, null), any, concat, traverse_)
-import safe Data.Function (($), (.))
-import safe Data.Functor (Functor((<$)), ($>), (<$>), fmap, void)
-import safe Data.Int (Int)
+import safe Data.Foldable (traverse_)
+import safe Data.Functor (($>), void)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (Maybe(Just, Nothing), maybe)
-import safe Data.Monoid (Monoid(mempty), (<>))
 import safe Data.Text (Text)
-import safe Data.Traversable (Traversable(traverse))
-import safe Data.Tuple (fst)
-import safe GHC.Err (error)
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot, unAnnot)
@@ -34,12 +23,12 @@ import safe CMM.AST.BlockAnnot
   )
 import safe CMM.AST.Blockifier.Error
   ( BlockifierError(FlatteningInconsistency, GotoWithoutTargets,
-                UnreachableStatement)
+                UnreachableStatement, ProcedureFallthrough)
   , continuationFallthrough
   , duplicateSymbol
   )
 import safe qualified CMM.AST.Blockifier.State as State
-import safe CMM.AST.Blockifier.State (Blockifier, BlockifierState)
+import safe CMM.AST.Blockifier.State (Blockifier, BlockifierState, HasCurrentBlock (currentBlock))
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.AST.Maps (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Utils
@@ -121,7 +110,7 @@ instance Register ReadsVars Text where
   register _ var =
     State.currentData %=
     Map.insertWith
-      (\_ (reads, writes, lives) -> (not writes || reads, writes, lives))
+      (\_ (reads', writes, lives) -> (not writes || reads', writes, lives))
       var
       (True, False, True)
 
@@ -129,7 +118,7 @@ instance Register WritesVars Text where
   register _ var =
     State.currentData %=
     Map.insertWith
-      (\_ (reads, _, lives) -> (reads, True, lives))
+      (\_ (reads', _, lives) -> (reads', True, lives))
       var
       (False, True, False)
 
@@ -379,6 +368,9 @@ class Blockify' a b n where
 instance Blockify (Annot n) a b => Blockify' a b (Annot n) where
   blockify' = blockify
 
+instance Blockify (Annot AST.Struct ) a b where
+  blockify n = return $ withBlockAnnot NoBlock <$> n
+
 instance Blockify' a b AST.Name where
   blockify' n = return $ withBlockAnnot NoBlock <$> n
 
@@ -414,7 +406,7 @@ instance Blockify (Annot AST.Procedure) a b where
     header' <- blockifyProcedureHeader header
     withAnnot (Begins index `withBlockAnnot` a) <$>
       (AST.Procedure header' <$> blockify body) <*
-      unsetBlock <*
+      forbidFallthrough a <*
       analyzeFlow procedure <*
       State.clearBlockifier
 
@@ -429,6 +421,12 @@ instance Blockify (Annot AST.ProcedureDecl) a b where
 instance Blockify (Annot AST.Body) a b where
   blockify (AST.Body bodyItems `Annot` a) =
     withNoBlockAnnot a . AST.Body <$> traverse blockify bodyItems
+
+forbidFallthrough :: HasPos a => a -> Blockifier ()
+forbidFallthrough a =
+  use currentBlock >>= \case
+    Just {} -> registerASTError a ProcedureFallthrough
+    Nothing -> return ()
 
 constructBlockified ::
      ( Blockify (Annot n1) a1 b1

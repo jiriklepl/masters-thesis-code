@@ -201,6 +201,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Unit) a where
 cycleWaves :: (HasPos a, HasTypeHole a) => Annot AST.Unit a
   -> InferMonomorphizer a (Either Error (Annot AST.Unit a))
 cycleWaves node = do
+  waves <- useMonomorphizer State.incWaves
   more <-
     useMonomorphizer . uses State.polyGenerate $
     concatMap submergeTuple  .
@@ -210,7 +211,6 @@ cycleWaves node = do
     [] -> succeed node
     mores
       | otherwise -> do
-        waves <- useMonomorphizer State.incWaves
         useMonomorphizer State.getMaxWaves >>= \maxWaves ->
           if waves < maxWaves
             then do
@@ -343,18 +343,19 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
       MethodTypeHole inst scheme _ ->
         useMonomorphizer . fmap Right $ State.addMethod (toTypeVar scheme) (toTypeVar inst)
       hole -> fail $ hole `illegalHole` annotated
-
+    handle <- useInferencer $ State.getHandle schemeName
     (addScheme *> addMethod) `reThrow` \_ -> useInferencer
       (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
       Mono -> do
-        handle <- useInferencer $ State.getHandle schemeName
         hole <- return . toTypeVar $ getTypeHole a
         inst <- getTypingUnder subst handle
-
+        waves <- useMonomorphizer State.getWaves
         stored <- useMonomorphizer $
           case getTypeHole a of
             SimpleTypeHole _ -> Right <$> State.tryStore hole inst
-            MethodTypeHole _ scheme _ -> Right <$> State.tryStore (toTypeVar scheme) inst
+            MethodTypeHole _ scheme _ -> if waves > 0
+              then Right <$> State.tryStore (toTypeVar scheme) inst
+              else return $ Right False
             hole' -> fail $ hole' `illegalHole` annotated
         stored `reThrow` \case
           True -> do
@@ -660,7 +661,7 @@ monomorphizeMethod scheme inst = do
   where
     go set = do
       set' <- Set.toList set `for` \item -> monomorphizeMethodInner item inst
-      return $ first (error . show) $ oneRight set' -- TODO: Ambiguity + Nihility
+      return $ first (error $ show (fmap (fmap (fmap void)) set')) $ oneRight set' -- TODO: Ambiguity + Nihility
 
 recallField :: TypeVar
   -> TypeVar

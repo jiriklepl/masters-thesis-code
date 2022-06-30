@@ -79,6 +79,10 @@ incWaves = do
   polyWaves += 1
   use polyWaves
 
+getWaves :: Monomorphizer a Int
+getWaves =
+  use polyWaves
+
 getMaxWaves :: Monomorphizer a Int
 getMaxWaves =
   use maxPolyWaves

@@ -11,7 +11,7 @@ import safe Control.Applicative
   , optional
   )
 import safe Data.Functor (($>))
-import safe Data.Maybe (fromMaybe)
+import safe Data.Maybe (fromMaybe, isJust)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 import safe Data.Void (Void)
@@ -346,7 +346,7 @@ labelDatum :: ULocParser AST.Datum
 labelDatum = AST.DatumLabel <$> identifier <* colon
 
 justDatum :: ULocParser AST.Datum
-justDatum = liftA3 AST.Datum type' (optional size) (optional init') <* semicolon
+justDatum = liftA4 AST.Datum (fmap isJust . optional $ keyword T.New) type' (optional size) (optional init') <* semicolon
 
 init' :: SourceParser AST.Init
 init' = withSourcePos $ choice [stringInit, string16Init, initList]
@@ -377,13 +377,16 @@ registers =
           (optional $ symbol T.EqSign *> stringLiteral)))
 
 type' :: SourceParser AST.Type
-type' = withSourcePos $ choice [parensType, autoType, bitsType', nameType]
+type' = withSourcePos $ choice [parensType, ptrType, autoType, bitsType', nameType]
 
 parensType :: ULocParser AST.Type
 parensType = AST.TPar <$> parens paraType
 
 autoType :: ULocParser AST.Type
 autoType = AST.TAuto <$> (keyword T.Auto *> optional (parens identifier))
+
+ptrType :: ULocParser AST.Type
+ptrType = keyword T.Ptr *> (AST.TPtr <$> withSourcePos parensType)
 
 bitsType' :: ULocParser AST.Type
 bitsType' = AST.TBits <$> bitsType

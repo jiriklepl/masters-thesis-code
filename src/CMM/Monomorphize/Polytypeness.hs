@@ -146,7 +146,7 @@ constnessPolytypeness tVar = go <$> State.readConstingBounds tVar
         LT ->
           if low >= LinkExpr
             then Mono
-            else constPolymorphism tVar bounds
+            else Mono
         EQ -> Mono
         GT -> Mono
 
@@ -157,7 +157,7 @@ kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
       if low PartialOrd.<= high
         then if high PartialOrd.<= low
                then Mono
-               else kindPolymorphism tVar bounds
+               else Mono
         else Mono
 
 typePolytypeness :: Subst Type -> TypeVar -> Inferencer Polytypeness

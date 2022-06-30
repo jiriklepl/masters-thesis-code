@@ -29,7 +29,6 @@ import safe CMM.Utils (doWhile, hasPrefix)
 
 analyzeFlow :: HasPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)
-  -- TODO: implement `cut to` statements
  = do
   flow <- use State.controlFlow
   blocks <- use State.blocksTable
@@ -62,7 +61,6 @@ analyzeFlow procedure@(Annot _ _)
   unless (null uninitialized) $
     registerASTError procedure $ UninitializedRegisters uninitialized
 
--- TODO: "unused after write" warning
 updateFlowPair :: (Int, Int) -> Blockifier Bool
 updateFlowPair (f, t) = do
   blocks <- use State.blockData

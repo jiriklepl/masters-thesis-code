@@ -112,7 +112,7 @@ import safe CMM.Utils (backQuote)
 import safe CMM.Err.State ( HasErrorState(errorState) )
 import CMM.Parser.ASTError (registerASTError)
 import safe CMM.Inference.Preprocess.Error
-    ( PreprocessError(NotImplemented, UndefinedForeign) )
+    ( PreprocessError(NotImplemented, UndefinedForeign, LVNotFound) )
 import safe CMM.AST.Wrap ( MakeWrapped(makeWrapped) )
 
 class Preprocess n a b where
@@ -389,6 +389,11 @@ instance Preprocess AST.Type a b where
       AST.TPar parType -> do
         parType' <- preprocess parType
         return (getTypeHole parType', AST.TPar parType')
+      AST.TPtr t -> do
+        ptr <- State.freshASTStar annot
+        t' <- preprocess t
+        State.storeFact $ ptr `typeUnion` makeAddrType t'
+        return (SimpleTypeHole ptr, AST.TPtr t')
 
 instance Preprocess AST.ParaType a b where
   preprocessImpl annot (AST.ParaType type' types') = do
@@ -674,6 +679,7 @@ instance Preprocess AST.Init a b where
       strInit@AST.StrInit {} -> strInitCommon StringType strInit
       strInit@AST.Str16Init {} -> strInitCommon String16Type strInit
     where
+      strInitCommon :: TypeCompl Type -> AST.Init a -> Preprocessor (TypeHole, AST.Init b)
       strInitCommon c strInit = do
         handle <- State.freshStar
         State.storeFact $ handle `typeConstraint` ComplType c
@@ -720,7 +726,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
       purePreprocess hole datum <:> preprocessDatumsImpl (hole : cache) others
     AST.DatumAlign _ -> do
       purePreprocess EmptyTypeHole datum <:> preprocessDatumsImpl [] others
-    AST.Datum type' mSize mInit -> do
+    AST.Datum new type' mSize mInit -> do
       uses State.currentContext head >>= \case
         StructCtx {ctxHole, ctxConstraint = (_,structType)} -> do
           tVars <- State.collectTVars
@@ -777,7 +783,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                 [ addressKind `kindConstraint` handle
                 , handle `typeConstraint` makeAddrType type''
                 ]
-              return (SimpleTypeHole handle, AST.Datum type'' mSize' mInit')
+              return (SimpleTypeHole handle, AST.Datum new type'' mSize' mInit')
 
 instance Preprocess AST.Datum a b where
   preprocessImpl a datum = head <$> preprocessDatumsImpl [] [datum `Annot` a]
@@ -796,7 +802,13 @@ instance Preprocess AST.LValue a b where
     \case
       lvName@AST.LVName {} -> do
         State.lookupFVar lvName >>= \case
-          EmptyTypeHole -> State.lookupVar lvName >>= (`purePreprocess` lvName)
+          EmptyTypeHole -> State.lookupVar lvName >>= \case
+              EmptyTypeHole -> do
+                let name = getName lvName
+                registerASTError annot $ LVNotFound  name
+                handle <- State.freshNamedASTStar name annot
+                purePreprocess (SimpleTypeHole handle) lvName
+              hole -> hole `purePreprocess` lvName
           scheme -> do
             inst <- State.freshNamedASTStar (getName lvName) annot
             handle <- State.freshNamedASTStar (getName lvName) annot
@@ -921,6 +933,7 @@ instance Preprocess AST.Expr a b where
           , unstorableConstraint tupleType
           ]
         return (handle, tupleType)
+      preprocessInherit :: Preprocess m a b => (Annot m b -> n b) -> Annot m a -> Preprocessor (TypeHole, n b)
       preprocessInherit c n = do
         n' <- preprocess n
         return (getTypeHole n', c n')

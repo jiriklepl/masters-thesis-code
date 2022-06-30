@@ -11,6 +11,8 @@ import safe Control.Lens.Type (Lens')
 import safe Control.Monad.State (MonadState)
 import Data.Data ( Data )
 
+import Prettyprinter
+
 import safe CMM.Data.List (count)
 import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Err.Error (Error(Error), HasErrSeverity(errSeverity))
@@ -31,6 +33,11 @@ instance Monoid ErrorState where
 
 instance Nullable ErrorState where
   nullVal = ErrorState mempty
+
+
+instance Pretty ErrorState where
+  pretty = \case
+    ErrorState errs -> vsep $ fmap pretty errs
 
 class a ~ ErrorState =>
       HasErrorState s a

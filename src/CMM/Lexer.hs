@@ -135,6 +135,8 @@ token =
     , keyword T.littleName $> T.Keyword T.Little
     , keyword T.memsizeName $> T.Keyword T.Memsize
     , keyword T.neverName $> T.Keyword T.Never
+    , keyword T.newName $> T.Keyword T.New
+    , keyword T.ptrName $> T.Keyword T.Ptr
     , keyword T.pointersizeName $> T.Keyword T.Pointersize
     , keyword T.pragmaName $> T.Keyword T.Pragma
     , keyword T.readsName $> T.Keyword T.Reads

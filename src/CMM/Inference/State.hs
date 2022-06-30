@@ -18,7 +18,7 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
-import safe Prettyprinter (Pretty(pretty))
+import safe Prettyprinter (Pretty(pretty), (<+>))
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
@@ -173,19 +173,20 @@ getUnlockedVars =
             freeInner = freeTypeVars facts <> freeTypeVars nesteds
 
 sanitizeClosed ::
-     (HasCallStack, Data a, Pretty a, Pretty DataKind)
+     (HasCallStack, Data a, Pretty a, Pretty b, Pretty DataKind)
   => Scheme a
+  -> b
   -> Inferencer ()
-sanitizeClosed scheme = do
+sanitizeClosed scheme b = do
   freeVars <- getUnlockedVars scheme
   msg freeVars -- TODO msg
   where
     msg [] = return ()
     msg freeVars =
-      error $
-      "scheme " <>
-      show (pretty scheme) <>
-      " is open, free variables: " <> show (pretty freeVars)
+      error .show$
+      "scheme" <+>
+      pretty scheme <+> "added by" <+> pretty b  <+>
+      "is open, free variables:" <+> pretty freeVars
 
 addClassFact ::
      HasCallStack => Text -> Scheme Type -> Inferencer ()
@@ -201,7 +202,6 @@ addScheme tVar scheme =
   case scheme of
     tVars :. _ :=> _ -> do
       lockVars tVar tVars
-      sanitizeClosed scheme
       State.schemes %= Map.insert tVar scheme
 
 addClassScheme ::
@@ -210,7 +210,7 @@ addClassScheme name scheme =
   case scheme of
     tVars :. _ :=> t -> do
       lockVars t tVars
-      sanitizeClosed scheme
+      sanitizeClosed scheme name
       State.classSchemes %= Map.insertWith msg name scheme -- TODO msg
   where
     msg new old =

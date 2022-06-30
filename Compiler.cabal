@@ -65,6 +65,7 @@ executable Compiler
                        CMM.AST.Blockifier.State,
                        CMM.AST.BlockAnnot,
                        CMM.AST.Flattener,
+                       CMM.AST.Flattener.State,
                        CMM.AST.GetConv,
                        CMM.AST.GetName,
                        CMM.AST.Maps,

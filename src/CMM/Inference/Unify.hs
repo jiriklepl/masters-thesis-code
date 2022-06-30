@@ -32,17 +32,18 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Unify.Error
   ( UnificationError(BadKind, GotErrorType, Mismatch, Occurs)
   )
+import CMM.Utils
 
-unify :: Unify a b => a -> a -> Either [UnificationError] (Subst b, a)
+unify :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
 unify = unifyDirected Both
 
-unifiable :: Unify a b => a -> a -> Bool
+unifiable :: (HasCallStack, Unify a b) => a -> a -> Bool
 unifiable = (isRight .) . unify
 
-instanceOf :: Unify a b => a -> a -> Bool
+instanceOf :: (HasCallStack, Unify a b) => a -> a -> Bool
 inst `instanceOf` scheme = isRight $ unifyDirected Backward inst scheme
 
-instantiateFrom :: Unify a b => a -> a -> Either [UnificationError] (Subst b, a)
+instantiateFrom :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
 instantiateFrom = unifyDirected Backward
 
 schemeOf :: Unify a b => a -> a -> Bool
@@ -56,7 +57,7 @@ unifyLax ::
 unifyLax = unifyLaxDirected Both
 
 class Unify a b | a -> b where
-  unifyDirected :: Way -> a -> a -> Either [UnificationError] (Subst b, a)
+  unifyDirected :: HasCallStack => Way -> a -> a -> Either [UnificationError] (Subst b, a)
 
 bind :: Way -> TypeVar -> Type -> Either [UnificationError] (Subst Type, Type)
 bind Backward tVar t' = Left [toType tVar `unifyMismatch` t']
@@ -70,7 +71,7 @@ bind _ tVar@TypeVar {} t'
   | otherwise = Left [Occurs tVar t']
 bind _ tVar t' = Left [toType tVar `unifyMismatch` t']
 
-unifyMismatch :: Type -> Type -> UnificationError
+unifyMismatch :: HasCallStack => Type -> Type -> UnificationError
 unifyMismatch = Mismatch "Types are not unifiable"
 
 instance Unify TypeVar TypeVar where
@@ -108,7 +109,7 @@ unifyLaxDirected way tVar@TypeVar {} tVar'@TypeVar {}
 unifyLaxDirected _ tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
 unifyMany ::
-     (Unify a b1, Apply a b2, Apply (Map TypeVar b2) b1, Apply b2 b2)
+     (HasCallStack, Unify a b1, Apply a b2, Apply (Map TypeVar b2) b1, Apply b2 b2)
   => Way
   -> [UnificationError]
   -> [a]
@@ -135,7 +136,7 @@ unifyFold = go mempty
       go (subst' `apply` subst) (tVar'' : tVars)
 
 unifyCompl ::
-     (Apply b b, Apply a b, Unify a b, Eq a, ToType a)
+     (HasCallStack, Apply b b, Apply a b, Unify a b, Eq a, ToType a)
   => Way
   -> TypeCompl a
   -> TypeCompl a
