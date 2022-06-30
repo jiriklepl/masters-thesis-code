@@ -2,42 +2,46 @@
 
 module CMM.Pipeline where
 
-import Text.Megaparsec hiding (Token)
-import CMM.Lexer
-import Control.Monad
-import Data.Bifunctor
-import Data.Text hiding (head, reverse, null)
-
-import CMM.AST.Annot
-import CMM.Parser
-import CMM.AST
-import CMM.Inference.Preprocess.Settings
-import CMM.Inference.Preprocess.State
-import CMM.Inference.Settings
-import CMM.Inference.State
-import CMM.Monomorphize.Settings
-import CMM.Monomorphize.State
-import CMM.Inference.Preprocess.TypeHole
-import CMM.Lexer.Token
-import Data.Data
-import CMM.AST.Flattener
-import CMM.AST.Blockifier
-import CMM.AST.Blockifier.State
-import Control.Monad.State
-import CMM.AST.BlockAnnot
-import CMM.Err.State
-import Control.Lens
-import CMM.Data.Nullable
-import Prettyprinter
-import CMM.Inference.Preprocess
-import CMM.Inference.Fact
-import CMM.Inference
-import CMM.Inference.State.Impl
-import CMM.Monomorphize
-import CMM.Parser.HasPos
-import CMM.Monomorphize.Error
-import CMM.FillHoles
-import CMM.Mangle
+import safe Text.Megaparsec
+    ( SourcePos, runParser, errorBundlePretty )
+import safe CMM.Lexer ( tokenize )
+import safe Data.Bifunctor ( Bifunctor(first) )
+import safe Data.Text ( Text )
+import safe CMM.AST.Annot ( Annot )
+import safe CMM.Parser ( unit )
+import safe CMM.AST ( Unit )
+import safe CMM.Inference.Preprocess.Settings
+    ( PreprocessorSettings )
+import safe CMM.Inference.Preprocess.State
+    ( PreprocessorState, initPreprocessor, facts )
+import safe CMM.Inference.Settings ( InferencerSettings )
+import safe CMM.Inference.State ( InferencerState )
+import safe CMM.Monomorphize.Settings ( MonomorphizerSettings )
+import safe CMM.Monomorphize.State
+    ( MonomorphizeState, initMonomorphizeState )
+import safe CMM.Inference.Preprocess.TypeHole
+    ( HasTypeHole, TypeHole )
+import safe CMM.Lexer.Token ( Token )
+import safe Data.Data ( Data, Typeable )
+import safe CMM.AST.Flattener ( flatten )
+import safe CMM.AST.Blockifier ( Blockify (blockify), BlockifyAssumps )
+import safe CMM.AST.Blockifier.State
+    ( initBlockifier, BlockifierState )
+import safe Control.Monad.State ( runState )
+import safe CMM.Err.State ( ErrorState, HasErrorState (errorState) )
+import safe Control.Lens ( uses, view )
+import safe CMM.Data.Nullable ( Nullable(nullVal) )
+import safe Prettyprinter ( Pretty(pretty) )
+import safe CMM.Inference.Preprocess ( Preprocess(preprocess) )
+import safe CMM.Inference.Fact ( Facts, Fact )
+import safe CMM.Inference ( mineAST, reduce )
+import safe CMM.Inference.State.Impl ( initInferencer )
+import safe CMM.Monomorphize ( Monomorphize(monomorphize) )
+import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.Monomorphize.Error
+    ( mapWrapped, MonomorphizeError(InstantiatesToNothing) )
+import safe CMM.FillHoles ( FillHoles(fillHoles) )
+import safe CMM.Mangle ( Mangle(mangle) )
 
 tokenizer :: String
   -> Text
