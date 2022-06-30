@@ -72,6 +72,7 @@ import LLVM.IRBuilder
 import CMM.Translator
 import LLVM.IRBuilder.Internal.SnocList (SnocList(SnocList))
 import LLVM.AST
+import CMM.AST
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -79,44 +80,47 @@ import LLVM.AST
 main :: IO ()
 main = do
   contents <- TS.getContents
-  let tokens' = either undefined id $ parse tokenize contents
-  let ast = either undefined id $ parse unit tokens'
+  let tokens' = either (error . show) id $ parse tokenize contents
+  let ast = either (error . show) id $ parse unit tokens'
+  let flattened = flatten ast
   -- print $ pretty flattened
-  let (mined, miner) = runState (preprocess ast) $ initPreprocessor PreprocessorSettings {}
+  let (blockified, blockifier) = blockify flattened `runState` B.initBlockifier
+  let (mined, miner) = runState (preprocess blockified) $ initPreprocessor PreprocessorSettings {}
   let _ = globalVariables $ unAnnot ast
       oldCounter = view handleCounter miner
       fs = reverse . head $ view CMM.Inference.Preprocess.State.facts miner
-  print . sep $ pretty <$> fs
+  -- print . sep $ pretty <$> fs
+  print . pretty $ view errorState blockifier
+  print . pretty $ blockified
   let (fs', inferencer) =
         (`runState` InferState.initInferencer InferencerSettings {}) $ do
           setHandleCounter oldCounter
           mineAST mined
           reduce fs
+  print . pretty $ view errorState inferencer
   let (msg, (inferencer', monomorphizer)) =
         (`runState` (inferencer, Infer.initMonomorphizeState MonomorphizerSettings)) $ do
           monomorphize mempty mined <&> \case
-            Left what -> undefined
+            Left what -> error $ show $ pretty what
             Right mined' -> fromJust mined'
-  let flattened = flatten msg
-  let (blockified, blockifier) = blockify flattened `runState` B.initBlockifier
-  let moduleBuilder = runFreshIRBuilderT $ translate blockified
-      translator = execFreshModuleBuilderT moduleBuilder
-      translated =
-        evalState translator $
-          Tr.initTranslState
-            { Tr._controlFlow = B._controlFlow blockifier
-            , Tr._blockData = B._blockData blockifier
-            , Tr._blocksTable =
-                Map.fromList . (swap <$>) . Map.toList $
-                B._blocksTable blockifier
-            }
+  -- let moduleBuilder = runFreshIRBuilderT $ translate msg
+  --     translator = execFreshModuleBuilderT moduleBuilder
+  --     translated =
+  --       evalState translator $
+  --         Tr.initTranslState
+  --           { Tr._controlFlow = B._controlFlow blockifier
+  --           , Tr._blockData = B._blockData blockifier
+  --           , Tr._blocksTable =
+  --               Map.fromList . (swap <$>) . Map.toList $
+  --               B._blocksTable blockifier
+  --           }
 
-      module' = defaultModule { moduleName = "", moduleDefinitions = translated }
-      prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
+  --     module' = defaultModule { moduleName = "", moduleDefinitions = translated }
+  --     prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
 
-  T.putStr prettyprinted
+  putStr . show $ pretty msg
   print "ERRORS:"
-  print . vsep . fmap pretty . view errors $ inferencer ^. errorState
+  print . pretty $ inferencer' ^. errorState
   print "CLASS_SCHEMES:"
   print . vsep . fmap (uncurry mappend . bimap pretty pretty) . Map.toList $
     inferencer ^. classSchemes
