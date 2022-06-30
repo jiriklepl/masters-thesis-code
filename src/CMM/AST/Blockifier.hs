@@ -351,19 +351,20 @@ instance GetMetadata DeclaresVars (AST.Arm a) where
     \case
       AST.Arm _ body -> getMetadata t body
 
+type BlockifyAssumps a b = (WithBlockAnnot a b, HasPos a)
+
 class Blockify n a b where
-  blockify :: (WithBlockAnnot a b, HasPos a) => n a -> Blockifier (n b)
+  blockify :: BlockifyAssumps a b => n a -> Blockifier (n b)
 
 data BlockifyHint =
   BlockifyHint
 
-type instance Constraint BlockifyHint a b =
-     (WithBlockAnnot a b, HasPos a)
+type instance Constraint BlockifyHint a b = BlockifyAssumps a b
 
 type instance Space BlockifyHint = Blockify'
 
 class Blockify' a b n where
-  blockify' :: (WithBlockAnnot a b, HasPos a) => n a -> Blockifier (n b)
+  blockify' :: BlockifyAssumps a b => n a -> Blockifier (n b)
 
 instance Blockify (Annot n) a b => Blockify' a b (Annot n) where
   blockify' = blockify

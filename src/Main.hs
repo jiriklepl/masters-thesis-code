@@ -74,6 +74,7 @@ import LLVM.IRBuilder.Internal.SnocList (SnocList(SnocList))
 import LLVM.AST
 import CMM.AST
 import CMM.FillHoles
+import CMM.Mangle
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -118,7 +119,7 @@ main = do
 
       module' = defaultModule { moduleName = "", moduleDefinitions = translated }
       prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
-  let msg' = evalState (fillHoles msg) inferencer'
+  let msg' = evalState (fillHoles msg >>= mangle) inferencer'
   putStr . show $ pretty msg'
   print "ERRORS:"
   print . pretty $ inferencer' ^. errorState

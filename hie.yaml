@@ -126,6 +126,9 @@ cradle:
     - path: "src/CMM/Err/State.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/FillHoles.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/FlowAnalysis.hs"
       component: "Compiler:exe:Compiler"
 
@@ -240,16 +243,13 @@ cradle:
     - path: "src/CMM/Lexer/Token.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/Mangle.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Monomorphize.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Error.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Monomorphize/MakeSignature.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Monomorphize/Mangle.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/Polytypeness.hs"
