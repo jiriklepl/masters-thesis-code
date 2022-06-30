@@ -3,9 +3,8 @@
 module CMM.Inference.Preprocess.TypeHole where
 
 import safe Data.Data (Data)
-import Data.Text (Text)
-import safe Control.Lens.Getter (view)
-import safe Control.Lens.Tuple (_2)
+import safe Control.Lens ( view, set, Field2(_2) )
+import safe Data.Text (Text)
 
 import safe Prettyprinter ( Pretty(pretty), (<+>), parens )
 
@@ -53,17 +52,27 @@ instance Pretty TypeHole where
         goInst cHandle inst scheme =
           pretty cHandle <> ":" <+> pretty scheme <+> instSymbol <+> pretty inst
 
+setHoleHandle :: TypeHandle -> TypeHole -> TypeHole
+setHoleHandle handle = \case
+  EmptyTypeHole -> EmptyTypeHole
+  hole' -> hole' {holeHandle= handle}
+
 class HasTypeHole a where
   getTypeHole :: a -> TypeHole
+  setTypeHole :: TypeHole -> a -> a
 
 instance HasTypeHole TypeHole where
   getTypeHole = id
+  setTypeHole = const
 
 instance HasTypeHole (a, TypeHole) where
   getTypeHole = view _2
+  setTypeHole = set _2
 
 instance HasTypeHole (a, TypeHole, b) where
   getTypeHole = view _2
+  setTypeHole = set _2
+
 
 instance ToType TypeHole where
   toType = toType . holeHandle

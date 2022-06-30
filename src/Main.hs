@@ -73,6 +73,7 @@ import CMM.Translator
 import LLVM.IRBuilder.Internal.SnocList (SnocList(SnocList))
 import LLVM.AST
 import CMM.AST
+import CMM.FillHoles
 
 -- import CMM.Translator
 -- import qualified CMM.Translator.State as Tr
@@ -91,7 +92,7 @@ main = do
       fs = reverse . head $ view CMM.Inference.Preprocess.State.facts miner
   -- print . sep $ pretty <$> fs
   print . pretty $ view errorState blockifier
-  print . pretty $ blockified
+  -- print . pretty $ blockified
   let (fs', inferencer) =
         (`runState` InferState.initInferencer InferencerSettings {}) $ do
           setHandleCounter oldCounter
@@ -103,22 +104,22 @@ main = do
           monomorphize mempty mined <&> \case
             Left what -> error $ show $ pretty what
             Right mined' -> fromJust mined'
-  -- let moduleBuilder = runFreshIRBuilderT $ translate msg
-  --     translator = execFreshModuleBuilderT moduleBuilder
-  --     translated =
-  --       evalState translator $
-  --         Tr.initTranslState
-  --           { Tr._controlFlow = B._controlFlow blockifier
-  --           , Tr._blockData = B._blockData blockifier
-  --           , Tr._blocksTable =
-  --               Map.fromList . (swap <$>) . Map.toList $
-  --               B._blocksTable blockifier
-  --           }
+  let moduleBuilder = runFreshIRBuilderT $ translate msg
+      translator = execFreshModuleBuilderT moduleBuilder
+      translated =
+        evalState translator $
+          Tr.initTranslState
+            { Tr._controlFlow = B._controlFlow blockifier
+            , Tr._blockData = B._blockData blockifier
+            , Tr._blocksTable =
+                Map.fromList . (swap <$>) . Map.toList $
+                B._blocksTable blockifier
+            }
 
-  --     module' = defaultModule { moduleName = "", moduleDefinitions = translated }
-  --     prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
-
-  putStr . show $ pretty msg
+      module' = defaultModule { moduleName = "", moduleDefinitions = translated }
+      prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
+  let msg' = evalState (fillHoles msg) inferencer'
+  putStr . show $ pretty msg'
   print "ERRORS:"
   print . pretty $ inferencer' ^. errorState
   print "CLASS_SCHEMES:"

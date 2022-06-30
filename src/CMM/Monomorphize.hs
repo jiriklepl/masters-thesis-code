@@ -8,7 +8,7 @@ import safe Control.Applicative (liftA2, liftA3)
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Tuple (_1, _2)
 import safe Control.Lens.Zoom (zoom)
-import safe Control.Monad (zipWithM_)
+import safe Control.Monad (zipWithM_, zipWithM)
 import safe Control.Monad.State (State)
 import safe Data.Bifunctor (first)
 import safe Data.Foldable (fold)
@@ -32,29 +32,22 @@ import safe CMM.Inference.Preprocess.TypeHole
   , TypeHole(LVInstTypeHole, MemberTypeHole, MethodTypeHole,
          SimpleTypeHole)
   , getTypeHoleId
-  , holeHandle
   )
 import safe qualified CMM.Inference.State as State
-import safe CMM.Inference.State (InferencerState, lookupScheme, getTyping)
+import safe CMM.Inference.State (InferencerState, lookupScheme)
 import safe CMM.Inference.Subst (Subst, apply)
 import safe CMM.Inference.Type as Type
-  ( Type(ComplType, ErrorType, VarType)
+  ( Type(ComplType)
   , makeAddrType
   )
 import safe CMM.Inference.TypeCompl
-  ( TypeCompl(AddrType, AppType, BoolType, ConstType, FunctionType,
-          LabelType, String16Type, StringType, TBitsType, TupleType,
-          VoidType)
+  ( TypeCompl(AddrType)
   )
 import safe CMM.Inference.TypeVar as Type (ToTypeVar(toTypeVar), TypeVar)
 import safe CMM.Inference.Unify (instantiateFrom)
 import safe CMM.Monomorphize.Polytypeness
   ( Polytypeness(Absurd, Mono, Poly)
-
-
-
-
-  , getTypeHandleIdPolytypeness
+  , typePolytypeness, reconstructType, reconstructHole
   )
 import safe CMM.Monomorphize.Schematized
   ( Schematized(FuncScheme, StructScheme)
@@ -254,9 +247,26 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Decl) a where
       AST.ExportDecl exports -> monomorphizeTrivials subst a AST.ExportDecl exports
       AST.ConstDecl {} -> undefined
       AST.TypedefDecl {} -> undefined
-      AST.RegDecl {} -> succeed . Just $ withAnnot a decl
+      AST.RegDecl bool registers -> do
+        monomorphizeTrivial subst a (AST.RegDecl bool) registers
       AST.PragmaDecl {} -> undefined
       AST.TargetDecl {} -> undefined
+
+instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Registers) a where
+  monomorphize subst (AST.Registers mKind t nameStrs `Annot` a) = do
+    t' <- monomorphize subst t
+    b <- useInferencer $ reconstructHole subst a
+    let (names, strs) = unzip nameStrs
+    names' <- traverse (monomorphize subst) names
+    return $ do
+      t'' <- t'
+      names'' <- sequence names'
+      return $ withAnnot b <$> liftA2 (AST.Registers mKind) t'' ((`zip` strs) <$> sequence names'')
+
+instance HasTypeHole a => Monomorphize (Annot AST.Name) a where
+  monomorphize subst (AST.Name name `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    succeed $ Just . withAnnot b $ AST.Name name
 
 instance Monomorphize (Annot AST.Class) a where
   monomorphize _ _ = succeed nullVal
@@ -280,12 +290,13 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Struct) a where
             State.addPolyScheme handle scheme (StructScheme $ withAnnot a struct)
         addScheme `reThrow` \_ ->
           useInferencer
-          (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
+          (typePolytypeness subst $ getTypeHole a) >>= \case
           Mono -> do
             datums' <- traverse (ensuredJustMonomorphize subst) datums
+            b <- useInferencer $ reconstructHole subst a
             return $ do
               datums'' <- sequence datums'
-              return $ withAnnot a . AST.Struct name <$> sequence datums''
+              return $ withAnnot b . AST.Struct name <$> sequence datums''
           Poly {} -> monomorphizeMaybes subst a (const Nothing) datums
           Absurd absurdity -> error $ show absurdity -- TODO: logic error
 
@@ -302,7 +313,7 @@ instance HasTypeHole a => Monomorphize (Annot AST.Datum) a where
         case getTypeHole a of
           MemberTypeHole struct _ insts schemes' ->
             useInferencer
-              (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
+              (typePolytypeness subst (getTypeHole a)) >>= \case
               Absurd absurdity -> error $ show absurdity
               _ -> do
                 useMonomorphizer $
@@ -312,7 +323,7 @@ instance HasTypeHole a => Monomorphize (Annot AST.Datum) a where
                     (toTypeVar <$> insts)
                 success
           SimpleTypeHole handle ->
-            useInferencer (getTypeHandleIdPolytypeness subst handle) >>= \case
+            useInferencer (typePolytypeness subst handle) >>= \case
               Mono -> success
               Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
               Absurd absurdity -> failure $ absurdity `absurdType` annotated
@@ -342,10 +353,10 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
       hole -> failure $ hole `illegalHole` annotated
     handle <- useInferencer $ State.getHandle schemeName
     (addScheme *> addMethod) `reThrow` \_ -> useInferencer
-      (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
+      (typePolytypeness subst (getTypeHole a)) >>= \case
       Mono -> do
         hole <- return . toTypeVar $ getTypeHole a
-        inst <- getTypingUnder subst handle
+        inst <- useInferencer $ reconstructType subst handle
         waves <- useMonomorphizer State.getWaves
         stored <- useMonomorphizer $
           case getTypeHole a of
@@ -364,10 +375,11 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
             addMemory `reThrow` \_ -> do
               header' <- ensuredJustMonomorphize subst header
               body' <- ensuredJustMonomorphize subst body
+              b <- useInferencer $ reconstructHole subst a
               return $ do
                 header'' <- header'
                 body'' <- body'
-                return $ withAnnot a <$> liftA2 AST.Procedure header'' body''
+                return $ withAnnot b <$> liftA2 AST.Procedure header'' body''
           False -> succeed nullVal
       Poly polyWhat
         | null subst -> succeed nullVal
@@ -375,7 +387,22 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
       Absurd absurdity -> failure $ absurdity `absurdType` annotated
 
 instance Monomorphize (Annot AST.ProcedureHeader) a where
-  monomorphize _ header = succeed $ Just header
+  monomorphize subst (AST.ProcedureHeader mConv name formals semis `Annot` a) = do
+    formals' <- traverse (monomorphize subst) formals
+    semis' <- traverse (traverse $ monomorphize subst) semis
+    b <- useInferencer $ reconstructHole subst a
+    return $ do
+      formals'' <- sequence formals'
+      semis''  <- traverse sequence semis'
+      return $ withAnnot b <$> liftA2 (AST.ProcedureHeader mConv name) (sequence formals'') (traverse sequence semis'')
+
+instance Monomorphize (Annot AST.Formal) a where
+  monomorphize subst (AST.Formal mKind bool t name `Annot` a) =
+    monomorphizeTrivial subst a (\t' -> AST.Formal mKind bool t' name) t
+
+instance Monomorphize (Annot AST.SemiFormal) a where
+  monomorphize subst (AST.SemiFormal mKind t `Annot` a) =
+    monomorphizeTrivial subst a (AST.SemiFormal mKind) t
 
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Body) a where
   monomorphize subst =
@@ -407,7 +434,11 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Actual) a where
         monomorphizeTrivial subst a (AST.Actual mKind) expr
 
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Stmt) a where
-  monomorphize subst annotated@(stmt `Annot` a) =
+  monomorphize subst (stmt `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    let
+      annotate = withAnnot b
+      annotated = annotate stmt
     case stmt of
       AST.EmptyStmt -> succeed $ Just annotated
       AST.IfStmt cond tBody eBody -> do
@@ -462,7 +493,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Stmt) a where
       AST.ReturnStmt _ (Just _) _ -> undefined
       AST.LabelStmt {} ->
         useInferencer
-          (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
+          (typePolytypeness subst (getTypeHole a)) >>= \case
           Mono -> succeed $ Just annotated
           Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
           Absurd absurdity -> failure $ absurdity `absurdType` annotated
@@ -475,63 +506,65 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Stmt) a where
           targets'' <- sequence targets'
           return $ annotate <$> liftA2 AST.GotoStmt expr'' (sequence targets'')
       AST.CutToStmt {} -> undefined
-    where
-      annotate = withAnnot a
 
 instance Monomorphize (Annot AST.KindName) a where
-  monomorphize _ (kindName `Annot` a) = succeed . Just $ withAnnot a kindName
+  monomorphize subst (kindName `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    succeed . Just $ withAnnot b kindName
 
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
-  monomorphize subst =
-    \case
-      annotated@(lValue `Annot` a) ->
-        useInferencer
-          (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
-          Poly {}
-          -- error . show $ () <$ lValue -- TODO: lValue cannot be a polytype
-           -> do
-            succeed . Just $ annotated
-          Absurd absurdity -> failure $ absurdity `absurdType` annotated -- TODO: lValue cannot have an illegal type
-          Mono ->
-            case lValue of
-              AST.LVName _ ->
-                case getTypeHole a of
-                  SimpleTypeHole {} -> succeed . Just $ annotated
-                  LVInstTypeHole handle scheme ->
-                    useInferencer
-                      (getTypeHandleIdPolytypeness
-                         subst
-                         scheme) >>= \case
-                      Absurd absurdity -> failure $ absurdity `absurdType` annotated
-                      _ -> do
-                        inst <-
-                          useInferencer $
-                          State.reconstructOld (toTypeVar handle) >>=
-                          simplify . apply subst >>=
-                          fmap toTypeVar . State.getHandle
-                        instType <- getTypingUnder subst handle
-                        useMonomorphizer $ State.addGenerate (mapAnnot WrappedLValue annotated) (toTypeVar scheme) inst instType
-                        succeed . Just $ annotated
-                  hole -> failure $ hole `illegalHole` annotated
-              AST.LVRef mType expr mAsserts -> do
-                mType' <-
-                  traverse (ensuredJustMonomorphize subst) mType
-                expr' <- ensuredJustMonomorphize subst expr
-                mAsserts' <-
-                  traverse (ensuredJustMonomorphize subst) mAsserts
-                return $ do
-                  mType'' <- sequence mType'
-                  expr'' <- expr'
-                  mAsserts'' <- sequence mAsserts'
-                  return $
-                    withAnnot a <$>
-                    liftA3 AST.LVRef (sequence mType'') expr'' (sequence mAsserts'')
+  monomorphize subst (lValue `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    let annotated = withAnnot b lValue
+    useInferencer
+      (typePolytypeness subst (getTypeHole a)) >>= \case
+      Poly {}
+      -- error . show $ () <$ lValue -- TODO: lValue cannot be a polytype
+        -> do
+        succeed . Just $ annotated
+      Absurd absurdity -> failure $ absurdity `absurdType` annotated -- TODO: lValue cannot have an illegal type
+      Mono ->
+        case lValue of
+          AST.LVName _ ->
+            case getTypeHole a of
+              SimpleTypeHole {} -> succeed . Just $ annotated
+              LVInstTypeHole handle scheme ->
+                useInferencer
+                  (typePolytypeness
+                      subst
+                      scheme) >>= \case
+                  Absurd absurdity -> failure $ absurdity `absurdType` annotated
+                  _ -> do
+                    inst <-
+                      useInferencer $
+                      State.reconstructOld (toTypeVar handle) >>=
+                      simplify . apply subst >>=
+                      fmap toTypeVar . State.getHandle
+                    instType <- useInferencer $ reconstructType subst handle
+                    useMonomorphizer $ State.addGenerate (mapAnnot WrappedLValue annotated) (toTypeVar scheme) inst instType
+                    succeed . Just $ annotated
+              hole -> failure $ hole `illegalHole` annotated
+          AST.LVRef mType expr mAsserts -> do
+            mType' <-
+              traverse (ensuredJustMonomorphize subst) mType
+            expr' <- ensuredJustMonomorphize subst expr
+            mAsserts' <-
+              traverse (ensuredJustMonomorphize subst) mAsserts
+            return $ do
+              mType'' <- sequence mType'
+              expr'' <- expr'
+              mAsserts'' <- sequence mAsserts'
+              return $
+                withAnnot b <$>
+                liftA3 AST.LVRef (sequence mType'') expr'' (sequence mAsserts'')
 
 instance Monomorphize (Annot AST.Targets) a where
   monomorphize = undefined
 
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
-  monomorphize subst annotated@(expr `Annot` a) =
+  monomorphize subst (expr `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    let annotated = withAnnot b expr
     case expr of
       AST.LitExpr lit mType -> do
         lit' <- monomorphize subst lit
@@ -539,7 +572,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
         return $ do
           lit'' <- lit'
           mType'' <- sequence mType'
-          return $ withAnnot a <$> liftA2 AST.LitExpr lit'' (sequence mType'')
+          return $ withAnnot b <$> liftA2 AST.LitExpr lit'' (sequence mType'')
       AST.LVExpr lValue -> monomorphizeTrivial subst a AST.LVExpr lValue
       AST.ParExpr expr' -> monomorphizeTrivial subst a AST.ParExpr expr'
       AST.BinOpExpr op left right -> do
@@ -548,7 +581,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
         return $ do
           left'' <- left'
           right'' <- right'
-          return $ withAnnot a <$> liftA2 (AST.BinOpExpr op) left'' right''
+          return $ withAnnot b <$> liftA2 (AST.BinOpExpr op) left'' right''
       AST.ComExpr expr' -> monomorphizeTrivial subst a AST.ComExpr expr'
       AST.NegExpr expr' -> monomorphizeTrivial subst a AST.NegExpr expr'
       AST.InfixExpr {} -> undefined
@@ -556,7 +589,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
       AST.MemberExpr expr' field ->
         case getTypeHole a of
           MethodTypeHole _ scheme inst ->
-            useInferencer (getTypeHandleIdPolytypeness subst scheme) >>= \case
+            useInferencer (typePolytypeness subst scheme) >>= \case
               Absurd absurdity -> failure $ absurdity `absurdType` annotated
               _ -> do
                 expr'' <- monomorphize subst expr'
@@ -571,46 +604,17 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
                   State.addGenerate (mapAnnot WrappedExpr annotated) (toTypeVar scheme) (toTypeVar inst') instType
                 return $ do
                   expr''' <- expr''
-                  return $ withAnnot a . (`AST.MemberExpr` field) <$> expr'''
+                  return $ withAnnot b . (`AST.MemberExpr` field) <$> expr'''
           hole -> failure $ hole `illegalHole` annotated
 
 instance Monomorphize (Annot AST.Lit) a where
   monomorphize _ = succeed . Just
 
 instance Monomorphize (Annot AST.Type) a where
-  monomorphize subst annotated = case annotated of
-    type' `Annot` a ->
-      useInferencer
-        (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
-        Mono -> do
-          type'' <-
-            useInferencer (State.reconstructOld (getTypeHoleId a)) >>=
-            instantiateType
-          return $ Just (withAnnot a type') <$ type''
-        Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
-        Absurd absurdity -> failure $ absurdity `absurdType` annotated
+  monomorphize subst (type' `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    succeed $ Just (withAnnot b type')
 
-instantiateType ::
-     Type.Type -> InferMonomorphizer a (Error `Either` ())
-instantiateType =
-  \case
-    ErrorType {} -> failure undefined
-    VarType {} -> failure undefined
-    ComplType type' ->
-      case type' of
-        TupleType args -> fmap fold . sequence <$> traverse instantiateType args
-        FunctionType args ret ->
-          fmap fold . sequence <$> traverse instantiateType (ret : args)
-        AppType t t' ->
-          liftA2 (liftA2 mappend) (instantiateType t) (instantiateType t')
-        AddrType t -> instantiateType t
-        ConstType {} -> succeed mempty
-        StringType -> succeed mempty
-        String16Type -> succeed mempty
-        LabelType -> succeed mempty
-        TBitsType {} -> succeed mempty
-        BoolType -> succeed mempty
-        VoidType -> succeed mempty
 
 monomorphizePolyType ::
      (HasPos a, HasTypeHole a)
@@ -760,7 +764,3 @@ instance Monomorphize (Annot AST.CallAnnot) a where
 
 instance Monomorphize (Annot AST.Asserts) a where
   monomorphize = undefined
-
-getTypingUnder :: ToTypeVar t => Subst Type -> t -> InferMonomorphizer a Type
-getTypingUnder subst handle =
-  useInferencer $ State.reconstructOld (toTypeVar handle) >>= simplify . apply subst >>= getTyping

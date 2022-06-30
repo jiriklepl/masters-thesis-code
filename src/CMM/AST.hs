@@ -673,7 +673,7 @@ instance Pretty (Type a) where
       TBits int -> bitsName <> pretty int
       TName name -> pretty name
       TAuto mName -> autoName <> maybe mempty (parens . pretty) mName
-      TPtr t -> ptrName <> pretty t
+      TPtr t -> ptrName <> parens (pretty t)
       TPar paraType -> parens $ pretty paraType
 
 data ParaType a =

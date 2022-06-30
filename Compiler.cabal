@@ -99,6 +99,7 @@ executable Compiler
                        CMM.Err.IsError,
                        CMM.Err.Severity,
                        CMM.Err.State,
+                       CMM.FillHoles,
                        CMM.FlowAnalysis,
                        CMM.Inference,
                        CMM.Inference.Arity,

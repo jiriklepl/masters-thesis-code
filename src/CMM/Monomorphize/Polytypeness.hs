@@ -3,12 +3,10 @@
 
 module CMM.Monomorphize.Polytypeness where
 
-import safe Control.Applicative (Applicative(liftA2))
 import safe Data.Set (Set)
 import safe Data.Data (Data)
 import safe qualified Data.Set as Set
 import safe qualified Data.PartialOrd as PartialOrd
-import safe Control.Lens.Getter ((^.))
 
 import safe Prettyprinter
     ( Pretty(pretty), (<+>), list, Doc )
@@ -18,19 +16,17 @@ import safe CMM.Data.Nullable (Fallbackable((??)))
 import safe CMM.Inference.Constness (Constness (LinkExpr))
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Type (Type, ToType)
-import safe CMM.Inference.TypeVar (TypeVar)
+import safe CMM.Inference.TypeVar (TypeVar, ToTypeVar (toTypeVar))
 import safe CMM.Inference.Fact ( constnessBounds, kindingBounds )
 import safe CMM.Pretty ( lambda )
 import safe CMM.Inference.BuiltIn()
 import safe CMM.Inference.State (Inferencer)
 import safe qualified CMM.Inference.State as State
 import safe CMM.Inference.Subst ( Apply(apply), Subst )
-import safe CMM.Inference.Preprocess.HasTypeHandle
-    ( getTypeHandleId, HasTypeHandle )
-import safe CMM.Inference.TypeHandle ( typing, kinding, consting )
 import safe CMM.Inference ( simplify )
-import safe CMM.Utils ( backQuote )
 import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
+import Data.Functor ((<&>))
+import CMM.Inference.Preprocess.TypeHole
 
 data Absurdity =
   Absurdity
@@ -138,44 +134,44 @@ typingPolytypeness t =
   where
     free = freeTypeVars t
 
--- | this was changed after the focus on sub-kinding was abandoned
 constnessPolytypeness :: TypeVar -> Inferencer Polytypeness
 constnessPolytypeness tVar = go <$> State.readConstingBounds tVar
   where
-    go (low `Bounds` high) =
+    go bounds@(low `Bounds` high) =
       case low `compare` high of
         LT ->
           if low >= LinkExpr
             then Mono
-            else Mono
+            else constPolymorphism tVar bounds
         EQ -> Mono
-        GT -> Mono
+        GT -> constAbsurdity tVar bounds
 
--- | this was changed after the focus on sub-kinding was abandoned (ditto)
 kindingPolytypeness :: TypeVar -> Inferencer Polytypeness
 kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
   where
-    go (low `Bounds` high) =
+    go bounds@(low `Bounds` high) =
       if low PartialOrd.<= high
         then if high PartialOrd.<= low
                then Mono
-               else Mono
-        else Mono
+               else kindPolymorphism tVar bounds
+        else kindAbsurdity tVar bounds
 
-typePolytypeness :: Subst Type -> TypeVar -> Inferencer Polytypeness
+reconstructHole :: HasTypeHole a => Subst Type -> a -> Inferencer a
+reconstructHole subst holed =
+  case getTypeHole holed of
+    EmptyTypeHole -> return holed
+    hole -> do
+      newHandle <- reconstructType subst hole >>= simplify >>= State.getHandle
+      return $ setTypeHole (setHoleHandle newHandle hole) holed
+
+reconstructBase :: ToTypeVar a => Subst Type -> a -> Inferencer TypeVar
+reconstructBase subst tVar =
+  State.reconstructOld (toTypeVar tVar) >>= simplify . apply subst
+
+reconstructType :: ToTypeVar a => Subst Type -> a -> Inferencer Type
+reconstructType subst tVar =
+  reconstructBase subst tVar >>= fmap (apply subst) . State.getTyping
+
+typePolytypeness :: ToTypeVar a => Subst Type -> a -> Inferencer Polytypeness
 typePolytypeness subst tVar =
-  State.reconstructOld tVar >>= simplify . apply subst >>= State.tryGetHandle >>= \case
-    Just handle ->
-      mappend (typingPolytypeness $ apply subst handle ^. typing) <$>
-      liftA2
-        mappend
-        (kindingPolytypeness $ apply subst handle ^. kinding)
-        (constnessPolytypeness $ apply subst handle ^. consting)
-    Nothing ->
-      error $
-      "(internal logic error) Type variable " <>
-      backQuote (show tVar) <> " not registered by the inferencer."
-
-getTypeHandleIdPolytypeness ::
-     HasTypeHandle a => Subst Type -> a -> Inferencer Polytypeness
-getTypeHandleIdPolytypeness subst = typePolytypeness subst . getTypeHandleId
+  reconstructType subst tVar <&> typingPolytypeness
