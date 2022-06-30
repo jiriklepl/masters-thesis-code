@@ -1,0 +1,12 @@
+f (bits32 a) {
+
+  a = 1;
+
+  return ();
+}
+f (bits32 a) {
+
+  a = 1;
+
+  return ();
+}

@@ -1,36 +1,37 @@
 class Id a b {
-  id (auto (a) x) -> auto (b);
+  id (auto (a) x, auto (b) y) -> auto (a);
 }
 
 instance Id bits32 bits32 {
-  id (auto u) {
-    return (u);
-  }
-}
-
-instance Id bits64 bits64 {
-  id (auto u) {
-    auto w;
-    w = u * u;
+  id (auto u, auto w) {
+    w = w * 2;
     return (w);
   }
 }
 
-f(bits32 x) -> bits32 {
-  x = id(x);
+instance Id bits64 bits64 {
+  id (auto u, auto w) {
+    w = w * 3;
+    return (w);
+  }
+}
+
+instance Id bits32 bits64 {
+  id (auto u, auto w) {
+    u = u * 4;
+    return (u);
+  }
+}
+
+f(bits32 x, bits64 y) -> bits32 {
+  x = id(x, y);
 
   return (x);
 }
 
 
 g(bits32 x) -> bits32 {
-  x = id(x);
-
-  return (x);
-}
-
-h(bits64 x) -> bits64 {
-  x = id(x);
+  x = id(x, x);
 
   return (x);
 }
