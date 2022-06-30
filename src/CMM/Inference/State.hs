@@ -197,7 +197,7 @@ addClassFact name scheme =
       State.classFacts %= Map.insertWith mappend name [scheme]
 
 addScheme ::
-     (HasCallStack, Pretty DataKind) => TypeVar -> Scheme Type -> Inferencer ()
+     HasCallStack => TypeVar -> Scheme Type -> Inferencer ()
 addScheme tVar scheme =
   case scheme of
     tVars :. _ :=> _ -> do

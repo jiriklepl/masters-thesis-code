@@ -11,7 +11,7 @@ import safe Control.Lens.Type (Lens')
 import safe Control.Monad.State (MonadState)
 import Data.Data ( Data )
 
-import Prettyprinter
+import Prettyprinter ( vsep, Pretty(pretty) )
 
 import safe CMM.Data.List (count)
 import safe CMM.Data.Nullable (Nullable(nullVal))

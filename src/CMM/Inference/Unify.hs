@@ -32,7 +32,7 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Unify.Error
   ( UnificationError(BadKind, GotErrorType, Mismatch, Occurs)
   )
-import CMM.Utils
+import safe CMM.Utils ( HasCallStack )
 
 unify :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
 unify = unifyDirected Both
@@ -71,7 +71,7 @@ bind _ tVar@TypeVar {} t'
   | otherwise = Left [Occurs tVar t']
 bind _ tVar t' = Left [toType tVar `unifyMismatch` t']
 
-unifyMismatch :: HasCallStack => Type -> Type -> UnificationError
+unifyMismatch :: Type -> Type -> UnificationError
 unifyMismatch = Mismatch "Types are not unifiable"
 
 instance Unify TypeVar TypeVar where

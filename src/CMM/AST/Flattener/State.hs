@@ -5,16 +5,17 @@
 module CMM.AST.Flattener.State where
 
 import Control.Lens
+    ( use, uses, (%=), (+=), (.=), makeFieldsNoPrefix )
 import Control.Monad.State ( State )
 import Data.Map (Map)
 import Data.Text (Text)
-import CMM.AST
+import CMM.AST ( Name(Name) )
 import qualified Data.Text as T
-import CMM.Utils
+import CMM.Utils ( addPrefix )
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Data.Foldable
+import Data.Foldable ( for_ )
 
 
 
