@@ -4,8 +4,6 @@
 -- TODO: add the overload resolution for instances to monomorphization
 module CMM.Monomorphize where
 
-import Prelude hiding (map, fail)
-
 import safe Control.Applicative (liftA2, liftA3)
 import safe Control.Lens.Getter (uses)
 import safe Control.Lens.Tuple (_1, _2)
@@ -82,15 +80,14 @@ import safe CMM.Inference.Unify.Error ( UnificationError )
 import safe qualified CMM.Monomorphize.State as State
 import safe CMM.Monomorphize.State.Impl
     ( Monomorphizer, MonomorphizeState )
-import CMM.Monomorphize.MakeSignature
 
 type InferMonomorphizer a = State (InferencerState, MonomorphizeState a)
 
 returnError :: (HasPos n, Monad m) => n -> MonomorphizeError -> m (Either Error b)
 returnError n = return . Left  . makeError n
 
-fail :: Monad m => a -> m (Either a b)
-fail = return . Left
+failure :: Monad m => a -> m (Either a b)
+failure = return . Left
 
 useInferencer :: State.Inferencer b -> InferMonomorphizer a b
 useInferencer = zoom _1
@@ -100,7 +97,7 @@ useMonomorphizer = zoom _2
 
 reThrow :: Monad m => Either Error a -> (a -> m (Either Error b)) -> m (Either Error b)
 reThrow = \case
-  Left err -> const $ fail err
+  Left err -> const $ failure err
   Right x -> ($ x)
 
 reThrowM :: Monad m =>
@@ -196,7 +193,7 @@ eliminateClasses (topLevel:topLevels) =
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Unit) a where
   monomorphize subst unit@(AST.Unit topLevels `Annot` a) =
     monomorphizeTrivials subst a AST.Unit (eliminateClasses topLevels) `reThrowM` \case
-      Nothing ->  fail $ illegalNothing unit
+      Nothing ->  failure $ illegalNothing unit
       Just node ->  fmap Just <$> cycleWaves node
 cycleWaves :: (HasPos a, HasTypeHole a) => Annot AST.Unit a
   -> InferMonomorphizer a (Either Error (Annot AST.Unit a))
@@ -277,7 +274,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Struct) a where
         handle <- useInferencer . fmap toTypeVar . State.getHandle $ getTypeHoleId a
         schemeName <- useInferencer . State.fromOldName $ getTypeHoleId a
         addScheme <- useInferencer (lookupScheme schemeName) >>= \case
-          Nothing -> fail $ isNotScheme annotated
+          Nothing -> failure $ isNotScheme annotated
           Just scheme ->
             useMonomorphizer . fmap Right $
             State.addPolyScheme handle scheme (StructScheme $ withAnnot a struct)
@@ -317,9 +314,9 @@ instance HasTypeHole a => Monomorphize (Annot AST.Datum) a where
           SimpleTypeHole handle ->
             useInferencer (getTypeHandleIdPolytypeness subst handle) >>= \case
               Mono -> success
-              Poly polyWhat -> fail $ polyWhat `illegalPolyType` annotated
-              Absurd absurdity -> fail $ absurdity `absurdType` annotated
-          hole -> fail $ illegalHole hole annotated
+              Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
+              Absurd absurdity -> failure $ absurdity `absurdType` annotated
+          hole -> failure $ illegalHole hole annotated
       _ -> success
     where
       success = succeed $ Just annotated
@@ -331,7 +328,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
   monomorphize subst annotated@(procedure@(AST.Procedure header body) `Annot` a) = do
     schemeName <- useInferencer . State.fromOldName $ getTypeHoleId a
     addScheme <- useInferencer (lookupScheme schemeName) >>= \case
-      Nothing -> fail $ isNotScheme annotated
+      Nothing -> failure $ isNotScheme annotated
       Just scheme ->
         useMonomorphizer . fmap Right $
         State.addPolyScheme
@@ -342,7 +339,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
       SimpleTypeHole {} -> succeed ()
       MethodTypeHole inst scheme _ ->
         useMonomorphizer . fmap Right $ State.addMethod (toTypeVar scheme) (toTypeVar inst)
-      hole -> fail $ hole `illegalHole` annotated
+      hole -> failure $ hole `illegalHole` annotated
     handle <- useInferencer $ State.getHandle schemeName
     (addScheme *> addMethod) `reThrow` \_ -> useInferencer
       (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
@@ -356,14 +353,14 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
             MethodTypeHole _ scheme _ -> if waves > 0
               then Right <$> State.tryStore (toTypeVar scheme) inst
               else return $ Right False
-            hole' -> fail $ hole' `illegalHole` annotated
+            hole' -> failure $ hole' `illegalHole` annotated
         stored `reThrow` \case
           True -> do
             addMemory <- useMonomorphizer $
               case getTypeHole a of
                 SimpleTypeHole _ -> Right <$> State.memorize hole inst
                 MethodTypeHole _ scheme _ -> Right <$> State.memorize (toTypeVar scheme) inst
-                hole' -> fail $ hole' `illegalHole` annotated
+                hole' -> failure $ hole' `illegalHole` annotated
             addMemory `reThrow` \_ -> do
               header' <- ensuredJustMonomorphize subst header
               body' <- ensuredJustMonomorphize subst body
@@ -375,7 +372,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
       Poly polyWhat
         | null subst -> succeed nullVal
         | otherwise -> error $ show polyWhat
-      Absurd absurdity -> fail $ absurdity `absurdType` annotated
+      Absurd absurdity -> failure $ absurdity `absurdType` annotated
 
 instance Monomorphize (Annot AST.ProcedureHeader) a where
   monomorphize _ header = succeed $ Just header
@@ -467,8 +464,8 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Stmt) a where
         useInferencer
           (getTypeHandleIdPolytypeness subst (holeHandle $ getTypeHole a)) >>= \case
           Mono -> succeed $ Just annotated
-          Poly polyWhat -> fail $ polyWhat `illegalPolyType` annotated
-          Absurd absurdity -> fail $ absurdity `absurdType` annotated
+          Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
+          Absurd absurdity -> failure $ absurdity `absurdType` annotated
       AST.ContStmt _ _ -> undefined
       AST.GotoStmt expr targets -> do
         expr' <- ensuredJustMonomorphize subst expr
@@ -494,7 +491,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
           -- error . show $ () <$ lValue -- TODO: lValue cannot be a polytype
            -> do
             succeed . Just $ annotated
-          Absurd absurdity -> fail $ absurdity `absurdType` annotated -- TODO: lValue cannot have an illegal type
+          Absurd absurdity -> failure $ absurdity `absurdType` annotated -- TODO: lValue cannot have an illegal type
           Mono ->
             case lValue of
               AST.LVName _ ->
@@ -505,7 +502,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
                       (getTypeHandleIdPolytypeness
                          subst
                          scheme) >>= \case
-                      Absurd absurdity -> fail $ absurdity `absurdType` annotated
+                      Absurd absurdity -> failure $ absurdity `absurdType` annotated
                       _ -> do
                         inst <-
                           useInferencer $
@@ -515,7 +512,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
                         instType <- getTypingUnder subst handle
                         useMonomorphizer $ State.addGenerate (mapAnnot WrappedLValue annotated) (toTypeVar scheme) inst instType
                         succeed . Just $ annotated
-                  hole -> fail $ hole `illegalHole` annotated
+                  hole -> failure $ hole `illegalHole` annotated
               AST.LVRef mType expr mAsserts -> do
                 mType' <-
                   traverse (ensuredJustMonomorphize subst) mType
@@ -560,7 +557,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
         case getTypeHole a of
           MethodTypeHole _ scheme inst ->
             useInferencer (getTypeHandleIdPolytypeness subst scheme) >>= \case
-              Absurd absurdity -> fail $ absurdity `absurdType` annotated
+              Absurd absurdity -> failure $ absurdity `absurdType` annotated
               _ -> do
                 expr'' <- monomorphize subst expr'
                 inst' <-
@@ -575,7 +572,7 @@ instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
                 return $ do
                   expr''' <- expr''
                   return $ withAnnot a . (`AST.MemberExpr` field) <$> expr'''
-          hole -> fail $ hole `illegalHole` annotated
+          hole -> failure $ hole `illegalHole` annotated
 
 instance Monomorphize (Annot AST.Lit) a where
   monomorphize _ = succeed . Just
@@ -590,15 +587,15 @@ instance Monomorphize (Annot AST.Type) a where
             useInferencer (State.reconstructOld (getTypeHoleId a)) >>=
             instantiateType
           return $ Just (withAnnot a type') <$ type''
-        Poly polyWhat -> fail $ polyWhat `illegalPolyType` annotated
-        Absurd absurdity -> fail $ absurdity `absurdType` annotated
+        Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
+        Absurd absurdity -> failure $ absurdity `absurdType` annotated
 
 instantiateType ::
      Type.Type -> InferMonomorphizer a (Error `Either` ())
 instantiateType =
   \case
-    ErrorType {} -> fail undefined
-    VarType {} -> fail undefined
+    ErrorType {} -> failure undefined
+    VarType {} -> failure undefined
     ComplType type' ->
       case type' of
         TupleType args -> fmap fold . sequence <$> traverse instantiateType args
@@ -680,17 +677,17 @@ monomorphizeField ::
 monomorphizeField scheme inst =
   useMonomorphizer (uses State.polyData $ Map.lookup scheme . State.getPolyData) >>= \case
     Nothing -> return Nothing
-    Just map -> do
-      isDone <- fmap or $ recallField scheme `traverse` Map.keys map
+    Just map' -> do
+      isDone <- fmap or $ recallField scheme `traverse` Map.keys map'
       if isDone
         then return . Just $ Right Nothing
-        else Just <$> go map
+        else Just <$> go map'
   where
-    go map = do
-      map' <-
-        Map.toList map `for` \(item, struct) ->
+    go map' = do
+      map'' <-
+        Map.toList map' `for` \(item, struct) ->
           monomorphizeFieldInner item inst struct
-      return $ first head $ oneRight map'
+      return $ first head $ oneRight map''
 
 instantiationError :: Monad m =>
   Type
@@ -699,7 +696,7 @@ instantiationError :: Monad m =>
   -> [UnificationError]
   -> m (Either Error b)
 instantiationError scheme inst instWrapper err =
-  fail . Error.makeError .
+  failure . Error.makeError .
     CannotInstantiate scheme inst err $ void instWrapper
 
 monomorphizeFieldInner ::
@@ -756,7 +753,7 @@ monomorphizeMethodInner scheme (inst, instWrapper) = do
 illegalScheme :: (Monad m, HasPos a1) =>
   Schematized a2 -> Annotation ASTWrapper a1 -> m (Either Error b)
 illegalScheme schematized instWrapper =
-  fail . makeError (takeAnnot instWrapper) . IllegalScheme (void schematized) $ void instWrapper
+  failure . makeError (takeAnnot instWrapper) . IllegalScheme (void schematized) $ void instWrapper
 
 instance Monomorphize (Annot AST.CallAnnot) a where
   monomorphize = undefined

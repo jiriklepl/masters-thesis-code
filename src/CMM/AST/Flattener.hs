@@ -3,13 +3,11 @@
 module CMM.AST.Flattener where
 
 import safe Control.Applicative (liftA2)
-import safe Control.Monad.State (State, evalState, get, put)
-import safe Data.Data (Data(gmapT, gmapM), Typeable)
-import safe Data.Text (Text)
-import safe qualified Data.Text as T
+import safe Control.Monad.State (evalState)
+import safe Data.Data (Data(gmapM), Typeable)
 
 import safe qualified CMM.AST.Flattener.State as State
-import safe CMM.AST.Flattener.State (Flattener, FlattenerState (FlattenerState))
+import safe CMM.AST.Flattener.State (Flattener)
 
 import safe CMM.AST
   ( Arm(Arm)
@@ -18,15 +16,14 @@ import safe CMM.AST
   , Expr(LVExpr)
   , LValue(LVName)
   , Name(Name)
-  , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt, ReturnStmt, CallStmt), StackDecl (StackDecl), Datum (DatumLabel, DatumAlign, Datum), Actual (Actual)
+  , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt, ReturnStmt, CallStmt), StackDecl (StackDecl), Datum (DatumLabel, Datum), Actual (Actual)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
-import safe CMM.Utils (addPrefix)
 import Data.List (partition)
 import Data.Generics.Aliases (extM)
-import CMM.AST.GetName
+import safe CMM.AST.GetName ( GetName(getName) )
 import qualified Data.Set as Set
-import Data.Functor ((<&>), void)
+import Data.Functor ((<&>))
 
 -- | Flattens the given AST node, more specifically nested blocks
 flatten ::

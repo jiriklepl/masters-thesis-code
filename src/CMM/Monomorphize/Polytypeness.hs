@@ -138,10 +138,11 @@ typingPolytypeness t =
   where
     free = freeTypeVars t
 
+-- | this was changed after the focus on sub-kinding was abandoned
 constnessPolytypeness :: TypeVar -> Inferencer Polytypeness
 constnessPolytypeness tVar = go <$> State.readConstingBounds tVar
   where
-    go bounds@(low `Bounds` high) =
+    go (low `Bounds` high) =
       case low `compare` high of
         LT ->
           if low >= LinkExpr
@@ -150,10 +151,11 @@ constnessPolytypeness tVar = go <$> State.readConstingBounds tVar
         EQ -> Mono
         GT -> Mono
 
+-- | this was changed after the focus on sub-kinding was abandoned (ditto)
 kindingPolytypeness :: TypeVar -> Inferencer Polytypeness
 kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
   where
-    go bounds@(low `Bounds` high) =
+    go (low `Bounds` high) =
       if low PartialOrd.<= high
         then if high PartialOrd.<= low
                then Mono

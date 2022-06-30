@@ -389,11 +389,11 @@ instance Preprocess AST.Type a b where
       AST.TPar parType -> do
         parType' <- preprocess parType
         return (getTypeHole parType', AST.TPar parType')
-      AST.TPtr t -> do
+      AST.TPtr t' -> do
         ptr <- State.freshASTStar annot
-        t' <- preprocess t
-        State.storeFact $ ptr `typeUnion` makeAddrType t'
-        return (SimpleTypeHole ptr, AST.TPtr t')
+        t'' <- preprocess t'
+        State.storeFact $ ptr `typeUnion` makeAddrType t''
+        return (SimpleTypeHole ptr, AST.TPtr t'')
 
 instance Preprocess AST.ParaType a b where
   preprocessImpl annot (AST.ParaType type' types') = do

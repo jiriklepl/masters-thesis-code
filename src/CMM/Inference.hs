@@ -640,17 +640,17 @@ reduceConstraint (fact:facts) =
     continueWith facts' = return (True, facts' <> facts)
 
 reduceMany :: Facts -> Inferencer (Bool, Facts)
-reduceMany = repeat reduceTrivial >=> reduceTemplates . snd >=> go
+reduceMany = repeatStep reduceTrivial >=> reduceTemplates . snd >=> go
   where
     go facts = do
-      result@(change, facts') <- repeat reduceTrivial facts >>= reduceConstraint . snd
+      result@(change, facts') <- repeatStep reduceTrivial facts >>= reduceConstraint . snd
       if change
         then go facts'
         else return result
-    repeat what facts = do
+    repeatStep what facts = do
       result@(change, facts') <- what facts
       if change
-        then repeat what facts'
+        then repeatStep what facts'
         else return result
 
 reduce :: Facts -> Inferencer (Bool, Facts)
