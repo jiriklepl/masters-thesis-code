@@ -54,8 +54,11 @@ wrapStandardLayout :: HasErrorState s ErrorState => (a, s) -> Either String (a, 
 blockifier :: (Blockify n a b, BlockifyAssumps a b) => n a
   -> Either String (n b, BlockifierState)
 
-preprocessor :: PreprocessorSettings -> Annot Unit SourcePos
-  -> Either String ((Annot Unit (SourcePos, TypeHole), Facts), PreprocessorState)
+preprocessor :: (Preprocess n a (a, TypeHole), HasPos a) =>
+  PreprocessorSettings
+  -> Annot n a
+  -> Either
+      String ((Annot n (a, TypeHole), [Fact]), PreprocessorState)
 
 inferencer :: HasTypeHole a => InferencerSettings -> Annot Unit a -> Facts
   -> Either String (Facts, InferencerState)
