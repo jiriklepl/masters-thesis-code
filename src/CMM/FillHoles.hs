@@ -22,7 +22,7 @@ import Control.Lens
 type FillAnnot = ((SourcePos, BlockAnnot), TypeHole)
 
 class FillHoles n where
-  fillHoles :: Annot n FillAnnot -> Inferencer (Annot n FillAnnot)
+  fillHoles :: Data (n FillAnnot) => Annot n FillAnnot -> Inferencer (Annot n FillAnnot)
 
 typeFromHoled :: HasTypeHole a => a -> Inferencer (AST.Type a)
 typeFromHoled holed =
@@ -45,7 +45,7 @@ translType holed = \case
       BoolType -> undefined
       VoidType -> undefined
 
-instance FillHoles AST.Unit where
+instance Typeable n => FillHoles n where
   fillHoles = go
     where
       go :: Data d => d -> Inferencer d
