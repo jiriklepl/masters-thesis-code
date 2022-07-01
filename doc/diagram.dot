@@ -5,28 +5,38 @@ digraph {
         node [shape="ellipse", fillcolor="lightblue"]
 
         Source [label="CHMMM source"]
-        LLVM [label="LLVM code"]
+        #LLVM [label="LLVM code"]
     }
 
     subgraph data {
         node [shape="parallelogram"]
 
+        subgraph orangeData {
+            node [fillcolor="orange"]
+
+            ASTErrors [label="AST errors"]
+            FillingErrors [label="Type instantiation errors"]
+            ManglingErrors [label="Mangling errors"]
+            UnifyErrors [label="Unification errors"]
+            BlockifierErrors [label="Blockifier errors"]
+            MonomorphizeErrors [label="Monomorphization errors"]
+            VariablesErrors [label="Variable collecton errors"]
+        }
         subgraph greenData {
             node [fillcolor="lightgreen"]
 
             AST
-            ASTErrors [label="AST errors"]
-            UnifyErrors [label="Unification errors"]
-            BlockifierErrors [label="Blockifier errors"]
-            MonomorphizeErrors [label="Monomorphization errors"]
             Facts [label="Type facts"]
+            LeftFacts [label="Leftover facts"]
             Variables [label="Variables"]
             ASTTypeHoles [label="AST\nwith type holes"]
             Judgments [label="Type Judgments"]
             FlatAST [label="Flat AST"]
             BlockifiedAST [label="Blockified AST"]
             BlockifiedASTAnnots [label="Blockified AST\nwith analyzed flow"]
-            MonoAST [label="Monomorphized AST"]
+            MonoAST [label="Monomorphized AST with type elaborations"]
+            FilledMonoAST [label="Monomorphized AST with instantiated types"]
+            PostAST [label="Postprocessed AST that can be translated"]
         }
 
     }
@@ -35,27 +45,30 @@ digraph {
         node [shape="component"]
 
         subgraph greenComponents {
-            node [fillcolor="lightgreen"]
+            node [fillcolor="lightblue"]
 
             FunDepSimpl [label="Functional dependencies\nsimplifier"]
             AnnotMining  [label="Annotation mining"]
             Parser
             Flattener
-            InferPre [label="Type inference\npreprocessing"]
-            VariableMining [label="Variables collection\n(repeated)"]
+            Unification
+            Prettyprinter
+            Preprocess [label="Type inference\npreprocessing"]
+            VariableMining [label="Variable collection\n(repeated)"]
             Blockifier
             FlowAnalysis [label="Flow analysis"]
+            Inference [label="Type inference"]
+            Monomorphization
+            HoleFilling [label="Turning AST elaborations into types"]
+            Mangling
         }
 
         subgraph yellowComponents {
             node [fillcolor="yellow"]
 
-            Inference [label="Type inference"]
-            Monomorphization
         }
 
-        Mangling [fillcolor="orange"]
-        Translator [fillcolor="orange"]
+        #Translator [fillcolor="orange"]
     }
 
     subgraph decisions {
@@ -65,15 +78,23 @@ digraph {
 
     Source -> Parser -> AST
     AST -> Flattener -> FlatAST
-    AST -> VariableMining -> Variables -> InferPre
-    AST -> InferPre -> { Facts ASTTypeHoles }
+    VariableMining -> VariablesErrors
+    AST -> VariableMining -> Variables -> Preprocess
     Facts -> { FunDepSimpl AnnotMining }
-    { FunDepSimpl ASTTypeHoles AnnotMining } -> Inference -> Judgments -> Monomorphization
-    { Inference Monomorphization } -> UnifyErrors
+    ASTTypeHoles -> AnnotMining
+    ASTTypeHoles -> Monomorphization
+    { FunDepSimpl AnnotMining } -> Inference -> Judgments -> Monomorphization -> MonoAST -> HoleFilling -> FilledMonoAST -> Mangling -> PostAST -> Prettyprinter
+    HoleFilling -> FillingErrors
+    Mangling -> ManglingErrors
+    { Inference Monomorphization } -> Unification
     FlatAST -> Blockifier -> {BlockifiedAST BlockifierErrors }
     BlockifiedAST -> FlowAnalysis -> BlockifiedASTAnnots
-    { Blockifier FlowAnalysis VariableMining} -> ASTErrors
-    BlockifiedASTAnnots -> Monomorphization -> {Mangling -> MonoAST}
+    FlowAnalysis -> BlockifierErrors
+    Unification -> { UnifyErrors Monomorphization Inference }
+    BlockifiedASTAnnots -> Preprocess -> { Facts ASTTypeHoles }
     Monomorphization -> MonomorphizeErrors
-    MonoAST -> Translator -> LLVM
+    MonoAST
+    { FillingErrors ManglingErrors UnifyErrors BlockifierErrors MonomorphizeErrors VariablesErrors } -> ASTErrors -> Prettyprinter
+    Inference -> LeftFacts -> Prettyprinter
+    #Translator -> LLVM
 }
