@@ -45,6 +45,7 @@ import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (addPrefix)
 import safe Data.Map (Map)
+import CMM.Err.State (nullErrorState)
 
 helperName :: Text -> Text
 helperName = addPrefix lrAnalysisPrefix
@@ -407,9 +408,14 @@ instance Blockify (Annot AST.Procedure) a b where
     header' <- blockifyProcedureHeader header
     withAnnot (Begins index `withBlockAnnot` a) <$>
       (AST.Procedure header' <$> blockify body) <*
-      forbidFallthrough a <*
-      analyzeFlow procedure <*
+      finalize <*
       State.clearBlockifier
+    where
+      finalize =
+        nullErrorState >>= (`when` finalizations)
+      finalizations = do
+        forbidFallthrough a
+        analyzeFlow procedure
 
 instance Blockify (Annot AST.ProcedureDecl) a b where
   blockify (AST.ProcedureDecl header `Annot` a) = do

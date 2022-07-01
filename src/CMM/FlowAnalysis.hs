@@ -26,6 +26,8 @@ import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)
+import Data.Maybe
+import Data.Functor
 
 analyzeFlow :: HasPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)
@@ -35,7 +37,7 @@ analyzeFlow procedure@(Annot _ _)
   let graph = Graph.buildG (0, Map.size blocks - 1) flow -- one block is guaranteed (procedure)
       blockNames = Map.fromList $ swap <$> Map.toList blocks
       reachable = Set.fromList $ Graph.reachable graph 0
-      removeReachable = (`Map.withoutKeys` Set.map (blockNames Map.!) reachable)
+      removeReachable = (`Map.withoutKeys` Set.map (fromJust . (`Map.lookup` blockNames)) reachable)
       makeMessageFromVisible = filter (not . hasPrefix) . Map.keys
   labelsWarning <- makeMessageFromVisible <$> uses State.labels removeReachable
   continuationsWarning <-
@@ -57,15 +59,17 @@ analyzeFlow procedure@(Annot _ _)
   State.blockData .= cleanData
   State.controlFlow .= cleanFlow
   doWhile $ or <$> traverse updateFlowPair cleanFlow
-  uninitialized <- uses State.blockData $ Map.keys . Map.filter (^. _3) . (Map.! 0)
+  uninitialized <- uses State.blockData (Map.lookup 0) <&> \case
+    Nothing -> []
+    Just blockData -> Map.keys $ Map.filter (^. _3) blockData
   unless (null uninitialized) $
     registerASTError procedure $ UninitializedRegisters uninitialized
 
 updateFlowPair :: (Int, Int) -> Blockifier Bool
 updateFlowPair (f, t) = do
   blocks <- use State.blockData
-  let toVars = blocks Map.! t
-      fromVars = blocks Map.! f
+  let toVars = fromJust $ t `Map.lookup` blocks
+      fromVars = fromJust $ f `Map.lookup` blocks
       newBlocks =
         Map.insertWithKey
           (\_ new old ->
@@ -74,7 +78,7 @@ updateFlowPair (f, t) = do
           f
           toVars
           blocks
-      newBlock = newBlocks Map.! f
+      newBlock = fromJust $ f `Map.lookup` newBlocks
   State.blockData .= newBlocks
   return . or $
     zipWith

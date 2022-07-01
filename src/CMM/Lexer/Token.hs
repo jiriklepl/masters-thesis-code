@@ -166,6 +166,7 @@ data Token a
   | EqSign
   | DotDot
   | Caret
+  | Eof
   deriving (Functor, Eq, Ord, Show)
 
 
@@ -211,6 +212,7 @@ instance Pretty (Token a) where
     EqSign -> "="
     DotDot -> ".."
     Caret -> "^"
+    Eof -> ""
 
 instance Ord a => VisualStream [Annot Token a] where
   showTokens _ = show . hsep . fmap pretty . toList

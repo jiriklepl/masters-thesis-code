@@ -37,6 +37,7 @@ import safe qualified Text.Megaparsec.Char.Lexer as L
 
 import safe qualified CMM.Lexer.Token as T
 import safe CMM.Lexer.Token (Token)
+import Data.List.Extra
 
 type Lexer = Parsec Void Text
 
@@ -206,4 +207,4 @@ tokenSafe =
 (>?=) = flip withRecovery
 
 tokenize :: Lexer [Annot Token SourcePos]
-tokenize = sc *> manyTill tokenSafe eof
+tokenize = sc *> liftA2 snoc (many tokenSafe) (withSourcePos  $ T.Eof <$ eof)

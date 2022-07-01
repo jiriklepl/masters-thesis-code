@@ -9,7 +9,7 @@ import safe CMM.Lexer ( tokenize )
 import safe Data.Bifunctor ( Bifunctor(first, second) )
 import safe Data.Text ( Text )
 import safe CMM.AST.Annot ( Annot )
-import safe CMM.Parser ( unit )
+import safe CMM.Parser ( program )
 import safe CMM.AST ( Unit )
 import safe CMM.Inference.Preprocess.State
     ( PreprocessorState, initPreprocessor, facts )
@@ -46,8 +46,7 @@ import safe CMM.Err.IsError ( IsError )
 import safe CMM.AST.BlockAnnot ( BlockAnnot )
 import System.IO (stdin, IOMode (ReadMode), withFile)
 import safe System.Exit ( die )
-import CMM.Inference.HandleCounter
-import CMM.Inference.BuiltIn()
+import safe CMM.Inference.HandleCounter ( readHandleCounter )
 
 newtype PipelineError
   = InferenceIncomplete Facts
@@ -114,7 +113,7 @@ tokenizer source = first errorBundlePretty . runParser tokenize source
 parser :: String
   -> [Annot Token SourcePos]
   -> Either String (Annot Unit SourcePos)
-parser source = first errorBundlePretty . runParser unit source
+parser source = first errorBundlePretty . runParser program source
 
 flattener :: (Data (n a), Typeable a) => n a -> n a
 flattener = flatten

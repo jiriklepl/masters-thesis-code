@@ -119,7 +119,7 @@ import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
 import safe CMM.Inference.Utils (fieldClassPrefix, trileanSeq, funDepsClassPrefix)
 import safe CMM.Utils (HasCallStack, addPrefix, getPrefix, hasPrefix)
 import safe qualified CMM.Inference.State.Impl as State
-import safe CMM.Err.State ( HasErrorState(errorState) )
+import safe CMM.Err.State ( HasErrorState(errorState), nullErrorState )
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -664,10 +664,9 @@ reduceMany = repeatStep reduceTrivial >=> reduceTemplates . snd >=> go
 reduce :: Facts -> Inferencer (Bool, Facts)
 reduce facts = do
   (change, facts') <- reduceMany facts
-  errorState' <- use errorState
-  if errorState' /= nullVal
-    then return (change, facts')
-    else do
+  nullErrorState >>= \case
+    False -> return (change, facts')
+    _ -> do
       State.currentFunDeps .= 0
       let (facts'', sccs) = makeCallGraph facts'
       (change', facts''') <- closeSCCs facts'' sccs

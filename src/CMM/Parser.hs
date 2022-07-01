@@ -125,7 +125,7 @@ commaList :: Parser a -> Parser [a]
 commaList = (`sepEndBy1` comma)
 
 program :: SourceParser AST.Unit
-program = unit
+program = unit <* symbol T.Eof
 
 comma :: Parser ()
 comma = symbol T.Comma

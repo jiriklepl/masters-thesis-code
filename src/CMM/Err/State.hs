@@ -5,7 +5,7 @@ module CMM.Err.State where
 
 import safe Control.Lens.TH (makeFieldsNoPrefix)
 
-import safe Control.Lens.Getter (view)
+import safe Control.Lens.Getter (view, uses)
 import safe Control.Lens.Setter ((%=))
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad.State (MonadState)
@@ -49,6 +49,10 @@ instance HasErrorState ErrorState ErrorState where
   errorState = id
 
 makeFieldsNoPrefix ''ErrorState
+
+
+nullErrorState :: (HasErrorState s e, MonadState s m) => m Bool
+nullErrorState = uses errorState (==nullVal)
 
 countSeverity :: Severity -> ErrorState -> Int
 countSeverity s = \case

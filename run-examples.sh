@@ -11,12 +11,24 @@ find examples -maxdepth 1 -mindepth 1 -name "*.chmmm" | {
     while read -r file; do
         TOTAL=$((TOTAL+1))
         out="examples/out/$(basename "$file")"
+        FAILURE_C=1
+        case "$file" in
+            *-bad-*)
+            FAILURE_C=0
+            ;;
+            *)
+            ;;
+        esac
+
         echo "doing $file" > /dev/stderr
-        if cabal run -v0 Compiler -- -o - - < "$file" > "$out"; then
-            SUCCESS=$((SUCCESS+1))
+
+        if cabal run -v0 Compiler -- -o "$out" "$file"; then
+            RESULT_C=1
         else
-            FAILURE=$((FAILURE+1))
+            RESULT_C=0
         fi
+        SUCCESS=$(( SUCCESS + FAILURE_C * RESULT_C + (1 - FAILURE_C) * (1 - RESULT_C) ))
+        FAILURE=$(( FAILURE + (1 - FAILURE_C) * RESULT_C + (FAILURE_C) * (1 - RESULT_C) ))
     done
 
     echo "SUCCESS: $SUCCESS"
