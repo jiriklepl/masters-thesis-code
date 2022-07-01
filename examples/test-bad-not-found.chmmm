@@ -1,0 +1,5 @@
+f(bits32 x) {
+    x = y;
+
+    return (x);
+}
