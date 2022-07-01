@@ -47,7 +47,8 @@ common common-options
                        -Wunused-packages
   cpp-options:         -DUSE_GHC_STACK
                        -DFACT_COMMENTS
-  build-depends:       base >= 4.13 && < 4.17,
+  build-depends:       bimap ^>= 0.4.0,
+                       base >= 4.13 && < 4.17,
                        containers ^>=0.6.4.1,
                        extra ^>=1.7.10,
                        lens >=5.0.1 && <5.2,
@@ -83,7 +84,6 @@ executable Compiler
                        CMM.Data.Bounds.Impl,
                        CMM.Data.Dioid,
                        CMM.Data.Either,
-                       CMM.Data.Float,
                        CMM.Data.Function,
                        CMM.Data.Generics,
                        CMM.Data.Lattice,
@@ -151,8 +151,7 @@ executable Compiler
                        CMM.Translator,
                        CMM.Translator.State,
                        CMM.Utils
-  build-depends:       bimap ^>= 0.4.0,
-                       llvm-hs-pretty ^>=12.0.0,
+  build-depends:       llvm-hs-pretty ^>=12.0.0,
                        llvm-hs-pure ^>=12.0.0,
                        mtl ^>=2.2.2,
                        partial-order ^>=0.2.0.0,
@@ -169,8 +168,7 @@ Test-Suite parser-testsuite
                        CMM.AST.GetName,
                        CMM.AST.Utils,
                        CMM.Control.Applicative,
-                       CMM.Data.Float,
-                       CMM.Data.Num,
+                       CMM.Data.Bimap,
                        CMM.Lexer,
                        CMM.Parser,
                        CMM.Parser.HasPos,

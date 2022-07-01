@@ -37,7 +37,7 @@ import safe qualified Text.Megaparsec.Char.Lexer as L
 
 import safe qualified CMM.Lexer.Token as T
 import safe CMM.Lexer.Token (Token)
-import Data.List.Extra
+import safe Data.List.Extra ( snoc )
 
 type Lexer = Parsec Void Text
 

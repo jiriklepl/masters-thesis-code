@@ -37,8 +37,6 @@ import qualified LLVM.IRBuilder.Instruction as L
 import qualified LLVM.IRBuilder.Module as L
 import qualified LLVM.IRBuilder.Monad as L
 
-import safe Prettyprinter
-
 import safe CMM.AST
 import safe CMM.AST.Annot
 import safe CMM.AST.BlockAnnot
@@ -53,9 +51,8 @@ type MonadTranslator m
    = ( L.MonadIRBuilder m
      , L.MonadModuleBuilder m
      , MonadFix m
-     , MonadState TranslState m {-, MonadIO m -}
+     , MonadState TranslState m
       )
- -- TODO: solve what with IO
 
 type OutVar = (Text, Int, L.Operand)
 
@@ -69,7 +66,7 @@ translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
 
 -- TODO: maybe change the name to `endBlock` or something...
 pushVariables ::
-     (MonadTranslator m, Pretty (n a), HasPos a) => Annot n a -> m OutVars
+     (MonadTranslator m) => Annot n a -> m OutVars
 pushVariables (Annot _ _) = do
   currentBlock `exchange` Nothing >>= \case
     Just idx -> do
@@ -77,7 +74,6 @@ pushVariables (Annot _ _) = do
       variables .= t
       return $ (\(v, o) -> (v, idx, o)) <$> Map.toList h
     Nothing
-            -- makeMessage mkWarning n "The variables from this block are lost" -- TODO: make clearer
      -> do
       variables %= tail
       return mempty
@@ -118,17 +114,17 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
             formals' <- traverse translate formals
             currentBlock ?= idx
             L.function (translateName name) formals' L.i32 $ \pars ->
-              mdo blockName <- uses blocksTable (Map.! idx)
+               do blockName <- uses blocksTable (Map.! idx)
                   L.emitBlockStart . fromString $ T.unpack blockName
                   let newVars = Map.fromList (zip (getName <$> formals) pars)
                   variables %= (newVars :)
-                  exports <-
-                    (\exports' ->
-                       liftA2
-                         (<>)
-                         (translate body exports')
-                         (pushVariables body))
-                      exports
+                  rec exports <-
+                        (\exports' ->
+                          liftA2
+                            (<>)
+                            (translate body exports')
+                            (pushVariables body))
+                          exports
                   variables %= tail
           _ -> undefined -- TODO: add nice error message for completeness
 
@@ -157,13 +153,14 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
             setCurrentBlock idx
             variables %= (mempty :)
             stmt' <- translate stmt
+            blockData' <- use blockData
             sequence_
               [ do o <-
                      L.phi $
                      [ let Just source =
                              (\(v', f', _) -> v' == v && f' == f) `find` exports
                         in (source ^. _3, L.mkName . T.unpack $ names Map.! f)
-                     | f <- from
+                     | f <- from, let export = blockData' Map.! f Map.! v, view _2 export
                      ]
                    ~(h:t) <- use variables
                    variables .= Map.insert v o h : t

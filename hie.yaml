@@ -72,16 +72,10 @@ cradle:
     - path: "src/CMM/Data/Bounds/Impl.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Data/Church.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Data/Dioid.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Data/Either.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Data/Float.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Data/Function.hs"
@@ -183,16 +177,10 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/TypeHole.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/Preprocess/Settings.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Inference/Preprocess/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Preprocess/State/Impl.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Inference/Settings.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Refresh.hs"
@@ -258,13 +246,13 @@ cradle:
     - path: "src/CMM/Monomorphize/Schematized.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Monomorphize/Settings.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Monomorphize/State.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Monomorphize/State/Impl.hs"
+      component: "Compiler:exe:Compiler"
+
+    - path: "src/CMM/Options.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Parser.hs"
