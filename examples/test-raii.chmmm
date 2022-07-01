@@ -14,7 +14,6 @@ class RAII a {
 instance RAII X {
   drop(ptr(auto(a)) u ) ->  {
     auto y;
-    y = y;
     y = [u->x];
     return ();
   }

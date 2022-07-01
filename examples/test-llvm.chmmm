@@ -1,0 +1,6 @@
+f(bits32 u, bits32 w) -> bits32{
+  bits32 r;
+
+
+  return (u);
+}

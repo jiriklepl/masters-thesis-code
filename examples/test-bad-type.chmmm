@@ -1,0 +1,4 @@
+f (bits32 x) -> bits64 {
+
+  return (x);
+}

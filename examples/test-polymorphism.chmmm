@@ -5,14 +5,6 @@ g(bits32 x) -> bits32 {
 
   return (r);
 }
-g(bits32 x) -> bits32 {
-  bits32 r;
-
-  r = f(x, x);
-
-  return (r);
-}
-
 h(bits64 x) -> bits64 {
   bits64 r;
 
