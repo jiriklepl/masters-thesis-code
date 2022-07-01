@@ -117,10 +117,8 @@ executable Compiler
                        CMM.Inference.Preprocess.HasTypeHandle,
                        CMM.Inference.Preprocess.WithTypeHole,
                        CMM.Inference.Preprocess.TypeHole,
-                       CMM.Inference.Preprocess.Settings,
                        CMM.Inference.Preprocess.State,
                        CMM.Inference.Preprocess.State.Impl,
-                       CMM.Inference.Settings,
                        CMM.Inference.Refresh,
                        CMM.Inference.State,
                        CMM.Inference.State.Impl,
@@ -142,9 +140,9 @@ executable Compiler
                        CMM.Monomorphize.Error,
                        CMM.Monomorphize.Polytypeness,
                        CMM.Monomorphize.Schematized,
-                       CMM.Monomorphize.Settings,
                        CMM.Monomorphize.State,
                        CMM.Monomorphize.State.Impl,
+                       CMM.Options,
                        CMM.Parser,
                        CMM.Parser.ASTError,
                        CMM.Parser.HasPos,
@@ -158,7 +156,8 @@ executable Compiler
                        llvm-hs-pure ^>=12.0.0,
                        mtl ^>=2.2.2,
                        partial-order ^>=0.2.0.0,
-                       syb ^>=0.7.2.1
+                       syb ^>=0.7.2.1,
+                       optparse-applicative ^>=0.17.0.0
   hs-source-dirs:      src
 
 Test-Suite parser-testsuite

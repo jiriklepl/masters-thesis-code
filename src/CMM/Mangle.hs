@@ -28,6 +28,7 @@ import safe CMM.Err.IsError ( IsError )
 import safe Prettyprinter ( (<+>), Pretty(pretty) )
 import safe CMM.Parser.ASTError ( registerASTError )
 import safe Data.Maybe ( fromMaybe )
+import safe CMM.Utils ( HasCallStack )
 
 data MangleError
   = NonConcreteType Ty.Type
@@ -44,7 +45,7 @@ instance Pretty MangleError where
 class Mangle n where
   mangle :: (Data (n a), Typeable n, HasTypeHole a, HasPos a, Data a) => Annot n a -> Inferencer (Annot n a)
 
-mangledFromHoled :: (HasTypeHole a, HasPos a) => Bool -> a -> Inferencer (Maybe Text)
+mangledFromHoled :: (HasCallStack, HasTypeHole a, HasPos a) => Bool -> a -> Inferencer (Maybe Text)
 mangledFromHoled skipAddr holed = do
   typing <- State.getTyping (toTypeVar $ getTypeHole holed)
   case mangleType skipAddr typing of

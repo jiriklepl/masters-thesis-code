@@ -16,7 +16,7 @@ import safe Data.Text (Text)
 
 import safe CMM.Data.Bimap (Bimap)
 import safe CMM.Data.Bounds (Bounds)
-import CMM.Data.Nullable (Nullable(nullVal))
+import safe CMM.Data.Nullable (Nullable(nullVal))
 import safe CMM.Data.Trilean (Trilean)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.Constness (Constness)
@@ -35,7 +35,9 @@ import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import safe CMM.Inference.Settings ( InferencerSettings (InferencerSettings) )
+import CMM.Options (Options(Options))
+import qualified CMM.Options as Options
+import Data.Monoid
 
 data InferencerState =
   InferencerState
@@ -66,13 +68,15 @@ data InferencerState =
     , _schemes :: Map TypeVar (Scheme Type)
     -- ^ TODO
     , _lockedVars :: Map TypeVar Type
+    , _maxFunDeps :: Int
+    , _currentFunDeps :: Int
     , _currentParent :: [TypeVar]
     -- ^ TODO
     }
   deriving (Show)
 
-initInferencer :: InferencerSettings -> InferencerState
-initInferencer InferencerSettings {} =
+initInferencer :: Options -> InferencerState
+initInferencer Options {Options.maxFunDeps = maxFunDeps, Options.handleStart = handleCounter} =
   InferencerState
     { _subKinding = nullVal
     , _kindingBounds = nullVal
@@ -81,12 +85,14 @@ initInferencer InferencerSettings {} =
     , _unifs = nullVal
     , _typize = Bimap.empty
     , _handlize = nullVal
-    , _handleCounter = nullVal
+    , _handleCounter = Sum handleCounter
     , _classSchemes = nullVal
     , _classFacts = nullVal
     , _funDeps = nullVal
     , _errorState = nullVal
     , _schemes = nullVal
+    , _maxFunDeps = maxFunDeps
+    , _currentFunDeps = 0
     , _lockedVars = nullVal
     , _currentParent = [globalTVar]
     }

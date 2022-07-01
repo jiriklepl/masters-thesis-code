@@ -25,7 +25,6 @@ import safe CMM.AST.Variables.Error
   ( VariablesError
   , duplicateFunctionVariable
   , duplicateTypeConstant
-  , duplicateTypeVariable
   , duplicateVariable
   )
 import safe CMM.AST.Variables.State.Impl
@@ -82,7 +81,7 @@ addTAliasTrivial n tKind = n <$ addTAlias n tKind
 
 -- | adds a type variable to the `Collector`
 addTVar :: (HasPos n, GetName n) => n -> TypeKind -> Collector ()
-addTVar = addVarImpl typeVariables duplicateTypeVariable
+addTVar node tKind = typeVariables %= Map.insert (getName node) (getPos node, tKind)
 
 -- | adds a type variable to the `Collector` and return the given node
 addTVarTrivial :: (HasPos n, GetName n) => n -> TypeKind -> Collector n

@@ -14,11 +14,11 @@ import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Monomorphize.Schematized (Schematized)
-import CMM.Monomorphize.Settings ( MonomorphizerSettings(MonomorphizerSettings) )
 import CMM.Parser.HasPos ( SourcePos )
 import CMM.AST.Wrap ( ASTWrapper )
 import CMM.AST.Annot ( Annot )
-
+import CMM.Options (Options (Options))
+import qualified CMM.Options as Options
 newtype PolyMemory =
   PolyMemory
     { getPolyMemory :: Map TypeVar (Set Type)
@@ -83,8 +83,8 @@ data MonomorphizeState a =
 
 makeLenses ''MonomorphizeState
 
-initMonomorphizeState :: MonomorphizerSettings -> MonomorphizeState a
-initMonomorphizeState MonomorphizerSettings {} =
+initMonomorphizeState :: Options -> MonomorphizeState a
+initMonomorphizeState Options {Options.maxCycles = maxPolyWaves'} =
   MonomorphizeState
     { _polyGenerate = mempty
     , _polyData = mempty
@@ -93,7 +93,7 @@ initMonomorphizeState MonomorphizerSettings {} =
     , _polyMemory = mempty
     , _polyStorage = mempty
     , _polyWaves = 0
-    , _maxPolyWaves = 50
+    , _maxPolyWaves = maxPolyWaves'
     }
 
 type Monomorphizer a = State (MonomorphizeState a)

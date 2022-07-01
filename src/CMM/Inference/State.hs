@@ -49,7 +49,7 @@ pushParent parent = State.currentParent %= (parent :)
 popParent :: Inferencer ()
 popParent = State.currentParent %= tail
 
-getHandle :: TypeVar -> Inferencer TypeHandle
+getHandle :: HasCallStack => TypeVar -> Inferencer TypeHandle
 getHandle = fmap fromJust . tryGetHandle
 
 tryGetHandle :: TypeVar -> Inferencer (Maybe TypeHandle)
@@ -74,10 +74,10 @@ readConstingBounds tVar = uses State.constingBounds (readBoundsFrom tVar)
 readKindingBounds :: TypeVar -> Inferencer (Bounds DataKind)
 readKindingBounds tVar = uses State.kindingBounds (readBoundsFrom tVar)
 
-getKinding :: TypeVar -> Inferencer TypeVar
+getKinding :: HasCallStack => TypeVar -> Inferencer TypeVar
 getKinding tVar = view kinding <$> getHandle tVar
 
-getTyping :: TypeVar -> Inferencer Type
+getTyping :: HasCallStack => TypeVar -> Inferencer Type
 getTyping tVar = view typing <$> getHandle tVar
 
 collectPrimeTVars :: TypeVar -> Inferencer (Set TypeVar)

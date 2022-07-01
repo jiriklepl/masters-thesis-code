@@ -129,6 +129,9 @@ funDepsSimplify original = generalize composed []
     strengthened = strengthen decomposed []
     decomposed = decompose original
 
+isTrival :: [Trilean] -> Bool
+isTrival = all (==T.False)
+
 addTrivialDep :: [[Trilean]] -> [[Trilean]]
 addTrivialDep rules = case rules of
   [] -> []

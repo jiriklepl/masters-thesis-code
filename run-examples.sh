@@ -12,7 +12,7 @@ find examples -maxdepth 1 -mindepth 1 -name "*.chmmm" | {
         TOTAL=$((TOTAL+1))
         out="examples/out/$(basename "$file")"
         echo "doing $file" > /dev/stderr
-        if cabal run -v0 Compiler < "$file" > "$out"; then
+        if cabal run -v0 Compiler -- -o - - < "$file" > "$out"; then
             SUCCESS=$((SUCCESS+1))
         else
             FAILURE=$((FAILURE+1))

@@ -1,12 +1,11 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE Rank2Types #-}
 
--- TODO: add the overlap check for instances
 module CMM.Inference where
 
 
 import safe Control.Applicative (Applicative(liftA2))
-import safe Control.Lens (Lens')
+import safe Control.Lens (Lens', (+=))
 import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
 import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
 import safe Control.Lens.Traversal (both)
@@ -120,6 +119,7 @@ import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
 import safe CMM.Inference.Utils (fieldClassPrefix, trileanSeq, funDepsClassPrefix)
 import safe CMM.Utils (HasCallStack, addPrefix, getPrefix, hasPrefix)
 import safe qualified CMM.Inference.State.Impl as State
+import safe CMM.Err.State ( HasErrorState(errorState) )
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()
@@ -591,8 +591,16 @@ reduceConstraint (fact:facts) =
       , prefix == fieldClassPrefix || prefix == funDepsClassPrefix ->
         State.lookupFunDep name >>= \case
           Nothing -> undefined -- TODO: logic error
-          Just rules -> continueWith $ fmap go rules
-            where go rule =
+          Just rules -> do
+            State.currentFunDeps += 1
+            current <- use State.currentFunDeps
+            max' <- use State.maxFunDeps
+            if current < max'
+              then continueWith facts'
+              else return (False, facts' <> facts)
+            where
+              facts' = fmap go rules
+              go rule =
                     Fact $
                     classConstraint
                       (fromString (trileanSeq rule) `addPrefix` name)
@@ -616,7 +624,7 @@ reduceConstraint (fact:facts) =
                         else go accum others
                     [] ->
                       case accum of
-                        [h] -> continueWith h
+                        h:_ -> continueWith h
                         _ -> skip
             go mempty schemes'
     Fact (ClassFact name t) ->
@@ -656,9 +664,14 @@ reduceMany = repeatStep reduceTrivial >=> reduceTemplates . snd >=> go
 reduce :: Facts -> Inferencer (Bool, Facts)
 reduce facts = do
   (change, facts') <- reduceMany facts
-  let (facts'', sccs) = makeCallGraph facts'
-  (change', facts''') <- closeSCCs facts'' sccs
-  return (change || change', facts''')
+  errorState' <- use errorState
+  if errorState' /= nullVal
+    then return (change, facts')
+    else do
+      State.currentFunDeps .= 0
+      let (facts'', sccs) = makeCallGraph facts'
+      (change', facts''') <- closeSCCs facts'' sccs
+      return (change || change', facts''')
 
 minimizeSubs :: TypeVar -> Set TypeVar -> Inferencer ()
 minimizeSubs parent pTypeVars = do
@@ -978,7 +991,6 @@ closeSCCs facts (scc:others) =
         concat
       parents' <- uses State.unifs ((<$> parents) . apply)
       x <- Set.unions <$> State.collectPrimeTVarsAll `traverse` parents'
-      --  error $ show x
       minimizeSubs parent x
       minimizeFree x
       _ <- fixAll
@@ -1010,12 +1022,12 @@ makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
       case fact of
         NestedFact (_ :. [Union (VarType tVar) _] :=> fs) ->
           _2 %~ ((fact, tVar, foldr out [] fs) :)
-        NestedFact (_ :. [Union {}] :=> _) -> undefined -- TODO: logic error, broken contract
+        NestedFact (_ :. [Union {}] :=> _) -> undefined -- logic error, broken contract
         _ -> _1 %~ (fact :)
     out fact =
       case fact of
         Fact (InstType (VarType scheme) _) -> (scheme :)
-        Fact InstType {} -> undefined -- TODO: logic error, broken contract
+        Fact InstType {} -> undefined -- logic error, broken contract
         _ -> id
 
 collectCounts :: Facts -> Subst Int
@@ -1026,7 +1038,7 @@ collectCounts = foldr countIn mempty
         NestedFact (_ :. [Union (VarType tVar) _] :=> _) ->
           Map.insertWith (+) tVar 1
         NestedFact (_ :. [Union {}] :=> _) ->
-          undefined -- TODO: logic error, broken contract
+          undefined -- logic error, broken contract
         _ -> id
 
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]

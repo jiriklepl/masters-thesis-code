@@ -2,7 +2,7 @@
 
 module CMM.Inference.HandleCounter where
 
-import safe Control.Lens.Getter (uses)
+import safe Control.Lens.Getter (uses, view, Getting)
 import safe Control.Lens.Setter ((+=), (.=))
 import safe Control.Lens.Type (Lens')
 import safe Control.Monad.State (MonadState)
@@ -23,6 +23,9 @@ class a ~ HandleCounter =>
 
 instance HasHandleCounter HandleCounter HandleCounter where
   handleCounter = id
+
+readHandleCounter :: HasHandleCounter s a => s -> Int
+readHandleCounter = getSum . view handleCounter
 
 getHandleCounter :: (MonadState s m, HasHandleCounter s a) => m Int
 getHandleCounter = uses handleCounter getSum
