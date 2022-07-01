@@ -41,7 +41,7 @@ import safe CMM.Pretty
   , maybeSpacedR
   )
 import safe CMM.Utils (backQuote, HasCallStack)
-import CMM.Lexer.Token hiding (StrLit, Foreign, Targets, Writes, Reads, Struct, Export, Big, Little, Class, Instance, Import)
+import safe qualified CMM.Lexer.Token as T
 
 newtype Unit a =
   Unit [Annot TopLevel a]
@@ -68,7 +68,7 @@ deriving instance Eq (TopLevel ())
 instance Pretty (TopLevel a) where
   pretty =
     \case
-      TopSection name items -> sectionName <+> pretty name <+> bracesBlock items
+      TopSection name items -> T.sectionName <+> pretty name <+> bracesBlock items
       TopDecl decl -> pretty decl
       TopProcedure procedure -> pretty procedure
       TopClass class' -> pretty class'
@@ -108,19 +108,19 @@ deriving instance Eq (Decl ())
 instance Pretty (Decl a) where
   pretty =
     \case
-      ImportDecl imports -> importName <+> commaPretty imports <> semi
-      ExportDecl exports -> exportName <+> commaPretty exports <> semi
+      ImportDecl imports -> T.importName <+> commaPretty imports <> semi
+      ExportDecl exports -> T.exportName <+> commaPretty exports <> semi
       ConstDecl mType name expr ->
-        constName <+>
+        T.constName <+>
         maybeSpacedR mType <> pretty name <+> equals <+> pretty expr <> semi
       TypedefDecl type' names ->
-        typedefName <+> pretty type' <+> commaPretty names <> semi
+        T.typedefName <+> pretty type' <+> commaPretty names <> semi
       RegDecl invar registers ->
-        ifTrue invar (invariantName <> space) <> pretty registers <> semi
+        ifTrue invar (T.invariantName <> space) <> pretty registers <> semi
       PragmaDecl name pragma ->
-        pragmaName <+> pretty name <+> braces (pretty pragma)
+        T.pragmaName <+> pretty name <+> braces (pretty pragma)
       TargetDecl targetDirectives ->
-        targetName <+> hsep (pretty <$> targetDirectives) <> semi
+        T.targetName <+> hsep (pretty <$> targetDirectives) <> semi
 
 data Class a =
   Class
@@ -133,7 +133,7 @@ deriving instance Eq (Class ())
 
 instance Pretty (Class a) where
   pretty class' =
-    className <+>
+    T.className <+>
     case class' of
       Class [] paraName methods -> pretty paraName <+> bracesBlock methods
       Class paraNames paraName methods ->
@@ -151,7 +151,7 @@ deriving instance Eq (Instance ())
 
 instance Pretty (Instance a) where
   pretty instance' =
-    instanceName <+>
+    T.instanceName <+>
     case instance' of
       Instance [] paraName methods -> pretty paraName <+> bracesBlock methods
       Instance paraNames paraName methods ->
@@ -168,7 +168,7 @@ instance Pretty (Struct a) where
   pretty =
     \case
       Struct paraName datums ->
-        structName <+> pretty paraName <+> inBraces (prettyDatums datums)
+        T.structName <+> pretty paraName <+> inBraces (prettyDatums datums)
 
 data ParaName param a =
   ParaName (Name a) [Annot param a]
@@ -192,15 +192,15 @@ data TargetDirective a
 instance Pretty (TargetDirective a) where
   pretty =
     \case
-      MemSize int -> memsizeName <+> pretty int
+      MemSize int -> T.memsizeName <+> pretty int
       ByteOrder endian ->
-        byteorderName <+>
+        T.byteorderName <+>
         (\case
-           Little -> littleName
-           Big -> bigName)
+           Little -> T.littleName
+           Big -> T.bigName)
           endian
-      PointerSize int -> pointersizeName <+> pretty int
-      WordSize int -> wordsizeName <+> pretty int
+      PointerSize int -> T.pointersizeName <+> pretty int
+      WordSize int -> T.wordsizeName <+> pretty int
 
 data Import a =
   Import (Maybe StrLit) (Name a)
@@ -209,7 +209,7 @@ data Import a =
 instance Pretty (Import a) where
   pretty =
     \case
-      Import (Just string) name -> pretty string <+> asName <+> pretty name
+      Import (Just string) name -> pretty string <+> T.asName <+> pretty name
       Import Nothing name -> pretty name
 
 data Export a =
@@ -219,7 +219,7 @@ data Export a =
 instance Pretty (Export a) where
   pretty =
     \case
-      Export name (Just string) -> pretty name <+> asName <+> pretty string
+      Export name (Just string) -> pretty name <+> T.asName <+> pretty string
       Export name Nothing -> pretty name
 
 data Endian
@@ -230,8 +230,8 @@ data Endian
 instance Pretty Endian where
   pretty =
     \case
-      Little -> littleName
-      Big -> bigName
+      Little -> T.littleName
+      Big -> T.bigName
 
 data Datum a
   = DatumLabel (Name a)
@@ -245,9 +245,9 @@ instance Pretty (Datum a) where
   pretty =
     \case
       DatumLabel name -> pretty name <> colon
-      DatumAlign int -> alignName <+> pretty int <> semi
+      DatumAlign int -> T.alignName <+> pretty int <> semi
       Datum new type' mSize mInit ->
-        ifTrue new (newName <> space) <>
+        ifTrue new (T.newName <> space) <>
         pretty type' <>
         maybe mempty pretty mSize <> maybe mempty pretty mInit <> semi
 
@@ -271,7 +271,7 @@ instance Pretty (Init a) where
     \case
       ExprInit exprs -> braces $ commaPretty exprs
       StrInit string -> pretty string
-      Str16Init string -> unicodeName <> parens (dquotes $ pretty string)
+      Str16Init string -> T.unicodeName <> parens (dquotes $ pretty string)
 
 data Registers a =
   Registers (Maybe Kind) (Annot Type a) [(Annot Name a, Maybe StrLit)] -- at least one
@@ -382,7 +382,7 @@ instance Pretty (Formal a) where
     \case
       Formal mKind invar type' name ->
         maybeSpacedR mKind <>
-        ifTrue invar (invariantName <> space) <> pretty type' <+>
+        ifTrue invar (T.invariantName <> space) <> pretty type' <+>
         pretty name
 
 data SemiFormal a =
@@ -425,7 +425,7 @@ deriving instance Eq (StackDecl ())
 instance Pretty (StackDecl a) where
   pretty =
     \case
-      StackDecl datums -> stackdataName <+> inBraces (prettyDatums datums)
+      StackDecl datums -> T.stackdataName <+> inBraces (prettyDatums datums)
 
 data Stmt a
   = EmptyStmt
@@ -463,13 +463,13 @@ instance Pretty (Stmt a) where
     case stmt of
       EmptyStmt -> semi
       IfStmt cond ifBody mElseBody ->
-        ifName <+>
+        T.ifName <+>
         pretty cond <+>
         pretty ifBody <>
-        maybe mempty ((space <>) . (elseName <+>) . pretty) mElseBody
-      SwitchStmt expr arms -> switchName <+> pretty expr <+> bracesBlock arms
+        maybe mempty ((space <>) . (T.elseName <+>) . pretty) mElseBody
+      SwitchStmt expr arms -> T.switchName <+> pretty expr <+> bracesBlock arms
       SpanStmt left right body ->
-        spanName <+> pretty left <+> pretty right <+> pretty body
+        T.spanName <+> pretty left <+> pretty right <+> pretty body
       AssignStmt lvalues exprs ->
         commaPretty lvalues <+> equals <+> commaPretty exprs <> semi
       PrimOpStmt left opName actuals flows ->
@@ -483,12 +483,12 @@ instance Pretty (Stmt a) where
         commaPretty kindedNames <+>
         equals <> maybeSpacedL mConv <+> prettyCallStmtRest stmt
       JumpStmt mConv expr actuals mTargets ->
-        jumpName <+>
+        T.jumpName <+>
         maybeSpacedR mConv <>
         pretty expr <>
         parens (commaPretty actuals) <> maybeSpacedL mTargets <> semi
       ReturnStmt mConv mChoices actuals ->
-        maybeSpacedR mConv <> returnName <+>
+        maybeSpacedR mConv <> T.returnName <+>
         maybe
           mempty
           (\(left, right) -> angles $ pretty left <> slash <> pretty right)
@@ -496,13 +496,13 @@ instance Pretty (Stmt a) where
         parens (commaPretty actuals) <> semi
       LabelStmt name -> pretty name <> colon
       ContStmt name kindedNames ->
-        continuationName <+>
+        T.continuationName <+>
         pretty name <> parens (commaPretty kindedNames) <> colon
       GotoStmt expr mTargets ->
-        gotoName <+> pretty expr <> maybeSpacedL mTargets <> semi
+        T.gotoName <+> pretty expr <> maybeSpacedL mTargets <> semi
       CutToStmt expr actuals flows ->
-        cutName <+>
-        toName <+>
+        T.cutName <+>
+        T.toName <+>
         pretty expr <>
         parens (commaPretty actuals) <> hsep (pretty <$> flows) <> semi
 
@@ -535,7 +535,7 @@ deriving instance Eq (Arm ())
 instance Pretty (Arm a) where
   pretty =
     \case
-      Arm ranges body -> caseName <+> commaPretty ranges <> colon <+> pretty body
+      Arm ranges body -> T.caseName <+> commaPretty ranges <> colon <+> pretty body
 
 data Range a =
   Range (Annot Expr a) (Maybe (Annot Expr a))
@@ -577,11 +577,11 @@ data Flow a
 instance Pretty (Flow a) where
   pretty =
     \case
-      AlsoCutsTo names -> alsoName <+> cutsName <+> toName <+> commaPretty names
-      AlsoUnwindsTo names -> alsoName <+> unwindsName <+> toName <+> commaPretty names
-      AlsoReturnsTo names -> alsoName <+> returnsName <+> toName <+> commaPretty names
-      AlsoAborts -> alsoName <+> abortsName
-      NeverReturns -> neverName <+> returnsName
+      AlsoCutsTo names -> T.alsoName <+> T.cutsName <+> T.toName <+> commaPretty names
+      AlsoUnwindsTo names -> T.alsoName <+> T.unwindsName <+> T.toName <+> commaPretty names
+      AlsoReturnsTo names -> T.alsoName <+> T.returnsName <+> T.toName <+> commaPretty names
+      AlsoAborts -> T.alsoName <+> T.abortsName
+      NeverReturns -> T.neverName <+> T.returnsName
 
 data Alias a
   = Reads [Annot Name a]
@@ -591,8 +591,8 @@ data Alias a
 instance Pretty (Alias a) where
   pretty =
     \case
-      Reads names -> readsName <+> commaPretty names
-      Writes names -> writesName <+> commaPretty names
+      Reads names -> T.readsName <+> commaPretty names
+      Writes names -> T.writesName <+> commaPretty names
 
 data CallAnnot a
   = FlowAnnot (Annot Flow a)
@@ -614,7 +614,7 @@ newtype Targets a =
 instance Pretty (Targets a) where
   pretty =
     \case
-      Targets names -> targetsName <+> commaPretty names
+      Targets names -> T.targetsName <+> commaPretty names
 
 data Expr a
   = LitExpr (Annot Lit a) (Maybe (Annot Type a))
@@ -670,10 +670,10 @@ data Type a
 instance Pretty (Type a) where
   pretty =
     \case
-      TBits int -> bitsName <> pretty int
+      TBits int -> T.bitsName <> pretty int
       TName name -> pretty name
-      TAuto mName -> autoName <> maybe mempty (parens . pretty) mName
-      TPtr t -> ptrName <> parens (pretty t)
+      TAuto mName -> T.autoName <> maybe mempty (parens . pretty) mName
+      TPtr t -> T.ptrName <> parens (pretty t)
       TPar paraType -> parens $ pretty paraType
 
 data ParaType a =
@@ -692,7 +692,7 @@ newtype Conv =
 instance Pretty Conv where
   pretty =
     \case
-      Foreign string -> foreignName <+> pretty string
+      Foreign string -> T.foreignName <+> pretty string
 
 data Asserts a
   = AlignAssert Int [Annot Name a]
@@ -702,10 +702,10 @@ data Asserts a
 instance Pretty (Asserts a) where
   pretty =
     \case
-      AlignAssert int [] -> alignedName <+> pretty int
+      AlignAssert int [] -> T.alignedName <+> pretty int
       AlignAssert int names ->
-        alignedName <+> pretty int <+> inName <+> commaPretty names
-      InAssert names mInt -> inName <+> commaPretty names <> maybeSpacedL mInt
+        T.alignedName <+> pretty int <+> T.inName <+> commaPretty names
+      InAssert names mInt -> T.inName <+> commaPretty names <> maybeSpacedL mInt
 
 data Op
   = AddOp
@@ -774,4 +774,4 @@ instance Show (Pragma a) where
   show = error "pragmas are not implemented"
 
 instance Pretty (Pragma a) where
-  pretty _ = error $ backQuote pragmaName <> "s are not specified" -- FIXME: pragmas are not specified
+  pretty _ = error $ backQuote T.pragmaName <> "s are not specified" -- FIXME: pragmas are not specified

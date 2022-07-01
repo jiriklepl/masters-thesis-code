@@ -9,7 +9,7 @@ import safe CMM.AST (Conv)
 import safe CMM.AST.GetConv (GetConv(getConv))
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.Preprocess.TypeHole
-  ( HasTypeHole(getTypeHole)
+  ( HasTypeHole(getTypeHole, setTypeHole)
   , TypeHole
   )
 import safe CMM.Inference.Type (Type)
@@ -29,6 +29,7 @@ instance GetName Context where
 
 instance HasTypeHole Context where
   getTypeHole = ctxHole
+  setTypeHole s ctx = ctx{ctxHole=s}
 
 instance GetConv Context where
   getConv = \case

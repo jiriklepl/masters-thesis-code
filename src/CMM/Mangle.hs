@@ -4,33 +4,33 @@
 module CMM.Mangle where
 
 import safe qualified CMM.Inference.State as State
-import safe qualified CMM.Inference
 import safe qualified CMM.AST as AST
 
-import safe CMM.Inference.State (Inferencer)
-import CMM.AST.Annot
-import CMM.Inference.Preprocess.TypeHole
-import Data.Data
-import Data.Generics.Aliases
-import CMM.Parser.HasPos
-import CMM.AST.BlockAnnot
-import CMM.Inference.TypeVar
-import CMM.Inference.Type
-import CMM.Inference.TypeCompl
-import Control.Lens
-import CMM.FillHoles
+import safe CMM.Inference.State.Impl ( Inferencer )
+import safe CMM.AST.Annot ( Annot, Annotation(Annot) )
+import safe CMM.Inference.Preprocess.TypeHole
+    ( HasTypeHole(getTypeHole),
+      TypeHole(MethodTypeHole, LVInstTypeHole, SimpleTypeHole) )
+import safe Data.Data ( Data(gmapM), Typeable )
+import safe Data.Generics.Aliases ( extM )
+import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.Inference.TypeVar ( ToTypeVar(toTypeVar) )
+import safe qualified CMM.Inference.Type as Ty
+import safe CMM.Inference.TypeCompl
+    ( TypeCompl(VoidType, TupleType, FunctionType, AppType, AddrType,
+                ConstType, StringType, String16Type, LabelType, TBitsType,
+                BoolType) )
 import Data.Text (Text)
 import qualified Data.Text as T
-import CMM.AST.GetName
-import Data.Foldable
+import safe CMM.AST.GetName ( GetName(getName) )
 import Data.String (IsString)
-import CMM.Err.IsError
-import Prettyprinter
-import CMM.Parser.ASTError
-import Data.Maybe
+import safe CMM.Err.IsError ( IsError )
+import safe Prettyprinter ( (<+>), Pretty(pretty) )
+import safe CMM.Parser.ASTError ( registerASTError )
+import safe Data.Maybe ( fromMaybe )
 
 data MangleError
-  = NonConcreteType Type
+  = NonConcreteType Ty.Type
   | IllegalTypeInformation TypeHole
   deriving (Show, Eq, IsError, Data)
 
@@ -56,11 +56,11 @@ mangledFromHoled skipAddr holed = do
 enclosed :: (Semigroup a, IsString a) => a -> a
 enclosed txt = "$L" <> txt <> "R$"
 
-mangleType :: Bool -> Type -> Maybe Text
+mangleType :: Bool -> Ty.Type -> Maybe Text
 mangleType skipAddr = \case
-    ErrorType {} -> undefined
-    VarType {} -> undefined
-    ComplType tc -> case tc of
+    Ty.ErrorType {} -> undefined
+    Ty.VarType {} -> undefined
+    Ty.ComplType tc -> case tc of
       TupleType types -> do
         types' <- traverse (mangleType False) types
         return $ "t" <> enclosed (T.concat types')

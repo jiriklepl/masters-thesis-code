@@ -26,7 +26,8 @@ import safe CMM.Inference.Subst ( Apply(apply), Subst )
 import safe CMM.Inference ( simplify )
 import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
 import Data.Functor ((<&>))
-import CMM.Inference.Preprocess.TypeHole
+import safe CMM.Inference.Preprocess.TypeHole
+    ( setHoleHandle, HasTypeHole(getTypeHole, setTypeHole), TypeHole(EmptyTypeHole) )
 
 data Absurdity =
   Absurdity
