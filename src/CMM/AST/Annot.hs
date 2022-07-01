@@ -7,7 +7,7 @@ import safe Data.Functor (void)
 
 import safe Prettyprinter (Pretty(pretty))
 
-import safe CMM.Inference.Preprocess.TypeHole (HasTypeHole(getTypeHole))
+import safe CMM.Inference.Preprocess.TypeHole (HasTypeHole(getTypeHole, setTypeHole))
 import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
 import safe CMM.Parser.HasPos (HasPos(getPos))
@@ -23,6 +23,7 @@ deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
 
 instance HasTypeHole a => HasTypeHole (Annot n a) where
   getTypeHole = getTypeHole . takeAnnot
+  setTypeHole s (n `Annot` a) =  n `Annot` setTypeHole s a
 
 instance HasTypeHole a => ToType (Annot n a) where
   toType = toType . getTypeHole

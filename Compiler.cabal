@@ -81,7 +81,6 @@ executable Compiler
                        CMM.Data.Bimap,
                        CMM.Data.Bounds,
                        CMM.Data.Bounds.Impl,
-                       CMM.Data.Church,
                        CMM.Data.Dioid,
                        CMM.Data.Either,
                        CMM.Data.Float,
