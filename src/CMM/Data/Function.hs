@@ -17,3 +17,6 @@ fAnd f g x = f x && g x
 
 applyAll :: [a -> a] -> a -> a
 applyAll fs a = foldl' (&) a fs
+
+(.>) :: (a -> b) -> (b -> c) -> a -> c
+(.>) = flip (.)

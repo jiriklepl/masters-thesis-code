@@ -102,39 +102,41 @@ runAll fileName options contents = do
   if prettify options
     then return . (,nullVal) . show $ pretty ast
     else if monosrc options
-      then second ((,nullVal) . show . pretty) $ runInferMono options ast
+      then do
+        (ast'', _, errState) <- runInferMono options ast
+        return . (,errState)  . show . pretty $ ast''
       else do
-      (ast', bState, errState) <- runFlatBlock ast
-      (ast'', errState') <- runInferMono options ast'
-      let
-        moduleBuilder = runFreshIRBuilderT $ translate ast''
-        translator = execFreshModuleBuilderT moduleBuilder
-        translated =
-          evalState translator $
-            Tr.initTranslState
-              { Tr._controlFlow = B._allFlow bState
-              , Tr._blockData = B._allData bState
-              , Tr._blocksTable =
-                  Map.fromList . Map.toList $
-                  B._allBlocks bState
-              , Tr._offSets = B._numBlocks bState
-              }
-
-        module' = defaultModule { moduleName = "", moduleDefinitions = translated }
-        prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
-      return . (,errState <> errState'). show $ pretty  prettyprinted
+        (ast', bState, errState) <- runFlatBlock ast
+        (ast'', iState, errState') <- runInferMono options ast'
+        let
+          moduleBuilder = runFreshIRBuilderT $ translate ast''
+          translator = execFreshModuleBuilderT moduleBuilder
+          translated =
+            evalState translator $
+              Tr.initTranslState
+                { Tr._controlFlow = B._allFlow bState
+                , Tr._blockData = B._allData bState
+                , Tr._blocksTable =
+                    Map.fromList . Map.toList $
+                    B._allBlocks bState
+                , Tr._offSets = B._numBlocks bState
+                , Tr._inferencer = iState
+                }
+          module' = defaultModule { moduleName = "", moduleDefinitions = translated }
+          prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
+        return . (,errState <> errState'). show $ pretty  prettyprinted
 
 runFlatBlock :: (Blockify n a (a, BlockAnnot), HasPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot), BlockifierState, ErrorState)
 runFlatBlock ast =
   blockifier $ flattener ast
 
-runInferMono :: (HasPos a, HasPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), ErrorState)
+runInferMono :: (HasPos a, HasPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), InferencerState, ErrorState)
 runInferMono options ast = do
   ((prepAST, facts), pState, errState) <- preprocessor options ast
   ((),iState, errState') <- inferencer options{handleStart=readHandleCounter pState} prepAST facts
   (monoAST, (iState', _)) <- monomorphizer options iState prepAST
-  (ast', _, errState'') <- postprocessor iState' monoAST
-  return (ast', errState <> errState' <> errState'')
+  (ast', iState'', errState'') <- postprocessor iState' monoAST
+  return (ast', iState'', errState <> errState' <> errState'')
 
 tokenizer :: String
   -> Text

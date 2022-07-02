@@ -12,7 +12,9 @@ import safe qualified LLVM.AST.Operand as L
 
 import safe CMM.AST.BlockAnnot (BlockData)
 import safe CMM.Err.State (ErrorState)
-import qualified LLVM.AST.Name as L
+import qualified CMM.Inference.Type as Ty
+import safe qualified LLVM.AST.Name as L
+import safe CMM.Inference.State ( InferencerState )
 
 data TranslState =
   TranslState
@@ -23,6 +25,8 @@ data TranslState =
     , _errorState :: ErrorState
     , _offSets :: Map Int Int
     , _rename :: Map L.Name L.Name
+    , _inferencer :: InferencerState
+    , _structs :: Map Text ([(Text, Int)], [Ty.Type])
     }
 
 makeFieldsNoPrefix ''TranslState
@@ -37,4 +41,6 @@ initTranslState =
     , _errorState = mempty
     , _offSets = mempty
     , _rename = mempty
+    , _inferencer = undefined
+    , _structs = undefined
     }
