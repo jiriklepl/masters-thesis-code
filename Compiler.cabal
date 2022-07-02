@@ -156,7 +156,8 @@ executable Compiler
                        mtl ^>=2.2.2,
                        partial-order ^>=0.2.0.0,
                        syb ^>=0.7.2.1,
-                       optparse-applicative ^>=0.17.0.0
+                       optparse-applicative ^>=0.17.0.0,
+                       vector ^>=0.13.0.0
   hs-source-dirs:      src
 
 Test-Suite parser-testsuite

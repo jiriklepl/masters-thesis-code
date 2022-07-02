@@ -1,5 +1,4 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE RecursiveDo #-}
 
 {-|
 Module      : CMM.Translator
@@ -30,6 +29,7 @@ import safe qualified LLVM.AST.Constant as L
 import safe qualified LLVM.AST.IntegerPredicate as L
 import safe qualified LLVM.AST.Name as L
 import safe qualified LLVM.AST.Operand as L
+import safe qualified LLVM.AST.Instruction as LI
 import safe qualified LLVM.AST.Type as L
 import qualified LLVM.AST.Typed as L
 import qualified LLVM.IRBuilder.Constant as L
@@ -46,6 +46,17 @@ import safe CMM.Lens
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
 import safe CMM.Translator.State
+import Debug.Trace
+import Data.Tuple.Extra (first)
+import Prettyprinter
+import CMM.Data.Function
+import qualified Data.Vector as V
+import Data.Vector (Vector)
+import safe Data.Map (Map)
+import CMM.Data.Tuple
+import Data.Maybe
+import qualified LLVM.IRBuilder.Internal.SnocList as L
+import Data.Generics
 
 type MonadTranslator m
    = ( L.MonadIRBuilder m
@@ -54,7 +65,7 @@ type MonadTranslator m
      , MonadState TranslState m
       )
 
-type OutVar = (Text, Int, L.Operand)
+type OutVar = (Text, L.Operand)
 
 type OutVars = [OutVar]
 
@@ -63,20 +74,6 @@ translateName = L.mkName . T.unpack . getName
 
 translateParName :: GetName n => n -> L.ParameterName
 translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
-
--- TODO: maybe change the name to `endBlock` or something...
-pushVariables ::
-     (MonadTranslator m) => Annot n a -> m OutVars
-pushVariables (Annot _ _) = do
-  currentBlock `exchange` Nothing >>= \case
-    Just idx -> do
-      ~(h:t) <- use variables
-      variables .= t
-      return $ (\(v, o) -> (v, idx, o)) <$> Map.toList h
-    Nothing
-     -> do
-      variables %= tail
-      return mempty
 
 setCurrentBlock :: MonadState TranslState m => Int -> m ()
 setCurrentBlock n = currentBlock ?= n
@@ -112,68 +109,107 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
         \case
           Begins idx -> do
             formals' <- traverse translate formals
-            currentBlock ?= idx
-            L.function (translateName name) formals' L.i32 $ \pars ->
-               do blockName <- uses blocksTable (Map.! idx)
+            f <- L.function (translateName name) formals' L.i32 $ \pars ->
+               do rename .= mempty
+                  blockName <- uses blocksTable (Map.! idx)
                   L.emitBlockStart . fromString $ T.unpack blockName
-                  let newVars = Map.fromList (zip (getName <$> formals) pars)
-                  variables %= (newVars :)
-                  rec exports <-
-                        (\exports' ->
-                          liftA2
-                            (<>)
-                            (translate body exports')
-                            (pushVariables body))
-                          exports
-                  variables %= tail
+                  rename' <- translate body idx . Map.fromList $ zip formalNames pars
+                  rename .= rename'
+                  L.modifyBlock $ \bb -> bb
+                    { L.partialBlockInstrs = L.SnocList $ L.unSnocList (L.partialBlockInstrs bb) & renameGeneric rename'
+                    , L.partialBlockTerm = L.partialBlockTerm bb & renameGeneric rename'
+                    }
+                  L.liftIRState $ modify $ \s -> s
+                    { L.builderBlocks =  L.SnocList $ L.unSnocList (L.builderBlocks s) & renameGeneric rename'
+                    , L.builderSupply = fromInteger $ toInteger (L.builderSupply s) - toInteger (Map.size rename')
+                    }
+            traceShowM f
+            return f
           _ -> undefined -- TODO: add nice error message for completeness
+        where formalNames = getName <$> formals
+
+applyRename :: Ord k => Map k k -> k -> Maybe k
+applyRename subst name = Map.lookup name subst
+
+renameGeneric :: Data d => Map L.Name L.Name -> d -> d
+renameGeneric subst = go
+  where
+    go :: Data d => d -> d
+    go = gmapT go `extT` nameCase
+    nameCase (name :: L.Name) = case applyRename subst name of
+      Just renamed -> renamed
+      Nothing -> case name of
+        L.UnName int -> L.UnName . fromInteger $ toInteger int  - toInteger (Map.size (Map.filterWithKey(\k _ -> k < name) subst))
+        _ -> name
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m Body a (OutVars -> m OutVars) where
-  translate (Annot (Body []) _) _ = return mempty
-  translate (Annot (Body items) _) exports =
-    fold <$> traverse (`translate` exports) items
-
-instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m BodyItem a (OutVars -> m OutVars) where
-  translate (Annot (BodyDecl decl) _) _ = translate decl $> mempty -- TODO ?
-  translate (Annot (BodyStackDecl stackDecl) _) _ =
-    translate stackDecl $> mempty -- TODO ?
-  translate (Annot (BodyStmt stmt) annot) exports = go $ getBlockAnnot annot
+         Translate m Body a (Int -> Map Text L.Operand ->m (Map L.Name L.Name)) where
+  translate (Annot (Body []) _) _ _ = return mempty
+  translate (Annot (Body items) _) zero newVars = do
+    off <- uses offSets $ fromJust . Map.lookup zero
+    blockData' <- uses blockData $ Map.filterWithKey $ \k _ -> k >= zero && k < zero + off
+    let vars = blockData' <&> Map.keys . Map.filter ((^. _3) `fOr` (^. _2))
+    exports <- Map.elems <$> traverse (traverse $ \v -> (v,) . L.LocalReference L.i32  <$> L.freshName (fromString $ T.unpack v)) (Map.delete zero vars)
+    newVars' <- translateMany header newVars
+    nVars'' <- traverse (translateBlock zero (Map.toList newVars') $ V.fromList exports) (V.fromList blocks)
+    let
+      unOperand (L.LocalReference _ name) = name
+      unOperand _ = undefined
+    return . Map.fromList $ zip (unOperand . snd <$> concat (V.toList nVars'')) (unOperand . snd <$> concat exports)
     where
-      go =
-        \case
-          Begins idx -> do
-            vars <-
-              uses blockData (idx `Map.lookup`) <&>
-              maybe [] (Map.keys . Map.filter (^. _3))
-            from <- uses controlFlow $ (fst <$>) . filter (\(_, t) -> t == idx)
-            names <- use blocksTable
-            exports' <- pushVariables stmt
-            setCurrentBlock idx
-            variables %= (mempty :)
-            stmt' <- translate stmt
-            blockData' <- use blockData
-            sequence_
-              [ do o <-
-                     L.phi $
-                     [ let Just source =
-                             (\(v', f', _) -> v' == v && f' == f) `find` exports
-                        in (source ^. _3, L.mkName . T.unpack $ names Map.! f)
-                     | f <- from, let export = blockData' Map.! f Map.! v, view _2 export
-                     ]
-                   ~(h:t) <- use variables
-                   variables .= Map.insert v o h : t
-              | v <- vars
+      (header, body) = tillNext items -- header = the rest of the entry block of the procedure
+      blocks = splitBlocks body
+      splitBlocks [] =[]
+      splitBlocks (item:items')
+        | Begins idx <- getBlockAnnot item = (item:part, idx) : splitBlocks rest
+        where (part, rest) = tillNext items'
+      splitBlocks _ = undefined
+      tillNext items'@(item:rest)
+        | Begins {} <- annot = ([], items')
+        | Unreachable {} <- annot = tillNext rest
+        | NoBlock {} <- annot = tillNext rest
+        where annot = getBlockAnnot item
+      tillNext (item:items') = first (item:) $ tillNext items'
+      tillNext [] = ([], [])
+
+translateBlock :: (MonadTranslator m, HasBlockAnnot a, HasPos a) => Int ->  OutVars -> Vector OutVars -> ([Annot BodyItem a], Int) -> m OutVars
+translateBlock zero entry exports (~(item:items), idx) = do
+  vars <- uses blockData (idx `Map.lookup`) <&> maybe [] (Map.keys . Map.filter (^. _3))
+  from <- uses controlFlow $ (fst <$>) . filter (\(_, t) -> t == idx)
+  names <- use blocksTable
+  nVars <- translate item mempty
+  nVars' <- Map.fromList <$> sequence
+    [ do
+        let sourceList =
+              [ let source =
+                      fromJust $ find (\(v', _) -> v' == v) $ if f == zero
+                        then entry
+                        else exports V.! (f - zero - 1)
+                    mkRecord s = (s, L.mkName . T.unpack $ names Map.! f)
+                in mkRecord $ source ^. _2
+              | f <- from
               ]
-            return $ exports' <> stmt'
-          Unreachable -> return mempty
-          _ -> translate stmt
+        o <- L.phi sourceList
+        return (v, o)
+    | v <- vars
+    ]
+  Map.toList <$> translateMany items (nVars' `Map.union` nVars)
+
+translateMany :: (Translate m1 n a1 (a2 -> m2 a2), Monad m2) => [Annot n a1] -> a2 -> m2 a2
+translateMany [] vars = return vars
+translateMany (item:items) vars = translate item vars >>= translateMany items
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m Decl a (m ()) -- TODO: continue from here
+         Translate m BodyItem a (Map Text L.Operand -> m (Map Text L.Operand)) where
+  translate (Annot (BodyDecl decl) _) = translate decl -- TODO ?
+  translate (Annot (BodyStackDecl stackDecl) _) =
+    translate stackDecl -- TODO ?
+  translate (Annot (BodyStmt stmt) _) = translate stmt
+
+instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
+         Translate m Decl a (Map Text L.Operand -> m (Map Text L.Operand)) -- TODO: continue from here
                                                                where
-  translate _ = return () -- TODO: continue from here
+  translate _ = return -- TODO: continue from here
 
 {- |
 Guarantees:
@@ -186,51 +222,59 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
     traverse_ translate topLevels
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m Stmt a (m OutVars) where
-  translate (Annot EmptyStmt _) = return mempty
-  translate (Annot (LabelStmt name) _) =
-    (L.emitBlockStart . fromString . T.unpack . getName) name $> mempty
-  translate (Annot (IfStmt c t (Just e)) _) -- TODO: Nothing is compilation pipeline error
-   = do
-    let Just tLab = getTrivialGotoTarget t
-        Just eLab = getTrivialGotoTarget e
-    c' <- translate c
-    L.condBr c' (L.mkName $ T.unpack tLab) (L.mkName $ T.unpack eLab)
-    return mempty
-  translate (Annot (SwitchStmt _ _) _) = return mempty -- TODO: this is taxing
-  translate (Annot (AssignStmt lvalues exprs) _) = do
-    assigns <- zipWithM translPair lvalues exprs -- TODO: check for duplicates -> error (also, check if modifiable)
-    ~(vars:rest) <- use variables
-    variables .= Map.fromList assigns <> vars : rest -- TODO: traverse all frames (assignments to global registers)
-    return mempty
-    where
-      translPair (Annot (LVName n) _) e = (getName n, ) <$> translate e
-      translPair (Annot LVRef {} _) _ = error "not implemented yet" -- TODO: make case for lvref
-  translate (Annot stmt@(GotoStmt _ Nothing) _) -- TODO: do other cases
-   = do
-    let Just lab = getTrivialGotoTarget stmt -- TODO: is this safe?
-    L.br (L.mkName $ T.unpack lab)
-    return mempty
-  translate (Annot (ReturnStmt Nothing Nothing [actual]) _) -- TODO: do others
-   = do
-    ret <- translate actual
-    L.ret ret $> mempty
-  translate _ = return mempty -- TODO: remove this
-
+         Translate m Stmt a (Map Text L.Operand -> m (Map Text L.Operand)) where
+  translate (stmt `Annot` annot) vars = case stmt of
+    EmptyStmt -> return vars
+    IfStmt {}
+      | IfStmt c t (Just e) <- stmt -> do
+          let Just tLab = getTrivialGotoTarget t
+              Just eLab = getTrivialGotoTarget e
+          c' <- translate c vars
+          L.condBr c' (L.mkName $ T.unpack tLab) (L.mkName $ T.unpack eLab)
+          return vars
+      | otherwise -> error "internal inconsistency"
+    SwitchStmt {} -> undefined -- TODO: this is taxing
+    SpanStmt {} -> undefined
+    AssignStmt lvalues exprs -> do
+      assigns <- zipWithM translPair lvalues exprs -- TODO: check for duplicates -> error (also, check if modifiable)
+      let vars' = Map.fromList assigns <> vars -- TODO: traverse all frames (assignments to global registers)
+      return vars'
+      where
+        translPair (Annot (LVName n) _) e = (getName n, ) <$> translate e vars
+        translPair (Annot LVRef {} _) _ = error "not implemented yet" -- TODO: make case for lvref
+    PrimOpStmt {} -> undefined
+    CallStmt {}
+      | CallStmt rets _ expr actuals Nothing [] <- stmt -> undefined
+      | otherwise -> undefined
+    JumpStmt {} -> undefined
+    ReturnStmt {}
+      | ReturnStmt Nothing Nothing [actual] <- stmt -> do
+        ret <- translate actual vars
+        L.ret ret $> vars
+      | otherwise -> undefined
+    LabelStmt name -> (L.emitBlockStart . fromString . T.unpack . getName) name $> vars
+    ContStmt na ans -> undefined
+    GotoStmt {}
+      | GotoStmt _ Nothing <- stmt ->do
+            let Just lab = getTrivialGotoTarget stmt -- TODO: is this safe?
+            L.br (L.mkName $ T.unpack lab)
+            return vars
+      | otherwise -> undefined
+    CutToStmt an ans ans' -> undefined
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m Actual a (m L.Operand) where
-  translate (Annot (Actual Nothing expr) _) = translate expr
-  translate _ = undefined
+         Translate m Actual a (Map Text L.Operand -> m L.Operand) where
+  translate (Annot (Actual Nothing expr) _) vars = translate expr vars
+  translate _ vars = undefined
 
 -- Source: https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf (7.4)
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m Expr a (m L.Operand) where
-  translate (Annot (LitExpr lit Nothing) _) = translate lit
-  translate (Annot (ParExpr expr) _) = translate expr
-  translate (Annot (LVExpr lvalue) _) = translate lvalue
-  translate (Annot (BinOpExpr o l r) _) = do
-    l' <- translate l
-    r' <- translate r
+         Translate m Expr a (Map Text L.Operand -> m L.Operand) where
+  translate (Annot (LitExpr lit Nothing) _) _ = translate lit
+  translate (Annot (ParExpr expr) _) vars = translate expr vars
+  translate (Annot (LVExpr lvalue) _) vars = translate lvalue vars
+  translate (Annot (BinOpExpr o l r) _) vars = do
+    l' <- translate l vars
+    r' <- translate r vars
     (r' &) . (l' &) $
       case o of
         AddOp -> L.add
@@ -250,13 +294,13 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
         LtOp -> L.icmp L.ULT
         GeOp -> L.icmp L.UGE
         LeOp -> L.icmp L.ULE
-  translate (Annot (ComExpr expr) _) = do
-    expr' <- translate expr
+  translate (Annot (ComExpr expr) _) vars = do
+    expr' <- translate expr vars
     L.typeOf expr' >>= \case
       Right (L.IntegerType bits) ->
         L.xor expr' . L.ConstantOperand $ L.Int bits (-1)
       _ -> error "Cannot create a binary complement to a non-int"
-  translate (Annot (NegExpr expr) _) = translate expr >>= L.icmp L.EQ (L.bit 0)
+  translate (Annot (NegExpr expr) _) vars = translate expr vars >>= L.icmp L.EQ (L.bit 0)
 
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
          Translate m Lit a (m L.Operand) where
@@ -266,14 +310,13 @@ instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
 
 -- TODO: continue from here
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m LValue a (m L.Operand) where
-  translate (Annot (LVName n) _) = do
-    ~(h:_) <- use variables
-    maybe (error "Variable not found") return (getName n `Map.lookup` h) -- TODO: traverse all frames (accessing global registers; also, accessing non-variables); remove the error
-  translate (Annot LVRef {} _) = do
+         Translate m LValue a (Map Text L.Operand -> m L.Operand) where
+  translate (Annot (LVName n) _) vars = do
+    maybe (error $"Variable not found " <> show n) return (getName n `Map.lookup` vars) -- TODO: traverse all frames (accessing global registers; also, accessing non-variables); remove the error
+  translate (Annot LVRef {} _) vars = do
     error "references not yet implemented" -- TODO: implement lvref
 
 -- TODO: continue from here
 instance (HasBlockAnnot a, HasPos a, MonadTranslator m) =>
-         Translate m StackDecl a (m ()) where
+         Translate m StackDecl a (Map Text L.Operand -> m (Map Text L.Operand)) where
   translate = undefined

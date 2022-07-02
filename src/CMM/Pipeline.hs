@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
 module CMM.Pipeline where
@@ -24,8 +24,8 @@ import safe CMM.AST.Flattener ( flatten )
 import safe CMM.AST.Blockifier ( Blockify (blockify), BlockifyAssumps )
 import safe CMM.AST.Blockifier.State
     ( initBlockifier, BlockifierState )
-import safe Control.Monad.State ( runState )
-import safe CMM.Err.State ( ErrorState, HasErrorState (errorState), registerError )
+import safe Control.Monad.State ( runState, evalState )
+import safe CMM.Err.State ( ErrorState, HasErrorState (errorState), registerError, countErrors )
 import safe Control.Lens ( uses, view )
 import safe CMM.Data.Nullable ( Nullable(nullVal) )
 import safe Prettyprinter ( Pretty(pretty), (<+>) )
@@ -44,9 +44,20 @@ import safe Options.Applicative ( execParser )
 import qualified Data.Text.IO as T
 import safe CMM.Err.IsError ( IsError )
 import safe CMM.AST.BlockAnnot ( BlockAnnot )
-import System.IO (stdin, IOMode (ReadMode), withFile)
+import System.IO (stdin, IOMode (ReadMode), withFile, stderr, hPutStr, hPrint, nativeNewline)
 import safe System.Exit ( die )
 import safe CMM.Inference.HandleCounter ( readHandleCounter )
+import safe qualified CMM.Translator.State as Tr
+import safe qualified CMM.AST.Blockifier.State as B
+import safe qualified Data.Map as Map
+import safe LLVM.AST (moduleName, Module (moduleDefinitions), defaultModule)
+import LLVM.IRBuilder
+import safe CMM.Translator (translate)
+import safe Data.Tuple
+import safe LLVM.IRBuilder.Internal.SnocList
+import LLVM.Pretty
+import Debug.Trace
+import Control.Monad
 
 newtype PipelineError
   = InferenceIncomplete Facts
@@ -70,40 +81,60 @@ runWithOptions options = do
         "-" -> "stdin"
         name -> name
     runOnInput input = do
-      prepared <- prepareOnInput input
+      (prepared, errState) <- prepareOnInput input
+      when (errState /= nullVal) .
+        hPrint stderr $ pretty errState
       if quiet options
         then return ()
         else case output options of
-          "-" ->  putStr prepared
-          name -> writeFile name prepared
+          "-" ->  putStrLn prepared
+          name -> writeFile name (prepared <> "\n")
     prepareOnInput input = do
       contents <- T.hGetContents input
       case runAll fileName options contents of
         Left prettyError -> die prettyError
         Right result -> return result
 
-runAll :: String -> Options -> Text -> Either String String
+runAll :: String -> Options -> Text -> Either String (String, ErrorState)
 runAll fileName options contents = do
   tokens <- tokenizer fileName contents
   ast <- parser fileName tokens
   if prettify options
-    then return . show $ pretty ast
+    then return . (,nullVal) . show $ pretty ast
     else if monosrc options
-      then second (show . pretty) $ runInferMono options ast
+      then second ((,nullVal) . show . pretty) $ runInferMono options ast
       else do
-      ast' <- runFlatBlock ast
-      second (show . pretty) $ runInferMono options ast'
+      (ast', bState, errState) <- runFlatBlock ast
+      (ast'', errState') <- runInferMono options ast'
+      let
+        moduleBuilder = runFreshIRBuilderT $ translate ast''
+        translator = execFreshModuleBuilderT moduleBuilder
+        translated =
+          evalState translator $
+            Tr.initTranslState
+              { Tr._controlFlow = B._allFlow bState
+              , Tr._blockData = B._allData bState
+              , Tr._blocksTable =
+                  Map.fromList . Map.toList $
+                  B._allBlocks bState
+              , Tr._offSets = B._numBlocks bState
+              }
 
-runFlatBlock :: (Blockify n a (a, BlockAnnot), HasPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot))
+        module' = defaultModule { moduleName = "", moduleDefinitions = translated }
+        prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
+      return . (,errState <> errState'). show $ pretty  prettyprinted
+
+runFlatBlock :: (Blockify n a (a, BlockAnnot), HasPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot), BlockifierState, ErrorState)
 runFlatBlock ast =
-  fmap fst . blockifier $ flattener ast
+  blockifier $ flattener ast
 
-runInferMono :: (HasPos a, HasPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole))
+runInferMono :: (HasPos a, HasPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), ErrorState)
 runInferMono options ast = do
-  ((prepAST, facts), pState) <- preprocessor options ast
-  ((),iState) <- inferencer options{handleStart=readHandleCounter pState} prepAST facts
+  ((prepAST, facts), pState, errState) <- preprocessor options ast
+  ((),iState, errState') <- inferencer options{handleStart=readHandleCounter pState} prepAST facts
   (monoAST, (iState', _)) <- monomorphizer options iState prepAST
-  fst <$> postprocessor iState' monoAST
+  (ast', _, errState'') <- postprocessor iState' monoAST
+  return (ast', errState <> errState' <> errState'')
 
 tokenizer :: String
   -> Text
@@ -118,15 +149,15 @@ parser source = first errorBundlePretty . runParser program source
 flattener :: (Data (n a), Typeable a) => n a -> n a
 flattener = flatten
 
-wrapStandardLayout :: HasErrorState s ErrorState => (a, s) -> Either String (a, s)
-wrapStandardLayout result@(_,state') = if errState == nullVal
-  then Right result
-  else Left . show $ pretty errState
+wrapStandardLayout :: HasErrorState s ErrorState => (a, s) -> Either String (a, s, ErrorState)
+wrapStandardLayout (result, state')
+  | countErrors errState /= 0 = Left . show $ pretty errState
+  | otherwise = Right (result, state', errState)
   where
-    errState = view errorState state'
+      errState = view errorState state'
 
 blockifier :: (Blockify n a b, BlockifyAssumps a b) => n a
-  -> Either String (n b, BlockifierState)
+  -> Either String (n b, BlockifierState, ErrorState)
 blockifier flattened = wrapStandardLayout $
     blockify flattened `runState` initBlockifier
 
@@ -134,7 +165,7 @@ preprocessor :: (Preprocess n a (a, TypeHole), HasPos a) =>
   Options
   -> Annot n a
   -> Either
-      String ((Annot n (a, TypeHole), [Fact]), PreprocessorState)
+      String ((Annot n (a, TypeHole), [Fact]), PreprocessorState, ErrorState)
 preprocessor settings ast = wrapStandardLayout $
   action `runState` initPreprocessor settings
   where
@@ -143,7 +174,7 @@ preprocessor settings ast = wrapStandardLayout $
       uses facts $ (ast',) . reverse . head
 
 inferencer :: HasTypeHole a => Options -> Annot Unit a -> Facts
-  -> Either String ((), InferencerState)
+  -> Either String ((), InferencerState, ErrorState)
 inferencer settings ast fs = wrapStandardLayout $
   action `runState` initInferencer settings
   where
@@ -163,7 +194,7 @@ monomorphizer settings iState ast = case result of
   where
     (result,states) = monomorphize mempty ast `runState` (iState, initMonomorphizeState settings)
 
-postprocessor :: (Data a, HasTypeHole a, HasPos a) => InferencerState -> Annot Unit a -> Either String (Annot Unit a, InferencerState)
+postprocessor :: (Data a, HasTypeHole a, HasPos a) => InferencerState -> Annot Unit a -> Either String (Annot Unit a, InferencerState, ErrorState)
 postprocessor iState ast = wrapStandardLayout $
     action `runState` iState
   where

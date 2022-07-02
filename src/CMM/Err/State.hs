@@ -37,7 +37,7 @@ instance Nullable ErrorState where
 
 instance Pretty ErrorState where
   pretty = \case
-    ErrorState errs -> vsep $ fmap pretty errs
+    ErrorState errs -> vsep . fmap pretty $ reverse errs
 
 class a ~ ErrorState =>
       HasErrorState s a
@@ -53,6 +53,9 @@ makeFieldsNoPrefix ''ErrorState
 
 nullErrorState :: (HasErrorState s e, MonadState s m) => m Bool
 nullErrorState = uses errorState (==nullVal)
+
+noErrorsState :: (HasErrorState s e, MonadState s m) => m Bool
+noErrorsState = uses errorState $ (==0) . countErrors
 
 countSeverity :: Severity -> ErrorState -> Int
 countSeverity s = \case

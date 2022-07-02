@@ -122,7 +122,7 @@ instance FlattenStmt (Annot Stmt) where
   flattenStmt stmt@(stmt' `Annot` annot) =
     case stmt' of
       LabelStmt n ->
-        return $ toBodyStmt (trivialGoto annot n) : [toBodyStmt stmt]
+        return $ toBodyStmt (trivialGoto annot n) : [toBodyStmt $ LabelStmt n `Annot` annot]
       IfStmt cond tBody Nothing -> do
         num <- State.freshBranchNum
         let tName = State.helperName $ "then_" ++ num
@@ -131,7 +131,7 @@ instance FlattenStmt (Annot Stmt) where
         pure $
           toBodyStmt (brCond cond tName fName annot) :
           (toBodyStmt . withAnnot annot $ LabelStmt tName) :
-          tTransl ++ [toBodyStmt . withAnnot annot $ LabelStmt fName]
+          tTransl ++ [toBodyStmt (trivialGoto annot fName), toBodyStmt . withAnnot annot $ LabelStmt fName]
       IfStmt cond tBody (Just eBody) -> do
         num <- State.freshBranchNum
         let tName = State.helperName $ "then_" ++ num

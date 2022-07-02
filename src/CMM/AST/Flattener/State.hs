@@ -16,6 +16,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Data.Foldable ( for_ )
+import Data.Maybe
 
 
 
@@ -23,6 +24,7 @@ data FlattenerState
   = FlattenerState
     { _branchIdHandles :: Int
     , _contractorMap :: Map Text Text
+    , _nameCache :: Map Text Int
     , _contractIdHandles :: Int
     }
     deriving (Show)
@@ -33,6 +35,7 @@ initFlattenerState =
   FlattenerState
     { _branchIdHandles = 0
     , _contractIdHandles = 0
+    , _nameCache = mempty
     , _contractorMap = mempty
     }
 
@@ -48,6 +51,13 @@ freshBranch = do
 
 freshBranchNum :: Flattener String
 freshBranchNum = fmap show freshBranch
+
+freshName :: Text -> Flattener Text
+freshName name = do
+  (found, nameCached) <- uses nameCache $ Map.insertLookupWithKey (const (+)) name 1
+  nameCache .= nameCached
+  let newName = show $ fromMaybe 0 found
+  return $ name <> T.pack newName
 
 -- | Generates a fresh integer
 freshContract :: Flattener Int
@@ -71,8 +81,6 @@ freshContractName = do
 
 clearFlattener :: Flattener ()
 clearFlattener = do
-  branchIdHandles .= 0
-  contractIdHandles .= 0
   contractorMap .= mempty
 
 -- | Creates a `Name` from a `String` with `flattenerPrefix`

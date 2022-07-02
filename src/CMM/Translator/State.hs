@@ -12,15 +12,17 @@ import safe qualified LLVM.AST.Operand as L
 
 import safe CMM.AST.BlockAnnot (BlockData)
 import safe CMM.Err.State (ErrorState)
+import qualified LLVM.AST.Name as L
 
 data TranslState =
   TranslState
-    { _variables :: [Map Text L.Operand]
-    , _controlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
+    { _controlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
     , _blockData :: BlockData -- We need the block data to create the phi nodes
     , _currentBlock :: Maybe Int
     , _blocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
     , _errorState :: ErrorState
+    , _offSets :: Map Int Int
+    , _rename :: Map L.Name L.Name
     }
 
 makeFieldsNoPrefix ''TranslState
@@ -28,10 +30,11 @@ makeFieldsNoPrefix ''TranslState
 initTranslState :: TranslState
 initTranslState =
   TranslState -- FIXME: this is just DUMMY
-    { _variables = mempty
-    , _controlFlow = mempty
+    { _controlFlow = mempty
     , _blockData = mempty
     , _currentBlock = Nothing -- TODO: change to (Just 0) in procedure translation
     , _blocksTable = mempty
     , _errorState = mempty
+    , _offSets = mempty
+    , _rename = mempty
     }

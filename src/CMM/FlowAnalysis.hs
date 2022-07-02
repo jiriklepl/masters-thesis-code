@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 
 module CMM.FlowAnalysis
   ( analyzeFlow
@@ -28,15 +28,17 @@ import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)
 import Data.Maybe
 import Data.Functor
+import Debug.Trace
 
 analyzeFlow :: HasPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)
  = do
-  flow <- use State.controlFlow
-  blocks <- use State.blocksTable
-  let graph = Graph.buildG (0, Map.size blocks - 1) flow -- one block is guaranteed (procedure)
+  flow <- use State.currentFlow
+  blocks <- use State.blocksCache
+  zero <- uses State.allBlocks Map.size
+  let graph = Graph.buildG (zero, zero + Map.size blocks - 1) flow -- one block is guaranteed (procedure)
       blockNames = Map.fromList $ swap <$> Map.toList blocks
-      reachable = Set.fromList $ Graph.reachable graph 0
+      reachable = Set.fromList $ Graph.reachable graph zero
       removeReachable = (`Map.withoutKeys` Set.map (fromJust . (`Map.lookup` blockNames)) reachable)
       makeMessageFromVisible = filter (not . hasPrefix) . Map.keys
   labelsWarning <- makeMessageFromVisible <$> uses State.labels removeReachable
@@ -47,7 +49,7 @@ analyzeFlow procedure@(Annot _ _)
     registerASTWarning procedure $ UnreachableContinuations continuationsWarning
   preCleanData <-
     uses State.registers (fmap . flip Map.restrictKeys . Map.keysSet) <*>
-    uses State.blockData (`Map.restrictKeys` reachable) -- we filter out variables that are not local variables and whole blocks that are not reachable
+    uses State.cacheData (`Map.restrictKeys` reachable) -- we filter out variables that are not local variables and whole blocks that are not reachable
   let allVars =
         (False, False, False) <$
         Map.foldlWithKey (\vars _ block -> block <> vars) mempty preCleanData
@@ -56,10 +58,10 @@ analyzeFlow procedure@(Annot _ _)
         flip elemIndex . filter (`Set.member` reachable) $ Graph.topSort graph
       cleanFlow =
         sortOn (order . fst) $ filter ((`Set.member` reachable) . fst) flow -- we filter out unreachable flow
-  State.blockData .= cleanData
-  State.controlFlow .= cleanFlow
+  State.cacheData .= cleanData
+  State.currentFlow .= cleanFlow
   doWhile $ or <$> traverse updateFlowPair cleanFlow
-  uninitialized <- uses State.blockData (Map.lookup 0) <&> \case
+  uninitialized <- uses State.cacheData (Map.lookup zero) <&> \case
     Nothing -> []
     Just blockData -> Map.keys $ Map.filter (^. _3) blockData
   unless (null uninitialized) $
@@ -67,7 +69,7 @@ analyzeFlow procedure@(Annot _ _)
 
 updateFlowPair :: (Int, Int) -> Blockifier Bool
 updateFlowPair (f, t) = do
-  blocks <- use State.blockData
+  blocks <- use State.cacheData
   let toVars = fromJust $ t `Map.lookup` blocks
       fromVars = fromJust $ f `Map.lookup` blocks
       newBlocks =
@@ -79,7 +81,7 @@ updateFlowPair (f, t) = do
           toVars
           blocks
       newBlock = fromJust $ f `Map.lookup` newBlocks
-  State.blockData .= newBlocks
+  State.cacheData .= newBlocks
   return . or $
     zipWith
       (\a b -> a ^. _3 /= b ^. _3)

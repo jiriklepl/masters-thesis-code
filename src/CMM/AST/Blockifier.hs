@@ -6,7 +6,7 @@
 module CMM.AST.Blockifier where
 
 import safe Control.Lens.Getter (use, uses)
-import safe Control.Lens.Setter ((%=), (.=), (?=))
+import safe Control.Lens.Setter ((%=), (.=), (?=), (+=))
 import safe Control.Lens.Type (Lens)
 import safe Control.Monad.State (when)
 import safe Data.Foldable (traverse_)
@@ -45,7 +45,8 @@ import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (addPrefix)
 import safe Data.Map (Map)
-import CMM.Err.State (nullErrorState)
+import CMM.Err.State (noErrorsState)
+import safe qualified Data.Text as T
 
 helperName :: Text -> Text
 helperName = addPrefix lrAnalysisPrefix
@@ -58,12 +59,14 @@ blockIsSet = uses State.currentBlock $ not . null
 
 blocksCache :: Text -> Blockifier Int
 blocksCache name = do
-  table <- use State.blocksTable
+  table <- use State.blocksCache
+  allBlocks <- use State.allBlocks
   case name `Map.lookup` table of
     Just index -> return index
-    Nothing ->
-      let index = Map.size table
-       in index <$ (State.blocksTable .= Map.insert name index table)
+    Nothing -> do
+      let index = Map.size table + Map.size allBlocks
+      State.blocksCache %= Map.insert name index
+      return index
 
 setCurrentBlock :: Text -> Blockifier Int
 setCurrentBlock name = do
@@ -71,13 +74,19 @@ setCurrentBlock name = do
   State.currentBlock ?= index
   return index
 
+newProcedureName :: Blockifier Text
+newProcedureName = do
+  count <- use State.procedureCounter
+  State.procedureCounter += 1
+  return . helperName . T.pack $ "procedure" <> show count
+
 updateBlock :: Maybe Text -> Blockifier ()
 updateBlock mName = do
   mIndex <- traverse blocksCache mName
   use State.currentBlock >>= \case
     Just oldName -> do
       cData <- use State.currentData
-      State.blockData %= Map.insert oldName cData
+      State.cacheData %= Map.insert oldName cData
       State.currentBlock .= mIndex
       State.currentData .= mempty
     Nothing -> State.currentBlock .= mIndex
@@ -100,7 +109,7 @@ addControlFlow destBlock =
     Nothing -> pure ()
     Just block -> do
       index <- blocksCache destBlock
-      State.controlFlow %= ((block, index) :)
+      State.currentFlow %= ((block, index) :)
 
 class MetadataType t =>
       Register t n
@@ -404,7 +413,7 @@ blockifyProcedureHeader (AST.ProcedureHeader mConv name formals mType `Annot` a)
 
 instance Blockify (Annot AST.Procedure) a b where
   blockify procedure@(AST.Procedure header body `Annot` a) = do
-    index <- setCurrentBlock $ helperName "procedure"
+    index <- newProcedureName >>= setCurrentBlock
     header' <- blockifyProcedureHeader header
     withAnnot (Begins index `withBlockAnnot` a) <$>
       (AST.Procedure header' <$> blockify body) <*
@@ -412,14 +421,14 @@ instance Blockify (Annot AST.Procedure) a b where
       State.clearBlockifier
     where
       finalize =
-        nullErrorState >>= (`when` finalizations)
+        noErrorsState >>= (`when` finalizations)
       finalizations = do
         forbidFallthrough a
         analyzeFlow procedure
 
 instance Blockify (Annot AST.ProcedureDecl) a b where
   blockify (AST.ProcedureDecl header `Annot` a) = do
-    index <- setCurrentBlock $ helperName "procedure"
+    index <- newProcedureName >>= setCurrentBlock
     header' <- blockifyProcedureHeader header
     withAnnot (Begins index `withBlockAnnot` a) (AST.ProcedureDecl header') <$
       unsetBlock <*
@@ -497,7 +506,7 @@ storeSymbol symbolMap symbolName node = do
     else symbolMap .= Map.insert (getName node) (getPos node) symbols'
 
 instance Blockify (Annot AST.Stmt) a b where
-  blockify stmt@(stmt' `Annot` a) =
+  blockify stmt@(stmt' `Annot` a) = do
     case stmt' of
       AST.LabelStmt {} -> do
         addControlFlow $ getName stmt -- a possible fallthrough
@@ -528,6 +537,7 @@ instance Blockify (Annot AST.Stmt) a b where
       AST.PrimOpStmt {} -- NOTE: In the future, this may end a basic block if given `NeverReturns` flow annotation
        -> registerReadsWrites stmt *> addBlockAnnot stmt
       AST.IfStmt _ tBody mEBody -> do
+        registerReadsWrites stmt
         case (getTrivialGotoTarget tBody, getTrivialGotoTarget <$> mEBody) of
           (Just left, Just (Just right)) -> do
             addControlFlow left
