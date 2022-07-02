@@ -664,6 +664,9 @@ data Type a
   | TName (Name a)
   | TAuto (Maybe (Name a))
   | TPtr (Annot Type a)
+  | TVoid
+  | TBool
+  | TLabel
   | TPar (Annot ParaType a)
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
 
@@ -674,6 +677,9 @@ instance Pretty (Type a) where
       TName name -> pretty name
       TAuto mName -> T.autoName <> maybe mempty (parens . pretty) mName
       TPtr t -> T.ptrName <> parens (pretty t)
+      TBool -> T.voidName
+      TVoid -> T.boolName
+      TLabel -> T.labelName
       TPar paraType -> parens $ pretty paraType
 
 data ParaType a =

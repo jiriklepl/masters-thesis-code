@@ -2,7 +2,28 @@
 
 
 module CMM.Options where
-import Options.Applicative
+import safe Options.Applicative
+    ( (<**>),
+      argument,
+      auto,
+      fullDesc,
+      header,
+      help,
+      info,
+      long,
+      metavar,
+      option,
+      progDesc,
+      short,
+      showDefault,
+      str,
+      strOption,
+      switch,
+      value,
+      internal,
+      helper,
+      Parser,
+      ParserInfo )
 
 
 data Options = Options

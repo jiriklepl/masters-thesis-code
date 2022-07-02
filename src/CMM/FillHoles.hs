@@ -59,10 +59,10 @@ translType holed t = case t of
       ConstType name _ _ -> Just . AST.TName $ AST.Name name
       StringType -> Nothing
       String16Type -> Nothing
-      LabelType -> Nothing
+      LabelType -> Just AST.TLabel
       TBitsType n -> Just $ AST.TBits n
-      BoolType -> Nothing
-      VoidType -> Nothing
+      BoolType -> Just AST.TBool
+      VoidType -> Just AST.TVoid
 
 
 

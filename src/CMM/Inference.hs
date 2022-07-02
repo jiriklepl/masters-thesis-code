@@ -17,13 +17,7 @@ import safe Data.Foldable (Foldable(foldl'), for_, traverse_)
 import safe Data.Functor (($>), (<&>), void)
 import safe Data.Graph (SCC(AcyclicSCC, CyclicSCC), stronglyConnCompR)
 import safe qualified Data.Graph as Graph
-import safe Data.List
-  ( partition
-
-
-
-
-  )
+import safe Data.List (partition)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Maybe (fromMaybe, fromJust)
@@ -119,7 +113,7 @@ import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
 import safe CMM.Inference.Utils (fieldClassPrefix, trileanSeq, funDepsClassPrefix)
 import safe CMM.Utils (HasCallStack, addPrefix, getPrefix, hasPrefix)
 import safe qualified CMM.Inference.State.Impl as State
-import safe CMM.Err.State ( HasErrorState(errorState), nullErrorState )
+import safe CMM.Err.State ( nullErrorState )
 
 class FactCheck a where
   factCheck :: a -> Inferencer ()

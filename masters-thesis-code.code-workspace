@@ -83,6 +83,7 @@
 			"mconcat",
 			"mempty",
 			"memsize",
+			"metavar",
 			"mfull",
 			"monoid",
 			"monomorphization",

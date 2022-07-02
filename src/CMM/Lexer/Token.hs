@@ -251,6 +251,15 @@ asName = "as"
 autoName :: IsString a => a
 autoName = "auto"
 
+boolName :: IsString a => a
+boolName = "bool"
+
+voidName :: IsString a => a
+voidName = "void"
+
+labelName :: IsString a => a
+labelName = "label"
+
 bigName :: IsString a => a
 bigName = "big"
 
