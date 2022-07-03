@@ -1,6 +1,27 @@
-f(bits32 u, bits32 w) -> bits32{
-  bits32 r;
+foreign "C" f(bits32 u, bits32 w) -> bits32{
+  auto r;
 
+  while:
+  if w != 0 {
+    r = w;
+    w = u % w;
+    u = r;
+    goto while;
+  }
+
+  return (u);
+}
+
+foreign "C" g(bits64 u, auto w){
+  auto r;
+
+  while:
+  if w != 0 {
+    r = w;
+    w = u % w;
+    u = r;
+    goto while;
+  }
 
   return (u);
 }

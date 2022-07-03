@@ -1,0 +1,10 @@
+
+g (bits32 a, bits32 b) {
+  return (a);
+}
+
+f (bits32 a) {
+  a = g(a);
+
+  return (a);
+}

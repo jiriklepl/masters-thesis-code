@@ -7,7 +7,7 @@ x   ) ->
 
 {
 x /* why not comments */  = /* and more comments */ 1; // and more comments
-return (x)
+return ()
 
 
 

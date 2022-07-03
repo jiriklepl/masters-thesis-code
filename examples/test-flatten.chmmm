@@ -4,7 +4,7 @@ foreign "C" f ("" bits32 x) {
             if x != 3 {
                 return (4);
             }
-            x = x + 2;
+            x = 2;
         }
         x = x + 1;
     }

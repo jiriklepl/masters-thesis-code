@@ -3,7 +3,8 @@ struct F {
 }
 
 struct G {
-  z: x: bits32;
+  x: y: bits32;
+  z: w: bits64;
 }
 
 f () {
@@ -24,8 +25,10 @@ g () {
   }
 
   auto a;
+  auto b;
   a = [y->x];
-  a = [y->z];
+  b = [y->z];
+  b = [y->w];
 
   return (a);
 }
