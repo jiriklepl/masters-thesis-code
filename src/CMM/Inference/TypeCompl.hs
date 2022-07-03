@@ -41,10 +41,11 @@ data TypeCompl a
 instance Eq a => Eq (TypeCompl a) where
   t == t'
     | TupleType ts <- t
-    , TupleType ts' <- t' = and $ zipWith (==) ts ts'
+    , TupleType ts' <- t'
+    , length ts == length ts' = and $ zipWith (==) ts ts'
     | FunctionType args ret <- t
-    , FunctionType args' ret' <- t' =
-      and $ zipWith (==) (ret : args) (ret' : args')
+    , FunctionType args' ret' <- t'
+    , length args == length args' = and $ zipWith (==) (ret : args) (ret' : args')
     | AppType app arg <- t
     , AppType app' arg' <- t' = app == app' && arg == arg'
     | AddrType addr <- t
@@ -68,10 +69,10 @@ instance Eq a => Eq (TypeCompl a) where
 instance Ord a => Ord (TypeCompl a) where
   t `compare` t'
     | TupleType ts <- t
-    , TupleType ts' <- t' = mconcat $ zipWith compare ts ts'
+    , TupleType ts' <- t' = compare ts ts' <> mconcat (zipWith compare ts ts')
     | FunctionType args ret <- t
     , FunctionType args' ret' <- t' =
-      mconcat $ zipWith compare (ret : args) (ret' : args')
+      compare args args' <> mconcat (zipWith compare (ret : args) (ret' : args'))
     | AppType app arg <- t
     , AppType app' arg' <- t' = compare app app' <> compare arg arg'
     | AddrType addr <- t

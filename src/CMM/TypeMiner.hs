@@ -10,15 +10,11 @@ import safe CMM.Inference.Type
 import safe CMM.Inference.TypeCompl
 import safe CMM.Inference.Preprocess.TypeHole
 import safe Data.Text (Text)
-import safe qualified Data.Text as T
-import safe Data.Data
-import safe Data.Generics.Aliases
 import CMM.AST.GetName
 import Data.Traversable
 import qualified Data.Map as Map
 import Data.Map
 import CMM.Inference.TypeKind
-import CMM.Inference.TypeHandle
 import safe qualified CMM.Inference.State as State
 import CMM.Inference.TypeVar
 import Control.Monad
@@ -70,10 +66,8 @@ makePacked = L.StructureType True
 makeUnpacked :: [L.Type] -> L.Type
 makeUnpacked = L.StructureType False
 
-
 mineType :: Map Text ([(Text, Int)], [Type]) -> Type -> Inferencer L.Type
 mineType structs t = case t of
-  ErrorType {} -> error "-"
   VarType {} -> error "-"
   ComplType tc -> case tc of
     TupleType args -> makePacked <$> traverse (mineType structs) args

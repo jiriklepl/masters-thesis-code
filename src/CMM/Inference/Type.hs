@@ -18,26 +18,17 @@ import safe CMM.Inference.TypeKind
 import safe CMM.Inference.TypeVar (FromTypeVar(fromTypeVar), TypeVar)
 
 data Type
-  = ErrorType Text
-  | VarType TypeVar
+  = VarType TypeVar
   | ComplType (TypeCompl Type)
   deriving (Show, Eq, Ord, Data)
-
-instance Fallbackable Type where
-  ErrorType {} ?? a = a
-  a ?? _ = a
 
 instance HasTypeKind Type where
   getTypeKind =
     \case
-      ErrorType {} -> GenericType
       VarType t -> getTypeKind t
       ComplType t -> getTypeKind t
   setTypeKind kind =
     \case
-      err@ErrorType {}
-        | kind == GenericType -> err
-        | otherwise -> setTypeKindInvariantLogicError err kind
       VarType t -> VarType $ setTypeKind kind t
       ComplType t -> ComplType $ setTypeKind kind t
 
@@ -59,7 +50,6 @@ instance ToType a => ToType (TypeCompl a) where
 instance Pretty Type where
   pretty =
     \case
-      ErrorType txt -> "!" <> dquotes (pretty txt)
       VarType tVar -> pretty tVar
       ComplType tCompl -> pretty tCompl
 
@@ -76,7 +66,6 @@ foldApp :: [Type] -> Type
 foldApp =
   \case
     t:ts -> foldl' ((ComplType .) . AppType) t ts
-    [] -> ErrorType "Illegal type fold"
 
 unfoldApp :: Type -> [Type]
 unfoldApp = reverse . go

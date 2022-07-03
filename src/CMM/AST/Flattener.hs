@@ -145,7 +145,7 @@ instance FlattenStmt (Annot Stmt) where
           tTransl ++
           toBodyStmt (trivialGoto annot fName) :
           (toBodyStmt . withAnnot annot $ LabelStmt eName) :
-          eTransl ++ [toBodyStmt . withAnnot annot $ LabelStmt fName]
+          eTransl ++ [toBodyStmt (trivialGoto annot fName), toBodyStmt . withAnnot annot $ LabelStmt fName]
       SwitchStmt expr arms -> do
         num <- State.freshBranchNum
         let endName = State.helperName $ "switch_" ++ num ++ "_end"

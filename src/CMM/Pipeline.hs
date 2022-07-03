@@ -67,7 +67,7 @@ instance Pretty PipelineError where
   pretty (InferenceIncomplete fs) = "Type inference could not resolve the following constraints:" <+> pretty fs
 
 runPipeline :: IO ()
-runPipeline = do
+runPipeline =
   execParser opts >>= runWithOptions
 
 runWithOptions :: Options -> IO ()

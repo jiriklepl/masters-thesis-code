@@ -86,7 +86,7 @@ import safe CMM.Inference.Subst
   )
 import safe CMM.Inference.Type
   ( ToType(toType)
-  , Type(ComplType, ErrorType, VarType)
+  , Type(ComplType, VarType)
   , foldApp
   , unfoldApp
   )
@@ -157,7 +157,6 @@ elaborate primType = do
 simplify :: HasCallStack => Type -> Inferencer TypeVar
 simplify =
   \case
-    ErrorType _ -> undefined
     VarType tVar -> do
       uses State.handlize (tVar `Bimap.lookup`) >>= \case
         Just _ -> return tVar
@@ -382,7 +381,6 @@ fixTypize = do
   let typize' = Bimap.fromList types'
       collapsedKeys = mapCollect types'
       collapsedValues = mapCollect $ swap <$> types'
-    -- TODO: reduce duplication; consider continuing despite errors
       goValues [] subst = return subst
       goValues ((primType:primType':primTypes):others) subst =
         case apply subst primType `unify` apply subst primType' of

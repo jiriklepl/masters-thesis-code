@@ -49,7 +49,6 @@ typeFromHoled holed = do
 
 translType :: a -> T.Type -> Maybe (AST.Type a)
 translType holed t = case t of
-    T.ErrorType {} -> Nothing
     T.VarType {} -> Nothing
     T.ComplType tc -> case tc of
       TupleType {} -> Nothing

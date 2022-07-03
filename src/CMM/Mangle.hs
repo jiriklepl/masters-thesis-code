@@ -59,7 +59,6 @@ enclosed txt = "$L" <> txt <> "R$"
 
 mangleType :: Bool -> Ty.Type -> Maybe Text
 mangleType skipAddr = \case
-    Ty.ErrorType {} -> undefined
     Ty.VarType {} -> undefined
     Ty.ComplType tc -> case tc of
       TupleType types -> do

@@ -14,7 +14,7 @@ import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Subst (Apply(apply), Subst)
 import safe CMM.Inference.Type
   ( ToType(toType)
-  , Type(ComplType, ErrorType, VarType)
+  , Type(ComplType, VarType)
   )
 import safe CMM.Inference.TypeCompl
   ( PrimType
@@ -168,10 +168,6 @@ instance Unify PrimType TypeVar where
 
 instance Unify Type Type where
   unifyDirected way t t'
-    | ErrorType text <- t
-    , ErrorType text' <- t' = Left [GotErrorType text, GotErrorType text']
-    | ErrorType text <- t = Left [GotErrorType text]
-    | ErrorType text <- t' = Left [GotErrorType text]
     | t == t' = Right (mempty, t)
     | way /= Backward
     , VarType tVar <- t = bind way tVar t'

@@ -24,7 +24,7 @@ data TranslState =
     , _blocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
     , _errorState :: ErrorState
     , _offSets :: Map Int Int
-    , _rename :: Map L.Name L.Name
+    , _rename :: Map L.Operand L.Operand
     , _inferencer :: InferencerState
     , _structs :: Map Text ([(Text, Int)], [Ty.Type])
     }

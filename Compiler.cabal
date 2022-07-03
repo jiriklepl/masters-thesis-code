@@ -150,6 +150,7 @@ executable Compiler
                        CMM.Pretty,
                        CMM.Translator,
                        CMM.Translator.State,
+                       CMM.TypeMiner,
                        CMM.Utils
   build-depends:       llvm-hs-pretty ^>=12.0.0,
                        llvm-hs-pure ^>=12.0.0,
