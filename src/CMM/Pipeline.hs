@@ -6,7 +6,7 @@ module CMM.Pipeline where
 import safe Text.Megaparsec
     ( SourcePos, runParser, errorBundlePretty )
 import safe CMM.Lexer ( tokenize )
-import safe Data.Bifunctor ( Bifunctor(first, second) )
+import safe Data.Bifunctor ( Bifunctor(first) )
 import safe Data.Text ( Text )
 import safe CMM.AST.Annot ( Annot )
 import safe CMM.Parser ( program )
@@ -44,7 +44,7 @@ import safe Options.Applicative ( execParser )
 import qualified Data.Text.IO as T
 import safe CMM.Err.IsError ( IsError )
 import safe CMM.AST.BlockAnnot ( BlockAnnot )
-import System.IO (stdin, IOMode (ReadMode), withFile, stderr, hPutStr, hPrint, nativeNewline)
+import System.IO (stdin, IOMode (ReadMode), withFile, stderr, hPrint)
 import safe System.Exit ( die )
 import safe CMM.Inference.HandleCounter ( readHandleCounter )
 import safe qualified CMM.Translator.State as Tr
@@ -52,12 +52,15 @@ import safe qualified CMM.AST.Blockifier.State as B
 import safe qualified Data.Map as Map
 import safe LLVM.AST (moduleName, Module (moduleDefinitions), defaultModule)
 import LLVM.IRBuilder
+    ( ModuleBuilderState(builderDefs),
+      emptyModuleBuilder,
+      evalModuleBuilder,
+      execFreshModuleBuilderT,
+      runFreshIRBuilderT )
 import safe CMM.Translator (translate)
-import safe Data.Tuple
-import safe LLVM.IRBuilder.Internal.SnocList
-import LLVM.Pretty
-import Debug.Trace
-import Control.Monad
+import safe LLVM.IRBuilder.Internal.SnocList ( SnocList(SnocList) )
+import LLVM.Pretty ( ppllvm )
+import safe Control.Monad ( when )
 
 newtype PipelineError
   = InferenceIncomplete Facts

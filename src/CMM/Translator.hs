@@ -29,7 +29,6 @@ import safe qualified LLVM.AST.Constant as LC
 import safe qualified LLVM.AST.IntegerPredicate as L
 import safe qualified LLVM.AST.Name as L
 import safe qualified LLVM.AST.Operand as LO
-import safe qualified LLVM.AST.Instruction as LI
 import safe qualified LLVM.AST.Type as LT
 import qualified LLVM.AST.Typed as L
 import qualified LLVM.IRBuilder.Constant as LC
@@ -42,12 +41,9 @@ import safe CMM.AST.Annot
 import safe CMM.AST.BlockAnnot
 import safe CMM.AST.GetName
 import safe CMM.AST.Utils
-import safe CMM.Lens
 import safe CMM.Parser.HasPos
 import safe CMM.Pretty ()
 import safe CMM.Translator.State
-import safe qualified CMM.Inference.Type as I
-import Debug.Trace
 import safe Data.Tuple.Extra (first, swap)
 import safe CMM.Data.Function
 import safe Data.Map (Map)
@@ -57,13 +53,11 @@ import Data.Generics
 import safe CMM.Inference.State
 import safe qualified Data.Set as Set
 import safe Data.Set (Set)
-import safe Control.Lens hiding (from)
 import safe CMM.TypeMiner
 import safe qualified CMM.Inference.Preprocess.TypeHole as Ty
 import safe CMM.Inference.Preprocess.TypeHole
-import safe Data.List (sortBy, sortOn)
+import safe Data.List (sortOn)
 import safe LLVM.Prelude (Word32)
-import safe CMM.AST (BodyItem(BodyStackDecl))
 import safe qualified Data.List as List
 import CMM.Utils
 
@@ -118,11 +112,11 @@ instance TranslAssumps a m =>
 instance TranslAssumps a m =>
          Translate m TopLevel a (m ()) where
   translate (topLevel `Annot` _) = case topLevel of
-    TopSection sl ans -> undefined
-    TopDecl an -> undefined
+    TopSection {} -> undefined
+    TopDecl {} -> undefined
     TopProcedure procedure -> void $ translate procedure
-    TopClass an -> undefined
-    TopInstance an -> undefined
+    TopClass {} -> undefined
+    TopInstance {} -> undefined
     TopStruct struct -> do
       structs' <- use structs
       struct' <- runInferencer $ mineStruct structs' struct
@@ -212,7 +206,7 @@ instance TranslAssumps a m =>
     where
       stmtItems = [item | item@(Annot BodyStmt {} _) <- items]
       stackdeclItems = [item | item@(Annot BodyStackDecl {} _) <- items]
-      declItems = [item | item@(Annot BodyDecl {} _) <- items]
+      _ = [item | item@(Annot BodyDecl {} _) <- items]
       (header, body) = tillNext stmtItems -- header = the rest of the entry block of the procedure
       blocks = splitBlocks body
       splitBlocks [] =[]
@@ -274,12 +268,17 @@ Guarantees:
 -}
 instance TranslAssumps a m =>
          Translate m Unit a (m ()) where
-  translate (Unit topLevels `Annot` _) =
-    traverse_ translate topLevels
+  translate (Unit topLevels `Annot` _) = do
+    traverse_ translate $ topStructs <> topProcs <> topDecls <> topSections
+      where
+        topStructs = [struct | struct@(Annot TopStruct{} _) <- topLevels ]
+        topProcs = [struct | struct@(Annot TopProcedure{} _) <- topLevels ]
+        topDecls = [struct | struct@(Annot TopDecl{} _) <- topLevels ]
+        topSections = [struct | struct@(Annot TopSection{} _) <- topLevels ]
 
 instance TranslAssumps a m =>
          Translate m Stmt a (Map Text LO.Operand -> m (Map Text LO.Operand)) where
-  translate (stmt `Annot` annot) vars = case stmt of
+  translate (stmt `Annot` _) vars = case stmt of
     EmptyStmt -> return vars
     IfStmt {}
       | IfStmt c t (Just e) <- stmt -> do
@@ -304,7 +303,9 @@ instance TranslAssumps a m =>
         actuals' <- traverse (`translate` vars) actuals
         expr' <- translate expr vars
         ret <- L.call expr' (fmap (,[]) actuals')
-        extract <- (L.extractValue ret . pure) `traverse` [0..(fromInteger . toInteger $ length rets - 1)]
+        extract <- if null rets
+          then return []
+          else (L.extractValue ret . pure) `traverse` [0..(fromInteger . toInteger $ length rets - 1)]
         let nVars = Map.fromList $ zip (getName <$> rets) extract
         return $ nVars <> vars
       | otherwise -> undefined
@@ -316,18 +317,18 @@ instance TranslAssumps a m =>
         L.ret ret $> vars
       | otherwise -> undefined
     LabelStmt name -> (L.emitBlockStart . fromString . T.unpack . getName) name $> vars
-    ContStmt na ans -> undefined
+    ContStmt {} -> undefined
     GotoStmt {}
       | GotoStmt _ Nothing <- stmt ->do
             let Just lab = getTrivialGotoTarget stmt -- TODO: is this safe?
             L.br (L.mkName $ T.unpack lab)
             return vars
       | otherwise -> undefined
-    CutToStmt an ans ans' -> undefined
+    CutToStmt {} -> undefined
 instance TranslAssumps a m =>
          Translate m Actual a (Map Text LO.Operand -> m LO.Operand) where
   translate (Annot (Actual Nothing expr) _) vars = translate expr vars
-  translate _ vars = undefined
+  translate _ _ = undefined
 
 undef :: LT.Type -> LO.Operand
 undef = LO.ConstantOperand . LC.Undef
@@ -349,7 +350,7 @@ translateManyExprs vars (expr:exprs) =
 -- Source: https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf (7.4)
 instance TranslAssumps a m =>
          Translate m Expr a (Map Text LO.Operand -> m LO.Operand) where
-  translate (expr `Annot` annot) vars = case expr of
+  translate (expr `Annot` _) vars = case expr of
     LitExpr lit Nothing -> translate lit
     ParExpr expr -> translate expr vars
     LVExpr lvalue -> translate lvalue vars
@@ -383,9 +384,9 @@ instance TranslAssumps a m =>
         _ -> error "Cannot create a binary complement to a non-int"
     NegExpr expr ->
       translate expr vars >>= L.icmp L.EQ (LC.bit 0)
-    MemberExpr expr@(_ `Annot` eAnnot) (Name name `Annot` nAnnot) -> do
+    MemberExpr expr@(_ `Annot` eAnnot) (Name name `Annot` _) -> do
       sName <- getStructName eAnnot
-      ~(Just (accessors, fields)) <- uses structs $ Map.lookup sName
+      ~(Just (accessors, _)) <- uses structs $ Map.lookup sName
       let Just idx = name `List.lookup` accessors
       expr' <- translate expr vars
       L.gep expr' [LC.int32 0, LC.int32 . fromInteger $ toInteger idx]
