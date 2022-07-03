@@ -4,4 +4,4 @@
 	branch = llvm-12
 [submodule "vendor/llvm-hs"]
 	path = vendor/llvm-hs
-	url = https://github.com/llvm-hs/llvm-hs.git
+	url = https://github.com/jiriklepl/llvm-hs.git
