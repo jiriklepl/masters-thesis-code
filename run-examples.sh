@@ -22,7 +22,7 @@ find examples -maxdepth 1 -mindepth 1 -name "*.chmmm" | {
 
         echo "doing $file" > /dev/stderr
 
-        if cabal run -v0 Compiler -- -o "$out" "$file"; then
+        if cabal run -v0 Compiler -- -o "$out" "$file" && llc-12 -o /dev/null "$out"; then
             RESULT_C=1
         else
             RESULT_C=0

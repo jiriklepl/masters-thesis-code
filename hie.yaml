@@ -276,6 +276,9 @@ cradle:
     - path: "src/CMM/Translator/State.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/TypeMiner.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/Utils.hs"
       component: "Compiler:exe:Compiler"
 
