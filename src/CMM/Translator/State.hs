@@ -12,9 +12,10 @@ import safe qualified LLVM.AST.Operand as L
 
 import safe CMM.AST.BlockAnnot (BlockData)
 import safe CMM.Err.State (ErrorState)
-import qualified CMM.Inference.Type as Ty
-import safe qualified LLVM.AST.Name as L
 import safe CMM.Inference.State ( InferencerState )
+import qualified LLVM.AST.Type as L
+import Control.Lens
+import Control.Monad.State
 
 data TranslState =
   TranslState
@@ -24,9 +25,9 @@ data TranslState =
     , _blocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
     , _errorState :: ErrorState
     , _offSets :: Map Int Int
-    , _rename :: Map L.Operand L.Operand
     , _inferencer :: InferencerState
-    , _structs :: Map Text ([(Text, Int)], [Ty.Type])
+    , _records :: Map Text L.Operand
+    , _structs :: Map Text ([(Text, Int)], [L.Type])
     }
 
 makeFieldsNoPrefix ''TranslState
@@ -34,13 +35,17 @@ makeFieldsNoPrefix ''TranslState
 initTranslState :: TranslState
 initTranslState =
   TranslState -- FIXME: this is just DUMMY
-    { _controlFlow = mempty
-    , _blockData = mempty
+    { _controlFlow = undefined
+    , _blockData = undefined
     , _currentBlock = Nothing -- TODO: change to (Just 0) in procedure translation
-    , _blocksTable = mempty
-    , _errorState = mempty
-    , _offSets = mempty
-    , _rename = mempty
+    , _blocksTable = undefined
+    , _offSets = undefined
     , _inferencer = undefined
-    , _structs = undefined
+    , _records = undefined
+    , _errorState = mempty
+    , _structs = mempty
     }
+
+clearTranslState :: MonadState TranslState m => m ()
+clearTranslState = do
+  records .= mempty

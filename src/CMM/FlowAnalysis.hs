@@ -1,4 +1,4 @@
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Safe #-}
 
 module CMM.FlowAnalysis
   ( analyzeFlow
@@ -26,9 +26,8 @@ import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.HasPos (HasPos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)
-import Data.Maybe
-import Data.Functor
-import Debug.Trace
+import safe Data.Maybe ( fromJust )
+import safe Data.Functor ( (<&>) )
 
 analyzeFlow :: HasPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)

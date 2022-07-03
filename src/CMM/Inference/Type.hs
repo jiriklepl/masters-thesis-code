@@ -4,16 +4,12 @@ module CMM.Inference.Type where
 
 import safe Data.Data (Data)
 import safe Data.List (foldl')
-import safe Data.Text (Text)
 
-import safe Prettyprinter (Pretty(pretty), dquotes)
+import safe Prettyprinter (Pretty(pretty))
 
-import safe CMM.Data.Nullable (Fallbackable((??)))
-import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, AppType, TBitsType))
+import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, AppType, TBitsType, VoidType))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
-  , TypeKind(GenericType)
-  , setTypeKindInvariantLogicError
   )
 import safe CMM.Inference.TypeVar (FromTypeVar(fromTypeVar), TypeVar)
 
@@ -66,6 +62,7 @@ foldApp :: [Type] -> Type
 foldApp =
   \case
     t:ts -> foldl' ((ComplType .) . AppType) t ts
+    [] -> ComplType VoidType
 
 unfoldApp :: Type -> [Type]
 unfoldApp = reverse . go

@@ -30,7 +30,7 @@ import safe CMM.Inference.TypeVar
   , familyDepth
   )
 import safe CMM.Inference.Unify.Error
-  ( UnificationError(BadKind, GotErrorType, Mismatch, Occurs)
+  ( UnificationError(BadKind, Mismatch, Occurs)
   )
 import safe CMM.Utils ( HasCallStack )
 

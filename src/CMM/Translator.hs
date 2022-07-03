@@ -48,23 +48,24 @@ import safe CMM.Pretty ()
 import safe CMM.Translator.State
 import safe qualified CMM.Inference.Type as I
 import Debug.Trace
-import Data.Tuple.Extra (first, swap)
-import Prettyprinter
-import CMM.Data.Function
+import safe Data.Tuple.Extra (first, swap)
+import safe CMM.Data.Function
 import safe Data.Map (Map)
-import CMM.Data.Tuple
-import Data.Maybe
-import qualified LLVM.IRBuilder.Internal.SnocList as L
+import safe Data.Maybe
+import safe qualified LLVM.IRBuilder.Internal.SnocList as L
 import Data.Generics
-import CMM.Inference.State
-import qualified Data.Set as Set
-import Data.Set (Set)
-import Control.Lens hiding (from)
-import CMM.TypeMiner
-import qualified CMM.Inference.Preprocess.TypeHole as Ty
-import CMM.Inference.Preprocess.TypeHole
-import Data.List (sortBy, sortOn)
-import LLVM.Prelude (Word32)
+import safe CMM.Inference.State
+import safe qualified Data.Set as Set
+import safe Data.Set (Set)
+import safe Control.Lens hiding (from)
+import safe CMM.TypeMiner
+import safe qualified CMM.Inference.Preprocess.TypeHole as Ty
+import safe CMM.Inference.Preprocess.TypeHole
+import safe Data.List (sortBy, sortOn)
+import safe LLVM.Prelude (Word32)
+import safe CMM.AST (BodyItem(BodyStackDecl))
+import safe Prettyprinter
+import safe qualified Data.List as List
 
 type MonadTranslator m
    = ( L.MonadIRBuilder m
@@ -114,19 +115,26 @@ instance TranslAssumps a m =>
     return . (type', ) . translateParName $ formal
 
 instance TranslAssumps a m =>
-         Translate m TopLevel a (m LO.Operand) where
+         Translate m TopLevel a (m ()) where
   translate (topLevel `Annot` _) = case topLevel of
     TopSection sl ans -> undefined
     TopDecl an -> undefined
-    TopProcedure procedure -> translate procedure
+    TopProcedure procedure -> void $ translate procedure
     TopClass an -> undefined
     TopInstance an -> undefined
-    TopStruct an -> undefined
+    TopStruct struct -> do
+      structs' <- use structs
+      struct' <- runInferencer $ mineStruct structs' struct
+      structs %= uncurry Map.insert struct'
 
 getType :: (MonadTranslator m, HasTypeHole a) => a -> m LT.Type
 getType annot = do
   structs' <- use structs
   runInferencer $ mineTypeHoled structs' annot
+
+getStructName :: (MonadTranslator m, HasTypeHole a) => a -> m Text
+getStructName annot =
+  runInferencer $ mineStructName annot
 
 instance TranslAssumps a m =>
          Translate m Procedure a (m LO.Operand) where
@@ -139,11 +147,10 @@ instance TranslAssumps a m =>
             formals' <- traverse translate formals
             type' <- getType annot
             L.function (translateName name) formals' (LT.resultType type') $ \pars ->
-               do rename .= mempty
+               do clearTranslState
                   blockName <- uses blocksTable (Map.! idx)
                   L.emitBlockStart . fromString $ T.unpack blockName
                   rename' <- translate body idx . Map.fromList $ zip formalNames pars
-                  rename .= rename'
                   L.modifyBlock $ \bb -> bb
                     { L.partialBlockInstrs = L.SnocList $ L.unSnocList (L.partialBlockInstrs bb) & renameGeneric rename'
                     , L.partialBlockTerm = L.partialBlockTerm bb & renameGeneric rename'
@@ -195,14 +202,17 @@ instance TranslAssumps a m =>
     blockData' <- uses blockData $ Map.filterWithKey $ \k _ -> k >= zero && k < zero + off
     let vars = blockData' <&> Map.keys . Map.filter ((^. _3) `fOr` (^. _2))
         varTypes = collectVarTypes (Set.fromList . concat $ Map.elems vars) bodyNode
-    structs' <- use structs
-    types <- runInferencer $ traverse (mineTypeHole structs') varTypes
-    exports <- Map.elems <$> traverse (traverse $ \v -> (v,) . LO.LocalReference (fromJust $ Map.lookup v types)  <$> L.freshName (fromString $ T.unpack v)) (Map.delete zero vars)
-    newVars' <- translateMany header newVars
-    nVars'' <- traverse (translateBlock zero (Map.toList newVars') exports) . fmap swap . sortOn fst $ fmap swap blocks
-    return . Map.fromList . concat $ zipWith' zip' (fmap snd <$> exports) (fmap snd <$> nVars'')
+    types <- traverse getType varTypes
+    placeholders <- Map.elems <$> traverse (traverse $ \v -> (v,) . LO.LocalReference (fromJust $ Map.lookup v types)  <$> L.freshName (fromString $ T.unpack v)) (Map.delete zero vars)
+    stackDeclVars <- translateMany stackdeclItems newVars
+    headerVars <- translateMany header stackDeclVars
+    finalVars <- traverse (translateBlock zero (Map.toList headerVars) placeholders) . fmap swap . sortOn fst $ fmap swap blocks
+    return . Map.fromList . concat $ zipWith' zip' (fmap snd <$> placeholders) (fmap snd <$> finalVars)
     where
-      (header, body) = tillNext items -- header = the rest of the entry block of the procedure
+      stmtItems = [item | item@(Annot BodyStmt {} _) <- items]
+      stackdeclItems = [item | item@(Annot BodyStackDecl {} _) <- items]
+      declItems = [item | item@(Annot BodyDecl {} _) <- items]
+      (header, body) = tillNext stmtItems -- header = the rest of the entry block of the procedure
       blocks = splitBlocks body
       splitBlocks [] =[]
       splitBlocks (item:items')
@@ -334,38 +344,46 @@ translateManyExprs vars (expr:exprs) =
 -- Source: https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf (7.4)
 instance TranslAssumps a m =>
          Translate m Expr a (Map Text LO.Operand -> m LO.Operand) where
-  translate (Annot (LitExpr lit Nothing) _) _ = translate lit
-  translate (Annot (ParExpr expr) _) vars = translate expr vars
-  translate (Annot (LVExpr lvalue) _) vars = translate lvalue vars
-  translate (Annot (BinOpExpr o l r) _) vars = do
-    l' <- translate l vars
-    r' <- translate r vars
-    (r' &) . (l' &) $
-      case o of
-        AddOp -> L.add
-        SubOp -> L.sub
-        MulOp -> L.mul
-        DivOp -> L.udiv
-        ModOp -> L.urem
-        AndOp -> L.and
-        OrOp -> L.or
-        XorOp -> L.xor
-        ShLOp -> L.shl
-        ShROp -> L.lshr
-            -- https://llvm.org/docs/LangRef.html#icmp-instruction
-        EqOp -> L.icmp L.EQ
-        NeqOp -> L.icmp L.NE
-        GtOp -> L.icmp L.UGT
-        LtOp -> L.icmp L.ULT
-        GeOp -> L.icmp L.UGE
-        LeOp -> L.icmp L.ULE
-  translate (Annot (ComExpr expr) _) vars = do
-    expr' <- translate expr vars
-    L.typeOf expr' >>= \case
-      Right (LT.IntegerType bits) ->
-        L.xor expr' . LO.ConstantOperand $ LC.Int bits (-1)
-      _ -> error "Cannot create a binary complement to a non-int"
-  translate (Annot (NegExpr expr) _) vars = translate expr vars >>= L.icmp L.EQ (LC.bit 0)
+  translate (expr `Annot` annot) vars = case expr of
+    LitExpr lit Nothing -> translate lit
+    ParExpr expr -> translate expr vars
+    LVExpr lvalue -> translate lvalue vars
+    BinOpExpr o l r -> do
+      l' <- translate l vars
+      r' <- translate r vars
+      (r' &) . (l' &) $
+        case o of
+          AddOp -> L.add
+          SubOp -> L.sub
+          MulOp -> L.mul
+          DivOp -> L.udiv
+          ModOp -> L.urem
+          AndOp -> L.and
+          OrOp -> L.or
+          XorOp -> L.xor
+          ShLOp -> L.shl
+          ShROp -> L.lshr
+              -- https://llvm.org/docs/LangRef.html#icmp-instruction
+          EqOp -> L.icmp L.EQ
+          NeqOp -> L.icmp L.NE
+          GtOp -> L.icmp L.UGT
+          LtOp -> L.icmp L.ULT
+          GeOp -> L.icmp L.UGE
+          LeOp -> L.icmp L.ULE
+    ComExpr expr -> do
+      expr' <- translate expr vars
+      L.typeOf expr' >>= \case
+        Right (LT.IntegerType bits) ->
+          L.xor expr' . LO.ConstantOperand $ LC.Int bits (-1)
+        _ -> error "Cannot create a binary complement to a non-int"
+    NegExpr expr ->
+      translate expr vars >>= L.icmp L.EQ (LC.bit 0)
+    MemberExpr expr@(_ `Annot` eAnnot) (Name name `Annot` nAnnot) -> do
+      sName <- getStructName eAnnot
+      ~(Just (accessors, fields)) <- uses structs $ Map.lookup sName
+      let Just idx = name `List.lookup` accessors
+      expr' <- translate expr vars
+      L.gep expr' [LC.int32 0, LC.int32 . fromInteger $ toInteger idx]
 
 instance TranslAssumps a m =>
          Translate m Lit a (m LO.Operand) where
@@ -381,12 +399,35 @@ instance TranslAssumps a m =>
 -- TODO: continue from here
 instance TranslAssumps a m =>
          Translate m LValue a (Map Text LO.Operand -> m LO.Operand) where
-  translate (Annot (LVName n) _) vars = do
-    maybe (error $"Variable not found " <> show n) return (getName n `Map.lookup` vars) -- TODO: traverse all frames (accessing global registers; also, accessing non-variables); remove the error
-  translate (Annot LVRef {} _) vars = do
-    error "references not yet implemented" -- TODO: implement lvref
+  translate (Annot lValue annot) vars = do
+    records' <- use records
+    case lValue of
+      LVName name
+        | Just op <- name' `Map.lookup` vars
+        <|> name' `Map.lookup` records' -> return op
+        where name' = getName name
+      LVName name -> error $ show name <> ": name not found"
+        -- TODO: traverse all frames (accessing global registers; also, accessing non-variables); remove the error
+      LVRef Nothing expr Nothing ->
+        translate expr vars >>= (`L.load` 0)
+      LVRef {} ->
+        error "dereferences not yet implemented" -- TODO: implement lvref
 
 -- TODO: continue from here
 instance TranslAssumps a m =>
          Translate m StackDecl a (Map Text LO.Operand -> m (Map Text LO.Operand)) where
-  translate = undefined
+  translate (StackDecl datums `Annot` _) = go mempty datums
+    where
+      go cache [] vars
+        | null cache = return vars
+        | otherwise = error $ "unresolved stackdata: " <> show cache
+      go cache (Annot (datum :: Datum a) _:datums') vars = case datum of
+        DatumLabel name -> go (getName name : cache) datums' vars
+        Datum _ t Nothing Nothing -> do
+          t' <- getType t
+          record <- L.alloca t' Nothing 0
+          cache `forM_` \item ->
+            records %= Map.insert item record
+          return vars
+        Datum {} -> undefined
+        DatumAlign {} -> undefined

@@ -5,7 +5,6 @@ module CMM.Inference.TypeCompl where
 import safe CMM.Pretty (arrowNice)
 import safe Data.Data (Data)
 import safe Data.Text (Text)
-import safe qualified Data.Text as T
 
 import safe Prettyprinter
   ( Pretty(pretty)
@@ -18,11 +17,10 @@ import safe Prettyprinter
 
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
-  , TypeKind((:->), ErrorKind, GenericType, Star)
+  , TypeKind((:->), GenericType, Star)
   , setTypeKindInvariantLogicError
   )
 import safe CMM.Inference.TypeVar (TypeVar)
-import safe CMM.Utils (backQuote)
 
 data TypeCompl a
   = TupleType [a]
@@ -119,9 +117,7 @@ instance (HasTypeKind a, Show a) => HasTypeKind (TypeCompl a) where
         case getTypeKind t of
           _ :-> k -> k
           GenericType -> GenericType
-          _ ->
-            ErrorKind $
-            T.pack ("Kind " ++ backQuote (show t) ++ " cannot be applied.")
+          _ -> error "kind cannot be applied"
       ConstType _ kind _ -> kind
       _ -> Star
   setTypeKind kind =

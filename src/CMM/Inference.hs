@@ -135,7 +135,6 @@ instance FactCheck Type where
     \case
       VarType t -> factCheck t
       ComplType t -> factCheck t
-      _ -> return ()
 
 instance {-# OVERLAPPING #-} FactCheck Fact where
   factCheck fact =

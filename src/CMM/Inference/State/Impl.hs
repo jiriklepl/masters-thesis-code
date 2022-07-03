@@ -35,9 +35,9 @@ import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import CMM.Options (Options(Options))
-import qualified CMM.Options as Options
-import Data.Monoid
+import safe CMM.Options (Options(Options))
+import safe qualified CMM.Options as Options
+import safe Data.Monoid ( Sum(Sum) )
 
 data InferencerState =
   InferencerState
@@ -76,7 +76,7 @@ data InferencerState =
   deriving (Show)
 
 initInferencer :: Options -> InferencerState
-initInferencer Options {Options.maxFunDeps = maxFunDeps, Options.handleStart = handleCounter} =
+initInferencer Options {Options.maxFunDeps = maxFunDeps, Options.handleStart = handleCounter'} =
   InferencerState
     { _subKinding = nullVal
     , _kindingBounds = nullVal
@@ -85,7 +85,7 @@ initInferencer Options {Options.maxFunDeps = maxFunDeps, Options.handleStart = h
     , _unifs = nullVal
     , _typize = Bimap.empty
     , _handlize = nullVal
-    , _handleCounter = Sum handleCounter
+    , _handleCounter = Sum handleCounter'
     , _classSchemes = nullVal
     , _classFacts = nullVal
     , _funDeps = nullVal

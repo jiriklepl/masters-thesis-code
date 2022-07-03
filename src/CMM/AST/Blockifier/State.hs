@@ -8,14 +8,14 @@ import safe Control.Lens.TH (makeFieldsNoPrefix)
 import safe Data.Map (Map)
 import safe Data.Text (Text)
 import safe Control.Monad.State ( State )
-import safe Control.Lens.Setter ((.=))
 
 import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Parser.HasPos (SourcePos)
-import Control.Lens
-import qualified Data.Map as Map
-import Data.Tuple
+import safe Control.Lens
+    ( use, uses, (%=), (<>=), (.=) )
+import safe qualified Data.Map as Map
+import safe Data.Tuple ( swap )
 
 -- | Contains various data used by `Blockifier`
 data BlockifierState =
