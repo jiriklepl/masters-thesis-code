@@ -64,8 +64,8 @@ import safe CMM.Inference.Preprocess.TypeHole
 import safe Data.List (sortBy, sortOn)
 import safe LLVM.Prelude (Word32)
 import safe CMM.AST (BodyItem(BodyStackDecl))
-import safe Prettyprinter
 import safe qualified Data.List as List
+import CMM.Utils
 
 type MonadTranslator m
    = ( L.MonadIRBuilder m
@@ -110,9 +110,10 @@ class TranslAssumps a m =>
 
 instance TranslAssumps a m =>
          Translate m Formal a (m (LT.Type, L.ParameterName)) where
-  translate (Annot formal annot) = do
-    type' <- getType annot
-    return . (type', ) . translateParName $ formal
+  translate (Formal _ True _ _ `Annot` _) = undefined
+  translate (Formal _ _ type' name `Annot` _) = do
+    type'' <- getType type'
+    return . (type'', ) $ translateParName name
 
 instance TranslAssumps a m =>
          Translate m TopLevel a (m ()) where
@@ -127,7 +128,7 @@ instance TranslAssumps a m =>
       struct' <- runInferencer $ mineStruct structs' struct
       structs %= uncurry Map.insert struct'
 
-getType :: (MonadTranslator m, HasTypeHole a) => a -> m LT.Type
+getType :: (MonadTranslator m, HasTypeHole a, HasCallStack) => a -> m LT.Type
 getType annot = do
   structs' <- use structs
   runInferencer $ mineTypeHoled structs' annot
@@ -299,15 +300,19 @@ instance TranslAssumps a m =>
         translPair (Annot LVRef {} _) _ = error "not implemented yet" -- TODO: make case for lvref
     PrimOpStmt {} -> undefined
     CallStmt {}
-      | CallStmt rets _ expr actuals Nothing [] <- stmt -> undefined
+      | CallStmt rets _ expr actuals Nothing [] <- stmt -> do
+        actuals' <- traverse (`translate` vars) actuals
+        expr' <- translate expr vars
+        ret <- L.call expr' (fmap (,[]) actuals')
+        extract <- (L.extractValue ret . pure) `traverse` [0..(fromInteger . toInteger $ length rets - 1)]
+        let nVars = Map.fromList $ zip (getName <$> rets) extract
+        return $ nVars <> vars
       | otherwise -> undefined
     JumpStmt {} -> undefined
     ReturnStmt {}
       | ReturnStmt Nothing Nothing actuals <- stmt -> do
         retType <- makePacked <$> traverse getType actuals
-        traceShowM retType
         ret <-  translateManyExprs vars actuals >>= makeTuple retType
-        traceShowM ret
         L.ret ret $> vars
       | otherwise -> undefined
     LabelStmt name -> (L.emitBlockStart . fromString . T.unpack . getName) name $> vars
@@ -406,7 +411,10 @@ instance TranslAssumps a m =>
         | Just op <- name' `Map.lookup` vars
         <|> name' `Map.lookup` records' -> return op
         where name' = getName name
-      LVName name -> error $ show name <> ": name not found"
+      LVName name -> do
+        t <- getType annot
+        return . LO.ConstantOperand . LC.GlobalReference t $ translateName name
+
         -- TODO: traverse all frames (accessing global registers; also, accessing non-variables); remove the error
       LVRef Nothing expr Nothing ->
         translate expr vars >>= (`L.load` 0)

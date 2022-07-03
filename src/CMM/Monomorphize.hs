@@ -429,8 +429,9 @@ instance Monomorphize (Annot AST.StackDecl) a where
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Actual) a where
   monomorphize subst =
     \case
-      AST.Actual mKind expr `Annot` a ->
-        monomorphizeTrivial subst a (AST.Actual mKind) expr
+      AST.Actual mKind expr `Annot` a -> do
+        b <- useInferencer $ reconstructHole subst a
+        monomorphizeTrivial subst b (AST.Actual mKind) expr
 
 instance (HasPos a, HasTypeHole a) => Monomorphize (Annot AST.Stmt) a where
   monomorphize subst (stmt `Annot` a) = do

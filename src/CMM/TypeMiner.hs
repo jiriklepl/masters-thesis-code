@@ -24,19 +24,20 @@ import safe qualified CMM.Inference.State as State
 import safe CMM.Inference.TypeVar ( ToTypeVar(toTypeVar) )
 import safe Control.Monad ( (>=>) )
 import safe CMM.Data.Function ((.>))
-import Data.Tuple.Extra (first, second)
+import safe Data.Tuple.Extra (second)
+import safe CMM.Utils ( HasCallStack )
 
-mineTypeHoled :: HasTypeHole a => Map Text ([(Text, Int)], [L.Type]) -> a -> Inferencer L.Type
+mineTypeHoled :: (HasCallStack, HasTypeHole a) => Map Text ([(Text, Int)], [L.Type]) -> a -> Inferencer L.Type
 mineTypeHoled structs = getTypeHole .> \case
   EmptyTypeHole -> undefined
   hole -> mineTypeHandle structs $ holeHandle hole
 
-mineTypeHole :: Map Text ([(Text, Int)], [L.Type]) -> TypeHole -> Inferencer L.Type
+mineTypeHole :: HasCallStack => Map Text ([(Text, Int)], [L.Type]) -> TypeHole -> Inferencer L.Type
 mineTypeHole structs = \case
   EmptyTypeHole -> undefined
   hole -> mineTypeHandle structs $ holeHandle hole
 
-mineTypeHandle :: ToTypeVar a => Map Text ([(Text, Int)], [L.Type])
+mineTypeHandle :: (ToTypeVar a, HasCallStack) => Map Text ([(Text, Int)], [L.Type])
   -> a
   -> Inferencer L.Type
 mineTypeHandle structs = State.getTyping . toTypeVar >=> mineType structs
@@ -62,10 +63,10 @@ collectStructs structs (AST.Unit topLevels `Annot` _) = Map.fromList <$> do
     AST.TopStruct struct -> pure <$> mineStruct structs struct
   return $ concat collected
 
-mineStruct :: HasTypeHole annot => Map Text ([(Text, Int)], [L.Type]) -> Annot AST.Struct annot -> Inferencer (Text, ([(Text, Int)], [L.Type]))
+mineStruct :: (HasCallStack, HasTypeHole annot) => Map Text ([(Text, Int)], [L.Type]) -> Annot AST.Struct annot -> Inferencer (Text, ([(Text, Int)], [L.Type]))
 mineStruct structs (AST.Struct name datums `Annot` _) = (getName name,) <$> mineDatums structs datums
 
-mineDatums :: HasTypeHole annot => Map Text ([(Text, Int)], [L.Type]) -> [Annot AST.Datum annot] -> Inferencer ([(Text, Int)], [L.Type])
+mineDatums :: (HasCallStack, HasTypeHole annot) => Map Text ([(Text, Int)], [L.Type]) -> [Annot AST.Datum annot] -> Inferencer ([(Text, Int)], [L.Type])
 mineDatums structs = fmap fix . go
   where
     fix (ids, fs) = (second (length fs -) <$> ids, fs)
@@ -86,7 +87,7 @@ makePacked = L.StructureType True
 makeUnpacked :: [L.Type] -> L.Type
 makeUnpacked = L.StructureType False
 
-mineType :: Map Text ([(Text, Int)], [L.Type]) -> Type -> Inferencer L.Type
+mineType :: HasCallStack => Map Text ([(Text, Int)], [L.Type]) -> Type -> Inferencer L.Type
 mineType structs t = case t of
   VarType {} -> error "-"
   ComplType tc -> case tc of
