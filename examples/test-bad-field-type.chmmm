@@ -1,0 +1,11 @@
+struct A a {
+    x : auto (a);
+}
+
+g (ptr((A bits32)) x) {
+    bits64 y;
+
+    y = [x->x];
+
+    return (x);
+}

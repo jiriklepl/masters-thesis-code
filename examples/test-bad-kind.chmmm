@@ -1,0 +1,7 @@
+struct A {
+
+}
+
+f((A auto(b)) x) {
+    return ();
+}

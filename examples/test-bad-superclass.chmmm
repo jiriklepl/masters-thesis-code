@@ -1,0 +1,7 @@
+class EQ a {
+    eq(auto(a) x, auto(a) y) -> bits1;
+}
+
+class EQ auto(b) => ORD a {
+    cmp(auto(a) x, auto(a) y) -> bits1;
+}

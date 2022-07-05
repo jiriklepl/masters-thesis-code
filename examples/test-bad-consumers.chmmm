@@ -1,0 +1,10 @@
+g() {
+    return(5, 10);
+}
+
+f () {
+    bits32 x;
+    x = g();
+
+    return (x);
+}
