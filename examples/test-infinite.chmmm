@@ -1,0 +1,15 @@
+class C a {
+    c() -> auto (a);
+}
+
+instance C ptr(auto(a)) => C auto (a) {
+    c() {
+        auto x;
+        auto y;
+
+        x = c();
+        y = [x];
+
+        return (y);
+    }
+}
