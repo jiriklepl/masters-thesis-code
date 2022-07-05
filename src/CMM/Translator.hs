@@ -223,7 +223,7 @@ instance TranslAssumps a m =>
       tillNext [] = ([], [])
 
 translateBlock :: TranslAssumps a m => Int ->  OutVars -> [OutVars] -> ([Annot BodyItem a], Int) -> m OutVars
-translateBlock zero entry exports (~(item:items), idx) = do
+translateBlock zero entry placeholders (~(item:items), idx) = do
   vars <- uses blockData (idx `Map.lookup`) <&> maybe [] (Map.keys . Map.filter (^. _3))
   from <- uses controlFlow $ (fst <$>) . filter (\(_, t) -> t == idx)
   names <- use blocksTable
@@ -234,7 +234,7 @@ translateBlock zero entry exports (~(item:items), idx) = do
               [ let source =
                       fromJust $ find (\(v', _) -> v' == v) $ if f == zero
                         then entry
-                        else exports !! (f - zero - 1)
+                        else placeholders !! (f - zero - 1)
                     mkRecord s = (s, L.mkName . T.unpack $ names Map.! f)
                 in mkRecord $ source ^. _2
               | f <- from

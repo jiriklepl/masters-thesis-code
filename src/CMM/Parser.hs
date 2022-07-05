@@ -184,8 +184,8 @@ instance' =
         AST.Instance
         (sepBy1 paraName comma <* symbol T.DArr)
         paraName
-        (braces $ many procedure)
-    , liftA2 (AST.Instance []) paraName (braces $ many procedure)
+        (braces $ many procedureInstance)
+    , liftA2 (AST.Instance []) paraName (braces $ many procedureInstance)
     ]
 
 structTopLevel :: ULocParser AST.TopLevel
@@ -291,17 +291,39 @@ procedureHeader =
     formals
     (optional $ symbol T.Arr *> sepEndBy semiFormal comma)
 
+procedureInstanceHeader :: SourceParser AST.ProcedureHeader
+procedureInstanceHeader =
+  withSourcePos $
+  liftA4
+    AST.ProcedureHeader
+    (optional convention)
+    identifier
+    formalsInstance
+    (optional $ symbol T.Arr *> sepEndBy semiFormalInstance comma)
+
 procedure :: SourceParser AST.Procedure
 procedure = withSourcePos $ liftA2 AST.Procedure procedureHeader body
+
+procedureInstance :: SourceParser AST.Procedure
+procedureInstance = withSourcePos $ liftA2 AST.Procedure procedureInstanceHeader body
 
 formal :: SourceParser AST.Formal
 formal = withSourcePos $ liftA4 AST.Formal mKind invariant type' identifier
 
+formalInstance :: SourceParser AST.Formal
+formalInstance = withSourcePos $ liftA4 AST.Formal mKind invariant justAutoType identifier
+
 semiFormal :: SourceParser AST.SemiFormal
 semiFormal = withSourcePos $ liftA2 AST.SemiFormal mKind type'
 
+semiFormalInstance :: SourceParser AST.SemiFormal
+semiFormalInstance = withSourcePos $ liftA2 AST.SemiFormal mKind justAutoType
+
 formals :: Parser [Annot AST.Formal SourcePos]
 formals = parens $ formal `sepEndBy` comma
+
+formalsInstance :: Parser [Annot AST.Formal SourcePos]
+formalsInstance = parens $ formalInstance `sepEndBy` comma
 
 invariant :: Parser Bool
 invariant = keyword T.Invariant $> True <|> pure False
@@ -384,6 +406,9 @@ parensType = AST.TPar <$> parens paraType
 
 autoType :: ULocParser AST.Type
 autoType = AST.TAuto <$> (keyword T.Auto *> optional (parens identifier))
+
+justAutoType :: SourceParser AST.Type
+justAutoType = withSourcePos $ AST.TAuto Nothing <$ keyword T.Auto
 
 ptrType :: ULocParser AST.Type
 ptrType = keyword T.Ptr *> (AST.TPtr <$> withSourcePos parensType)

@@ -24,6 +24,7 @@ import safe CMM.Err.IsError ( IsError )
 import safe Prettyprinter ( (<+>), Pretty(pretty) )
 import safe CMM.Parser.ASTError ( registerASTError )
 import safe Data.Maybe ( fromMaybe )
+import CMM.Inference.Type (unfoldApp)
 
 
 newtype FillAnnotError
@@ -53,7 +54,11 @@ translType holed t = case t of
     T.ComplType tc -> case tc of
       TupleType {} -> Nothing
       FunctionType {} -> Nothing
-      AppType {} -> Nothing
+      AppType {} -> do
+        app' <- withAnnot holed <$> translType holed app
+        args' <- traverse (fmap (withAnnot holed) . translType holed) args
+        return . AST.TPar . withAnnot holed $ AST.ParaType app' args'
+        where (app:args) = unfoldApp t
       AddrType t' -> AST.TPtr . withAnnot holed <$> translType holed t'
       ConstType name _ _ -> Just . AST.TName $ AST.Name name
       StringType -> Nothing

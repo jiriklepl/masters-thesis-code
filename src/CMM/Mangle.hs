@@ -92,8 +92,8 @@ instance Mangle n where
   mangle n@(_ `Annot` (_ :: annot)) = go n
     where
       go :: Data d => d -> Inferencer d
-      go = gmapM go `extM` lvNameCase `extM` procedureHeaderCase
-      lvNameCase (AST.LVName name `Annot` (a :: annot)) = do
+      go = gmapM go `extM` lValueCase `extM` procedureHeaderCase
+      lValueCase (AST.LVName name `Annot` (a :: annot)) = do
         name' <- case getTypeHole a of
           SimpleTypeHole {} -> return name
           LVInstTypeHole {} ->
@@ -102,7 +102,7 @@ instance Mangle n where
             registerASTError a . IllegalTypeInformation $ getTypeHole a
             return name
         return $ AST.LVName name' `Annot` a
-      lvNameCase lvRef = gmapM go lvRef
+      lValueCase lvRef = gmapM go lvRef
       procedureHeaderCase (AST.ProcedureHeader mConv name formals semis `Annot` (a :: annot)) = do
         name' <- case getTypeHole a of
           SimpleTypeHole {} -> case mConv of

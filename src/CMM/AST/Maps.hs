@@ -309,14 +309,18 @@ instance ( ASTmapCTX6 hint a b AST.Actual AST.Expr AST.Lit AST.LValue AST.Name A
 instance ASTmap hint AST.Lit a b where
   astMapM _ _ = trivial
 
-instance (ASTmapCTX1 hint a b AST.ParaType, Space hint a b AST.Name) =>
+instance (ASTmapCTX2 hint a b  AST.ParaType AST.Type, Space hint a b AST.Name) =>
          ASTmap hint AST.Type a b where
   astMapM _ f =
     \case
       AST.TBits a -> pure $ AST.TBits a
       AST.TName a -> AST.TName <$> f a
-      AST.TAuto a -> AST.TAuto <$> traverse f a
       AST.TPar a -> AST.TPar <$> f a
+      AST.TAuto a -> AST.TAuto <$> traverse f a
+      AST.TPtr a -> AST.TPtr <$> f a
+      AST.TVoid -> pure AST.TVoid
+      AST.TBool -> pure AST.TBool
+      AST.TLabel -> pure AST.TLabel
 
 instance ASTmapCTX1 hint a b AST.Type => ASTmap hint AST.ParaType a b where
   astMapM _ f (AST.ParaType a b) = liftA2 AST.ParaType (f a) (traverse f b)

@@ -12,7 +12,7 @@ class RAII a {
 }
 
 instance RAII X {
-  drop(ptr(auto(a)) u ) ->  {
+  drop(auto u) ->  {
     auto y;
     y = [u->x];
     return ();
@@ -20,7 +20,7 @@ instance RAII X {
 }
 
 instance RAII Y {
-  drop(ptr(auto) u ) ->  {
+  drop(auto u) ->  {
     return ();
   }
 }
