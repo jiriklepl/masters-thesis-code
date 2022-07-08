@@ -16,8 +16,7 @@ import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.Fact (Facts)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
-  ( HandleCounter
-  , HasHandleCounter(handleCounter)
+  ( HasHandleCounter(handleCounter)
   , freshAnnotatedTypeHelperWithParent
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
@@ -56,7 +55,7 @@ data PreprocessorState =
     , _facts :: [Facts] -- ^ The head refers to the Constraints in the current context
     , _cSymbols :: [Text] -- ^ list of the functions with the 'foreign "C"' specifier
     , _currentContext :: [Context] -- ^ The head refers to the `Context` object representing the given context
-    , _handleCounter :: HandleCounter -- ^ Counter for fresh variable names when generating type handles
+    , _handleCounter :: Int -- ^ Counter for fresh variable names when generating type handles
     , _errorState :: ErrorState -- ^ the error state of the preprocessor
     , _currentParent :: [TypeVar] -- ^ The head refers to the parent of the current context
     }

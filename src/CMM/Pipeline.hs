@@ -46,7 +46,7 @@ import safe CMM.Err.IsError ( IsError )
 import safe CMM.AST.BlockAnnot ( BlockAnnot )
 import System.IO (stdin, IOMode (ReadMode), withFile, stderr, hPrint)
 import safe System.Exit ( die )
-import safe CMM.Inference.HandleCounter ( readHandleCounter )
+import safe CMM.Inference.HandleCounter ( handleCounter )
 import safe qualified CMM.Translator.State as Tr
 import safe qualified CMM.AST.Blockifier.State as B
 import safe qualified Data.Map as Map
@@ -136,7 +136,7 @@ runFlatBlock ast =
 runInferMono :: (GetPos a, GetPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), InferencerState, ErrorState)
 runInferMono options ast = do
   ((prepAST, facts'), pState, errState) <- preprocessor options ast
-  ((),iState, errState') <- inferencer options{handleStart=readHandleCounter pState} prepAST facts'
+  ((),iState, errState') <- inferencer options{handleStart=view handleCounter pState} prepAST facts'
   (monoAST, (iState', _)) <- monomorphizer options iState prepAST
   (ast', iState'', errState'') <- postprocessor iState' monoAST
   return (ast', iState'', errState <> errState' <> errState'')

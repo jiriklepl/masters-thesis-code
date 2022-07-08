@@ -24,8 +24,7 @@ import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
-  ( HandleCounter
-  , HasHandleCounter(handleCounter)
+  ( HasHandleCounter(handleCounter)
   , freshAnnotatedTypeHelperWithParent
   )
 import safe CMM.Inference.Refresh (Refresher(refresher))
@@ -37,7 +36,6 @@ import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
 import safe CMM.Options (Options(Options))
 import safe qualified CMM.Options as Options
-import safe Data.Monoid ( Sum(Sum) )
 
 data InferencerState =
   InferencerState
@@ -55,7 +53,7 @@ data InferencerState =
     -- ^ TODO: Handlize
     , _handlize :: Bimap TypeVar TypeHandle
     -- ^ Maps variables to their respective superKinding variables (forms a graph)
-    , _handleCounter :: HandleCounter
+    , _handleCounter :: Int
     -- ^ TODO
     , _errorState :: ErrorState
     -- ^ TODO
@@ -85,7 +83,7 @@ initInferencer Options {Options.maxFunDeps = maxFunDeps, Options.handleStart = h
     , _unifs = nullVal
     , _typize = Bimap.empty
     , _handlize = nullVal
-    , _handleCounter = Sum handleCounter'
+    , _handleCounter = handleCounter'
     , _classSchemes = nullVal
     , _classFacts = nullVal
     , _funDeps = nullVal

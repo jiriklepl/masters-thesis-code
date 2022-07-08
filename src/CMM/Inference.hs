@@ -68,7 +68,7 @@ import safe CMM.Inference.Fact
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.GetParent (GetParent(getParent))
-import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
+import safe CMM.Inference.HandleCounter (nextHandleCounter, handleCounter)
 import safe CMM.Inference.Preprocess.TypeHole
   ( HasTypeHole(getTypeHole)
   , TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
@@ -268,7 +268,7 @@ fixSubs = do
         propagateBounds bounds sub
         boundsUnifs bounds >>= go subst
         where
-          subUnifs = liftA2 deduceUnifs getHandleCounter (use sub)
+          subUnifs = liftA2 deduceUnifs (use handleCounter) (use sub)
           go accum subst
             | null subst = return accum
             | otherwise = do
@@ -1063,7 +1063,7 @@ propagateBounds ::
   -> Getter InferencerState (Map TypeVar (Set TypeVar))
   -> Inferencer ()
 propagateBounds which by = do
-  pairs <- liftA2 (collectPairs Forward) getHandleCounter (use by)
+  pairs <- liftA2 (collectPairs Forward) (use handleCounter) (use by)
   for_ pairs $ \(sup, sub) -> do
     uses which (sub `Map.lookup`) >>=
       traverse_
