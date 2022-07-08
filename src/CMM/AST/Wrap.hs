@@ -89,6 +89,9 @@ instance (Pretty (ASTWrapper a)) where
 class MakeWrapped n where
   makeWrapped :: n a -> ASTWrapper a
 
+instance MakeWrapped ASTWrapper where
+  makeWrapped = id
+
 instance MakeWrapped AST.Unit where
   makeWrapped = WrapUnit
 

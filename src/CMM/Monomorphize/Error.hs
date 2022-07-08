@@ -17,7 +17,7 @@ import safe CMM.Inference.TypeVar ( TypeVar )
 import safe CMM.Inference.Type ( Type )
 import CMM.AST.Wrap (ASTWrapper, MakeWrapped (makeWrapped))
 import safe CMM.AST.Annot
-    ( Annotation(Annot, takeAnnot), Annot, mapAnnot )
+    ( Annotation(Annot, takeAnnot), Annot, unAnnot )
 import CMM.Inference.Unify.Error (UnificationError)
 import safe CMM.Parser.GetPos ( GetPos )
 import CMM.Err.Error (Error)
@@ -25,17 +25,18 @@ import qualified CMM.Err.Error as Error
 import safe CMM.Parser.ASTError ( makeASTError )
 import safe CMM.Monomorphize.Schematized ( Schematized (FuncScheme, StructScheme) )
 
+-- | Various errors that can be registered by the monomorphizer (for their explanation, see the pretty instance)
 data MonomorphizeError
   = ReachedMaxWaves Int
-  | AbsurdType Absurdity (Annot ASTWrapper ())
-  | IllegalPolyType PolyWhat (Annot ASTWrapper ())
-  | InstantiatesToNothing (Annot ASTWrapper ())
-  | IllegalHole TypeHole (Annot ASTWrapper ())
-  | IllegalScheme (Schematized ()) (Annot ASTWrapper ())
-  | NoInstance TypeVar TypeVar (Annot ASTWrapper ())
-  | IsNotScheme (Annot ASTWrapper ())
-  | CannotInstantiate Type Type [UnificationError] (Annot ASTWrapper ())
-  | Ambiguity [TypeHole] (Annot ASTWrapper ())
+  | AbsurdType Absurdity (ASTWrapper ())
+  | IllegalPolyType PolyWhat (ASTWrapper ())
+  | InstantiatesToNothing (ASTWrapper ())
+  | IllegalHole TypeHole (ASTWrapper ())
+  | IllegalScheme (Schematized ()) (ASTWrapper ())
+  | NoInstance TypeVar TypeVar (ASTWrapper ())
+  | IsNotScheme (ASTWrapper ())
+  | CannotInstantiate Type Type [UnificationError] (ASTWrapper ())
+  | Ambiguity [TypeHole] (ASTWrapper ())
   deriving (Show, Eq, IsError, Data)
 
 instance Pretty MonomorphizeError where
@@ -59,30 +60,37 @@ instance Pretty MonomorphizeError where
       _ -> pretty node <+> " cannot be instantiated due to ambiguity between the following types:" <+> list (pretty <$> holes)
     where report = ", report bug in inference preprocessing"
 
+-- | a shortcut for making AST errors of error severity
 makeError :: GetPos n => n -> MonomorphizeError -> Error
 makeError n = Error.makeError . makeASTError n
 
-mapWrapped :: MakeWrapped n => Annot n a -> Annotation ASTWrapper ()
-mapWrapped = void . mapAnnot makeWrapped
+-- | strips annotations from the given node and wraps it in the `ASTWrapper`
+voidWrapped :: MakeWrapped n => Annot n a -> ASTWrapper ()
+voidWrapped = void . makeWrapped . unAnnot
 
+-- | helper for creating AST error containing `InstantiatesToNothing`
 illegalNothing :: (GetPos a, MakeWrapped n) => Annot n a -> Error
 illegalNothing annotated@Annot{takeAnnot} =
-  makeError takeAnnot . InstantiatesToNothing $ mapWrapped annotated
+  makeError takeAnnot . InstantiatesToNothing $ voidWrapped annotated
 
+-- | helper for creating AST error containing `AbsurdType`
 absurdType :: (GetPos a, MakeWrapped n) =>
   Absurdity -> Annotation n a -> Error
 absurdType absurdity annotated@Annot{takeAnnot} =
-  makeError takeAnnot . AbsurdType absurdity $ mapWrapped annotated
+  makeError takeAnnot . AbsurdType absurdity $ voidWrapped annotated
 
+-- | helper for creating AST error containing `IllegalPolyType`
 illegalPolyType :: (GetPos a, MakeWrapped n) =>
   PolyWhat -> Annotation n a -> Error
 illegalPolyType absurdity annotated@Annot{takeAnnot} =
-  makeError takeAnnot . IllegalPolyType absurdity $ mapWrapped annotated
+  makeError takeAnnot . IllegalPolyType absurdity $ voidWrapped annotated
 
+-- | helper for creating AST error containing `IllegalHole`
 illegalHole :: (GetPos a, MakeWrapped n) => TypeHole -> Annotation n a -> Error
 illegalHole hole annotated@Annot{takeAnnot} =
-  makeError takeAnnot . IllegalHole hole $ mapWrapped annotated
+  makeError takeAnnot . IllegalHole hole $ voidWrapped annotated
 
+-- | helper for creating AST error containing `IsNotScheme`
 isNotScheme :: (GetPos a, MakeWrapped n) => Annotation n a -> Error
 isNotScheme annotated@Annot{takeAnnot} =
-  makeError takeAnnot . IsNotScheme $ mapWrapped annotated
+  makeError takeAnnot . IsNotScheme $ voidWrapped annotated

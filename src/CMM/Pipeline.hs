@@ -36,7 +36,7 @@ import safe CMM.Inference.State.Impl ( initInferencer )
 import safe CMM.Monomorphize ( Monomorphize(monomorphize) )
 import safe CMM.Parser.GetPos ( GetPos )
 import safe CMM.Monomorphize.Error
-    ( mapWrapped, MonomorphizeError(InstantiatesToNothing) )
+    ( MonomorphizeError(InstantiatesToNothing), voidWrapped )
 import safe CMM.FillHoles ( FillHoles(fillHoles) )
 import safe CMM.Mangle ( Mangle(mangle) )
 import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, handleStart), opts )
@@ -177,7 +177,7 @@ monomorphizer :: (GetPos a, HasTypeHole a) => Options -> InferencerState -> Anno
   -> Either String (Annot Unit a, (InferencerState, MonomorphizeState a))
 monomorphizer settings iState ast = case result of
       Left err -> Left . show $ pretty err
-      Right Nothing -> Left . show . pretty . InstantiatesToNothing $ mapWrapped ast
+      Right Nothing -> Left . show . pretty . InstantiatesToNothing $ voidWrapped ast
       Right (Just unit') -> Right (unit', states)
   where
     (result,states) = monomorphize mempty ast `runState` (iState, initMonomorphizeState settings)

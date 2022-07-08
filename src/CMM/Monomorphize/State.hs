@@ -11,12 +11,9 @@ import safe Control.Lens
       use,
       ASetter',
       (%=),
-      (%~),
       (.=),
       (<>=),
       (+=),
-      _1,
-      _2,
       Lens' )
 import safe Control.Monad (unless, when)
 import safe Data.Map (Map)
@@ -25,7 +22,6 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 
 import safe CMM.Inference.Fact (Scheme)
-import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Monomorphize.Schematized (Schematized)
@@ -51,15 +47,7 @@ import safe CMM.Monomorphize.State.Impl
   , maxPolyWaves, PolyMemory (PolyMemory, getPolyMemory)
   )
 
-renewPolyData :: Map TypeVar TypeVar -> Monomorphizer a ()
-renewPolyData (unifs :: Map TypeVar TypeVar) = do
-  fromData <- uses polyData $ fmap (_2 %~ Map.toList) . Map.toList . getPolyData
-  let toData =
-        Map.fromList $ (_2 %~ Map.fromList . fmap (apply unifs)) .
-        (_1 %~ apply unifs) <$>
-        fromData
-  polyData .= PolyData toData
-
+-- | resets the list of items to monomorphize
 unPolyGenerate :: Monomorphizer a ()
 unPolyGenerate = polyGenerate .= mempty
 
@@ -78,9 +66,6 @@ memorizeImpl toWhere scheme inst = addImpl PolyMemory scheme inst toWhere
 
 memorize :: TypeVar -> Type -> Monomorphizer a ()
 memorize = memorizeImpl polyMemory
-
-store :: TypeVar -> Type -> Monomorphizer a ()
-store = memorizeImpl polyStorage
 
 incWaves :: Monomorphizer a Int
 incWaves = do
@@ -102,9 +87,6 @@ isMemorizedImpl inWhere scheme inst =
 
 isMemorized :: TypeVar -> Type -> Monomorphizer a Bool
 isMemorized = isMemorizedImpl polyMemory
-
-isStored :: TypeVar -> Type -> Monomorphizer a Bool
-isStored = isMemorizedImpl polyStorage
 
 tryMemorizeImpl :: Lens' (MonomorphizeState a) PolyMemory -> TypeVar -> Type -> Monomorphizer a Bool
 tryMemorizeImpl toWhere scheme inst = do

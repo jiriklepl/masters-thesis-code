@@ -17,8 +17,6 @@ import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
 
-import safe Prettyprinter (Pretty(pretty), (<+>))
-
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounds (Bounds(Bounds), lowerBound, upperBound)
 import safe CMM.Data.Trilean (Trilean)
@@ -205,7 +203,7 @@ getUnlockedVars =
       where freeOuter = freeInner Set.\\ tVars
             freeInner = freeTypeVars facts <> freeTypeVars nesteds
 
--- | checks whether the given scheme has no unlocked free variables
+-- | checks whether the given scheme has no unlocked free variables, otherwise adds them to the quantifier and locks them
 sanitizeClosed ::
      (HasCallStack, Data a, ToType b)
   => Scheme a
@@ -216,6 +214,7 @@ sanitizeClosed scheme@(tVars :. q) b = do
   lockVars b freeVars
   return $ (tVars <> Set.fromList freeVars) :. q
 
+-- | adds a class fact to the monadic inferencer state
 addClassFact ::
      HasCallStack => Text -> Scheme Type -> Inferencer ()
 addClassFact name scheme =
@@ -224,6 +223,7 @@ addClassFact name scheme =
       lockVars t tVars
       State.classFacts %= Map.insertWith mappend name [scheme]
 
+-- | adds a function scheme to the monadic inferencer state after sanitizing it
 addScheme ::
      HasCallStack => TypeVar -> Scheme Type -> Inferencer ()
 addScheme tVar scheme =
@@ -233,6 +233,7 @@ addScheme tVar scheme =
       scheme' <- sanitizeClosed scheme tVar
       State.schemes %= Map.insert tVar scheme'
 
+-- | adds a class scheme to the monadic inferencer state after sanitizing it
 addClassScheme ::
      HasCallStack => Text -> Scheme Type -> Inferencer ()
 addClassScheme name scheme =
@@ -249,18 +250,22 @@ addClassScheme name scheme =
       " already registered with scheme " <>
       backQuoteShow old <> " (attempted adding " <> backQuoteShow new <> ")"
 
+-- | translates a type variable to its alive representant if if has been forgotten
 fromOldName :: TypeVar -> Inferencer TypeVar
 fromOldName tVar = uses State.unifs (`apply` tVar)
 
+-- | reconstructs a type from the given type variable
 reconstruct :: TypeVar -> Inferencer Type
 reconstruct tVar =
   uses State.typize (Bimap.lookup tVar) >>= \case
     Just primType -> ComplType <$> traverse reconstruct primType
     Nothing -> return $ VarType tVar
 
+-- | reconstructs a type from the given type variable after applying `fromOldName`
 reconstructOld :: TypeVar -> Inferencer Type
 reconstructOld tVar = fromOldName tVar >>= reconstruct
 
+-- | adds the unification errors from the given list to the error state of the monadic inferencer state
 addUnificationErrors :: [UnificationError] -> Inferencer ()
 addUnificationErrors errs =
   errorState <>= ErrorState (Error ErrorLevel <$> errs)

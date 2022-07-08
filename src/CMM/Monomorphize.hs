@@ -15,7 +15,7 @@ import safe qualified Data.Set as Set
 import safe Data.Traversable (for)
 
 import safe qualified CMM.AST as AST
-import safe CMM.AST.Annot (Annot, Annotation(Annot, takeAnnot), withAnnot, mapAnnot)
+import safe CMM.AST.Annot (Annot, Annotation(Annot, takeAnnot), withAnnot, mapNode)
 import safe CMM.AST.Utils (addTopLevels)
 import safe CMM.Control.Applicative (liftA5)
 import safe CMM.Control.Monad ((>>@=))
@@ -61,7 +61,7 @@ import safe CMM.Monomorphize.Error
       illegalHole,
       isNotScheme,
       makeError,
-      absurdType )
+      absurdType, voidWrapped )
 import safe CMM.AST.Wrap
     ( ASTWrapper(WrappedExpr, WrappedLValue), MakeWrapped )
 import safe CMM.Inference.Unify.Error ( UnificationError )
@@ -538,7 +538,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
                       simplify . apply subst >>=
                       fmap toTypeVar . State.getHandle
                     instType <- useInferencer $ reconstructType subst handle
-                    useMonomorphizer $ State.addGenerate (mapAnnot WrappedLValue annotated) (toTypeVar scheme) inst instType
+                    useMonomorphizer $ State.addGenerate (mapNode WrappedLValue annotated) (toTypeVar scheme) inst instType
                     succeed . Just $ annotated
               hole -> failure $ hole `illegalHole` annotated
           AST.LVRef mType expr mAsserts -> do
@@ -598,7 +598,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
                   useInferencer $
                   State.reconstructOld (toTypeVar inst) <&> apply subst
                 useMonomorphizer $
-                  State.addGenerate (mapAnnot WrappedExpr annotated) (toTypeVar scheme) (toTypeVar inst') instType
+                  State.addGenerate (mapNode WrappedExpr annotated) (toTypeVar scheme) (toTypeVar inst') instType
                 return $ do
                   expr''' <- expr''
                   return $ withAnnot b . (`AST.MemberExpr` field) <$> expr'''
@@ -698,7 +698,7 @@ instantiationError :: Monad m =>
   -> m (Either Error b)
 instantiationError scheme inst instWrapper err =
   failure . Error.makeError .
-    CannotInstantiate scheme inst err $ void instWrapper
+    CannotInstantiate scheme inst err $ voidWrapped instWrapper
 
 monomorphizeFieldInner ::
      (GetPos a, HasTypeHole a)
@@ -754,7 +754,7 @@ monomorphizeMethodInner scheme (inst, instWrapper) = do
 illegalScheme :: (Monad m, GetPos a1) =>
   Schematized a2 -> Annotation ASTWrapper a1 -> m (Either Error b)
 illegalScheme schematized instWrapper =
-  failure . makeError (takeAnnot instWrapper) . IllegalScheme (void schematized) $ void instWrapper
+  failure . makeError (takeAnnot instWrapper) . IllegalScheme (void schematized) $ voidWrapped instWrapper
 
 instance Monomorphize (Annot AST.CallAnnot) a where
   monomorphize = undefined

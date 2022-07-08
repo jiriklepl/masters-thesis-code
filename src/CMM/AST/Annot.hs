@@ -47,15 +47,17 @@ type Annot = Annotation
 withAnnot :: a -> n a -> Annot n a
 withAnnot = flip Annot
 
+-- | transforms an `Annot` object to an equivalent tuple
 toTuple :: Annot n a -> (a, n a)
 toTuple = \case
   Annot {unAnnot, takeAnnot} -> (takeAnnot, unAnnot)
 
+-- | creates an `Annot` object from an equivalent tuple
 fromTuple :: (a, n a) -> Annot n a
 fromTuple (takeAnnot, unAnnot) = Annot {unAnnot, takeAnnot}
 
-mapAnnot :: (n a -> m a) -> Annot n a -> Annot m a
-mapAnnot f = \case
+mapNode :: (n a -> m a) -> Annot n a -> Annot m a
+mapNode f = \case
   n `Annot` a -> f n `Annot` a
 
 -- | Applies an update function to all annotations inside the given node
