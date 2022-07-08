@@ -48,7 +48,7 @@ import safe CMM.Inference.Fact
   , lockFact
   , regularExprConstraint
   , subConst
-  , typeUnion, unstorableConstraint
+  , typeEquality, unstorableConstraint
   )
 import safe CMM.Inference.GetParent (makeAdoption)
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
@@ -147,7 +147,7 @@ beginUnit collector = do
     storeFact $
       forall
         (Set.fromList $ toTypeVar <$> [a, b])
-        [mem `typeUnion` t]
+        [mem `typeEquality` t]
         [ Fact $ addressKind `kindConstraint` a
         , Fact $ addressKind `kindConstraint` b
         , Fact $ b `subConst` a
@@ -210,7 +210,7 @@ untrivialize :: Map Text TypeHandle -> Preprocessor ()
 untrivialize tCons =
   Map.toList tCons `for_` \(name', handle) ->
     storeFacts
-      [ handle `typeUnion`
+      [ handle `typeEquality`
         ComplType (ConstType name' (getTypeKind $ handleId handle) NoType)
       , getDataKind "" `kindConstraint` handle
       , lockFact handle
@@ -308,7 +308,7 @@ storeProc name fs x = do
   uses currentContext head >>= \case
     GlobalCtx -> do
       hole <- lookupFVar name
-      storeFact . apply subst $ forall tVars' [hole `typeUnion` t] fs
+      storeFact . apply subst $ forall tVars' [hole `typeEquality` t] fs
       return hole
     ClassCtx {ctxConstraint} ->
       storeElaboratedProc subst tVars' $
@@ -337,17 +337,17 @@ storeProc name fs x = do
               ]
               t
           instFact = Fact $ eHandle `instType` iHandle
-          unionFact = Fact $ iHandle `typeUnion` eType
+          unionFact = Fact $ iHandle `typeEquality` eType
       uses currentContext head >>= \case
         ClassCtx {} -> do
           adoption :: TypeVar -> TypeVar <- makeAdoption eHandle
           storeFact . extT id adoption . apply subst $
-            forall tVars [eHandle `typeUnion` eType] facts'
+            forall tVars [eHandle `typeEquality` eType] facts'
           storeFact . extT id adoption . apply subst $
-            forall tVars [handle `typeUnion` t] [instFact, unionFact]
+            forall tVars [handle `typeEquality` t] [instFact, unionFact]
           return . extT id adoption $ SimpleTypeHole handle
         _ -> do
-          storeFact . apply subst . forall tVars [handle `typeUnion` t] $
+          storeFact . apply subst . forall tVars [handle `typeEquality` t] $
             instFact :
             unionFact :
             facts'
@@ -383,7 +383,7 @@ pushStruct (name, hole) constraint@(_, t) = do
   storeFact $
     forall
       tVars
-      [hole `typeUnion` t]
+      [hole `typeEquality` t]
       [Fact $ regularExprConstraint t]
 
 pushClass ::
@@ -439,7 +439,7 @@ storeTVar name handle = use typeVariables >>= storeVarImpl name handle
 storeVarImpl ::
      (ToType a, GetName n) => n -> a -> [Map Text TypeHandle] -> Preprocessor ()
 storeVarImpl named handle vars =
-  storeFact $ lookupVarImpl named vars `typeUnion` handle
+  storeFact $ lookupVarImpl named vars `typeEquality` handle
 
 -- | Stores the given `fact` to the state monad
 class StoreFact a where

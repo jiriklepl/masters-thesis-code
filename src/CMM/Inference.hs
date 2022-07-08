@@ -51,20 +51,20 @@ import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
-  , FlatFact(ClassConstraint, ClassFact, ClassFunDeps, ConstUnion,
-         ConstnessBounds, FactComment, InstType, KindBounds, KindUnion,
-         Lock, OnRegister, SubConst, SubKind, SubType, Typing, Union)
+  , FlatFact(ClassConstraint, ClassFact, ClassFunDeps, ConstEquality,
+         ConstnessBounds, FactComment, InstType, KindBounds, KindEquality,
+         Lock, OnRegister, SubConst, SubKind, SubType, TypingEquality, Equality)
   , FlatFacts
   , NestedFact(Fact, NestedFact)
   , Qual((:=>))
   , Scheme((:.))
   , classConstraint
-  , constUnion
-  , kindUnion
+  , constEquality
+  , kindEquality
   , subConst
   , subKind
-  , typeConstraint
-  , typeUnion
+  , typingEquality
+  , typeEquality
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.GetParent (GetParent(getParent))
@@ -418,7 +418,7 @@ wrapParent flatFacts wrapped =
     Just parent -> State.pushParent parent *> wrapped <* State.popParent
     Nothing -> wrapped
   where
-    determineParent [VarType tVar `Union` _] = Just tVar
+    determineParent [VarType tVar `Equality` _] = Just tVar
     determineParent _ = undefined
 
 unwrapParent :: Inferencer a -> Inferencer a
@@ -468,7 +468,7 @@ reduceTemplates (fact:facts) =
                             (uncurry chooseArg)
                             (zip args (toType <$> tVars'))
                             rule
-                        fs = zipWith typeUnion tVars' args
+                        fs = zipWith typeEquality tVars' args
                     State.addClassFact (fromString (trileanSeq rule) `addPrefix` name) $
                       Set.fromList tVars' :.
                       fs :=>
@@ -480,13 +480,13 @@ reduceTemplates (fact:facts) =
           Just (tVars' :. facts' :=> t') -> do
             subst <- refresher tVars'
             State.addClassFact name $ (tVars <> (apply subst `Set.map` tVars')) :.
-              ((t `typeUnion` apply subst t') :
+              ((t `typeEquality` apply subst t') :
                reverseFacts [f | Fact f <- nesteds] <>
                apply subst facts') :=>
               t
             subst' <- refresher tVars
             reduceTemplates $
-              (Fact <$> typeUnion (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
+              (Fact <$> typeEquality (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
     Fact (ClassFunDeps name rules) -> do
       State.addFunDeps name rules
       continue
@@ -503,10 +503,10 @@ reduceTrivial (fact:facts) =
       tVar <- simplify t
       tVar' <- simplify t'
       continueWith $ Fact (tVar `subKind` tVar') :
-        Fact (tVar `typeConstraint` tVar') :
+        Fact (tVar `typingEquality` tVar') :
         Fact (tVar `subConst` tVar') :
         facts
-    Fact (KindUnion t t') -> do
+    Fact (KindEquality t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
       continueWith $ Fact (tVar `subKind` tVar') : Fact (tVar' `subKind` tVar) :
@@ -521,17 +521,17 @@ reduceTrivial (fact:facts) =
       handle' <- simplify t' >>= State.getHandle
       State.pushSubConst handle handle'
       continue
-    Fact (ConstUnion t t') -> do
+    Fact (ConstEquality t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
       continueWith $ Fact (tVar `subConst` tVar') : Fact (tVar' `subConst` tVar) :
         facts
-    Fact (Typing t t') -> do
+    Fact (TypingEquality t t') -> do
       handle <- simplify t >>= State.getHandle
       handle' <- simplify t' >>= State.getHandle
       pushTyping handle handle'
       fixFacts facts >>= continueWith
-    Fact (Union t t') -> do
+    Fact (Equality t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
       case tVar `unify` tVar' of
@@ -609,7 +609,7 @@ reduceConstraint (fact:facts) =
                           subst <- refresher tVars
                           let freshT = subst `apply` t'
                               newFacts =
-                                typeUnion t freshT : (apply subst <$> fs)
+                                typeEquality t freshT : (apply subst <$> fs)
                           go (fmap Fact newFacts : accum) others
                         else go accum others
                     [] ->
@@ -624,7 +624,7 @@ reduceConstraint (fact:facts) =
           subst <- refresher tVars
           State.addClassFact name $ mempty :. [] :=> t
           continueWith $
-            Fact <$> typeUnion t (subst `apply` t') :
+            Fact <$> typeEquality t (subst `apply` t') :
              (apply subst <$> facts')
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceConstraint nesteds
@@ -834,8 +834,8 @@ unSchematize (Fact (InstType (VarType scheme) inst):others) =
       instSubst <- refresher tVars
       let facts' = Fact . apply instSubst <$> facts
           t' = instSubst `apply` t
-      ((Fact (inst `Union` t') : facts') <>) <$> unSchematize others
-    Nothing -> (Fact (VarType scheme `Union` inst) :) <$> unSchematize others
+      ((Fact (inst `Equality` t') : facts') <>) <$> unSchematize others
+    Nothing -> (Fact (VarType scheme `Equality` inst) :) <$> unSchematize others
 unSchematize (fact:others) = (fact :) <$> unSchematize others
 
 -- TODO: check whether all typings are set (otherwise error)
@@ -859,13 +859,13 @@ schematize facts tVars = do
     Map.toList
   let constingsSubst = Map.fromList $ zip constings reX
       constingFacts =
-        [ constUnion t' t
+        [ constEquality t' t
         | (t', t) <- zip (constingsSubst `apply` fmap toType constings) reX
         , t' /= t
         ]
       kindingsSubst = Map.fromList $ zip kindings reX
       kindingFacts =
-        [ kindUnion t' t
+        [ kindEquality t' t
         | (t', t) <- zip (kindingsSubst `apply` fmap toType kindings) reX
         , t' /= t
         ]
@@ -904,7 +904,7 @@ schematize facts tVars = do
                factPairs
        return (view _2 <$> filtered, (Fact . view _2 <$> rest) <> others)
   let typingFacts =
-        [ typeConstraint t t'
+        [ typingEquality t t'
         | (t, t'', t') <- typings
         , let useFilter =
                 (`Set.member` freeTypeVars t'') `fOr` parentedBy parent
@@ -1009,9 +1009,9 @@ makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
   where
     transform fact =
       case fact of
-        NestedFact (_ :. [Union (VarType tVar) _] :=> fs) ->
+        NestedFact (_ :. [Equality (VarType tVar) _] :=> fs) ->
           _2 %~ ((fact, tVar, foldr out [] fs) :)
-        NestedFact (_ :. [Union {}] :=> _) -> undefined -- logic error, broken contract
+        NestedFact (_ :. [Equality {}] :=> _) -> undefined -- logic error, broken contract
         _ -> _1 %~ (fact :)
     out fact =
       case fact of
@@ -1024,9 +1024,9 @@ collectCounts = foldr countIn mempty
   where
     countIn =
       \case
-        NestedFact (_ :. [Union (VarType tVar) _] :=> _) ->
+        NestedFact (_ :. [Equality (VarType tVar) _] :=> _) ->
           Map.insertWith (+) tVar 1
-        NestedFact (_ :. [Union {}] :=> _) ->
+        NestedFact (_ :. [Equality {}] :=> _) ->
           undefined -- logic error, broken contract
         _ -> id
 

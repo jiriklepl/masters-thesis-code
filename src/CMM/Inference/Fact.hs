@@ -40,6 +40,7 @@ import safe CMM.Inference.DataKind ( DataKind )
 
 infix 6 :=>
 
+-- | Represents a qualified `a`, `a` with some constraints
 data Qual a =
   FlatFacts :=> a
   deriving (Show, Eq, Ord, Data)
@@ -55,6 +56,7 @@ instance (Pretty a, Pretty DataKind) => Pretty (Qual a) where
 
 infix 5 :.
 
+-- | Qualified and Quantified `a`
 data Scheme a =
   Set TypeVar :. Qual a
   deriving (Show, Eq, Ord, Data)
@@ -69,13 +71,13 @@ instance (Pretty a, Pretty DataKind) => Pretty (Scheme a) where
       tVars :. qual ->
         lambda <+> list (pretty <$> Set.toList tVars) <+> dot <+> pretty qual
 
--- | Flat fact is a non-nested fact that specifies some constraints on type inference
+-- | Flat fact is a non-nested fact that specifies some flat constraints on type inference
 data FlatFact a
   = SubType a a
-  -- ^ TODO supertype; subtype
-  | Union a a
+  -- ^ Specifies that the left-hand operand is a super-type of the right-hand operand
+  | Equality a a
   -- ^ TODO binds the type to a type
-  | Typing a a
+  | TypingEquality a a
   -- ^ states that the type follows a certain typing
   | FactComment Text
   -- ^ fact with zero semantics
@@ -87,10 +89,10 @@ data FlatFact a
   -- ^ states that the type variable stores its data to a certain register
   | SubKind a a
   -- ^ TODO superKind; subKind
-  | KindUnion a a
+  | KindEquality a a
   | SubConst a a
   -- ^ TODO superConst; subConst
-  | ConstUnion a a
+  | ConstEquality a a
   | Lock a
   | InstType a a
   -- ^ TODO polytype; monotype
@@ -106,18 +108,18 @@ instance (Pretty a, Pretty DataKind) => Pretty (FlatFact a) where
   pretty =
     \case
       SubType sup sub -> pretty sub <+> "≤" <+> pretty sup
-      Union t t' -> pretty t <+> "~" <+> pretty t'
-      Typing t t' -> pretty t <+> "~" <> typingSymbol <+> pretty t'
+      Equality t t' -> pretty t <+> "~" <+> pretty t'
+      TypingEquality t t' -> pretty t <+> "~" <> typingSymbol <+> pretty t'
       KindBounds bounds t ->
         pretty t <+> isIn <> kindingSymbol <+> pretty bounds
       ConstnessBounds bounds t ->
         pretty t <+> isIn <> constingSymbol <+> pretty bounds
       OnRegister reg t -> pretty t <+> "~" <> regingSymbol <+> pretty reg
       SubKind sup sub -> pretty sub <+> "≤" <> kindingSymbol <+> pretty sup
-      KindUnion sup sub -> pretty sub <+> "~" <> kindingSymbol <+> pretty sup
+      KindEquality sup sub -> pretty sub <+> "~" <> kindingSymbol <+> pretty sup
       FactComment txt -> squotes . squotes . squotes $ pretty txt
       SubConst sup sub -> pretty sub <+> "≤" <> constingSymbol <+> pretty sup
-      ConstUnion sup sub -> pretty sub <+> "~" <> constingSymbol <+> pretty sup
+      ConstEquality sup sub -> pretty sub <+> "~" <> constingSymbol <+> pretty sup
       Lock t -> "lock" <+> pretty t
       InstType poly mono -> pretty poly <+> instSymbol <+> pretty mono
       ClassConstraint name t -> pretty name <> "?" <> parens (pretty t)
@@ -149,15 +151,15 @@ forall s fs f
 forall s fs f = NestedFact $ s :. fs :=> f
 
 -- | States that the given `TypeVar` type variable is unified with the given `Type`
-typeUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
-typeUnion t t' = toType t `Union` toType t'
+typeEquality :: (ToType a, ToType b) => a -> b -> FlatFact Type
+typeEquality t t' = toType t `Equality` toType t'
 
 lockFact :: ToType a => a -> FlatFact Type
 lockFact = Lock . toType
 
 -- | States that the given `TypeVar` type variable follows the typing dictated by the `Type` (note that this does not imply type unification nor any subtyping)
-typeConstraint :: (ToType a, ToType b) => a -> b -> FlatFact Type
-typeConstraint t t' = toType t `Typing` toType t'
+typingEquality :: (ToType a, ToType b) => a -> b -> FlatFact Type
+typingEquality t t' = toType t `TypingEquality` toType t'
 
 -- | States that the given `TypeVar` type variable is subtyped by another `TypeVar` type variable
 subType :: (ToType a, ToType b) => a -> b -> FlatFact Type
@@ -166,14 +168,14 @@ subType t t' = toType t `SubType` toType t'
 subKind :: (ToType a, ToType b) => a -> b -> FlatFact Type
 subKind t t' = toType t `SubKind` toType t'
 
-kindUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
-kindUnion t t' = toType t `KindUnion` toType t'
+kindEquality :: (ToType a, ToType b) => a -> b -> FlatFact Type
+kindEquality t t' = toType t `KindEquality` toType t'
 
 subConst :: (ToType a, ToType b) => a -> b -> FlatFact Type
 subConst t t' = toType t `SubConst` toType t'
 
-constUnion :: (ToType a, ToType b) => a -> b -> FlatFact Type
-constUnion t t' = toType t `ConstUnion` toType t'
+constEquality :: (ToType a, ToType b) => a -> b -> FlatFact Type
+constEquality t t' = toType t `ConstEquality` toType t'
 
 -- | States that the given `TypeVar` type variable is instantiated into another `TypeVar` type variable
 instType :: (ToType a, ToType b) => a -> b -> FlatFact Type

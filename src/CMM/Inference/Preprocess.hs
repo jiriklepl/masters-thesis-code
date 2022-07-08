@@ -61,15 +61,15 @@ import safe CMM.Inference.Fact as Fact
   , forall
   , instType
   , kindConstraint
-  , kindUnion
+  , kindEquality
   , linkExprConstraint
   , minKindConstraint
   , registerConstraint
   , regularExprConstraint
   , subConst
   , subType
-  , typeConstraint
-  , typeUnion
+  , typingEquality
+  , typeEquality
   , unstorableConstraint
   )
 import safe CMM.Inference.GetParent (makeAdoption)
@@ -352,7 +352,7 @@ preprocessParaName looker kind (Annot (AST.ParaName name params) annot) = do
   class' <- looker $ getName name'
   handle <- State.freshNamedASTTypeHandle (getName name) annot kind
   let constraint = foldApp $ toType class' : fmap toType params'
-  State.storeFact $ handle `typeUnion` constraint
+  State.storeFact $ handle `typeEquality` constraint
   return
     ( constraint
     , withTypeHole (SimpleTypeHole handle) annot `withAnnot`
@@ -387,7 +387,7 @@ instance Preprocess AST.Type a b where
       AST.TPtr t' -> do
         ptr <- State.freshASTStar annot
         t'' <- preprocess t'
-        State.storeFact $ ptr `typeUnion` makeAddrType t''
+        State.storeFact $ ptr `typeEquality` makeAddrType t''
         return (SimpleTypeHole ptr, AST.TPtr t'')
       AST.TVoid -> trivialCase makeVoidType
       AST.TBool -> trivialCase makeBoolType
@@ -395,7 +395,7 @@ instance Preprocess AST.Type a b where
       where
         trivialCase type' = do
           handle <- State.freshASTStar annot
-          State.storeFact $ handle `typeUnion` type'
+          State.storeFact $ handle `typeEquality` type'
           purePreprocess (SimpleTypeHole handle) t
 
 instance Preprocess AST.ParaType a b where
@@ -403,7 +403,7 @@ instance Preprocess AST.ParaType a b where
     type'' <- preprocess type'
     types'' <- traverse preprocess types'
     handle <- State.freshASTGeneric annot
-    State.storeFact . typeUnion handle . foldApp $ toType type'' : fmap toType types''
+    State.storeFact . typeEquality handle . foldApp $ toType type'' : fmap toType types''
     return (SimpleTypeHole handle, AST.ParaType type'' types'')
 
 maybeKindUnif ::
@@ -412,12 +412,12 @@ maybeKindUnif mKind derived base =
   State.storeFacts $
   case mKind of
     Nothing ->
-      [ derived `kindUnion` base
+      [ derived `kindEquality` base
       , base `subConst` derived
-      , base `typeConstraint` derived
+      , base `typingEquality` derived
       ]
     Just kind ->
-      [ derived `typeConstraint` base
+      [ derived `typingEquality` base
       , base `subConst` derived
       , getDataKind (getName kind) `kindConstraint` derived
       ]
@@ -480,13 +480,13 @@ preprocessProcedureHeaderImpl (AST.ProcedureHeader mConv name formals mTypes `An
     retHandle <- State.getCurrentReturn
     retType'@(~(TupleType retVars)) <-
       doOutsideCtx $ makeTuple <$> traverse State.freshASTStar (fromJust mTypes)
-    State.storeFact $ retHandle `typeUnion` retType'
+    State.storeFact $ retHandle `typeEquality` retType'
     case mConv of
       Just (AST.Foreign (AST.StrLit conv))
         | conv == "C" -> do State.storeFacts $ regularExprConstraint <$> retVars
         | otherwise -> registerASTError pos $ UndefinedForeign conv
       Nothing -> return ()
-    zipWithM_ ((State.storeFact .) . typeUnion) types retVars
+    zipWithM_ ((State.storeFact .) . typeEquality) types retVars
   (fs, retType) <- (_2 %~ toType) <$> State.endProc
   let procedureType = fmap toType formals' `makeFunction` retType
   State.storeFacts
@@ -551,7 +551,7 @@ instance Preprocess AST.Stmt a b where
       AST.IfStmt cond thenBody mElseBody -> do
         cond' <- preprocess cond
         State.storeFacts
-          [ cond' `typeConstraint` makeBoolType
+          [ cond' `typingEquality` makeBoolType
           , boolKind `minKindConstraint` cond'
           ]
         (EmptyTypeHole, ) <$>
@@ -582,7 +582,7 @@ instance Preprocess AST.Stmt a b where
         actuals' <- preprocessT actuals
         mTargets' <- preprocessT mTargets
         annots' <- preprocessT annots
-        State.storeFact . typeUnion expr' . makeAddrType $
+        State.storeFact . typeEquality expr' . makeAddrType $
           makeFunction (toType <$> argTypes) (toType $ makeTuple retTypes)
         zipWithM_ ((State.storeFact .) . subType) names' retTypes
         zipWithM_ ((State.storeFact .) . subType) argTypes actuals'
@@ -601,14 +601,14 @@ instance Preprocess AST.Stmt a b where
             | conv == "C" -> do State.storeFacts $ regularExprConstraint <$> retVars
             | otherwise -> registerASTError pos $ UndefinedForeign conv
           Nothing -> return ()
-        State.getCurrentReturn >>= State.storeFact . (`typeUnion` retType)
+        State.getCurrentReturn >>= State.storeFact . (`typeEquality` retType)
         return (EmptyTypeHole, AST.ReturnStmt mConv Nothing actuals')
       AST.ReturnStmt {} -> notImplemented pos stmt
       label@AST.LabelStmt {} -> do
         hole <- State.lookupVar label
         State.storeFacts
           [ addressKind `kindConstraint` hole
-          , hole `typeConstraint` makeLabelType
+          , hole `typingEquality` makeLabelType
           , constExprConstraint hole
           ]
         purePreprocess hole label
@@ -618,7 +618,7 @@ instance Preprocess AST.Stmt a b where
         expr' <- preprocess expr
         State.storeFacts
           [ addressKind `minKindConstraint` expr'
-          , expr' `typeConstraint` makeLabelType
+          , expr' `typingEquality` makeLabelType
           ]
         (EmptyTypeHole, ) . AST.GotoStmt expr' <$> preprocessT mTargets
       AST.CutToStmt {} -> notImplemented pos stmt
@@ -667,7 +667,7 @@ unionizeTypes :: ToType a => [a] -> Preprocessor ()
 unionizeTypes =
   \case
     [] -> return ()
-    tVar:tVars -> traverse_ (State.storeFact . typeUnion tVar) tVars
+    tVar:tVars -> traverse_ (State.storeFact . typeEquality tVar) tVars
 
 instance Preprocess AST.Init a b where
   preprocessImpl annot =
@@ -684,7 +684,7 @@ instance Preprocess AST.Init a b where
       strInitCommon :: TypeCompl Type -> AST.Init a -> Preprocessor (TypeHole, AST.Init b)
       strInitCommon c strInit = do
         handle <- State.freshStar
-        State.storeFact $ handle `typeConstraint` ComplType c
+        State.storeFact $ handle `typingEquality` ComplType c
         purePreprocess (SimpleTypeHole handle) strInit
 
 preprocessDatums ::
@@ -722,7 +722,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
             hole <- State.lookupVar name
             State.storeFacts
               [ addressKind `kindConstraint` hole
-              , hole `typeUnion` makeAddrType tVar
+              , hole `typeEquality` makeAddrType tVar
               ]
             return hole
       purePreprocess hole datum <:> preprocessDatumsImpl (hole : cache) others
@@ -750,7 +750,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
               hole' = MemberTypeHole (holeHandle ctxHole) `uncurry3` unzip3 cache'
               scheme (MemberTypeHole h [(name, classHandle)] _ _) = do
                 method <-
-                  refreshNestedFact . forall tVars [h `typeUnion` t] $
+                  refreshNestedFact . forall tVars [h `typeEquality` t] $
                   structAddrFact :
                   fieldAddrFact : funcFact : constExprFact : fs
                 subst <- refresher tVars
@@ -783,7 +783,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                 State.storeFacts [type'' `subType` init', linkExprConstraint init']
               State.storeFacts
                 [ addressKind `kindConstraint` handle
-                , handle `typeConstraint` makeAddrType type''
+                , handle `typingEquality` makeAddrType type''
                 ]
               return (SimpleTypeHole handle, AST.Datum new type'' mSize' mInit')
 
@@ -816,7 +816,7 @@ instance Preprocess AST.LValue a b where
             handle <- State.freshNamedASTStar (getName lvName) annot
             State.storeFacts
               [ scheme `instType` inst
-              , handle `typeUnion` makeAddrType inst
+              , handle `typeEquality` makeAddrType inst
               , constExprConstraint handle
               , constExprConstraint inst
               , addressKind `kindConstraint` handle
@@ -828,7 +828,7 @@ instance Preprocess AST.LValue a b where
         handle <- State.freshASTStar annot
         let mAsserts' = (withTypeHole EmptyTypeHole <$>) <$> mAsserts
         State.storeFacts
-          [ expr' `typeUnion` makeAddrType handle
+          [ expr' `typeEquality` makeAddrType handle
           , handle `subConst` expr'
           , addressKind `minKindConstraint` expr'
           ]
@@ -857,7 +857,7 @@ instance Preprocess AST.Expr a b where
             classHole <- State.lookupClass name
             State.storeFacts
               [ scheme `instType` inst
-              , inst `typeUnion` makeFunction [argType] retType
+              , inst `typeEquality` makeFunction [argType] retType
               , classConstraint name $
                 foldApp [toType classHole, toType argType, toType retType]
               , constExprConstraint inst
@@ -881,15 +881,15 @@ instance Preprocess AST.Expr a b where
         left' <- preprocess left
         right' <- preprocess right
         State.storeFact $
-          operator `typeUnion`
+          operator `typeEquality`
           makeFunction [toType left', toType right'] (toType handle)
         State.storeFact $ unstorableConstraint operator
         State.storeFacts $
           if op `elem` [AST.EqOp, AST.NeqOp, AST.GtOp, AST.LtOp, AST.GeOp, AST.LeOp]
-            then [ left' `typeConstraint` right'
+            then [ left' `typingEquality` right'
                  , handle `subConst` left'
                  , handle `subConst` right'
-                 , handle `typeConstraint` makeBoolType
+                 , handle `typingEquality` makeBoolType
                  , boolKind `kindConstraint` handle
                  ]
             else [handle `subType` left', handle `subType` right']
@@ -907,14 +907,14 @@ instance Preprocess AST.Expr a b where
       AST.PrefixExpr name actuals -> do
         (handle, tupleType) <- fixCommon name
         actuals' <- preprocessT actuals
-        State.storeFact $ tupleType `typeUnion` makeTuple actuals'
+        State.storeFact $ tupleType `typeEquality` makeTuple actuals'
         return
           (SimpleTypeHole handle, AST.PrefixExpr (preprocessTrivial name) actuals')
       AST.InfixExpr name left right -> do
         (handle, tupleType) <- fixCommon name
         left' <- preprocess left
         right' <- preprocess right
-        State.storeFact $ tupleType `typeUnion` makeTuple [left', right']
+        State.storeFact $ tupleType `typeEquality` makeTuple [left', right']
         return
           ( SimpleTypeHole handle
           , AST.InfixExpr (preprocessTrivial name) left' right')
@@ -927,8 +927,8 @@ instance Preprocess AST.Expr a b where
         fType <- State.freshStar
         opScheme <- State.freshStar
         State.storeFacts
-          [ fType `typeUnion` makeFunction [argType] retType
-          , opScheme `typeUnion` getNamedOperator (getName name)
+          [ fType `typeEquality` makeFunction [argType] retType
+          , opScheme `typeEquality` getNamedOperator (getName name)
           , opScheme `instType` fType
           , argType `subType` tupleType
           , handle `subType` retType
