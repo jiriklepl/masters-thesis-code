@@ -6,7 +6,7 @@ synopsis:            TODO: add synopsis
 description:         TODO: add description
 homepage:            https://github.com/jiriklepl/masters-thesis-code
 bug-reports:         https://github.com/jiriklepl/masters-thesis-code/issues
-license:             NONE
+license:             MIT
 author:              Jiří Klepl
 maintainer:          jiriklepl@seznam.cz
 category:            Development

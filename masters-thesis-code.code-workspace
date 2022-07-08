@@ -127,6 +127,7 @@
 			"subtyping",
 			"succ",
 			"targs",
+			"testsuite",
 			"Trilean",
 			"Trivials",
 			"tupled",
