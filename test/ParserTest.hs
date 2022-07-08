@@ -6,9 +6,6 @@ module Main
   ( main
   ) where
 
-
-import safe Prelude
-
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 import safe System.Exit (exitFailure, exitSuccess)
