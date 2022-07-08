@@ -3,7 +3,8 @@
 
 module CMM.AST.Blockifier.State where
 
-import safe Control.Lens.TH (makeFieldsNoPrefix)
+import safe Control.Lens
+    ( makeFieldsNoPrefix, use, uses, (%=), (<>=), (.=) )
 
 import safe Data.Map (Map)
 import safe Data.Text (Text)
@@ -12,8 +13,6 @@ import safe Control.Monad.State ( State )
 import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Parser.GetPos (SourcePos)
-import safe Control.Lens
-    ( use, uses, (%=), (<>=), (.=) )
 import safe qualified Data.Map as Map
 import safe Data.Tuple ( swap )
 

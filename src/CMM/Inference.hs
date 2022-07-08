@@ -5,11 +5,21 @@ module CMM.Inference where
 
 
 import safe Control.Applicative (Applicative(liftA2))
-import safe Control.Lens (Lens', (+=))
-import safe Control.Lens.Getter (Getter, (^.), use, uses, view)
-import safe Control.Lens.Setter ((%=), (%~), (.=), (.~))
-import safe Control.Lens.Traversal (both)
-import safe Control.Lens.Tuple (_1, _2)
+import safe Control.Lens
+    ( Lens',
+      (+=),
+      Getter,
+      (^.),
+      use,
+      uses,
+      view,
+      (%=),
+      (%~),
+      (.=),
+      (.~),
+      both,
+      _1,
+      _2 )
 import safe Control.Monad ((>=>), when)
 import safe Data.Bifunctor (second, Bifunctor (first))
 import safe Data.Data (Data(gmapT))
@@ -924,7 +934,7 @@ schematize facts tVars = do
             (freeTypeVars facts' <> freeTypeVars t) :.
           facts' :=>
           t
-    State.addScheme tVar scheme
+    registerScheme tVar scheme
   return factsRest
   where
     translateSubs _ _ _ _ [] = return []

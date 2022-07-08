@@ -6,9 +6,7 @@ module CMM.AST.Variables.State
   , module CMM.AST.Variables.State
   ) where
 
-import safe Control.Lens.Getter (uses)
-import safe Control.Lens.Setter ((%=))
-import safe Control.Lens.Type (Lens')
+import safe Control.Lens ( uses, (%=), Lens' )
 import safe Control.Monad (unless)
 import safe Control.Monad.State (State)
 import safe qualified Data.Map as Map

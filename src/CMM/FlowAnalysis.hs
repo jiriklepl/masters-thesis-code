@@ -4,9 +4,7 @@ module CMM.FlowAnalysis
   ( analyzeFlow
   ) where
 
-import safe Control.Lens.Getter ((^.), use, uses)
-import safe Control.Lens.Setter ((.=))
-import safe Control.Lens.Tuple (_3)
+import safe Control.Lens ( (^.), use, uses, (.=), _3 )
 import safe Control.Monad (unless)
 import safe qualified Data.Graph as Graph
 import safe Data.List (elemIndex, sortOn )

@@ -3,11 +3,9 @@
 
 module CMM.Inference.State.Impl where
 
-import safe Control.Lens.TH (makeFieldsNoPrefix)
+import safe Control.Lens ( makeFieldsNoPrefix, uses, (%=) )
 
 import safe qualified CMM.Data.Bimap as Bimap
-import safe Control.Lens.Getter (uses)
-import safe Control.Lens.Setter ((%=))
 import safe Control.Monad.State (State)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map

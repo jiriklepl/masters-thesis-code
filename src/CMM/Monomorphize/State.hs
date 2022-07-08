@@ -6,15 +6,23 @@ module CMM.Monomorphize.State
   , module CMM.Monomorphize.State.Impl
   ) where
 
-import safe Control.Lens.Getter (uses, use)
-import safe Control.Lens.Setter (ASetter', (%=), (%~), (.=), (<>=), (+=))
-import safe Control.Lens.Tuple (Field1(_1), Field2(_2))
+import safe Control.Lens
+    ( uses,
+      use,
+      ASetter',
+      (%=),
+      (%~),
+      (.=),
+      (<>=),
+      (+=),
+      _1,
+      _2,
+      Lens' )
 import safe Control.Monad (unless, when)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Control.Lens.Lens (Lens')
 
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Subst (Apply(apply))

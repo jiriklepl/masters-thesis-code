@@ -3,8 +3,7 @@
 
 module CMM.Inference.BuiltIn where
 
-import safe Control.Lens.Setter ((%~))
-import safe Control.Lens.Tuple (_2)
+import safe Control.Lens ( (%~), _2 )
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.String (IsString(fromString))

@@ -3,9 +3,7 @@
 
 module CMM.Lens where
 
-import safe Control.Lens.Getter (use)
-import safe Control.Lens.Setter ((.=))
-import safe Control.Lens.Type (Lens)
+import safe Control.Lens ( use, (.=), Lens )
 import safe Control.Monad.State (MonadState)
 
 infix 4 `exchange`

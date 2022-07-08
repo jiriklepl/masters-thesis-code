@@ -4,9 +4,7 @@
 module CMM.Inference.Preprocess where
 
 import safe Control.Applicative (liftA2)
-import safe Control.Lens.Getter ((^.), uses)
-import safe Control.Lens.Setter ((%~), (<>=))
-import safe Control.Lens.Tuple (_2)
+import safe Control.Lens ( (^.), uses, (%~), (<>=), _2 )
 import safe Control.Monad ((>=>), zipWithM, zipWithM_)
 import safe Data.Foldable (for_, traverse_)
 import safe Data.Functor ((<&>), void)

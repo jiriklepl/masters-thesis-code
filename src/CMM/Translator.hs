@@ -23,9 +23,8 @@ import safe Data.String ( IsString(fromString) )
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
-import safe Control.Lens.Getter ( (^.), use, uses )
-import safe Control.Lens.Setter ( (%=), (?=) )
-import safe Control.Lens.Tuple ( Field2(_2), Field3(_3) )
+import safe Control.Lens
+    ( (^.), use, uses, (%=), (?=), Field2(_2), Field3(_3) )
 
 import safe qualified LLVM.AST.Constant as LC
 import safe qualified LLVM.AST.IntegerPredicate as L

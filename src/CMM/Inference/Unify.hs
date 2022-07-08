@@ -2,8 +2,7 @@
 
 module CMM.Inference.Unify where
 
-import safe Control.Lens ((%~))
-import safe Control.Lens.Tuple (_1, _2)
+import safe Control.Lens ( (%~), _1, _2 )
 import safe Data.Either (isRight)
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)

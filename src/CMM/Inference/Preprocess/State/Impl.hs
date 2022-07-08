@@ -3,9 +3,7 @@
 
 module CMM.Inference.Preprocess.State.Impl where
 
-import safe Control.Lens.TH (makeFieldsNoPrefix)
-
-import safe Control.Lens.Getter (uses)
+import safe Control.Lens ( makeFieldsNoPrefix, uses )
 import safe Control.Monad.State (State)
 import safe Data.Data (Data)
 import safe Data.Map (Map)

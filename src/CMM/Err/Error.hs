@@ -4,7 +4,7 @@
 
 module CMM.Err.Error where
 
-import safe Control.Lens.TH (makeFieldsNoPrefix)
+import safe Control.Lens (makeFieldsNoPrefix)
 
 import safe Data.Data (cast, Data)
 import safe Data.Generics

@@ -5,9 +5,7 @@
 module CMM.Monomorphize where
 
 import safe Control.Applicative (liftA2, liftA3)
-import safe Control.Lens.Getter (uses)
-import safe Control.Lens.Tuple (_1, _2)
-import safe Control.Lens.Zoom (zoom)
+import safe Control.Lens ( uses, _1, _2, zoom )
 import safe Control.Monad (zipWithM_)
 import safe Control.Monad.State (State)
 import safe Data.Bifunctor (first)

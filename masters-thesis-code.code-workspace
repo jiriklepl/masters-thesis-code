@@ -125,6 +125,7 @@
 			"struct",
 			"structs",
 			"substs",
+			"subterm",
 			"subtyping",
 			"succ",
 			"targs",

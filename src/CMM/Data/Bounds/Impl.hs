@@ -7,7 +7,7 @@ module CMM.Data.Bounds.Impl
   , upperBound
   ) where
 
-import safe Control.Lens.TH (makeLenses)
+import safe Control.Lens (makeLenses)
 import safe Data.Data (Data)
 
 import safe Prettyprinter (Pretty(pretty), (<+>), brackets, comma)

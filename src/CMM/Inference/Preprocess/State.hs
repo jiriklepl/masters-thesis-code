@@ -7,10 +7,8 @@ module CMM.Inference.Preprocess.State
   ) where
 
 import safe Control.Applicative ( (<|>))
-import safe Control.Lens.Getter ((^.), use, uses)
-import safe Control.Lens.Setter ((%=), (.=), (<~), (<>=))
-import safe Control.Lens.Tuple (_3)
-import safe Control.Lens.Type (Lens')
+import safe Control.Lens
+    ( (^.), use, uses, (%=), (.=), (<~), (<>=), _3, Lens' )
 import safe Control.Monad.State (MonadState)
 import safe Data.Bifunctor (Bifunctor(bimap, second))
 import safe Data.Foldable (for_, traverse_)

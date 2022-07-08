@@ -3,7 +3,7 @@
 
 module CMM.Inference.Preprocess.ClassData where
 
-import safe Control.Lens.TH (makeLenses)
+import safe Control.Lens (makeLenses)
 
 import safe Data.Data (Data)
 import safe Data.Set (Set)

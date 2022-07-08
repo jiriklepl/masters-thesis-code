@@ -5,9 +5,8 @@
 
 module CMM.AST.Blockifier where
 
-import safe Control.Lens.Getter (use, uses)
-import safe Control.Lens.Setter ((%=), (.=), (?=), (+=))
-import safe Control.Lens.Type (Lens)
+import safe Control.Lens
+    ( use, uses, (%=), (.=), (?=), (+=), Lens )
 import safe Control.Monad.State (when)
 import safe Data.Foldable (traverse_)
 import safe Data.Functor (($>), void)

@@ -4,7 +4,7 @@
 
 module CMM.Inference.Subst where
 
-import safe Control.Lens.Setter ((%~))
+import safe Control.Lens ((%~))
 import safe Data.Data (Data(gmapT), Typeable)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map

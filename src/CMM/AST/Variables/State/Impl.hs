@@ -3,7 +3,7 @@
 
 module CMM.AST.Variables.State.Impl where
 
-import safe Control.Lens.TH (makeFieldsNoPrefix)
+import safe Control.Lens (makeFieldsNoPrefix)
 
 import safe Data.Map (Map)
 import safe Data.Set (Set)

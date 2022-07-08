@@ -3,11 +3,8 @@
 
 module CMM.Err.State where
 
-import safe Control.Lens.TH (makeFieldsNoPrefix)
-
-import safe Control.Lens.Getter (view, uses)
-import safe Control.Lens.Setter ((%=))
-import safe Control.Lens.Type (Lens')
+import safe Control.Lens
+    ( makeFieldsNoPrefix, view, uses, (%=), Lens' )
 import safe Control.Monad.State (MonadState)
 import Data.Data ( Data )
 

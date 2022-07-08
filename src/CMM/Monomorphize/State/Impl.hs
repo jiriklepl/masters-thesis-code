@@ -3,7 +3,7 @@
 
 module CMM.Monomorphize.State.Impl where
 
-import safe Control.Lens.TH (makeLenses)
+import safe Control.Lens (makeLenses)
 
 import safe Control.Monad.State (State)
 import safe Data.Map (Map)
