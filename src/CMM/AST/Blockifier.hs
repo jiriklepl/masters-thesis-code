@@ -41,7 +41,7 @@ import safe CMM.AST.Variables.SymbolType
   )
 import safe CMM.FlowAnalysis (analyzeFlow)
 import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
-import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos)
+import safe CMM.Parser.GetPos (GetPos(getPos), SourcePos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (addPrefix)
 import safe Data.Map (Map)
@@ -215,7 +215,7 @@ instance GetTargetNames (AST.Targets a) [Text] where
 
 -- | Annotates the given statement with the given node (or marks it unreachable)
 addBlockAnnot ::
-     (HasPos a, WithBlockAnnot a b) => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
+     (GetPos a, WithBlockAnnot a b) => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
 addBlockAnnot stmt@(Annot n annot) =
   use State.currentBlock >>= \case
     Nothing ->
@@ -385,7 +385,7 @@ instance GetMetadata DeclaresVars (AST.Arm a) where
     \case
       AST.Arm _ body -> getMetadata t body
 
-type BlockifyAssumps a b = (WithBlockAnnot a b, HasPos a)
+type BlockifyAssumps a b = (WithBlockAnnot a b, GetPos a)
 
 -- | Blockifies the given node, annotating the statements with basic blocks they appear in
 class Blockify n a b where
@@ -426,7 +426,7 @@ instance Blockify (Annot AST.Datum) a b where
 
 -- | Blockifies the given procedure header
 blockifyProcedureHeader ::
-     (HasPos a, WithBlockAnnot a b)
+     (GetPos a, WithBlockAnnot a b)
   => Annotation AST.ProcedureHeader a
   -> Blockifier (Annot AST.ProcedureHeader b)
 blockifyProcedureHeader (AST.ProcedureHeader mConv name formals mType `Annot` a) = do
@@ -467,7 +467,7 @@ instance Blockify (Annot AST.Body) a b where
     withNoBlockAnnot a . AST.Body <$> traverse blockify bodyItems
 
 -- | Generates an error for a forbidden fallthrough
-forbidFallthrough :: HasPos a => a -> Blockifier ()
+forbidFallthrough :: GetPos a => a -> Blockifier ()
 forbidFallthrough a =
   use currentBlock >>= \case
     Just {} -> registerASTError a ProcedureFallthrough
@@ -478,7 +478,7 @@ constructBlockified ::
      ( Blockify (Annot n1) a1 b1
      , WithBlockAnnot a1 b1
      , WithBlockAnnot a2 b2
-     , HasPos a1
+     , GetPos a1
      )
   => (Annot n1 b1 -> n2 b2)
   -> a2
@@ -521,12 +521,12 @@ instance Blockify (Annot AST.Formal) a b where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
 -- | stores a symbol to a virtual register (local variable)
-storeRegister :: (GetName n, HasPos n) => n -> Blockifier ()
+storeRegister :: (GetName n, GetPos n) => n -> Blockifier ()
 storeRegister = storeSymbol State.registers RegisterSymbol
 
 -- | stores a symbol of the given type, from the given node
 storeSymbol ::
-     (GetName n, HasPos n)
+     (GetName n, GetPos n)
   => Lens BlockifierState BlockifierState (Map Text SourcePos) (Map Text SourcePos)
   -> SymbolType
   -> n
@@ -592,7 +592,7 @@ instance Blockify (Annot AST.Stmt) a b where
         when (neverReturns callAnnots) unsetBlock
 
 -- | This is here just for completeness
-flatteningError :: HasPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()
+flatteningError :: GetPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()
 flatteningError stmt = registerASTError stmt . FlatteningInconsistency . void $ unAnnot stmt
 
 -- | Blockifies a label statement

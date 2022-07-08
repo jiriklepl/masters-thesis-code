@@ -11,7 +11,7 @@ import safe Data.Text (Text)
 
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.TypeKind (TypeKind)
-import safe CMM.Parser.HasPos (SourcePos)
+import safe CMM.Parser.GetPos (SourcePos)
 
 -- | Contains various data used by the Variable `Collector`
 --

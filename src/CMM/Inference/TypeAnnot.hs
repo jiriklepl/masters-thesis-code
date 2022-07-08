@@ -11,7 +11,7 @@ import safe Prettyprinter (Pretty(pretty), dquotes, parens)
 
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Inference.TypeVar (TypeVar)
-import safe CMM.Parser.HasPos (SourcePos)
+import safe CMM.Parser.GetPos (SourcePos)
 import CMM.Pretty (commaSep, genSymbol)
 
 data TypeAnnot

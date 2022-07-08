@@ -21,7 +21,7 @@ import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Monomorphize.Schematized (Schematized)
-import safe CMM.Parser.HasPos ( HasPos(getPos) )
+import safe CMM.Parser.GetPos ( GetPos(getPos) )
 import safe CMM.AST.Wrap ( ASTWrapper )
 import safe CMM.AST.Annot ( Annot )
 
@@ -110,7 +110,7 @@ tryMemorize  = tryMemorizeImpl polyMemory
 tryStore :: TypeVar -> Type -> Monomorphizer a Bool
 tryStore = tryMemorizeImpl polyStorage
 
-addGenerate :: HasPos a => Annot ASTWrapper a -> TypeVar -> TypeVar -> Type -> Monomorphizer a ()
+addGenerate :: GetPos a => Annot ASTWrapper a -> TypeVar -> TypeVar -> Type -> Monomorphizer a ()
 addGenerate n scheme inst instType = do
   success <- tryMemorize scheme instType
   when success $ polyGenerate %= PolyGenerate . Map.insertWith mappend scheme [(inst, getPos <$> n)] . getPolyGenerate

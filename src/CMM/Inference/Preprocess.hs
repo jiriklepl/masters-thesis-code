@@ -105,7 +105,7 @@ import safe CMM.Inference.TypeHandle ()
 import safe CMM.Inference.TypeKind (TypeKind(Constraint, Star))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
 import safe CMM.Inference.Utils (fieldClassHelper)
-import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Parser.GetPos (GetPos)
 import safe CMM.Utils (backQuote)
 import safe CMM.Err.State ( HasErrorState(errorState) )
 import CMM.Parser.ASTError (registerASTError)
@@ -115,12 +115,12 @@ import safe CMM.AST.Wrap ( MakeWrapped(makeWrapped) )
 
 class Preprocess n a b where
   preprocess ::
-       (WithTypeHole a b, HasPos a) => Annot n a -> Preprocessor (Annot n b)
+       (WithTypeHole a b, GetPos a) => Annot n a -> Preprocessor (Annot n b)
   preprocess =
     \case
       Annot n a -> preprocessFinalize a $ preprocessImpl a n
   preprocessImpl ::
-       (WithTypeHole a b, HasPos a) => a -> n a -> Preprocessor (TypeHole, n b)
+       (WithTypeHole a b, GetPos a) => a -> n a -> Preprocessor (TypeHole, n b)
 
 preprocessTrivial :: (Functor n, WithTypeHole a b) => n a -> n b
 preprocessTrivial = fmap withEmptyTypeHole
@@ -134,12 +134,12 @@ data PreprocessHint =
   PreprocessHint
 
 type instance Constraint PreprocessHint a b =
-     (WithTypeHole a b, HasPos a)
+     (WithTypeHole a b, GetPos a)
 
 type instance Space PreprocessHint = Preprocess'
 
 class Preprocess' a b n where
-  preprocess' :: (WithTypeHole a b, HasPos a) => n a -> Preprocessor (n b)
+  preprocess' :: (WithTypeHole a b, GetPos a) => n a -> Preprocessor (n b)
 
 instance WithTypeHole a b => Preprocess' a b AST.Name where
   preprocess' = return . preprocessTrivial
@@ -148,7 +148,7 @@ instance Preprocess n a b => Preprocess' a b (Annot n) where
   preprocess' = preprocess
 
 pass ::
-     (ASTmap PreprocessHint n a b, WithTypeHole a b, HasPos a)
+     (ASTmap PreprocessHint n a b, WithTypeHole a b, GetPos a)
   => n a
   -> Preprocessor (n b)
 pass = astMapM PreprocessHint preprocess'
@@ -158,7 +158,7 @@ instance {-# OVERLAPPABLE #-} ASTmap PreprocessHint n a b =>
   preprocessImpl _ = fmap (EmptyTypeHole, ) . pass
 
 preprocessT ::
-     (Preprocess n a b, WithTypeHole a b, Traversable t, HasPos a)
+     (Preprocess n a b, WithTypeHole a b, Traversable t, GetPos a)
   => t (Annot n a)
   -> Preprocessor (t (Annot n b))
 preprocessT = traverse preprocess
@@ -208,7 +208,7 @@ instance Preprocess AST.Section a b where
         return $ AST.SecSpan key' value' sectionItems'
 
 preprocessSpanCommon ::
-     (WithTypeHole a b, HasPos a)
+     (WithTypeHole a b, GetPos a)
   => Annot AST.Expr a
   -> Annot AST.Expr a
   -> Preprocessor (Annot AST.Expr b, Annot AST.Expr b)
@@ -273,9 +273,9 @@ preprocessClassCommon ::
      , WithTypeHole a2 b2
      , WithTypeHole a3 b3
      , Traversable t1
-     , HasPos a1
-     , HasPos a2
-     , HasPos a3
+     , GetPos a1
+     , GetPos a2
+     , GetPos a3
      , Preprocess n a3 b3
      )
   => (Text -> TypeHole -> (Text, Infer.Type) -> [(Text, Infer.Type)] -> Preprocessor ())
@@ -328,7 +328,7 @@ class Preprocess param a b =>
       PreprocessParam param a b
   where
   preprocessParam ::
-       (WithTypeHole a b, HasPos a)
+       (WithTypeHole a b, GetPos a)
     => Annot param a
     -> Preprocessor (Annot param b)
 
@@ -341,7 +341,7 @@ instance PreprocessParam AST.Type a b where
   preprocessParam = preprocess
 
 preprocessParaName ::
-     (WithTypeHole a b, PreprocessParam param a b, HasPos a)
+     (WithTypeHole a b, PreprocessParam param a b, GetPos a)
   => (Text -> Preprocessor TypeHole)
   -> TypeKind
   -> Annot (AST.ParaName param) a
@@ -455,7 +455,7 @@ instance FormalNames (AST.Procedure a) where
   formalNames (AST.Procedure header _) = formalNames header
 
 preprocessHeader ::
-     (WithTypeHole a b, HasPos a)
+     (WithTypeHole a b, GetPos a)
   => Annot AST.ProcedureHeader a
   -> Preprocessor (Annot AST.ProcedureHeader b)
 preprocessHeader header =
@@ -463,7 +463,7 @@ preprocessHeader header =
   preprocessProcedureHeaderImpl header
 
 preprocessProcedureHeaderImpl ::
-     (WithTypeHole a b, HasPos a)
+     (WithTypeHole a b, GetPos a)
   => Annot AST.ProcedureHeader a
   -> Preprocessor (TypeHole, AST.ProcedureHeader b)
 preprocessProcedureHeaderImpl (AST.ProcedureHeader mConv name formals mTypes `Annot` pos) = do
@@ -495,7 +495,7 @@ preprocessProcedureHeaderImpl (AST.ProcedureHeader mConv name formals mTypes `An
   return (hole, AST.ProcedureHeader mConv (preprocessTrivial name) formals' mTypes')
 
 preprocessProcedureCommon ::
-     (GetName proc, HasPos a, GetConv proc)
+     (GetName proc, GetPos a, GetConv proc)
   => proc
   -> Annot AST.ProcedureHeader a
   -> Preprocessor ()
@@ -623,7 +623,7 @@ instance Preprocess AST.Stmt a b where
         (EmptyTypeHole, ) . AST.GotoStmt expr' <$> preprocessT mTargets
       AST.CutToStmt {} -> notImplemented pos stmt
 
-notImplemented :: (HasPos a, MakeWrapped n, WithTypeHole a b, Functor n) =>
+notImplemented :: (GetPos a, MakeWrapped n, WithTypeHole a b, Functor n) =>
   a -> n a -> Preprocessor (TypeHole, n b)
 notImplemented pos node = do
   registerASTError pos . NotImplemented . makeWrapped $ void node
@@ -688,7 +688,7 @@ instance Preprocess AST.Init a b where
         purePreprocess (SimpleTypeHole handle) strInit
 
 preprocessDatums ::
-     (WithTypeHole a b, HasPos a)
+     (WithTypeHole a b, GetPos a)
   => [Annot AST.Datum a]
   -> Preprocessor [Annot AST.Datum b]
 preprocessDatums datums = do
@@ -696,7 +696,7 @@ preprocessDatums datums = do
   zipWithM preprocessFinalize (takeAnnot <$> datums) (return <$> datumResults)
 
 preprocessDatumsImpl ::
-     (HasPos a, WithTypeHole a b)
+     (GetPos a, WithTypeHole a b)
   => [TypeHole]
   -> [Annotation AST.Datum a]
   -> Preprocessor [(TypeHole, AST.Datum b)]

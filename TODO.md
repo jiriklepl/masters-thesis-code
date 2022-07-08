@@ -1,12 +1,12 @@
 # TO-DO list
 
-- [ ] add monotype checker (or whatever)
+- [x] add monotype checker (or whatever)
 
-- [ ] translate c-- to llvm <-
+- [x] translate c-- to llvm <-
 
 - [x] change "Language" to "CMM"
 
-- [x] rename Language.Parser.Utils to something more reasonable (renamed to Language.Parser.HasPos)
+- [x] rename Language.Parser.Utils to something more reasonable (renamed to Language.Parser.GetPos)
 
 - LRAnalysis
   - [x] abstract out details about registering stuff
@@ -14,16 +14,16 @@
   - [x] split LRAnalysis into blockifying and flow analysis
 
 - [x] Blockifier
-  - [~] refactor Blockifier
+  - [x] refactor Blockifier
 
 - [x] FlowAnalysis
-  - [ ] make the errors/warnings cleaner
+  - [x] make the errors/warnings cleaner
   - [ ] add "useless-write" warnings
-  - [ ] errors/warnings should output to stderr
-  - [ ] refactor FlowAnalysis
+  - [x] errors/warnings should output to stderr
+  - [x] refactor FlowAnalysis
 
-- [ ] Move CMM.Pretty to CMM.AST.Pretty
-- [ ] Pretty types
+- [x] Move CMM.Pretty to CMM.AST.Pretty
+- [x] Pretty types
 
 - [x] Flattener
   - [x] fallthrough should be made explicit
@@ -33,27 +33,26 @@
     - [ ] AST
       - [ ] Annot
       - [x] BlockAnnot
-        - [ ] State
-      - [ ] Blockifier
-      - [ ] Flattener
-      - [ ] GetName
-      - [ ] Maps
-      - [ ] Utils
-      - [ ] Variables
-    - [-] Control
-      - [ ] Applicative
-    - [ ] FlowAnalysis
+        - [x] State
+      - [x] Blockifier
+      - [x] Flattener
+      - [x] GetName
+      - [~] Maps
+      - [x] Utils
+      - [x] Variables
+    - [x] Control
+      - [x] Applicative
+    - [~] FlowAnalysis
     - [ ] Inference
-      - [ ] BuiltIn
-        - [ ] Operator
+      - [x] BuiltIn
       - [ ] Preprocess
-        - [ ] State
+        - [x] State
       - [ ] State
       - [ ] Type
     - [ ] Lens
     - [ ] Lexer
     - [ ] Parser
-      - [ ] HasPos
+      - [ ] GetPos
     - [ ] Pretty
     - [ ] Translator
       - [ ] State
@@ -63,22 +62,17 @@
   - [ ] QuasiQuotes
 
 - [x] Inference preprocessing
-  - [ ] check whether all `subType`s and `instType`s follow the correct order
-  - [ ] check correctness
-- [ ] Inference
-  - [ ] Type classes
-    - [ ] MPTC
+  - [x] check whether all `subType`s and `instType`s follow the correct order
+  - [x] check correctness
+- [x] Inference
+  - [x] Type classes
+    - [x] MPTC
 
-- [ ] Type
-  - [ ] check correctness of lambdize&forall
+- [x] Type
+  - [x] check correctness of lambdize&forall -> removed
 
-- [ ] write unit tests
-  - [ ] for binOp: precedence, associativity etc
-
-- [ ] write QuickCheck tests
-  - [ ] tests for re-parsing
-  - [ ] tests for variables (global, local)
-  - [ ] tests for unification?
+- [x] write unit tests
+  - [x] for binOp: precedence, associativity etc
 
 - [x] change `undefined` to `error s`
 

@@ -10,7 +10,7 @@ import safe Prettyprinter (Pretty(pretty))
 import safe CMM.Inference.Preprocess.TypeHole (HasTypeHole(getTypeHole, setTypeHole))
 import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
-import safe CMM.Parser.HasPos (HasPos(getPos))
+import safe CMM.Parser.GetPos (GetPos(getPos))
 
 -- | Annotation used to append extra information to nodes in AST
 data Annotation node annot =
@@ -29,7 +29,7 @@ instance HasTypeHole a => HasTypeHole (Annot n a) where
 instance HasTypeHole a => ToType (Annot n a) where
   toType = toType . getTypeHole
 
-instance HasPos a => HasPos (Annot n a) where
+instance GetPos a => GetPos (Annot n a) where
   getPos = getPos . takeAnnot
 
 instance ToTypeVar a => ToTypeVar (Annot n a) where

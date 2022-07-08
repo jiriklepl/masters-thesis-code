@@ -258,7 +258,7 @@ cradle:
     - path: "src/CMM/Parser/ASTError.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Parser/HasPos.hs"
+    - path: "src/CMM/Parser/GetPos.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Pipeline.hs"

@@ -78,7 +78,7 @@ import safe CMM.Inference.TypeVar
   , noType
   )
 import safe CMM.Inference.Utils (fieldClassHelper)
-import safe CMM.Parser.HasPos (SourcePos)
+import safe CMM.Parser.GetPos (SourcePos)
 
 import safe CMM.Inference.Preprocess.State.Impl
   ( Preprocessor

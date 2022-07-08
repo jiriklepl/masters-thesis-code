@@ -19,18 +19,18 @@ import safe CMM.Data.Generics ((<*|*>))
 import safe CMM.Inference.TypeKind
   ( TypeKind((:->), Constraint, GenericType, Star)
   )
-import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
+import safe CMM.Parser.GetPos (GetPos, SourcePos, getPos)
 
 -- | Returns a `CollectorState` containing the local variables of the given node
 localVariables ::
-     (Data (n SourcePos), Functor n, HasPos a) => n a -> CollectorState
+     (Data (n SourcePos), Functor n, GetPos a) => n a -> CollectorState
 localVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
     go = addTAutoCase $ addCommonCases $ gmapM go
 
 -- | Returns a `CollectorState` containing the global variables of the given `AST.Unit`
-globalVariables :: HasPos a => AST.Unit a -> CollectorState
+globalVariables :: GetPos a => AST.Unit a -> CollectorState
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
@@ -38,14 +38,14 @@ globalVariables n = variablesCommon . go $ getPos <$> n
 
 -- | adds type variables to the `CollectorState` from the given `AST.ParaName`
 addParaNameTVars ::
-     (HasPos annot, GetName (param annot))
+     (GetPos annot, GetName (param annot))
   => Annot (AST.ParaName param) annot
   -> Collector ()
 addParaNameTVars (Annot (AST.ParaName _ params) _) =
   traverse_ (`State.addTVarTrivial` GenericType) params
 
 -- | Returns a `CollectorState` containing the local variables of the given `AST.Struct`
-structVariables :: HasPos a => AST.Struct a -> CollectorState
+structVariables :: GetPos a => AST.Struct a -> CollectorState
 structVariables (AST.Struct paraName datums) =
   variablesCommon $ do
     traverse_
@@ -54,7 +54,7 @@ structVariables (AST.Struct paraName datums) =
     addParaNameTVars paraName
 
 -- | Returns a `CollectorState` containing the local variables of the given `AST.Class`
-classVariables :: HasPos a => AST.Class a -> CollectorState
+classVariables :: GetPos a => AST.Class a -> CollectorState
 classVariables class'@(AST.Class _ paraName _) =
   variablesCommon $ do
     addParaNameTVars paraName
@@ -68,7 +68,7 @@ classVariables class'@(AST.Class _ paraName _) =
           State.addFVarTrivial procedureDecl Star
 
 -- | Returns a `CollectorState` containing the local variables of the given `AST.Instance`
-instanceVariables :: HasPos a => AST.Instance a -> CollectorState
+instanceVariables :: GetPos a => AST.Instance a -> CollectorState
 instanceVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d

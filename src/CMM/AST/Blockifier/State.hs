@@ -11,7 +11,7 @@ import safe Control.Monad.State ( State )
 
 import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
-import safe CMM.Parser.HasPos (SourcePos)
+import safe CMM.Parser.GetPos (SourcePos)
 import safe Control.Lens
     ( use, uses, (%=), (<>=), (.=) )
 import safe qualified Data.Map as Map

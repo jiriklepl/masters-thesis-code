@@ -34,7 +34,7 @@ import safe CMM.Inference.Fact ( Facts, Fact )
 import safe CMM.Inference ( mineAST, reduce )
 import safe CMM.Inference.State.Impl ( initInferencer )
 import safe CMM.Monomorphize ( Monomorphize(monomorphize) )
-import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.Parser.GetPos ( GetPos )
 import safe CMM.Monomorphize.Error
     ( mapWrapped, MonomorphizeError(InstantiatesToNothing) )
 import safe CMM.FillHoles ( FillHoles(fillHoles) )
@@ -129,11 +129,11 @@ runAll fileName options contents = do
           prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
         return . (,errState <> errState'). show $ pretty  prettyprinted
 
-runFlatBlock :: (Blockify n a (a, BlockAnnot), HasPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot), BlockifierState, ErrorState)
+runFlatBlock :: (Blockify n a (a, BlockAnnot), GetPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot), BlockifierState, ErrorState)
 runFlatBlock ast =
   blockifier $ flattener ast
 
-runInferMono :: (HasPos a, HasPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), InferencerState, ErrorState)
+runInferMono :: (GetPos a, GetPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), InferencerState, ErrorState)
 runInferMono options ast = do
   ((prepAST, facts'), pState, errState) <- preprocessor options ast
   ((),iState, errState') <- inferencer options{handleStart=readHandleCounter pState} prepAST facts'
@@ -166,7 +166,7 @@ blockifier :: (Blockify n a b, BlockifyAssumps a b) => n a
 blockifier flattened = wrapStandardLayout $
     blockify flattened `runState` initBlockifier
 
-preprocessor :: (Preprocess n a (a, TypeHole), HasPos a) =>
+preprocessor :: (Preprocess n a (a, TypeHole), GetPos a) =>
   Options
   -> Annot n a
   -> Either
@@ -190,7 +190,7 @@ inferencer settings ast fs = wrapStandardLayout $
         then return ()
         else registerError $ InferenceIncomplete fs'
 
-monomorphizer :: (HasPos a, HasTypeHole a) => Options -> InferencerState -> Annot Unit a
+monomorphizer :: (GetPos a, HasTypeHole a) => Options -> InferencerState -> Annot Unit a
   -> Either String (Annot Unit a, (InferencerState, MonomorphizeState a))
 monomorphizer settings iState ast = case result of
       Left err -> Left . show $ pretty err
@@ -199,7 +199,7 @@ monomorphizer settings iState ast = case result of
   where
     (result,states) = monomorphize mempty ast `runState` (iState, initMonomorphizeState settings)
 
-postprocessor :: (Data a, HasTypeHole a, HasPos a) => InferencerState -> Annot Unit a -> Either String (Annot Unit a, InferencerState, ErrorState)
+postprocessor :: (Data a, HasTypeHole a, GetPos a) => InferencerState -> Annot Unit a -> Either String (Annot Unit a, InferencerState, ErrorState)
 postprocessor iState ast = wrapStandardLayout $
     action `runState` iState
   where

@@ -6,24 +6,13 @@ module Main
   ( main
   ) where
 
-import safe Prelude (Integer, Monoid(mempty), Num((+)))
 
-import safe Control.Applicative (Applicative(pure))
-import safe Data.Bool (Bool(False, True))
-import safe Data.Either (Either(Left, Right), either)
-import safe Data.Eq (Eq((==)))
-import safe Data.Foldable (all)
-import safe Data.Function (($), (.), const, flip)
-import safe Data.Functor (Functor, (<$>))
-import safe Data.List ((++))
-import safe Data.String (String)
+import safe Prelude
+
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-import safe GHC.Err (undefined)
 import safe System.Exit (exitFailure, exitSuccess)
-import safe System.IO (IO)
 import safe Text.Megaparsec (ParseErrorBundle(), Parsec(), many, runParser)
-import safe Text.Show (Show(show))
 
 import safe Prettyprinter (Doc(), Pretty(), pretty)
 
@@ -49,7 +38,6 @@ import safe CMM.Parser
   , stringLiteral
   , topLevel
   )
-import safe CMM.Pretty ()
 import safe QuasiQuotes (text)
 
 data SimpleAnnotation node annot =

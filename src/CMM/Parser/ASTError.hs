@@ -16,7 +16,7 @@ import safe CMM.Err.State
   , registerInfo
   , registerWarning
   )
-import safe CMM.Parser.HasPos (HasPos(getPos), SourcePos, sourcePosPretty)
+import safe CMM.Parser.GetPos (GetPos(getPos), SourcePos, sourcePosPretty)
 
 data ASTError err =
   ASTError SourcePos err
@@ -29,25 +29,25 @@ instance Pretty err => Pretty (ASTError err) where
     ASTError pos err -> pretty (sourcePosPretty pos) <+> pretty err
 
 registerASTInfo ::
-     (IsError err, HasErrorState s ErrorState, MonadState s m, HasPos n)
+     (IsError err, HasErrorState s ErrorState, MonadState s m, GetPos n)
   => n
   -> err
   -> m ()
 registerASTInfo n err = registerInfo $ n `makeASTError` err
 
 registerASTError ::
-     (IsError err, HasErrorState s ErrorState, MonadState s m, HasPos n)
+     (IsError err, HasErrorState s ErrorState, MonadState s m, GetPos n)
   => n
   -> err
   -> m ()
 registerASTError n err = registerError $ n `makeASTError` err
 
 registerASTWarning ::
-     (IsError err, HasErrorState s ErrorState, MonadState s m, HasPos n)
+     (IsError err, HasErrorState s ErrorState, MonadState s m, GetPos n)
   => n
   -> err
   -> m ()
 registerASTWarning n err = registerWarning $ n `makeASTError` err
 
-makeASTError :: HasPos a => a -> err -> ASTError err
+makeASTError :: GetPos a => a -> err -> ASTError err
 makeASTError n err = getPos n `ASTError` err

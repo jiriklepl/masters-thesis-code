@@ -36,7 +36,7 @@ import safe CMM.Inference.TypeKind
   , TypeKind(GenericType, Star)
   )
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import safe CMM.Parser.HasPos (HasPos(getPos))
+import safe CMM.Parser.GetPos (GetPos(getPos))
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import CMM.Options (Options(Options))
 
@@ -107,7 +107,7 @@ getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)
 
 -- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
 freshNamedASTTypeHandle ::
-     HasPos n => Text -> n -> TypeKind -> Preprocessor TypeHandle
+     GetPos n => Text -> n -> TypeKind -> Preprocessor TypeHandle
 freshNamedASTTypeHandle name node =
   freshAnnotatedTypeHelper . TypeNamedAST name $ getPos node
 
@@ -117,12 +117,12 @@ freshNamedTypeHandle name = freshAnnotatedTypeHelper $ TypeNamed name
 
 -- | Generates a new type handle with AST annotation and name annotation and the given type kind
 freshNamedNodeTypeHandle ::
-     (HasPos n, GetName n) => n -> TypeKind -> Preprocessor TypeHandle
+     (GetPos n, GetName n) => n -> TypeKind -> Preprocessor TypeHandle
 freshNamedNodeTypeHandle node =
   freshAnnotatedTypeHelper . TypeNamedAST (getName node) $ getPos node
 
 -- | Generates a new type handle with AST annotation and the given type kind
-freshASTTypeHandle :: HasPos n => n -> TypeKind -> Preprocessor TypeHandle
+freshASTTypeHandle :: GetPos n => n -> TypeKind -> Preprocessor TypeHandle
 freshASTTypeHandle node = freshAnnotatedTypeHelper . TypeAST $ getPos node
 
 -- | Generates a new type handle with no annotation
@@ -130,15 +130,15 @@ freshTypeHelper :: TypeKind -> Preprocessor TypeHandle
 freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
 -- | Generates a new type handle type-kinded `Star` with AST annotation and name annotation
-freshNamedASTStar :: HasPos n => Text -> n -> Preprocessor TypeHandle
+freshNamedASTStar :: GetPos n => Text -> n -> Preprocessor TypeHandle
 freshNamedASTStar name node = freshNamedASTTypeHandle name node Star
 
 -- | Generates a new type handle type-kinded `Star` with AST annotation
-freshASTStar :: HasPos n => n -> Preprocessor TypeHandle
+freshASTStar :: GetPos n => n -> Preprocessor TypeHandle
 freshASTStar = (`freshASTTypeHandle` Star)
 
 -- | Generates a new type handle type-kinded `GenericType` with AST annotation
-freshASTGeneric :: HasPos n => n -> Preprocessor TypeHandle
+freshASTGeneric :: GetPos n => n -> Preprocessor TypeHandle
 freshASTGeneric = (`freshASTTypeHandle` GenericType)
 
 -- | Generates a new type handle type-kinded `Star` with no annotation

@@ -41,7 +41,7 @@ import safe CMM.AST.Annot
 import safe CMM.AST.BlockAnnot
 import safe CMM.AST.GetName
 import safe CMM.AST.Utils
-import safe CMM.Parser.HasPos
+import safe CMM.Parser.GetPos
 import safe CMM.Pretty ()
 import safe CMM.Translator.State
 import safe Data.Tuple.Extra (first, swap)
@@ -70,7 +70,7 @@ type MonadTranslator m
 
 type AnnotAssumps a
    = ( HasBlockAnnot a
-     , HasPos a
+     , GetPos a
      , HasTypeHole a
      , Data a
      )

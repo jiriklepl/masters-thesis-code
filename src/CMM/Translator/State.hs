@@ -14,8 +14,8 @@ import safe CMM.AST.BlockAnnot (BlockData)
 import safe CMM.Err.State (ErrorState)
 import safe CMM.Inference.State ( InferencerState )
 import qualified LLVM.AST.Type as L
-import Control.Lens
-import Control.Monad.State
+import safe Control.Lens ( (.=) )
+import safe Control.Monad.State ( MonadState )
 
 data TranslState =
   TranslState

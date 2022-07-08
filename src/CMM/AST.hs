@@ -9,7 +9,6 @@ import safe Prettyprinter
   ( Doc
   , Pretty(pretty)
   , (<+>)
-
   , angles
   , braces
   , brackets
@@ -771,7 +770,7 @@ instance Pretty StrLit where
       StrLit string -> pretty $ show string
 
 data Pragma a
-  deriving (Functor, Foldable, Traversable, Data) -- FIXME: the manual does not specify at all
+  deriving (Functor, Foldable, Traversable, Data) -- NOTE: the manual does not specify at all
 
 instance Eq (Pragma a) where
   (==) = error "pragmas are not implemented"
@@ -780,4 +779,4 @@ instance Show (Pragma a) where
   show = error "pragmas are not implemented"
 
 instance Pretty (Pragma a) where
-  pretty _ = error $ backQuote T.pragmaName <> "s are not specified" -- FIXME: pragmas are not specified
+  pretty _ = error $ backQuote T.pragmaName <> "s are not specified" -- NOTE: pragmas are not specified

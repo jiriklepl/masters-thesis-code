@@ -13,7 +13,7 @@ import safe CMM.Inference.Preprocess.TypeHole
       TypeHole(MethodTypeHole, LVInstTypeHole, SimpleTypeHole) )
 import safe Data.Data ( Data(gmapM), Typeable )
 import safe Data.Generics.Aliases ( extM )
-import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.Parser.GetPos ( GetPos )
 import safe CMM.Inference.TypeVar ( ToTypeVar(toTypeVar) )
 import safe qualified CMM.Inference.Type as Ty
 import safe CMM.Inference.TypeCompl
@@ -43,9 +43,9 @@ instance Pretty MangleError where
       "Cannot get the necessary type information from the intermediate data" <+> pretty hole
 
 class Mangle n where
-  mangle :: (Data (n a), Typeable n, HasTypeHole a, HasPos a, Data a) => Annot n a -> Inferencer (Annot n a)
+  mangle :: (Data (n a), Typeable n, HasTypeHole a, GetPos a, Data a) => Annot n a -> Inferencer (Annot n a)
 
-mangledFromHoled :: (HasCallStack, HasTypeHole a, HasPos a) => Bool -> a -> Inferencer (Maybe Text)
+mangledFromHoled :: (HasCallStack, HasTypeHole a, GetPos a) => Bool -> a -> Inferencer (Maybe Text)
 mangledFromHoled skipAddr holed = do
   typing <- State.getTyping (toTypeVar $ getTypeHole holed)
   case mangleType skipAddr typing of

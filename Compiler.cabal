@@ -144,7 +144,7 @@ executable Compiler
                        CMM.Options,
                        CMM.Parser,
                        CMM.Parser.ASTError,
-                       CMM.Parser.HasPos,
+                       CMM.Parser.GetPos,
                        CMM.Pipeline,
                        CMM.Pretty,
                        CMM.Translator,
@@ -171,7 +171,7 @@ Test-Suite parser-testsuite
                        CMM.Data.Bimap,
                        CMM.Lexer,
                        CMM.Parser,
-                       CMM.Parser.HasPos,
+                       CMM.Parser.GetPos,
                        CMM.Pretty,
                        CMM.Utils,
                        QuasiQuotes

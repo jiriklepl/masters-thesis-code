@@ -13,7 +13,7 @@ import safe CMM.Inference.Preprocess.TypeHole
     ( HasTypeHole(getTypeHole) )
 import safe Data.Data ( Data(gmapM), Typeable )
 import safe Data.Generics.Aliases ( extM )
-import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.Parser.GetPos ( GetPos )
 import safe CMM.Inference.TypeVar ( ToTypeVar(toTypeVar) )
 import safe qualified CMM.Inference.Type as T
 import safe CMM.Inference.TypeCompl
@@ -36,9 +36,9 @@ instance Pretty FillAnnotError where
     "The intermediate form type" <+> pretty t <+> "is currently not reflected in the syntax of C--"
 
 class FillHoles n where
-  fillHoles :: (Data (n a), Typeable n, Data a, HasTypeHole a, HasPos a) => Annot n a -> Inferencer (Annot n a)
+  fillHoles :: (Data (n a), Typeable n, Data a, HasTypeHole a, GetPos a) => Annot n a -> Inferencer (Annot n a)
 
-typeFromHoled :: (HasTypeHole a, HasPos a) => a -> Inferencer (Maybe (AST.Type a))
+typeFromHoled :: (HasTypeHole a, GetPos a) => a -> Inferencer (Maybe (AST.Type a))
 typeFromHoled holed = do
   typing <- State.getTyping . toTypeVar $ getTypeHole holed
   case translType holed typing of

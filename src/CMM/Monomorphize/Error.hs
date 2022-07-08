@@ -19,7 +19,7 @@ import CMM.AST.Wrap (ASTWrapper, MakeWrapped (makeWrapped))
 import safe CMM.AST.Annot
     ( Annotation(Annot, takeAnnot), Annot, mapAnnot )
 import CMM.Inference.Unify.Error (UnificationError)
-import safe CMM.Parser.HasPos ( HasPos )
+import safe CMM.Parser.GetPos ( GetPos )
 import CMM.Err.Error (Error)
 import qualified CMM.Err.Error as Error
 import safe CMM.Parser.ASTError ( makeASTError )
@@ -59,30 +59,30 @@ instance Pretty MonomorphizeError where
       _ -> pretty node <+> " cannot be instantiated due to ambiguity between the following types:" <+> list (pretty <$> holes)
     where report = ", report bug in inference preprocessing"
 
-makeError :: HasPos n => n -> MonomorphizeError -> Error
+makeError :: GetPos n => n -> MonomorphizeError -> Error
 makeError n = Error.makeError . makeASTError n
 
 mapWrapped :: MakeWrapped n => Annot n a -> Annotation ASTWrapper ()
 mapWrapped = void . mapAnnot makeWrapped
 
-illegalNothing :: (HasPos a, MakeWrapped n) => Annot n a -> Error
+illegalNothing :: (GetPos a, MakeWrapped n) => Annot n a -> Error
 illegalNothing annotated@Annot{takeAnnot} =
   makeError takeAnnot . InstantiatesToNothing $ mapWrapped annotated
 
-absurdType :: (HasPos a, MakeWrapped n) =>
+absurdType :: (GetPos a, MakeWrapped n) =>
   Absurdity -> Annotation n a -> Error
 absurdType absurdity annotated@Annot{takeAnnot} =
   makeError takeAnnot . AbsurdType absurdity $ mapWrapped annotated
 
-illegalPolyType :: (HasPos a, MakeWrapped n) =>
+illegalPolyType :: (GetPos a, MakeWrapped n) =>
   PolyWhat -> Annotation n a -> Error
 illegalPolyType absurdity annotated@Annot{takeAnnot} =
   makeError takeAnnot . IllegalPolyType absurdity $ mapWrapped annotated
 
-illegalHole :: (HasPos a, MakeWrapped n) => TypeHole -> Annotation n a -> Error
+illegalHole :: (GetPos a, MakeWrapped n) => TypeHole -> Annotation n a -> Error
 illegalHole hole annotated@Annot{takeAnnot} =
   makeError takeAnnot . IllegalHole hole $ mapWrapped annotated
 
-isNotScheme :: (HasPos a, MakeWrapped n) => Annotation n a -> Error
+isNotScheme :: (GetPos a, MakeWrapped n) => Annotation n a -> Error
 isNotScheme annotated@Annot{takeAnnot} =
   makeError takeAnnot . IsNotScheme $ mapWrapped annotated

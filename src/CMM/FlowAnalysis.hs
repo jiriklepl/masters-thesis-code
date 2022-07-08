@@ -23,13 +23,13 @@ import CMM.AST.Blockifier.Error
 import safe qualified CMM.AST.Blockifier.State as State
 import safe CMM.AST.Blockifier.State (Blockifier)
 import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
-import safe CMM.Parser.HasPos (HasPos)
+import safe CMM.Parser.GetPos (GetPos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)
 import safe Data.Maybe ( fromJust )
 import safe Data.Functor ( (<&>) )
 
-analyzeFlow :: HasPos a => Annot Procedure a -> Blockifier ()
+analyzeFlow :: GetPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)
  = do
   flow <- use State.currentFlow
