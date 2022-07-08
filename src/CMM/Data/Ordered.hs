@@ -8,6 +8,7 @@ import safe Data.Data (Data)
 
 import safe Prettyprinter (Pretty(pretty))
 
+-- | A wrapper that allows for a separate definition of Ordering (for ordered maps, for example) for types that are unordered
 data Ordered a where
   Ordered :: { unOrdered :: a} -> Ordered a
 

@@ -40,27 +40,29 @@ import safe CMM.Parser.HasPos (HasPos(getPos))
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import CMM.Options (Options(Options))
 
+-- | Contains the state of the preprocessor
 data PreprocessorState =
   PreprocessorState
-    { _variables :: [Map Text TypeHandle]
-    , _funcVariables :: Map Text TypeHandle
-    , _funcInstVariables :: Map Text [TypeHandle]
-    , _funcElabVariables :: Map Text TypeHandle
-    , _typeAliases :: [Map Text TypeHandle]
-    , _typeConstants :: [Map Text TypeHandle]
-    , _typeVariables :: [Map Text TypeHandle]
-    , _typeClasses :: Map Text ClassData
-    , _structMembers :: Map Text TypeHandle
-    , _structInstMembers :: Map Text [TypeHandle]
-    , _facts :: [Facts]
-    , _cSymbols :: [Text]
-    , _currentContext :: [Context]
-    , _handleCounter :: HandleCounter
-    , _errorState :: ErrorState
-    , _currentParent :: [TypeVar]
+    { _variables :: [Map Text TypeHandle] -- ^ For each nested context, maps variable names to their type handles
+    , _funcVariables :: Map Text TypeHandle -- ^ Maps function names to their type handles
+    , _funcInstVariables :: Map Text [TypeHandle] -- ^ Maps method names to the list of type handles of their instances
+    , _funcElabVariables :: Map Text TypeHandle -- ^ Maps function names to the type handles of their elaborated forms (taking a witness of the class)
+    , _typeAliases :: [Map Text TypeHandle] -- ^ For each nested context, maps type alias names to their type handles
+    , _typeConstants :: [Map Text TypeHandle] -- ^ For each nested context, maps constant names to their type handles
+    , _typeVariables :: [Map Text TypeHandle] -- ^ For each nested context, maps type variable names to their type handles
+    , _typeClasses :: Map Text ClassData -- ^ Maps each class name to its type hole and a list of its methods
+    , _structMembers :: Map Text TypeHandle -- ^ Maps field names to their type handles
+    , _structInstMembers :: Map Text [TypeHandle] -- ^ Maps field name instances to their type handles
+    , _facts :: [Facts] -- ^ The head refers to the Constraints in the current context
+    , _cSymbols :: [Text] -- ^ list of the functions with the 'foreign "C"' specifier
+    , _currentContext :: [Context] -- ^ The head refers to the `Context` object representing the given context
+    , _handleCounter :: HandleCounter -- ^ Counter for fresh variable names when generating type handles
+    , _errorState :: ErrorState -- ^ the error state of the preprocessor
+    , _currentParent :: [TypeVar] -- ^ The head refers to the parent of the current context
     }
     deriving (Data)
 
+-- | Initiates a preprocessor state with initial values dictated by the given `Options` object
 initPreprocessor :: Options -> PreprocessorState
 initPreprocessor Options {} =
   PreprocessorState
@@ -84,6 +86,7 @@ initPreprocessor Options {} =
 
 makeFieldsNoPrefix ''PreprocessorState
 
+-- | Monadic type for the preprocessor state
 type Preprocessor = State PreprocessorState
 
 instance GetParent Preprocessor TypeVar where
@@ -98,6 +101,7 @@ instance Refresher Preprocessor where
          getTypeKind tVar)
       tVars
 
+-- | Gets the handle of the current context
 getCtxHandle :: Preprocessor (Maybe TypeHandle)
 getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)
 
@@ -107,35 +111,45 @@ freshNamedASTTypeHandle ::
 freshNamedASTTypeHandle name node =
   freshAnnotatedTypeHelper . TypeNamedAST name $ getPos node
 
+-- | Generates a new type handle with the given kind and annotation specifying its name
 freshNamedTypeHandle :: Text -> TypeKind -> Preprocessor TypeHandle
 freshNamedTypeHandle name = freshAnnotatedTypeHelper $ TypeNamed name
 
+-- | Generates a new type handle with AST annotation and name annotation and the given type kind
 freshNamedNodeTypeHandle ::
      (HasPos n, GetName n) => n -> TypeKind -> Preprocessor TypeHandle
 freshNamedNodeTypeHandle node =
   freshAnnotatedTypeHelper . TypeNamedAST (getName node) $ getPos node
 
+-- | Generates a new type handle with AST annotation and the given type kind
 freshASTTypeHandle :: HasPos n => n -> TypeKind -> Preprocessor TypeHandle
 freshASTTypeHandle node = freshAnnotatedTypeHelper . TypeAST $ getPos node
 
+-- | Generates a new type handle with no annotation
 freshTypeHelper :: TypeKind -> Preprocessor TypeHandle
 freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
+-- | Generates a new type handle type-kinded `Star` with AST annotation and name annotation
 freshNamedASTStar :: HasPos n => Text -> n -> Preprocessor TypeHandle
 freshNamedASTStar name node = freshNamedASTTypeHandle name node Star
 
+-- | Generates a new type handle type-kinded `Star` with AST annotation
 freshASTStar :: HasPos n => n -> Preprocessor TypeHandle
 freshASTStar = (`freshASTTypeHandle` Star)
 
+-- | Generates a new type handle type-kinded `GenericType` with AST annotation
 freshASTGeneric :: HasPos n => n -> Preprocessor TypeHandle
 freshASTGeneric = (`freshASTTypeHandle` GenericType)
 
+-- | Generates a new type handle type-kinded `Star` with no annotation
 freshStar :: Preprocessor TypeHandle
 freshStar = freshTypeHelper Star
 
+-- | Generates a new type handle type-kinded `GenericType` with no annotation
 freshGeneric :: Preprocessor TypeHandle
 freshGeneric = freshTypeHelper GenericType
 
+-- | Generates a new type handle with the given annotation and the given type kind
 freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Preprocessor TypeHandle
 freshAnnotatedTypeHelper annot tKind = do
   getParent >>= freshAnnotatedTypeHelperWithParent annot tKind

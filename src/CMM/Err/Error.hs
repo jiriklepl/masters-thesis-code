@@ -52,21 +52,27 @@ instance Eq Error where
 instance Pretty Error where
   pretty Error {_errSeverity = severity, _errContent = content} = pretty severity <> ":" <+> pretty content
 
+-- | Takes an object representing an error and wraps it in `Error` with `InfoLevel` severity
 makeInfo :: IsError err => err -> Error
 makeInfo = Error InfoLevel
 
+-- | Returns `True` iff the given `Error` object represents an info
 isInfo :: Error -> Bool
 isInfo Error {_errSeverity = severity} = severity == InfoLevel
 
+-- | Takes an object representing an error and wraps it in `Error` with `WarningLevel` severity
 makeWarning :: IsError err => err -> Error
 makeWarning = Error WarningLevel
 
+-- | Returns `True` iff the given `Error` object represents a warning
 isWarning :: Error -> Bool
 isWarning Error {_errSeverity = severity} = severity == WarningLevel
 
+-- | Takes an object representing an error and wraps it in `Error` with `ErrorLevel` severity
 makeError :: IsError err => err -> Error
 makeError = Error ErrorLevel
 
+-- | Returns `True` iff the given `Error` object represents an error (with `ErrorLevel` severity)
 isError :: Error -> Bool
 isError Error {_errSeverity = severity} = severity == ErrorLevel
 

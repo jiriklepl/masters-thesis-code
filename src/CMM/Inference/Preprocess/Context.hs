@@ -15,11 +15,12 @@ import safe CMM.Inference.Preprocess.TypeHole
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeHandle (TypeHandle)
 
+-- | An object representing the given context
 data Context
-  = GlobalCtx
-  | ClassCtx { ctxName ::Text, ctxHole :: TypeHole, ctxConstraint :: (Text, Type), superSupers :: [(Text, Type)] } -- className, classHandle, superClassHandles
-  | FunctionCtx { ctxName :: Text, ctxHole :: TypeHole, ctxFunctionHandle :: TypeHandle, ctxFunctionConv :: Maybe Conv }
-  | InstanceCtx { ctxName :: Text, ctxHole :: TypeHole, ctxConstraint :: (Text, Type), ctxSupers :: [(Text, Type)] } -- className, classHandle, superClassHandles
+  = GlobalCtx -- ^ Represents the global context
+  | ClassCtx { ctxName ::Text, ctxHole :: TypeHole, ctxConstraint :: (Text, Type), superSupers :: [(Text, Type)] } -- ^ class name, class handle, super-class handles
+  | FunctionCtx { ctxName :: Text, ctxHole :: TypeHole, ctxFunctionHandle :: TypeHandle, ctxFunctionConv :: Maybe Conv } -- ^ function name, function handle, the call convention (eg foreign "C")
+  | InstanceCtx { ctxName :: Text, ctxHole :: TypeHole, ctxConstraint :: (Text, Type), ctxSupers :: [(Text, Type)] } -- ^ class name, class handle, assumptions handles
   | StructCtx { ctxName :: Text, ctxHole :: TypeHole, ctxConstraint :: (Text, Type) }
   deriving (Data)
   --- | SectionCtx Text

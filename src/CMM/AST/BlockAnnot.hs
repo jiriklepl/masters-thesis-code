@@ -32,6 +32,7 @@ instance HasBlockAnnot ((a, BlockAnnot), b) where
 instance HasBlockAnnot a => HasBlockAnnot (Annot n a) where
   getBlockAnnot = getBlockAnnot . takeAnnot
 
+-- | Adds `BlockAnnot` to an annotation
 class HasBlockAnnot b =>
       WithBlockAnnot a b
   | a -> b
@@ -42,6 +43,8 @@ class HasBlockAnnot b =>
 instance WithBlockAnnot a (a, BlockAnnot) where
   withBlockAnnot = flip (,)
 
+-- | Maps a block to a `BlockVars` map, which then contains the R.W.L. tuple about each variable
 type BlockData = Map Int BlockVars
 
+-- | Maps a variable name to a tuple (Reads before any write, Writes, Requests alive)
 type BlockVars = Map Text (Bool, Bool, Bool)

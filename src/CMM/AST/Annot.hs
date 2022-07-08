@@ -12,6 +12,7 @@ import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
 import safe CMM.Parser.HasPos (HasPos(getPos))
 
+-- | Annotation used to append extra information to nodes in AST
 data Annotation node annot =
   Annot { unAnnot :: node annot, takeAnnot :: annot }
   deriving (Show, Foldable, Traversable, Functor, Data)

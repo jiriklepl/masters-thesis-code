@@ -14,6 +14,7 @@ import safe Prettyprinter (Pretty(pretty), (<+>), brackets, comma)
 
 import safe CMM.Data.Lattice (Lattice, join, meet)
 
+-- | An object having a lower bound and upper bound, usable for intervals, for example
 data Bounds a =
   Bounds
     { _lowerBound :: a

@@ -72,7 +72,7 @@ import safe CMM.Inference.HandleCounter (getHandleCounter, nextHandleCounter)
 import safe CMM.Inference.Preprocess.TypeHole
   ( HasTypeHole(getTypeHole)
   , TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         MethodTypeHole, NamedTypeHole, SimpleTypeHole)
+         MethodTypeHole, SimpleTypeHole)
   )
 import safe CMM.Inference.Refresh (Refresher(refresher))
 import safe qualified CMM.Inference.State as State
@@ -194,7 +194,6 @@ mineAST = traverse_ (addHandles . getTypeHole)
     addHandles =
       \case
         EmptyTypeHole -> return ()
-        NamedTypeHole handle _ -> addHandle handle
         SimpleTypeHole handle -> addHandle handle
         LVInstTypeHole handle handle' -> addHandle handle *> addHandle handle'
         MethodTypeHole handle handle' handle'' ->

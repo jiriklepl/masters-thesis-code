@@ -24,7 +24,7 @@ data BlockifierState =
     , _allFlow :: [(Int, Int)] -- ^ [(from, to)] edges in the control-flow graph
     , _blocksCache :: Map Text Int -- ^ Maps block names to their respective indices
     , _allBlocks :: Map Int Text -- ^ Maps block names to their respective indices
-    , _numBlocks :: Map Int Int
+    , _numBlocks :: Map Int Int -- ^ Maps each procedure's entry block to the number of blocks of that procedure
     , _currentBlock :: Maybe Int -- ^ Contains the index of the current block
     , _currentData :: BlockVars -- ^ Contains information for variables in the current block
     , _allData :: BlockData -- ^ Contains information for variables in all closed blocks
@@ -35,7 +35,7 @@ data BlockifierState =
     , _stackLabels :: Map Text SourcePos -- ^ Stack labels valid inside the current scope
     , _labels :: Map Text SourcePos -- ^ Regular labels inside the current scope
     , _continuations :: Map Text SourcePos -- ^ Continuations inside the current scope
-    , _procedureCounter :: Int
+    , _procedureCounter :: Int -- ^ Counts procedures
     , _errorState :: ErrorState -- ^ The current `ErrorState`
     }
   deriving (Show)

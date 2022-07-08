@@ -6,6 +6,7 @@ import safe qualified CMM.AST as AST
 import safe Data.Data ( Data )
 import safe Prettyprinter ( Pretty(pretty) )
 
+-- | Wraps an AST node to allow fpr multiple possible nodes to occupy the given place (used, for example, in errors, for convenience)
 data ASTWrapper a
   = WrapUnit (AST.Unit a)
   | WrappedTopLevel (AST.TopLevel a)
@@ -84,6 +85,7 @@ instance (Pretty (ASTWrapper a)) where
     WrappedAsserts asserts ->  pretty asserts
     WrappedPragma pragma ->  pretty pragma
 
+-- | Wraps the given node into a `ASTWrapper`
 class MakeWrapped n where
   makeWrapped :: n a -> ASTWrapper a
 

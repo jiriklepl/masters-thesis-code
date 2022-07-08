@@ -34,10 +34,10 @@ import safe CMM.Inference.TypeKind (TypeKind((:->), Constraint, Star))
 import safe CMM.Inference.TypeVar as Infer (TypeVar(NoType))
 
 getNamedOperator :: Text -> Infer.Type
-getNamedOperator = undefined -- TODO
+getNamedOperator = undefined -- NOTE: the imaginary architecture does not support any named operators
 
 getSymbolicOperator :: Op -> Infer.Type
-getSymbolicOperator = undefined -- TODO
+getSymbolicOperator = undefined -- NOTE: the imaginary architecture does not support any symbolic operators on top of the standard ones
 
 builtInKinds :: Bimap Text (Ordered DataKind)
 builtInKinds =
@@ -75,32 +75,29 @@ unstorableKindName = builtInPrefix <> "unstorable"
 addressKindName :: IsString a => a
 addressKindName = "address"
 
--- TODO: add to `Preprocess` (after adding the typed labels)
 addressKind :: DataKind
 addressKind = DataKind addressRegisters
 
 addressRegisters :: Set Int
-addressRegisters = Set.fromList [0] -- TODO: just a placeholder
+addressRegisters = Set.fromList [0] -- NOTE: the imaginary architecture supports only one address register
 
 floatKindName :: IsString a => a
 floatKindName = "float"
 
--- TODO: add to `Preprocess`
 floatKind :: DataKind
 floatKind = DataKind floatRegisters
 
 floatRegisters :: Set Int
-floatRegisters = Set.fromList [1] -- TODO: just a placeholder
+floatRegisters = Set.fromList [1] -- NOTE: the imaginary architecture supports only one floating point number register
 
 integerKindName :: IsString a => a
 integerKindName = ""
 
--- TODO: add to `Preprocess`
 integerKind :: DataKind
 integerKind = DataKind integerRegisters
 
 integerRegisters :: Set Int
-integerRegisters = Set.fromList [0, 2] -- TODO: just a placeholder
+integerRegisters = Set.fromList [0, 2] -- NOTE: the imaginary architecture supports two integer registers, one of which is also address
 
 boolKindName :: IsString a => a
 boolKindName = "bool"
@@ -109,7 +106,7 @@ boolKind :: DataKind
 boolKind = DataKind boolRegisters
 
 boolRegisters :: Set Int
-boolRegisters = Set.fromList [3] -- TODO: just a placeholder
+boolRegisters = Set.fromList [3] -- NOTE: the imaginary architecture supports only one boolean register
 
 builtInContext :: Facts
 builtInContext = [] -- undefined

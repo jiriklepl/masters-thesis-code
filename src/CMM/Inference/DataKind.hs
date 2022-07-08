@@ -8,7 +8,6 @@ import safe qualified Data.PartialOrd as PartialOrd
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 
-import safe CMM.Data.Dioid (Dioid((<.>), mfull))
 import safe CMM.Data.Lattice (Lattice((/\), (\/)))
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Data.Ordered (Ordered(Ordered))
@@ -67,9 +66,6 @@ instance Semigroup DataKind where
 instance Monoid DataKind where
   mempty = Unstorable
 
-instance Dioid DataKind where
-  (<.>) = (/\)
-  mfull = GenericData
 
 instance Ord (Ordered DataKind) where
   Ordered GenericData `compare` Ordered GenericData = EQ

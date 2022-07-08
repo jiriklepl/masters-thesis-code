@@ -8,6 +8,7 @@ import safe qualified Data.Text as T
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 
+-- | Gets the name of the given node
 class GetName n where
   getName :: n -> Text
 

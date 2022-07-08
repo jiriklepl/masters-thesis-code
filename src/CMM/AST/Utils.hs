@@ -18,6 +18,7 @@ import safe CMM.AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot), unAnnot, withAnnot)
 import safe CMM.AST.GetName (getName)
 
+-- | returns the node representation without any annotation
 class EnsureNode n' n where
   ensureNode :: n' a -> n a
 
@@ -27,6 +28,7 @@ instance EnsureNode n n where
 instance EnsureNode (Annot n) n where
   ensureNode = unAnnot
 
+-- | Returns `Just` name of the expression, if it has any, otherwise, `Nothing`
 getExprLVName :: Annot Expr a -> Maybe Text
 getExprLVName =
   \case
@@ -66,9 +68,11 @@ instance GetTrivialGotoTarget (Stmt a) where
       GotoStmt expr _ -> getExprLVName expr
       _ -> Nothing
 
+-- | Adds a `TopLevel` definition to the given `Unit`
 addTopLevel :: Annot TopLevel a -> Annot Unit a -> Annot Unit a
 addTopLevel topLevel (Unit topLevels `Annot` a) =
   withAnnot a . Unit $ topLevel : topLevels
 
+-- | Adds multiple `TopLevel` definition to the given `Unit`
 addTopLevels :: [Annot TopLevel a] -> Annot Unit a -> Annot Unit a
 addTopLevels topLevels unit = foldl' (flip addTopLevel) unit topLevels

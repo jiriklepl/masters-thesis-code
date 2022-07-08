@@ -13,9 +13,11 @@ import safe qualified Data.Set as Set
 
 infixr 5 ??
 
+-- | Like `Alternative`, but for values
 class Fallbackable a where
   (??) :: a -> a -> a
 
+-- | Class for object that have a `null`-like or empty value
 class Nullable a where
   nullVal :: a
 

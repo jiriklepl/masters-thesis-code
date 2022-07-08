@@ -72,9 +72,6 @@ cradle:
     - path: "src/CMM/Data/Bounds/Impl.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Data/Dioid.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Data/Either.hs"
       component: "Compiler:exe:Compiler"
 

@@ -7,10 +7,11 @@ import safe Data.Data ( Data )
 import safe Prettyprinter ( Pretty(pretty) )
 
 
+-- | Represents a severity of an `Error`
 data Severity
-  = InfoLevel
-  | WarningLevel
-  | ErrorLevel
+  = InfoLevel -- ^ Just some information due to verbosity settings
+  | WarningLevel -- ^ The error is not fatal, but is wrong
+  | ErrorLevel -- ^ The error is fatal, the compiler does not perform any more  steps of the compilation pipeline
   deriving (Eq, Ord, Show, Data)
 
 deriving instance Bounded Severity

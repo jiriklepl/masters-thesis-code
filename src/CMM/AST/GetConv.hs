@@ -14,6 +14,7 @@ import safe CMM.AST
   )
 import safe CMM.AST.Annot (Annot, unAnnot)
 
+-- | Gets the call convention specialization from the given node
 class GetConv n where
   getConv :: n -> Maybe Conv
 

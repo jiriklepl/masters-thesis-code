@@ -48,15 +48,19 @@ import safe Data.Map (Map)
 import CMM.Err.State (noErrorsState)
 import safe qualified Data.Text as T
 
+-- | Adds a prefix representing the blockifier phase to a name
 helperName :: Text -> Text
 helperName = addPrefix lrAnalysisPrefix
 
+-- | The prefix representing the blockifier phase
 lrAnalysisPrefix :: Text
 lrAnalysisPrefix = "LR"
 
+-- | Returns `True` iff the blockifier happens to be inside a basic block
 blockIsSet :: Blockifier Bool
 blockIsSet = uses State.currentBlock $ not . null
 
+-- | Returns a number assigned to the given basic block, if it is not assigned any number, assigns a new number
 blocksCache :: Text -> Blockifier Int
 blocksCache name = do
   table <- use State.blocksCache
@@ -68,18 +72,21 @@ blocksCache name = do
       State.blocksCache %= Map.insert name index
       return index
 
+-- | Opens a basic block
 setCurrentBlock :: Text -> Blockifier Int
 setCurrentBlock name = do
   index <- blocksCache name
   State.currentBlock ?= index
   return index
 
+-- | Generates a fresh name for the given procedure's entry block
 newProcedureName :: Blockifier Text
 newProcedureName = do
   count <- use State.procedureCounter
   State.procedureCounter += 1
   return . helperName . T.pack $ "procedure" <> show count
 
+-- | Closes the old basic block if it is open and maybe opens a new one, depending on the input
 updateBlock :: Maybe Text -> Blockifier ()
 updateBlock mName = do
   mIndex <- traverse blocksCache mName
@@ -91,18 +98,23 @@ updateBlock mName = do
       State.currentData .= mempty
     Nothing -> State.currentBlock .= mIndex
 
+-- | Closes the old basic block if it is open and opens a new one
 setBlock :: Text -> Blockifier ()
 setBlock = updateBlock . Just
 
+-- | Closes the old basic block if it is open
 unsetBlock :: Blockifier ()
 unsetBlock = updateBlock Nothing
 
+-- | Adds a `NoBlock` annotation to the annotation of the given node
 noBlockAnnots :: (Functor n, WithBlockAnnot a b) => n a -> n b
 noBlockAnnots = updateAnnots (withBlockAnnot NoBlock)
 
+-- | Adds a `NoBlock` annotation to the given annotation and the result then to the given node
 withNoBlockAnnot :: WithBlockAnnot a b => a -> n b -> Annot n b
 withNoBlockAnnot = withAnnot . withBlockAnnot NoBlock
 
+-- | Adds an edge from the current block (if it is set) to the target block
 addControlFlow :: Text -> Blockifier ()
 addControlFlow destBlock =
   use State.currentBlock >>= \case
@@ -111,6 +123,7 @@ addControlFlow destBlock =
       index <- blocksCache destBlock
       State.currentFlow %= ((block, index) :)
 
+-- | Registers the given metadata of the given node
 class MetadataType t =>
       Register t n
   where
@@ -135,16 +148,20 @@ instance Register WritesVars Text where
 instance (GetMetadata t (n a), Register t Text) => Register t (n a) where
   register t = traverse_ (register t) . getMetadata t
 
+-- | Registers the reads of the given node
 registerReads :: Register ReadsVars n => n -> Blockifier ()
 registerReads = register ReadsVars
 
+-- | Registers the writes of the given node
 registerWrites :: Register WritesVars n => n -> Blockifier ()
 registerWrites = register WritesVars
 
+-- | Registers the reads and the writes of the given node
 registerReadsWrites ::
      (Register WritesVars n, Register ReadsVars n) => n -> Blockifier ()
 registerReadsWrites n = registerReads n *> registerWrites n
 
+-- | Returns `True` if the given node never returns (ends the procedure)
 class NeverReturns n where
   neverReturns :: n -> Bool
 
@@ -166,6 +183,7 @@ instance NeverReturns (AST.Flow a) where
       AST.NeverReturns -> True
       _ -> False
 
+-- | Returns the names of the targets of the given node
 class GetTargetNames n t | n -> t where
   getTargetNames :: n -> t
 
@@ -195,6 +213,7 @@ instance GetTargetNames (AST.Stmt a) (Maybe [Text]) where
 instance GetTargetNames (AST.Targets a) [Text] where
   getTargetNames (AST.Targets names) = getName <$> names
 
+-- | Annotates the given statement with the given node (or marks it unreachable)
 addBlockAnnot ::
      (HasPos a, WithBlockAnnot a b) => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
 addBlockAnnot stmt@(Annot n annot) =
@@ -205,20 +224,25 @@ addBlockAnnot stmt@(Annot n annot) =
     Just block ->
       return . withAnnot (withBlockAnnot (PartOf block) annot) $ noBlockAnnots n
 
+-- | A class for metadata tags
 class MetadataType a
 
+-- | A ReadsVars metadata tag
 data ReadsVars =
   ReadsVars
   deriving (MetadataType, Eq)
 
+-- | A WritesVars metadata tag
 data WritesVars =
   WritesVars
   deriving (MetadataType, Eq)
 
+-- | A DeclaresVars metadata tag
 data DeclaresVars =
   DeclaresVars
   deriving (MetadataType, Eq)
 
+-- | Based on the given metadata tag, returns the information from the given node
 class MetadataType t =>
       GetMetadata t n
   where
@@ -363,9 +387,11 @@ instance GetMetadata DeclaresVars (AST.Arm a) where
 
 type BlockifyAssumps a b = (WithBlockAnnot a b, HasPos a)
 
+-- | Blockifies the given node, annotating the statements with basic blocks they appear in
 class Blockify n a b where
   blockify :: BlockifyAssumps a b => n a -> Blockifier (n b)
 
+-- | A helper type for generating the blockifier AST map
 data BlockifyHint =
   BlockifyHint
 
@@ -373,6 +399,7 @@ type instance Constraint BlockifyHint a b = BlockifyAssumps a b
 
 type instance Space BlockifyHint = Blockify'
 
+-- | A helper class for generating the blockifier AST map
 class Blockify' a b n where
   blockify' :: BlockifyAssumps a b => n a -> Blockifier (n b)
 
@@ -397,6 +424,7 @@ instance Blockify (Annot AST.Datum) a b where
         storeSymbol State.stackLabels DatumLabelSymbol datum $> noBlockAnnots datum
       _ -> return $ noBlockAnnots datum
 
+-- | Blockifies the given procedure header
 blockifyProcedureHeader ::
      (HasPos a, WithBlockAnnot a b)
   => Annotation AST.ProcedureHeader a
@@ -423,8 +451,8 @@ instance Blockify (Annot AST.Procedure) a b where
       finalize =
         noErrorsState >>= (`when` finalizations)
       finalizations = do
-        forbidFallthrough a
-        analyzeFlow procedure
+        forbidFallthrough a -- forbids a fallthrough through the procedure's end
+        analyzeFlow procedure -- performs the lr analysis on the procedure's control flow
 
 instance Blockify (Annot AST.ProcedureDecl) a b where
   blockify (AST.ProcedureDecl header `Annot` a) = do
@@ -438,12 +466,14 @@ instance Blockify (Annot AST.Body) a b where
   blockify (AST.Body bodyItems `Annot` a) =
     withNoBlockAnnot a . AST.Body <$> traverse blockify bodyItems
 
+-- | Generates an error for a forbidden fallthrough
 forbidFallthrough :: HasPos a => a -> Blockifier ()
 forbidFallthrough a =
   use currentBlock >>= \case
     Just {} -> registerASTError a ProcedureFallthrough
     Nothing -> return ()
 
+-- | takes a wrapped object, the constructor of the wrapper and its annotation, generates a new wrapped object after blockifying the inside
 constructBlockified ::
      ( Blockify (Annot n1) a1 b1
      , WithBlockAnnot a1 b1
@@ -490,9 +520,11 @@ instance Blockify (Annot AST.Registers) a b where
 instance Blockify (Annot AST.Formal) a b where
   blockify formal = storeRegister formal $> noBlockAnnots formal
 
+-- | stores a symbol to a virtual register (local variable)
 storeRegister :: (GetName n, HasPos n) => n -> Blockifier ()
 storeRegister = storeSymbol State.registers RegisterSymbol
 
+-- | stores a symbol of the given type, from the given node
 storeSymbol ::
      (GetName n, HasPos n)
   => Lens BlockifierState BlockifierState (Map Text SourcePos) (Map Text SourcePos)
@@ -559,10 +591,11 @@ instance Blockify (Annot AST.Stmt) a b where
         registerReadsWrites stmt *> addBlockAnnot stmt <*
         when (neverReturns callAnnots) unsetBlock
 
--- This is here just for completeness
+-- | This is here just for completeness
 flatteningError :: HasPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()
 flatteningError stmt = registerASTError stmt . FlatteningInconsistency . void $ unAnnot stmt
 
+-- | Blockifies a label statement
 blockifyLabelStmt ::
      WithBlockAnnot a b => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
 blockifyLabelStmt (Annot stmt a) = do

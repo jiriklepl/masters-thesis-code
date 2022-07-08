@@ -21,19 +21,22 @@ import safe CMM.Inference.TypeKind
   )
 import safe CMM.Parser.HasPos (HasPos, SourcePos, getPos)
 
+-- | Returns a `CollectorState` containing the local variables of the given node
 localVariables ::
      (Data (n SourcePos), Functor n, HasPos a) => n a -> CollectorState
 localVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
-    go = addTAutoCases $ addCommonCases $ gmapM go
+    go = addTAutoCase $ addCommonCases $ gmapM go
 
+-- | Returns a `CollectorState` containing the global variables of the given `AST.Unit`
 globalVariables :: HasPos a => AST.Unit a -> CollectorState
 globalVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
     go = addGlobalCases $ addCommonCases $ gmapM go
 
+-- | adds type variables to the `CollectorState` from the given `AST.ParaName`
 addParaNameTVars ::
      (HasPos annot, GetName (param annot))
   => Annot (AST.ParaName param) annot
@@ -41,6 +44,7 @@ addParaNameTVars ::
 addParaNameTVars (Annot (AST.ParaName _ params) _) =
   traverse_ (`State.addTVarTrivial` GenericType) params
 
+-- | Returns a `CollectorState` containing the local variables of the given `AST.Struct`
 structVariables :: HasPos a => AST.Struct a -> CollectorState
 structVariables (AST.Struct paraName datums) =
   variablesCommon $ do
@@ -49,6 +53,7 @@ structVariables (AST.Struct paraName datums) =
       [label | label@(Annot AST.DatumLabel {} _) <- datums]
     addParaNameTVars paraName
 
+-- | Returns a `CollectorState` containing the local variables of the given `AST.Class`
 classVariables :: HasPos a => AST.Class a -> CollectorState
 classVariables class'@(AST.Class _ paraName _) =
   variablesCommon $ do
@@ -56,22 +61,34 @@ classVariables class'@(AST.Class _ paraName _) =
     gmapM go $ getPos <$> class'
   where
     go :: Data d => d -> Collector d
-    go = addProcedureDeclCases $ gmapM go
+    go = goProcedureDecl <*|*> gmapM go
+    goProcedureDecl =
+      \case
+        (procedureDecl :: Annot AST.ProcedureDecl SourcePos) ->
+          State.addFVarTrivial procedureDecl Star
 
+-- | Returns a `CollectorState` containing the local variables of the given `AST.Instance`
 instanceVariables :: HasPos a => AST.Instance a -> CollectorState
 instanceVariables n = variablesCommon . go $ getPos <$> n
   where
     go :: Data d => d -> Collector d
-    go = addTAutoCases $ addProcedureCases $ gmapM go
+    go = addTAutoCase $ goProcedure <*|*> gmapM go
+    goProcedure =
+      \case
+        (procedure :: Annot AST.Procedure SourcePos) ->
+          State.addFVarTrivial procedure Star
 
+-- | Runs the a `Collector` monadic action from the initial state and returns the resulting `CollectorState`
 variablesCommon :: Collector a -> CollectorState
 variablesCommon = (`execState` State.initCollector)
 
+-- | Tje type of helper functions that add monotype cases to the polytype function, that monadically collects variables
 type CasesAdder m a
    = Data a =>
        (forall d. Data d =>
                     d -> Collector d) -> a -> Collector a
 
+-- | adds the common cases like formals, declarations, registers, datums, etc.
 addCommonCases :: CasesAdder m a
 addCommonCases go =
   goFormal <*|*> goDecl <*|*> goImport <*|*> goRegisters <*|*> goDatum <*|*>
@@ -104,6 +121,7 @@ addCommonCases go =
         stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) -> State.addVarTrivial stmt Star
         stmt -> gmapM go stmt
 
+-- | adds the cases specific to the global variable collecting
 addGlobalCases :: CasesAdder m a
 addGlobalCases go =
   goClass <*|*> goInstance <*|*> goStruct <*|*> goSection <*|*> goProcedure <*|*>
@@ -143,6 +161,7 @@ addGlobalCases go =
     goSectionItems :: Data d => d -> Collector d
     goSectionItems = addSectionCases $ addCommonCases $ gmapM goSectionItems
 
+-- | adds the cases specific to collecting variables inside a section
 addSectionCases :: CasesAdder m a
 addSectionCases go = goProcedure <*|*> go
   where
@@ -151,27 +170,7 @@ addSectionCases go = goProcedure <*|*> go
         (procedure :: Annot AST.Procedure SourcePos) ->
           State.addFVarTrivial procedure Star <* gmapM goLabels procedure
     goLabels :: Data d => d -> Collector d
-    goLabels = addLabelCases $ gmapM goLabels
-
-addProcedureDeclCases :: CasesAdder m a
-addProcedureDeclCases go = goProcedureDecl <*|*> go
-  where
-    goProcedureDecl =
-      \case
-        (procedureDecl :: Annot AST.ProcedureDecl SourcePos) ->
-          State.addFVarTrivial procedureDecl Star
-
-addProcedureCases :: CasesAdder m a
-addProcedureCases go = goProcedure <*|*> go
-  where
-    goProcedure =
-      \case
-        (procedureDecl :: Annot AST.Procedure SourcePos) ->
-          State.addFVarTrivial procedureDecl Star
-
-addLabelCases :: CasesAdder m a
-addLabelCases go = goStmt <*|*> goDatum <*|*> go
-  where
+    goLabels = goStmt <*|*> goDatum <*|*> gmapM goLabels
     goStmt =
       \case
         stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) -> State.addVarTrivial stmt Star
@@ -181,8 +180,9 @@ addLabelCases go = goStmt <*|*> goDatum <*|*> go
         datum@(Annot AST.DatumLabel {} (_ :: SourcePos)) -> State.addVarTrivial datum Star
         datum -> gmapM go datum
 
-addTAutoCases :: CasesAdder m a
-addTAutoCases go = goTAuto <*|*> go
+-- | Adds the case for collecting `AST.TAuto` variables
+addTAutoCase :: CasesAdder m a
+addTAutoCase go = goTAuto <*|*> go
   where
     goTAuto =
       \case

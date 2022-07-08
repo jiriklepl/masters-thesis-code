@@ -10,9 +10,11 @@ count f = foldr go 0
       | f x = i + 1
       | otherwise = i
 
+-- | Goes through an (ordered) list and removes consecutive duplicates
 uniq :: Eq a => [a] -> [a]
 uniq = uniqOn (==)
 
+-- | Goes through an (ordered) list and removes consecutive duplicates as dictated by the given predicate
 uniqOn :: (a -> a -> Bool) -> [a] -> [a]
 uniqOn p = go
   where

@@ -5,6 +5,7 @@ module CMM.Data.Either where
 import safe Data.Bifunctor (bimap, first)
 import safe Data.Functor (($>))
 
+-- | Takes a list of `Either a b` and return the only `Right` element, otherwise, returns a `Left` element with all `Left` values
 oneRight :: [Either a b] -> Either [a] b
 oneRight =
   \case

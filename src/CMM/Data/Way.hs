@@ -2,6 +2,7 @@
 
 module CMM.Data.Way where
 
+-- | An object representing a 1D direction
 data Way
   = Backward
   | Both
@@ -16,6 +17,7 @@ instance Semigroup Way where
   Backward <> Backward = Backward
   Forward <> Forward = Forward
 
+-- | Reverses the `Way` object
 otherWay :: Way -> Way
 otherWay =
   \case
