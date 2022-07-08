@@ -1,0 +1,7 @@
+f() {
+    bits32 x, y;
+    x, y = 5, 10;
+    x, y = y, x;
+
+    return (x, y);
+}

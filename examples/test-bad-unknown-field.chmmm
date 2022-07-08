@@ -1,0 +1,12 @@
+struct A{}
+
+f() {
+    stackdata {
+        x : A;
+    }
+
+    auto y;
+    y = x->x;
+
+    return (y);
+}
