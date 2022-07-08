@@ -16,17 +16,20 @@ import safe CMM.Inference.Fact
   )
 import safe CMM.Inference.TypeVar (TypeVar(TypeVar))
 
+-- | Gets free type variables from the given object
 freeTypeVars :: Data a => a -> Set TypeVar
 freeTypeVars = go
   where
     go :: Data d => d -> Set TypeVar
-    go = (Set.unions . gmapQ go) `extQ` factCase `extQ` leaf
+    go = (Set.unions . gmapQ go) `extQ` factCase `extQ` tVarCase
     factCase =
       \case
+        -- does not return the free type variables of the object to be instantiated
         Fact (InstType _ t') -> freeTypeVars t'
+        -- does not propagate the quantified tVars
         NestedFact (tVars :. flatFacts :=> nestedFacts) ->
           (freeTypeVars flatFacts <> freeTypeVars nestedFacts) `Set.difference`
           tVars
         (fact :: Fact) -> Set.unions $ gmapQ go fact
-    leaf tVar@TypeVar {} = Set.singleton tVar
-    leaf _ = mempty
+    tVarCase tVar@TypeVar {} = Set.singleton tVar
+    tVarCase _ = mempty
