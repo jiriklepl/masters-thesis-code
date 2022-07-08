@@ -25,7 +25,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   ( HasTypeHole(getTypeHole)
   , safeHoleHandle
   )
-import safe CMM.Inference.Refresh (Refresher(refresher))
+import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.TypeAnnot
   ( TypeAnnot(NoTypeAnnot, TypeAST, TypeInst, TypeNamed, TypeNamedAST)
   )
@@ -91,8 +91,8 @@ type Preprocessor = State PreprocessorState
 instance GetParent Preprocessor TypeVar where
   getParent = uses currentParent head
 
-instance Refresher Preprocessor where
-  refresher tVars =
+instance Refresh Preprocessor where
+  refresh tVars =
     sequence $
     Map.fromSet
       (\tVar ->

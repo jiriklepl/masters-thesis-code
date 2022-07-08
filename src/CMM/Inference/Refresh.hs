@@ -6,6 +6,7 @@ module CMM.Inference.Refresh where
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
+import safe Data.Functor ((<&>))
 
 import safe CMM.Inference.Fact
   ( NestedFact(NestedFact)
@@ -15,22 +16,25 @@ import safe CMM.Inference.Fact
 import safe CMM.Inference.Subst (Apply(apply), Subst)
 import safe CMM.Inference.TypeVar (TypeVar)
 
+-- | Class for all monadic states that can refresh type variables,
+--   providing a substitution from old names to fresh names
 class Monad s =>
-      Refresher s
+      Refresh s
   where
-  refresher :: Set TypeVar -> s (Subst TypeVar)
+  refresh :: Set TypeVar -> s (Subst TypeVar)
 
-refreshScheme :: (Refresher s, Apply n TypeVar) => Scheme n -> s (Scheme n)
+-- | refreshes the given scheme, instantiation can be then
+--   done by trivially throwing away the quantified type variables
+refreshScheme :: (Refresh s, Apply n TypeVar) => Scheme n -> s (Scheme n)
 refreshScheme =
   \case
     tVars :. facts :=> nested -> do
-      subst <- refresher tVars
-      return
-        (Set.fromAscList (Map.elems subst) :. (apply subst <$> facts) :=>
-         apply subst nested)
+      refresh tVars <&> \subst ->
+        Set.fromAscList (Map.elems subst) :. (apply subst <$> facts) :=>
+         apply subst nested
 
 refreshNestedFact ::
-     (Refresher s, Apply n TypeVar) => NestedFact n -> s (NestedFact n)
+     (Refresh s, Apply n TypeVar) => NestedFact n -> s (NestedFact n)
 refreshNestedFact =
   \case
     NestedFact scheme -> NestedFact <$> refreshScheme scheme

@@ -74,7 +74,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   , TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
          MethodTypeHole, SimpleTypeHole)
   )
-import safe CMM.Inference.Refresh (Refresher(refresher))
+import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe qualified CMM.Inference.State as State
 import safe CMM.Inference.State
     ( InferencerState, Inferencer )
@@ -443,7 +443,7 @@ reduceTemplates [] = return []
 reduceTemplates (fact:facts) =
   case fact of
     NestedFact (tVars :. [ClassConstraint name t] :=> nesteds) -> do
-      subst <- refresher tVars
+      subst <- refresh tVars
       let tVars' = apply subst `Set.map` tVars
       State.addClassScheme name $ tVars' :. flattenFacts (subst `apply` nesteds) :=>
         apply subst t
@@ -478,13 +478,13 @@ reduceTemplates (fact:facts) =
         State.lookupClassScheme name >>= \case
           Nothing -> skip
           Just (tVars' :. facts' :=> t') -> do
-            subst <- refresher tVars'
+            subst <- refresh tVars'
             State.addClassFact name $ (tVars <> (apply subst `Set.map` tVars')) :.
               ((t `typeEquality` apply subst t') :
                reverseFacts [f | Fact f <- nesteds] <>
                apply subst facts') :=>
               t
-            subst' <- refresher tVars
+            subst' <- refresh tVars
             reduceTemplates $
               (Fact <$> typeEquality (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
     Fact (ClassFunDeps name rules) -> do
@@ -606,7 +606,7 @@ reduceConstraint (fact:facts) =
                       tType' <- simplify t' >>= State.getTyping
                       if tType `instanceOf` tType'
                         then do
-                          subst <- refresher tVars
+                          subst <- refresh tVars
                           let freshT = subst `apply` t'
                               newFacts =
                                 typeEquality t freshT : (apply subst <$> fs)
@@ -621,7 +621,7 @@ reduceConstraint (fact:facts) =
       State.lookupClassScheme name >>= \case
         Nothing -> skip
         Just (tVars :. facts' :=> t') -> do
-          subst <- refresher tVars
+          subst <- refresh tVars
           State.addClassFact name $ mempty :. [] :=> t
           continueWith $
             Fact <$> typeEquality t (subst `apply` t') :
@@ -831,7 +831,7 @@ unSchematize [] = return []
 unSchematize (Fact (InstType (VarType scheme) inst):others) =
   State.fromOldName scheme >>= State.lookupScheme >>= \case
     Just (tVars :. facts :=> t) -> do
-      instSubst <- refresher tVars
+      instSubst <- refresh tVars
       let facts' = Fact . apply instSubst <$> facts
           t' = instSubst `apply` t
       ((Fact (inst `Equality` t') : facts') <>) <$> unSchematize others
@@ -947,7 +947,7 @@ registerScheme :: TypeVar -> Scheme Type -> Inferencer ()
 registerScheme tVar =
   \case
     tVars :. facts :=> nesteds -> do
-      subst <- refresher tVars
+      subst <- refresh tVars
       let tVars' = apply subst `Set.map` tVars
           nesteds' = apply subst nesteds
       void . reduceMany $ Fact <$> facts

@@ -27,7 +27,7 @@ import safe CMM.Inference.HandleCounter
   ( HasHandleCounter(handleCounter)
   , freshAnnotatedTypeHelperWithParent
   )
-import safe CMM.Inference.Refresh (Refresher(refresher))
+import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
 import safe CMM.Inference.TypeCompl (PrimType)
@@ -105,8 +105,8 @@ type Inferencer = State InferencerState
 instance GetParent Inferencer TypeVar where
   getParent = uses currentParent head
 
-instance Refresher Inferencer where
-  refresher tVars =
+instance Refresh Inferencer where
+  refresh tVars =
     sequence $
     Map.fromSet
       (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind tVar)

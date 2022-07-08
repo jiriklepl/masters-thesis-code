@@ -59,7 +59,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   ( TypeHole(EmptyTypeHole, MethodTypeHole, SimpleTypeHole)
   , holeHandle
   )
-import safe CMM.Inference.Refresh (Refresher(refresher))
+import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
 import safe CMM.Inference.TypeCompl
@@ -303,7 +303,7 @@ getCtxClassConstraint = uses currentContext go
 storeProc :: ToType a => Text -> Facts -> a -> Preprocessor TypeHole
 storeProc name fs x = do
   tVars <- collectTVars
-  subst <- refresher tVars
+  subst <- refresh tVars
   let tVars' = apply subst `Set.map` tVars
   uses currentContext head >>= \case
     GlobalCtx -> do

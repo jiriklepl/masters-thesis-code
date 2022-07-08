@@ -87,7 +87,7 @@ import safe CMM.Inference.Preprocess.WithTypeHole
   ( WithTypeHole(withTypeHole)
   , withEmptyTypeHole
   )
-import safe CMM.Inference.Refresh (Refresher(refresher), refreshNestedFact)
+import safe CMM.Inference.Refresh (Refresh(refresh), refreshNestedFact)
 import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Inference.Type as Infer
   ( ToType(toType)
@@ -753,7 +753,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                   refreshNestedFact . forall tVars [h `typeEquality` t] $
                   structAddrFact :
                   fieldAddrFact : funcFact : constExprFact : fs
-                subst <- refresher tVars
+                subst <- refresh tVars
                 fact <-
                   refreshNestedFact $
                   forall (apply subst `Set.map` tVars) [subst `apply` classF] []
