@@ -294,7 +294,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.Struct) a where
               datums'' <- sequence datums'
               return $ withAnnot b . AST.Struct name <$> sequence datums''
           Poly {} -> monomorphizeMaybes subst a (const Nothing) datums
-          Absurd absurdity -> error $ show absurdity -- TODO: logic error
+          Absurd absurdity -> failure $ absurdity `absurdType` annotated
 
 instance Monomorphize (Annot AST.Import) a where
   monomorphize = undefined
@@ -310,7 +310,7 @@ instance HasTypeHole a => Monomorphize (Annot AST.Datum) a where
           MemberTypeHole struct _ insts schemes' ->
             useInferencer
               (typePolytypeness subst (getTypeHole a)) >>= \case
-              Absurd absurdity -> error $ show absurdity
+              Absurd absurdity -> failure $ absurdity `absurdType` annotated
               _ -> do
                 useMonomorphizer $
                   zipWithM_
@@ -377,9 +377,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
                 body'' <- body'
                 return $ withAnnot b <$> liftA2 AST.Procedure header'' body''
           False -> succeed nullVal
-      Poly polyWhat
-        | null subst -> succeed nullVal
-        | otherwise -> error $ show polyWhat
+      Poly {} -> succeed nullVal
       Absurd absurdity -> failure $ absurdity `absurdType` annotated
 
 instance Monomorphize (Annot AST.ProcedureHeader) a where
@@ -515,16 +513,13 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
     let annotated = withAnnot b lValue
     useInferencer
       (typePolytypeness subst (getTypeHole a)) >>= \case
-      Poly {}
-      -- error . show $ () <$ lValue -- TODO: lValue cannot be a polytype
-        -> do
-        succeed . Just $ annotated
-      Absurd absurdity -> failure $ absurdity `absurdType` annotated -- TODO: lValue cannot have an illegal type
+      Poly {} -> succeed $ Just annotated
+      Absurd absurdity -> failure $ absurdity `absurdType` annotated
       Mono ->
         case lValue of
           AST.LVName _ ->
             case getTypeHole a of
-              SimpleTypeHole {} -> succeed . Just $ annotated
+              SimpleTypeHole {} -> succeed $ Just annotated
               LVInstTypeHole handle scheme ->
                 useInferencer
                   (typePolytypeness
@@ -539,7 +534,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
                       fmap toTypeVar . State.getHandle
                     instType <- useInferencer $ reconstructType subst handle
                     useMonomorphizer $ State.addGenerate (mapNode WrappedLValue annotated) (toTypeVar scheme) inst instType
-                    succeed . Just $ annotated
+                    succeed $ Just annotated
               hole -> failure $ hole `illegalHole` annotated
           AST.LVRef mType expr mAsserts -> do
             mType' <-
@@ -688,7 +683,7 @@ monomorphizeField scheme inst =
       map'' <-
         Map.toList map' `for` \(item, struct) ->
           monomorphizeFieldInner item inst struct
-      return $ first head $ oneRight map''
+      return $ first head $ oneRight map'' -- TODO: Ambiguity + Nihility
 
 instantiationError :: Monad m =>
   Type
@@ -719,7 +714,7 @@ monomorphizeFieldInner scheme (inst, instWrapper) struct = do
         Right (subst, _) -> do
           struct' <- useInferencer . fmap toTypeVar $ State.getHandle struct
           useMonomorphizer (uses State.polySchemes $ Map.lookup struct') >>= \case
-            Nothing -> error $ show struct' -- TODO: logic error
+            Nothing -> failure $ isNotScheme instWrapper
             Just (_, schematized) ->
               case schematized of
                 FuncScheme {} -> illegalScheme schematized instWrapper
@@ -744,7 +739,7 @@ monomorphizeMethodInner scheme (inst, instWrapper) = do
         Left err -> instantiationError scheme'' inst'' instWrapper err
         Right (subst, _) ->
           useMonomorphizer (uses State.polySchemes $ Map.lookup scheme) >>= \case
-            Nothing -> error $ show scheme
+            Nothing -> failure $ isNotScheme instWrapper
             Just (_, schematized) ->
               case schematized of
                 FuncScheme procedure -> do
