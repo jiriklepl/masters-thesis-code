@@ -10,7 +10,6 @@ import safe Data.Map (Map)
 import safe Data.Text (Text)
 import safe qualified Data.Map as Map
 
-import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.Inference.Fact (Facts)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
@@ -25,7 +24,7 @@ import safe CMM.Inference.Preprocess.TypeHole
   )
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.TypeAnnot
-  ( TypeAnnot(NoTypeAnnot, TypeAST, TypeInst, TypeNamed, TypeNamedAST)
+  ( TypeAnnot(NoTypeAnnot, TypeAST, TypeInst, TypeNamedAST)
   )
 import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
 import safe CMM.Inference.TypeKind
@@ -107,16 +106,6 @@ freshNamedASTTypeHandle ::
      GetPos n => Text -> n -> TypeKind -> Preprocessor TypeHandle
 freshNamedASTTypeHandle name node =
   freshAnnotatedTypeHelper . TypeNamedAST name $ getPos node
-
--- | Generates a new type handle with the given kind and annotation specifying its name
-freshNamedTypeHandle :: Text -> TypeKind -> Preprocessor TypeHandle
-freshNamedTypeHandle name = freshAnnotatedTypeHelper $ TypeNamed name
-
--- | Generates a new type handle with AST annotation and name annotation and the given type kind
-freshNamedNodeTypeHandle ::
-     (GetPos n, GetName n) => n -> TypeKind -> Preprocessor TypeHandle
-freshNamedNodeTypeHandle node =
-  freshAnnotatedTypeHelper . TypeNamedAST (getName node) $ getPos node
 
 -- | Generates a new type handle with AST annotation and the given type kind
 freshASTTypeHandle :: GetPos n => n -> TypeKind -> Preprocessor TypeHandle

@@ -116,7 +116,6 @@ import safe CMM.Inference.TypeHandle
 import safe CMM.Inference.TypeKind (TypeKind(GenericType), getTypeKind)
 import safe CMM.Inference.TypeVar
   ( TypeVar(NoType, TypeVar, tVarId, tVarParent)
-  , overLeaf
   , predecessor
   )
 import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
@@ -708,7 +707,7 @@ minimizeSubs parent pTypeVars = do
       Map.toList . fmap (Set.filter (setFilter pTypeThings)) .
       Map.filterWithKey (mapFilter pTypeThings)
     setFilter pTypeThings =
-      predecessor parent . tVarParent `fOr` (`Set.member` pTypeThings) `fOr`
+      flip predecessor parent . tVarParent `fOr` (`Set.member` pTypeThings) `fOr`
       (`Set.member` pTypeVars)
     mapFilter pTypeThings from _ =
       tVarParent from == parent && not (from `Set.member` pTypeThings)
@@ -949,7 +948,7 @@ schematize facts tVars = do
         translateOthers =
           translateSubs bounds reconstructor subConstr boundsConstr others
         facts' = subConstr t . apply reconstructor . toType <$> limits'
-    parentedBy parent TypeVar {tVarParent = par} = par `overLeaf` parent
+    parentedBy parent TypeVar {tVarParent = par} = parent `predecessor` par
     parentedBy _ _ = False
     presentIn where' (key, _) = key `Set.member` Set.fromList where'
 

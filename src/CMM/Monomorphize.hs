@@ -46,7 +46,7 @@ import safe CMM.Monomorphize.Polytypeness
   , typePolytypeness, reconstructType, reconstructHole
   )
 import safe CMM.Monomorphize.Schematized
-  ( Schematized(FuncScheme, StructScheme)
+  ( Schematized(ProcedureScheme, StructScheme)
   , schematized2topLevel
   )
 import safe CMM.Parser.GetPos (GetPos, SourcePos)
@@ -63,7 +63,7 @@ import safe CMM.Monomorphize.Error
       makeError,
       absurdType, voidWrapped )
 import safe CMM.AST.Wrap
-    ( ASTWrapper(WrappedExpr, WrappedLValue), MakeWrapped )
+    ( ASTWrapper, MakeWrapped, makeWrapped )
 import safe CMM.Inference.Unify.Error ( UnificationError )
 
 import safe qualified CMM.Monomorphize.State as State
@@ -314,7 +314,7 @@ instance HasTypeHole a => Monomorphize (Annot AST.Datum) a where
               _ -> do
                 useMonomorphizer $
                   zipWithM_
-                    (State.addData $ toTypeVar struct)
+                    (State.addField $ toTypeVar struct)
                     (toTypeVar <$> schemes')
                     (toTypeVar <$> insts)
                 success
@@ -341,7 +341,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.Procedure) a where
         State.addPolyScheme
           (toTypeVar $ getTypeHole a)
           scheme
-          (FuncScheme $ withAnnot a procedure)
+          (ProcedureScheme $ withAnnot a procedure)
     addMethod <- case getTypeHole a of
       SimpleTypeHole {} -> succeed ()
       MethodTypeHole inst scheme _ ->
@@ -533,7 +533,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.LValue) a where
                       simplify . apply subst >>=
                       fmap toTypeVar . State.getHandle
                     instType <- useInferencer $ reconstructType subst handle
-                    useMonomorphizer $ State.addGenerate (mapNode WrappedLValue annotated) (toTypeVar scheme) inst instType
+                    useMonomorphizer $ State.addGenerate (mapNode makeWrapped annotated) (toTypeVar scheme) inst instType
                     succeed $ Just annotated
               hole -> failure $ hole `illegalHole` annotated
           AST.LVRef mType expr mAsserts -> do
@@ -593,7 +593,7 @@ instance (GetPos a, HasTypeHole a) => Monomorphize (Annot AST.Expr) a where
                   useInferencer $
                   State.reconstructOld (toTypeVar inst) <&> apply subst
                 useMonomorphizer $
-                  State.addGenerate (mapNode WrappedExpr annotated) (toTypeVar scheme) (toTypeVar inst') instType
+                  State.addGenerate (mapNode makeWrapped annotated) (toTypeVar scheme) (toTypeVar inst') instType
                 return $ do
                   expr''' <- expr''
                   return $ withAnnot b . (`AST.MemberExpr` field) <$> expr'''
@@ -717,7 +717,7 @@ monomorphizeFieldInner scheme (inst, instWrapper) struct = do
             Nothing -> failure $ isNotScheme instWrapper
             Just (_, schematized) ->
               case schematized of
-                FuncScheme {} -> illegalScheme schematized instWrapper
+                ProcedureScheme {} -> illegalScheme schematized instWrapper
                 StructScheme structure ->
                   ensuredJustMonomorphize subst structure <&>
                   fmap (fmap StructScheme)
@@ -742,8 +742,8 @@ monomorphizeMethodInner scheme (inst, instWrapper) = do
             Nothing -> failure $ isNotScheme instWrapper
             Just (_, schematized) ->
               case schematized of
-                FuncScheme procedure -> do
-                  monomorphize subst procedure <&> fmap (fmap FuncScheme)
+                ProcedureScheme procedure -> do
+                  monomorphize subst procedure <&> fmap (fmap ProcedureScheme)
                 StructScheme {} -> illegalScheme schematized instWrapper
 
 illegalScheme :: (Monad m, GetPos a1) =>

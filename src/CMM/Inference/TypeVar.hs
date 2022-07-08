@@ -16,21 +16,25 @@ import safe CMM.Inference.TypeKind
   )
 import safe CMM.Pretty (dollar, emptySet)
 
+-- | representation of a type variable
 data TypeVar
   = NoType
   | TypeVar
-      { tVarId :: Int
-      , tVarKind :: TypeKind
-      , tVarParent :: TypeVar
+      { tVarId :: Int -- ^ the unique identifier of a type variable
+      , tVarKind :: TypeKind -- ^ the kind of a type variable
+      , tVarParent :: TypeVar -- ^ the parent of the type variable (that represents a context in which the type variable was generated)
       }
   deriving (Show, Data)
 
+-- | a helper class that generates a type variable, but receives the identifier as a last argument
 typeVarIdLast :: TypeKind -> TypeVar -> Int -> TypeVar
 typeVarIdLast kind parent int = TypeVar int kind parent
 
+-- | class for objects that can be generated from a type variable
 class FromTypeVar a where
   fromTypeVar :: TypeVar -> a
 
+-- | class for objects that contain a type variable
 class ToTypeVar a where
   toTypeVar :: a -> TypeVar
 
@@ -85,27 +89,23 @@ instance Pretty TypeVar where
           NoType -> mempty
           parent -> dollar <> pretty (tVarId parent) <> go (tVarParent parent)
 
+-- | returns the depth of the sequence of parents of the given type variable
 familyDepth :: TypeVar -> Int
 familyDepth =
   \case
     NoType -> 0
     TypeVar {tVarParent = parent} -> familyDepth parent + 1
 
+-- | returns `True` iff the right-hand operand is a predecessor of the left-hand operand
 predecessor :: TypeVar -> TypeVar -> Bool
-predecessor NoType NoType = True
-predecessor NoType _ = False
-predecessor whose@TypeVar {tVarParent = parent} who
-  | whose == who = True
-  | otherwise = predecessor parent who
-
-overLeaf :: TypeVar -> TypeVar -> Bool
-overLeaf NoType = const False
-overLeaf x =
+predecessor NoType = const False
+predecessor x =
   \case
     NoType -> False
     leaf
       | x == leaf -> True
-      | otherwise -> x `overLeaf` tVarParent leaf
+      | otherwise -> x `predecessor` tVarParent leaf
 
+-- | returns an object generated from the NoType variable
 noType :: FromTypeVar a => a
 noType = fromTypeVar NoType

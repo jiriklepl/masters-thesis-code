@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import CMM.Pipeline ( runPipeline )
+import safe CMM.Pipeline ( runPipeline )
 
 main :: IO ()
 main = runPipeline

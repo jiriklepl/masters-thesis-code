@@ -22,6 +22,7 @@ import safe CMM.Inference.TypeKind
   )
 import safe CMM.Inference.TypeVar (TypeVar)
 
+-- | The primitive patterns for types
 data TypeCompl a
   = TupleType [a]
   | FunctionType [a] a
@@ -155,10 +156,13 @@ makeTuple = TupleType
 
 infixl `makeApplication`
 
+-- | Takes two types and applies one to the other
 makeApplication :: a -> a -> TypeCompl a
 makeApplication = AppType
 
+-- | Creates an address type from the given type
 makeAddress :: a -> TypeCompl a
 makeAddress = AddrType
 
+-- | The primitive pattern
 type PrimType = TypeCompl TypeVar

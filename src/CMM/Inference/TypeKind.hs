@@ -9,10 +9,11 @@ import safe Prettyprinter (Pretty(pretty), parens)
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Inference.Arity (Arity(arity))
 import safe CMM.Pretty (arrowNice, deltaBig, question, star)
-import safe CMM.Utils (backQuote)
+import safe CMM.Utils (backQuote, HasCallStack)
 
 infixr 6 :->
 
+-- | represents the kind of a type
 data TypeKind
   = Star
   | Constraint
@@ -20,6 +21,7 @@ data TypeKind
   | TypeKind :-> TypeKind
   deriving (Show, Data)
 
+-- | class for all objects that have a kind
 class HasTypeKind a where
   getTypeKind :: a -> TypeKind
   setTypeKind :: TypeKind -> a -> a
@@ -76,7 +78,8 @@ instance Pretty TypeKind where
         | arity left == 0 -> pretty left <> arrowNice <> pretty right
         | otherwise -> parens (pretty left) <> arrowNice <> pretty right
 
-setTypeKindInvariantLogicError :: (HasTypeKind a, Show a) => a -> TypeKind -> a
+-- | logic error for illegal type kind updates
+setTypeKindInvariantLogicError :: (HasCallStack, HasTypeKind a, Show a) => a -> TypeKind -> a
 setTypeKindInvariantLogicError what kind =
   error $
   "(internal) " ++
@@ -85,6 +88,7 @@ setTypeKindInvariantLogicError what kind =
   backQuote (show (getTypeKind what)) ++
   " kind; attempting to set to: " ++ backQuote (show kind) ++ "."
 
+-- | returns `True` iff the given objects have matching type kinds
 matchKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> Bool
 matchKind a b = getTypeKind a `go` getTypeKind b
   where
@@ -95,7 +99,8 @@ matchKind a b = getTypeKind a `go` getTypeKind b
     (l :-> r) `go` (l' :-> r') = go l l' && go r r'
     _ `go` _ = False
 
-combineTypeKind :: (HasTypeKind a, HasTypeKind b) => a -> b -> TypeKind
+-- | combines the type kinds of the given objects
+combineTypeKind :: (HasCallStack, HasTypeKind a, HasTypeKind b) => a -> b -> TypeKind
 combineTypeKind a b = getTypeKind a `go` getTypeKind b
   where
     kind `go` kind'

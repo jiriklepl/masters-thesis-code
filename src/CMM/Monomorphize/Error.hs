@@ -23,7 +23,7 @@ import safe CMM.Parser.GetPos ( GetPos )
 import CMM.Err.Error (Error)
 import qualified CMM.Err.Error as Error
 import safe CMM.Parser.ASTError ( makeASTError )
-import safe CMM.Monomorphize.Schematized ( Schematized (FuncScheme, StructScheme) )
+import safe CMM.Monomorphize.Schematized ( Schematized (ProcedureScheme, StructScheme) )
 
 -- | Various errors that can be registered by the monomorphizer (for their explanation, see the pretty instance)
 data MonomorphizeError
@@ -47,7 +47,7 @@ instance Pretty MonomorphizeError where
     InstantiatesToNothing node -> pretty node <+> "instantiates into nothing"
     IllegalHole hole node -> pretty node <+> "has an illegal type hole" <+> parens (pretty hole) <> report
     IllegalScheme schematized node -> pretty node <+> case schematized of
-      FuncScheme func -> "Is required to be a structure, but has been given a function:" <+> pretty func
+      ProcedureScheme func -> "Is required to be a structure, but has been given a function:" <+> pretty func
       StructScheme struct -> "Is required to be a function, but has been given a structure:" <+> pretty struct
     NoInstance scheme inst node -> pretty node <+> "with a scheme" <+> pretty scheme <+> "failed to instantiate into" <+> pretty inst
     IsNotScheme node -> "There is no scheme registered for" <+> pretty node <> report

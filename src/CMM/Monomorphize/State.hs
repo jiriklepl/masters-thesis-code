@@ -123,6 +123,7 @@ addPolyScheme tVar scheme schematized =
 addMethod :: TypeVar -> TypeVar -> Monomorphizer a ()
 addMethod scheme inst = addImpl PolyMethods scheme inst polyMethods
 
-addData :: TypeVar -> TypeVar -> TypeVar -> Monomorphizer a ()
-addData struct field inst =
+-- | adds an instance of the given field in the given struct
+addField :: TypeVar -> TypeVar -> TypeVar -> Monomorphizer a ()
+addField struct field inst =
   polyData <>= PolyData (Map.singleton field (Map.singleton inst struct))

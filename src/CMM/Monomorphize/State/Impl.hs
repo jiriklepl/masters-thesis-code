@@ -19,6 +19,8 @@ import CMM.AST.Wrap ( ASTWrapper )
 import CMM.AST.Annot ( Annot )
 import CMM.Options (Options (Options))
 import qualified CMM.Options as Options
+
+-- | maps each scheme to already memorized instances
 newtype PolyMemory =
   PolyMemory
     { getPolyMemory :: Map TypeVar (Set Type)
@@ -31,6 +33,7 @@ instance Semigroup PolyMemory where
 instance Monoid PolyMemory where
   mempty = PolyMemory mempty
 
+-- | maps each scheme to the list of pairs of monotype to be instantiated to and wrapped references
 newtype PolyGenerate =
   PolyGenerate
     { getPolyGenerate :: Map TypeVar [(TypeVar, Annot ASTWrapper SourcePos)]
@@ -43,6 +46,7 @@ instance Semigroup PolyGenerate where
 instance Monoid PolyGenerate where
   mempty = PolyGenerate mempty
 
+-- | maps each method to the list of its instances
 newtype PolyMethods =
   PolyMethods
     { getPolyMethods :: Map TypeVar (Set TypeVar)
@@ -55,6 +59,7 @@ instance Semigroup PolyMethods where
 instance Monoid PolyMethods where
   mempty = PolyMethods mempty
 
+-- | maps each field accessor to the list of its instances
 newtype PolyData =
   PolyData
     { getPolyData :: Map TypeVar (Map TypeVar TypeVar)
@@ -67,22 +72,25 @@ instance Semigroup PolyData where
 instance Monoid PolyData where
   mempty = PolyData mempty
 
+-- | the database of all polytype schemes
 type PolySchemes a = Map TypeVar (Scheme Type, Schematized a)
 
+-- | the monomorphizer state
 data MonomorphizeState a =
   MonomorphizeState
-    { _polyMethods :: PolyMethods
-    , _polyData :: PolyData
-    , _polyGenerate :: PolyGenerate
-    , _polyMemory :: PolyMemory
-    , _polyStorage :: PolyMemory
-    , _polyWaves :: Int
-    , _maxPolyWaves :: Int
-    , _polySchemes :: PolySchemes a
+    { _polyMethods :: PolyMethods -- ^ maps each method to the list of its instances
+    , _polyData :: PolyData -- ^ maps each field accessor to the list of its instances
+    , _polyGenerate :: PolyGenerate -- ^ maps each scheme to the list of pairs of monotype to be instantiated to and wrapped references
+    , _polyMemory :: PolyMemory -- ^ maps each scheme to already asked to instance monotypes
+    , _polyStorage :: PolyMemory -- ^ maps each scheme to already instanced monotypes
+    , _polyWaves :: Int -- ^ the number of currently done monomorphization waves
+    , _maxPolyWaves :: Int -- ^ the maximum allowed number of monomorphization waves
+    , _polySchemes :: PolySchemes a -- ^ the database of all polytype schemes
     }
 
 makeLenses ''MonomorphizeState
 
+-- | initializes an empty monomorphizer state according to the given `Options` object
 initMonomorphizeState :: Options -> MonomorphizeState a
 initMonomorphizeState Options {Options.maxCycles = maxPolyWaves'} =
   MonomorphizeState

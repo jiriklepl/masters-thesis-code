@@ -36,7 +36,7 @@ getExprLVName =
     ParExpr expr `Annot` _ -> getExprLVName expr
     Annot {} -> Nothing
 
--- | Returns Nothing on failure
+-- | Returns `Just` the target of the given trivial goto, otherwise `Nothing`
 class GetTrivialGotoTarget n where
   getTrivialGotoTarget :: n -> Maybe Text
 

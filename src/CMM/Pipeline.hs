@@ -39,7 +39,7 @@ import safe CMM.Monomorphize.Error
     ( MonomorphizeError(InstantiatesToNothing), voidWrapped )
 import safe CMM.FillHoles ( FillHoles(fillHoles) )
 import safe CMM.Mangle ( Mangle(mangle) )
-import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, handleStart), opts )
+import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, handleStart), opts, noTransl )
 import safe Options.Applicative ( execParser )
 import safe qualified Data.Text.IO as T
 import safe CMM.Err.IsError ( IsError )
@@ -67,10 +67,12 @@ newtype PipelineError
 instance Pretty PipelineError where
   pretty (InferenceIncomplete fs) = "Type inference could not resolve the following constraints:" <+> pretty fs
 
+-- | runs the compiler pipeline
 runPipeline :: IO ()
 runPipeline =
   execParser opts >>= runWithOptions
 
+-- | runs the compiler pipeline with the given options
 runWithOptions :: Options -> IO ()
 runWithOptions options = do
   case input options of
@@ -79,43 +81,51 @@ runWithOptions options = do
   where
     fileName =
       case input options of
-        "-" -> "stdin"
+        "-" -> "stdin" -- name the input stdin
         name -> name
     runOnInput input = do
       (prepared, errState) <- prepareOnInput input
       when (errState /= nullVal) .
-        hPrint stderr $ pretty errState
+        hPrint stderr $ pretty errState -- prints all warnings and infos
       if quiet options
-        then return ()
+        then return () -- prints nothing
         else case output options of
-          "-" ->  putStrLn prepared
-          name -> writeFile name (prepared <> "\n")
+          "-" ->  putStrLn prepared -- prints to stdout
+          name -> writeFile name (prepared <> "\n") -- prints to the file `name`
     prepareOnInput input = do
-      contents <- T.hGetContents input
+      contents <- T.hGetContents input -- gets the content of the file
       case runAll fileName options contents of
-        Left prettyError -> die prettyError
+        Left prettyError -> die prettyError -- prints errors and dies
         Right result -> return result
 
+-- runs the compiler pipeline as an `Either String` monad
 runAll :: String -> Options -> Text -> Either String (String, ErrorState)
 runAll fileName options contents = do
   tokens <- tokenizer fileName contents
   ast <- parser fileName tokens
   if prettify options
-    then return . (,nullVal) . show $ pretty ast
+    then return . (,nullVal) . show $ pretty ast -- we just output the prettyprinted source
     else if monoSrc options
       then do
+        -- we output the unflattened monomorphized source
         (ast'', _, errState) <- runInferMono options ast
         return . (,errState)  . show . pretty $ ast''
       else do
         (ast', bState, errState) <- runFlatBlock ast
         (ast'', iState, errState') <- runInferMono options ast'
-        (prettyprinted, _, errState'') <- translator options iState bState ast''
-        return (prettyprinted ,errState <> errState' <> errState'')
+        if noTransl options
+          then return . (,errState <> errState')  . show . pretty $ ast'' -- prettyprint flattened and monomorphized source
+          else do
+            (prettyprinted, _, errState'') <- translator options iState bState ast''
+            -- prettyprint the llvm representation of the source
+            return (prettyprinted ,errState <> errState' <> errState'')
 
+-- | runs the flattener phase and the blockifier phase
 runFlatBlock :: (Blockify n a (a, BlockAnnot), GetPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot), BlockifierState, ErrorState)
 runFlatBlock ast =
   blockifier $ flattener ast
 
+-- | runs the inference phase and the monomorphizer phase
 runInferMono :: (GetPos a, GetPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), InferencerState, ErrorState)
 runInferMono options ast = do
   ((prepAST, facts'), pState, errState) <- preprocessor options ast
@@ -124,19 +134,23 @@ runInferMono options ast = do
   (ast', iState'', errState'') <- postprocessor iState' monoAST
   return (ast', iState'', errState <> errState' <> errState'')
 
+-- | runs the tokenization
 tokenizer :: String
   -> Text
   -> Either String [Annot Token SourcePos]
 tokenizer source = first errorBundlePretty . runParser tokenize source
 
+-- | runs the parsing phase
 parser :: String
   -> [Annot Token SourcePos]
   -> Either String (Annot Unit SourcePos)
 parser source = first errorBundlePretty . runParser program source
 
+-- | runs the flattener
 flattener :: (Data (n a), Typeable a) => n a -> n a
 flattener = flatten
 
+-- | wraps the result in an `Either String` monad, choosing `Left` if the `ErrorState` contains any errors
 wrapStandardLayout :: HasErrorState s ErrorState => (a, s) -> Either String (a, s, ErrorState)
 wrapStandardLayout (result, state')
   | countErrors errState /= 0 = Left . show $ pretty errState
@@ -144,11 +158,13 @@ wrapStandardLayout (result, state')
   where
       errState = view errorState state'
 
+-- | runs the blockifier
 blockifier :: (Blockify n a b, BlockifyAssumps a b) => n a
   -> Either String (n b, BlockifierState, ErrorState)
 blockifier flattened = wrapStandardLayout $
     blockify flattened `runState` initBlockifier
 
+-- | runs the inference preprocessor
 preprocessor :: (Preprocess n a (a, TypeHole), GetPos a) =>
   Options
   -> Annot n a
@@ -161,6 +177,7 @@ preprocessor settings ast = wrapStandardLayout $
       ast' <- preprocess ast
       uses facts $ (ast',) . reverse . head
 
+-- | runs the inferencer
 inferencer :: HasTypeHole a => Options -> Annot Unit a -> Facts
   -> Either String ((), InferencerState, ErrorState)
 inferencer settings ast fs = wrapStandardLayout $
@@ -173,6 +190,7 @@ inferencer settings ast fs = wrapStandardLayout $
         then return ()
         else registerError $ InferenceIncomplete fs'
 
+-- | runs the monomorphizer
 monomorphizer :: (GetPos a, HasTypeHole a) => Options -> InferencerState -> Annot Unit a
   -> Either String (Annot Unit a, (InferencerState, MonomorphizeState a))
 monomorphizer settings iState ast = case result of
@@ -182,12 +200,14 @@ monomorphizer settings iState ast = case result of
   where
     (result,states) = monomorphize mempty ast `runState` (iState, initMonomorphizeState settings)
 
+-- | runs the mangler and hole-filler
 postprocessor :: (Data a, HasTypeHole a, GetPos a) => InferencerState -> Annot Unit a -> Either String (Annot Unit a, InferencerState, ErrorState)
 postprocessor iState ast = wrapStandardLayout $
     action `runState` iState
   where
     action = fillHoles ast >>= mangle
 
+-- | runs the translator
 translator :: TranslAnnotAssumps a =>
   Options
   -> InferencerState

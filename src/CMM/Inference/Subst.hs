@@ -17,28 +17,32 @@ import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar, tVarParent))
 
+-- | Defines the type of a substitution - mapping from a type variable to something
 type Subst = Map TypeVar
 
-schemeNCase :: Apply (Qual n) b => Subst b -> Scheme n -> Scheme n
-schemeNCase subst (tVars :. qN) =
+-- substitution applied to a scheme ignores the quantified type variables
+termSchemeCase :: Apply (Qual n) b => Subst b -> Scheme n -> Scheme n
+termSchemeCase subst (tVars :. qN) =
   tVars :. (Map.withoutKeys subst tVars `apply` qN)
 
 class (ToType b, Typeable b, Data a, TypeCase b) =>
       Apply a b
   where
+  -- | applies the substitution to the given object (recursively), including the parents of type variables
   apply :: Map TypeVar b -> a -> a
   apply subst = go
     where
       go :: Data d => d -> d
-      go = typeCase subst go *|* schemeFactCase *|* schemeTypeCase *|* gmapT go
-      schemeTypeCase :: Scheme Type -> Scheme Type
-      schemeTypeCase = schemeNCase subst
-      schemeFactCase :: Scheme Fact -> Scheme Fact
-      schemeFactCase = schemeNCase subst
+      go = typeCase subst go *|* factSchemeCase *|* typeSchemeCase *|* gmapT go
+      typeSchemeCase :: Scheme Type -> Scheme Type
+      typeSchemeCase = termSchemeCase subst
+      factSchemeCase :: Scheme Fact -> Scheme Fact
+      factSchemeCase = termSchemeCase subst
 
 class (ToType b, Typeable b, Data a, TypeCaseShallow b) =>
       ApplyShallow a b
   where
+  -- | applies the substitutions to the given object (recursively), not including the parents of type variables
   applyShallow :: Map TypeVar b -> a -> a
   applyShallow subst = go
     where

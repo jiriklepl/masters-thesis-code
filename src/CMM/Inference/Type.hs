@@ -13,6 +13,7 @@ import safe CMM.Inference.TypeKind
   )
 import safe CMM.Inference.TypeVar (FromTypeVar(fromTypeVar), TypeVar)
 
+-- | type is either a type variable or a primitive pattern applied to some types
 data Type
   = VarType TypeVar
   | ComplType (TypeCompl Type)
@@ -28,6 +29,7 @@ instance HasTypeKind Type where
       VarType t -> VarType $ setTypeKind kind t
       ComplType t -> ComplType $ setTypeKind kind t
 
+-- | class for objects that can be "cast" to type
 class ToType a where
   toType :: a -> Type
 
@@ -49,30 +51,38 @@ instance Pretty Type where
       VarType tVar -> pretty tVar
       ComplType tCompl -> pretty tCompl
 
+-- | creates a type application from the given two objects that represent some types
 makeAppType :: ToType a => a -> a -> Type
 makeAppType f a = ComplType $ toType f `AppType` toType a
 
+-- | creates an address type from the given object representing a type
 makeAddrType :: ToType a => a -> Type
 makeAddrType = ComplType . AddrType . toType
 
+-- | creates a type that represents a "bits_n" type of the given width "n"
 makeTBitsType :: Int -> Type
 makeTBitsType = ComplType . TBitsType
 
+-- | creates a type that represents "void"
 makeVoidType :: Type
 makeVoidType = ComplType VoidType
 
+-- | creates a type that represents "label"
 makeLabelType :: Type
 makeLabelType = ComplType LabelType
 
+-- | creates a type that represents "bool"
 makeBoolType :: Type
 makeBoolType = ComplType BoolType
 
+-- | left-associatively folds the given types into a single chain of `makeAppType`
 foldApp :: [Type] -> Type
 foldApp =
   \case
-    t:ts -> foldl' ((ComplType .) . AppType) t ts
+    t:ts -> foldl' makeAppType t ts
     [] -> ComplType VoidType
 
+-- | unfolds the given chain of type applications into a list of types
 unfoldApp :: Type -> [Type]
 unfoldApp = reverse . go
   where

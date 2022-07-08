@@ -14,6 +14,7 @@ import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
 import safe CMM.Pretty (constingSymbol, kindingSymbol, typingSymbol)
 
+-- | contains the typing, constness and data kind of a type (identifier is the same as the type variable's it has been initialized from)
 data TypeHandle =
   TypeHandle
     { _identifier :: TypeVar
@@ -53,6 +54,7 @@ instance Pretty TypeHandle where
         parens (constingSymbol <+> "~" <+> pretty consting) <+>
         parens (kindingSymbol <+> "~" <+> pretty kinding) <+> pretty annot
 
+-- | initializes a type handle from the given type variable and the given annotation
 initTypeHandle :: TypeAnnot -> TypeVar -> TypeHandle
 initTypeHandle annotation tVar =
   TypeHandle
@@ -63,6 +65,7 @@ initTypeHandle annotation tVar =
     , _annot = annotation
     }
 
+-- | returns the identifier of the given handle
 handleId :: TypeHandle -> TypeVar
 handleId = _identifier
 

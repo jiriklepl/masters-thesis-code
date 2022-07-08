@@ -15,6 +15,7 @@ import safe Text.Megaparsec
       PosState(PosState) )
 import safe Data.List.NonEmpty ( toList )
 
+-- | Tokens for the reserved keywords
 data Reserved
   = Aborts
   | Align
@@ -125,6 +126,7 @@ instance Pretty Reserved where
     Writes -> writesName
     Wordsize -> wordsizeName
 
+-- | All the tokens of the CHMMM language
 data Token a
   = Keyword Reserved
   | Ident Text

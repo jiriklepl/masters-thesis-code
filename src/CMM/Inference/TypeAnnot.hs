@@ -14,14 +14,13 @@ import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Parser.GetPos (SourcePos)
 import CMM.Pretty (commaSep, genSymbol)
 
+-- | annotations used in type handles
 data TypeAnnot
-  = NoTypeAnnot
-  | TypeInst TypeVar
-  | TypeAST SourcePos
-  | TypeNamed Text
-  | TypeNamedAST Text SourcePos
-  | TypeBuiltIn Text
-  | MultiAnnot (Set TypeAnnot)
+  = NoTypeAnnot -- ^ no annotation
+  | TypeInst TypeVar -- ^ represents an monotype instance of the given polytype type variable
+  | TypeAST SourcePos -- ^ relates to a node at the given location
+  | TypeNamedAST Text SourcePos -- ^ relates to a node at the given location and has a name
+  | MultiAnnot (Set TypeAnnot) -- ^ more annotations collected together
   deriving (Eq, Ord, Show, Data)
 
 instance Fallbackable TypeAnnot where
@@ -48,7 +47,5 @@ instance Pretty TypeAnnot where
       NoTypeAnnot -> mempty
       TypeInst poly -> genSymbol <> pretty poly
       TypeAST {} -> mempty
-      TypeNamed name -> dquotes $ pretty name
       TypeNamedAST name _ -> dquotes $ pretty name
-      TypeBuiltIn name -> dquotes $ pretty name
       MultiAnnot set -> commaSep . fmap pretty $ Set.toList set
