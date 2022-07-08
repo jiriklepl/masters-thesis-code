@@ -13,7 +13,7 @@ module CMM.Translator where
 import safe Control.Applicative
     ( Applicative(liftA2), Alternative((<|>)) )
 import safe Control.Monad.State
-    ( MonadFix, void, zipWithM, forM_, MonadState, evalState, modify )
+    ( void, zipWithM, forM_, MonadState, evalState, modify )
 import safe Data.Char ( ord )
 import safe Data.Foldable ( find, traverse_ )
 import safe Data.Function ( (&) )
@@ -24,7 +24,7 @@ import safe Data.Text (Text)
 import safe qualified Data.Text as T
 
 import safe Control.Lens
-    ( (^.), use, uses, (%=), (?=), Field2(_2), Field3(_3) )
+    ( (^.), use, uses, (%=), Field2(_2), Field3(_3) )
 
 import safe qualified LLVM.AST.Constant as LC
 import safe qualified LLVM.AST.IntegerPredicate as L
@@ -71,18 +71,17 @@ import safe Data.Data (Proxy (Proxy), Data (gmapQ, gmapT))
 type MonadTranslator m
    = ( L.MonadIRBuilder m
      , L.MonadModuleBuilder m
-     , MonadFix m
      , MonadState TranslState m
       )
 
-type AnnotAssumps a
+type TranslAnnotAssumps a
    = ( HasBlockAnnot a
      , GetPos a
      , HasTypeHole a
      , Data a
      )
 
-type TranslAssumps a m = (AnnotAssumps a, MonadTranslator m)
+type TranslAssumps a m = (TranslAnnotAssumps a, MonadTranslator m)
 
 type OutVar = (Text, LO.Operand)
 
@@ -98,9 +97,6 @@ getIntWidth = \case
 
 translateParName :: GetName n => n -> L.ParameterName
 translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
-
-setCurrentBlock :: MonadState TranslState m => Int -> m ()
-setCurrentBlock n = State.currentBlock ?= n
 
 class TranslAssumps a m =>
       Translate m n a b
@@ -188,7 +184,7 @@ collectNames names (proxy :: Proxy a) = (concat  . gmapQ (collectNames names pro
 
 runInferencer :: MonadTranslator m => Inferencer a -> m a
 runInferencer action =
-  uses State.inferencer $ evalState action
+  uses State.inferState $ evalState action
 
 zip' :: [a] -> [b] -> [(a, b)]
 zip' = zipWith' (,)

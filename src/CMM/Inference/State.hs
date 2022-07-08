@@ -36,6 +36,7 @@ import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Inference.Unify.Error (UnificationError)
 import safe CMM.Utils (HasCallStack, backQuoteShow)
+import safe CMM.Inference.BuiltIn ()
 
 import safe CMM.Inference.State.Impl
   ( Inferencer
@@ -204,22 +205,16 @@ getUnlockedVars =
       where freeOuter = freeInner Set.\\ tVars
             freeInner = freeTypeVars facts <> freeTypeVars nesteds
 
--- |
+-- | checks whether the given scheme has no unlocked free variables
 sanitizeClosed ::
-     (HasCallStack, Data a, Pretty a, Pretty b, Pretty DataKind)
+     (HasCallStack, Data a, ToType b)
   => Scheme a
   -> b
-  -> Inferencer ()
-sanitizeClosed scheme b = do
+  -> Inferencer (Scheme a)
+sanitizeClosed scheme@(tVars :. q) b = do
   freeVars <- getUnlockedVars scheme
-  msg freeVars -- TODO msg
-  where
-    msg [] = return ()
-    msg freeVars =
-      error .show$
-      "scheme" <+>
-      pretty scheme <+> "added by" <+> pretty b  <+>
-      "is open, free variables:" <+> pretty freeVars
+  lockVars b freeVars
+  return $ (tVars <> Set.fromList freeVars) :. q
 
 addClassFact ::
      HasCallStack => Text -> Scheme Type -> Inferencer ()
@@ -235,16 +230,17 @@ addScheme tVar scheme =
   case scheme of
     tVars :. _ :=> _ -> do
       lockVars tVar tVars
-      State.schemes %= Map.insert tVar scheme
+      scheme' <- sanitizeClosed scheme tVar
+      State.schemes %= Map.insert tVar scheme'
 
 addClassScheme ::
-     (HasCallStack, Pretty DataKind) => Text -> Scheme Type -> Inferencer ()
+     HasCallStack => Text -> Scheme Type -> Inferencer ()
 addClassScheme name scheme =
   case scheme of
     tVars :. _ :=> t -> do
       lockVars t tVars
-      sanitizeClosed scheme name
-      State.classSchemes %= Map.insertWith msg name scheme -- TODO msg
+      scheme' <- sanitizeClosed scheme t
+      State.classSchemes %= Map.insertWith msg name scheme' -- TODO msg
   where
     msg new old =
       error $

@@ -27,8 +27,9 @@ import safe Options.Applicative
 
 
 data Options = Options
-  { monosrc      :: Bool
+  { monoSrc      :: Bool
   , prettify      :: Bool
+  , noTransl      :: Bool
   , output      :: String
   , handleStart      :: Int
   , maxCycles      :: Int
@@ -41,13 +42,17 @@ data Options = Options
 options :: Parser Options
 options = Options
   <$> switch
-      ( long "monosrc"
+      ( long "mono_src"
       <> short 'm'
       <> help "Monomorphize the source without any flattening or blockifying" )
   <*> switch
       ( long "pretty"
       <> short 'p'
       <> help "Run as a prettyprinter" )
+  <*> switch
+      ( long "no_translate"
+      <> short 'n'
+      <> help "Do not translate to llvm" )
   <*> strOption
       ( long "output"
       <> short 'o'
@@ -56,7 +61,7 @@ options = Options
       <> value "a.out"
       <> help "Specify the output file" )
   <*> option auto
-      ( long "handle_couter"
+      ( long "handle_counter"
       <> short 'H'
       <> internal
       <> metavar "HANDLE_COUNTER"

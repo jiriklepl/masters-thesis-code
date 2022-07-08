@@ -1,7 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
--- TODO: add the overload resolution for instances to monomorphization
 module CMM.Monomorphize where
 
 import safe Control.Applicative (liftA2, liftA3)

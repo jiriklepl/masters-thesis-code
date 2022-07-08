@@ -3,7 +3,7 @@
 
 module CMM.Translator.State where
 
-import safe Control.Lens ( makeFieldsNoPrefix, (.=) )
+import safe Control.Lens ( makeFieldsNoPrefix, (.=), (^.) )
 
 import safe Data.Map (Map)
 import safe Data.Text (Text)
@@ -11,35 +11,34 @@ import safe Data.Text (Text)
 import safe qualified LLVM.AST.Operand as L
 
 import safe CMM.AST.BlockAnnot (BlockData)
-import safe CMM.Err.State (ErrorState)
 import safe CMM.Inference.State ( InferencerState )
 import qualified LLVM.AST.Type as L
 import safe Control.Monad.State ( MonadState )
+import safe CMM.Err.State ( ErrorState, HasErrorState(errorState) )
+import safe CMM.AST.Blockifier.State (BlockifierState, allFlow, allData, allBlocks, numBlocks)
 
 data TranslState =
   TranslState
     { _controlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
     , _blockData :: BlockData -- We need the block data to create the phi nodes
-    , _currentBlock :: Maybe Int
     , _blocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
     , _errorState :: ErrorState
     , _offSets :: Map Int Int
-    , _inferencer :: InferencerState
+    , _inferState :: InferencerState
     , _records :: Map Text L.Operand
     , _structs :: Map Text ([(Text, Int)], [L.Type])
     }
 
 makeFieldsNoPrefix ''TranslState
 
-initTranslState :: TranslState
-initTranslState =
-  TranslState -- FIXME: this is just DUMMY
-    { _controlFlow = undefined
-    , _blockData = undefined
-    , _currentBlock = Nothing -- TODO: change to (Just 0) in procedure translation
-    , _blocksTable = undefined
-    , _offSets = undefined
-    , _inferencer = undefined
+initTranslState :: InferencerState -> BlockifierState -> TranslState
+initTranslState iState bState =
+  TranslState
+    { _controlFlow = bState ^. allFlow
+    , _blockData = bState ^. allData
+    , _blocksTable = bState ^. allBlocks
+    , _offSets = bState ^. numBlocks
+    , _inferState = iState
     , _records = undefined
     , _errorState = mempty
     , _structs = mempty

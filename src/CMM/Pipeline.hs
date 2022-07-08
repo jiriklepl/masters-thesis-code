@@ -24,7 +24,7 @@ import safe CMM.AST.Flattener ( flatten )
 import safe CMM.AST.Blockifier ( Blockify (blockify), BlockifyAssumps )
 import safe CMM.AST.Blockifier.State
     ( initBlockifier, BlockifierState )
-import safe Control.Monad.State ( runState, evalState )
+import safe Control.Monad.State ( runState )
 import safe CMM.Err.State ( ErrorState, HasErrorState (errorState), registerError, countErrors )
 import safe Control.Lens ( uses, view )
 import safe CMM.Data.Nullable ( Nullable(nullVal) )
@@ -39,17 +39,14 @@ import safe CMM.Monomorphize.Error
     ( mapWrapped, MonomorphizeError(InstantiatesToNothing) )
 import safe CMM.FillHoles ( FillHoles(fillHoles) )
 import safe CMM.Mangle ( Mangle(mangle) )
-import safe CMM.Options ( Options (output, prettify, monosrc, input, quiet, handleStart), opts )
+import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, handleStart), opts )
 import safe Options.Applicative ( execParser )
-import qualified Data.Text.IO as T
+import safe qualified Data.Text.IO as T
 import safe CMM.Err.IsError ( IsError )
 import safe CMM.AST.BlockAnnot ( BlockAnnot )
-import System.IO (stdin, IOMode (ReadMode), withFile, stderr, hPrint)
+import safe System.IO (stdin, IOMode (ReadMode), withFile, stderr, hPrint)
 import safe System.Exit ( die )
 import safe CMM.Inference.HandleCounter ( handleCounter )
-import safe qualified CMM.Translator.State as Tr
-import safe qualified CMM.AST.Blockifier.State as B
-import safe qualified Data.Map as Map
 import safe LLVM.AST (moduleName, Module (moduleDefinitions), defaultModule)
 import LLVM.IRBuilder
     ( ModuleBuilderState(builderDefs),
@@ -57,10 +54,11 @@ import LLVM.IRBuilder
       evalModuleBuilder,
       execFreshModuleBuilderT,
       runFreshIRBuilderT )
-import safe CMM.Translator (translate)
+import safe CMM.Translator (translate, TranslAnnotAssumps)
 import safe LLVM.IRBuilder.Internal.SnocList ( SnocList(SnocList) )
 import LLVM.Pretty ( ppllvm )
 import safe Control.Monad ( when )
+import safe CMM.Translator.State ( TranslState, initTranslState )
 
 newtype PipelineError
   = InferenceIncomplete Facts
@@ -104,30 +102,15 @@ runAll fileName options contents = do
   ast <- parser fileName tokens
   if prettify options
     then return . (,nullVal) . show $ pretty ast
-    else if monosrc options
+    else if monoSrc options
       then do
         (ast'', _, errState) <- runInferMono options ast
         return . (,errState)  . show . pretty $ ast''
       else do
         (ast', bState, errState) <- runFlatBlock ast
         (ast'', iState, errState') <- runInferMono options ast'
-        let
-          moduleBuilder = runFreshIRBuilderT $ translate ast''
-          translator = execFreshModuleBuilderT moduleBuilder
-          translated =
-            evalState translator $
-              Tr.initTranslState
-                { Tr._controlFlow = B._allFlow bState
-                , Tr._blockData = B._allData bState
-                , Tr._blocksTable =
-                    Map.fromList . Map.toList $
-                    B._allBlocks bState
-                , Tr._offSets = B._numBlocks bState
-                , Tr._inferencer = iState
-                }
-          module' = defaultModule { moduleName = "", moduleDefinitions = translated }
-          prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
-        return . (,errState <> errState'). show $ pretty  prettyprinted
+        (prettyprinted, _, errState'') <- translator options iState bState ast''
+        return (prettyprinted ,errState <> errState' <> errState'')
 
 runFlatBlock :: (Blockify n a (a, BlockAnnot), GetPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot), BlockifierState, ErrorState)
 runFlatBlock ast =
@@ -204,3 +187,19 @@ postprocessor iState ast = wrapStandardLayout $
     action `runState` iState
   where
     action = fillHoles ast >>= mangle
+
+translator :: TranslAnnotAssumps a =>
+  Options
+  -> InferencerState
+  -> BlockifierState
+  -> Annot Unit a
+  -> Either
+      String (String, TranslState, ErrorState)
+translator _ iState bState ast = do
+  let irBuilder = runFreshIRBuilderT $ translate ast
+      moduleBuilder = execFreshModuleBuilderT irBuilder
+      (translated, tState) =
+            runState moduleBuilder $ initTranslState iState bState
+      module' = defaultModule { moduleName = "", moduleDefinitions = translated }
+      prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
+  wrapStandardLayout (show $ pretty  prettyprinted, tState)
