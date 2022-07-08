@@ -56,7 +56,7 @@ import LLVM.IRBuilder
       runFreshIRBuilderT )
 import safe CMM.Translator (translate, TranslAnnotAssumps)
 import safe LLVM.IRBuilder.Internal.SnocList ( SnocList(SnocList) )
-import LLVM.Pretty ( ppllvm )
+import safe LLVM.Pretty ( ppllvm )
 import safe Control.Monad ( when )
 import safe CMM.Translator.State ( TranslState, initTranslState )
 
