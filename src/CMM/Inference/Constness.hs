@@ -11,10 +11,11 @@ import safe Prettyprinter (Pretty(pretty))
 import safe CMM.Data.Lattice (Lattice((/\), (\/)))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 
+-- | The constness object representing constness constants
 data Constness
-  = Regular
-  | LinkExpr
-  | ConstExpr
+  = Regular -- ^ represents runtime values
+  | LinkExpr -- ^ represents values known during link-time
+  | ConstExpr -- ^ represents values known during compile-time
   deriving (Show, Eq, Data)
 
 deriving instance Ord (Ordered Constness)

@@ -7,7 +7,7 @@ import safe Data.List (foldl')
 
 import safe Prettyprinter (Pretty(pretty))
 
-import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, AppType, TBitsType, VoidType))
+import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, AppType, TBitsType, VoidType, LabelType, BoolType))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind, setTypeKind)
   )
@@ -57,6 +57,15 @@ makeAddrType = ComplType . AddrType . toType
 
 makeTBitsType :: Int -> Type
 makeTBitsType = ComplType . TBitsType
+
+makeVoidType :: Type
+makeVoidType = ComplType VoidType
+
+makeLabelType :: Type
+makeLabelType = ComplType LabelType
+
+makeBoolType :: Type
+makeBoolType = ComplType BoolType
 
 foldApp :: [Type] -> Type
 foldApp =

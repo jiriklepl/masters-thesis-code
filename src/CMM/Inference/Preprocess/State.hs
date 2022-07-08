@@ -30,7 +30,7 @@ import safe qualified CMM.Data.Trilean as T
 import safe CMM.Data.Tuple (complThd3)
 import safe CMM.Inference.BuiltIn
   ( addressKind
-  , constraintWitness
+  , constraintWitnessName
   , getConstType
   , getDataKind
   )
@@ -48,8 +48,7 @@ import safe CMM.Inference.Fact
   , lockFact
   , regularExprConstraint
   , subConst
-  , tupleKind
-  , typeUnion
+  , typeUnion, unstorableConstraint
   )
 import safe CMM.Inference.GetParent (makeAdoption)
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
@@ -75,7 +74,7 @@ import safe CMM.Inference.TypeKind
   )
 import safe CMM.Inference.TypeVar
   ( ToTypeVar(toTypeVar)
-  , TypeVar(NoType, tVarId)
+  , TypeVar(NoType)
   , noType
   )
 import safe CMM.Inference.Utils (fieldClassHelper)
@@ -230,7 +229,7 @@ beginProc name hole collector mConv = do
   currentReturn <- freshTypeHelper Star
   storeFacts
     [ constExprConstraint currentReturn
-    , tVarId (handleId currentReturn) `tupleKind` currentReturn
+    , unstorableConstraint currentReturn
     ]
   pushContext $ FunctionCtx name hole currentReturn mConv
 
@@ -333,7 +332,7 @@ storeProc name fs x = do
       classConstraint' <- getCtxClassConstraint
       let eType =
             makeFunction
-              [ toType $ ComplType (getConstType constraintWitness) `makeApplication`
+              [ toType $ ComplType (getConstType constraintWitnessName) `makeApplication`
                 snd classConstraint'
               ]
               t

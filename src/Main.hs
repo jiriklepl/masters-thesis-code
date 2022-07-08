@@ -1,5 +1,6 @@
+{-# LANGUAGE Safe #-}
 
-module Main where
+module Main (main) where
 
 import CMM.Pipeline ( runPipeline )
 

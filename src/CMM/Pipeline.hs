@@ -135,8 +135,8 @@ runFlatBlock ast =
 
 runInferMono :: (HasPos a, HasPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), InferencerState, ErrorState)
 runInferMono options ast = do
-  ((prepAST, facts), pState, errState) <- preprocessor options ast
-  ((),iState, errState') <- inferencer options{handleStart=readHandleCounter pState} prepAST facts
+  ((prepAST, facts'), pState, errState) <- preprocessor options ast
+  ((),iState, errState') <- inferencer options{handleStart=readHandleCounter pState} prepAST facts'
   (monoAST, (iState', _)) <- monomorphizer options iState prepAST
   (ast', iState'', errState'') <- postprocessor iState' monoAST
   return (ast', iState'', errState <> errState' <> errState'')

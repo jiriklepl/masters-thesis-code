@@ -22,7 +22,6 @@ import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.Trilean (Trilean)
 import safe CMM.Inference.Constness (Constness(ConstExpr, LinkExpr, Regular))
-import safe CMM.Inference.DataKind (DataKind(FunctionKind, TupleKind))
 import safe CMM.Inference.Type (ToType(toType), Type)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind, setTypeKind))
 import safe CMM.Inference.TypeVar (TypeVar)
@@ -37,6 +36,7 @@ import safe CMM.Pretty
   , regingSymbol
   , typingSymbol
   )
+import safe CMM.Inference.DataKind ( DataKind )
 
 infix 6 :=>
 
@@ -214,12 +214,6 @@ registerConstraint = (. toType) . OnRegister
 
 kindConstraint :: ToType a => DataKind -> a -> FlatFact Type
 kindConstraint kind = kindingBounds $ kind `Bounds` kind
-
-functionKind :: ToType a => Int -> a -> FlatFact Type
-functionKind = kindConstraint . FunctionKind
-
-tupleKind :: ToType a => Int -> a -> FlatFact Type
-tupleKind = kindConstraint . TupleKind
 
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
 classConstraint :: ToType a => Text -> a -> FlatFact Type
