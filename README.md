@@ -1,35 +1,49 @@
-# Master's Thesis Code
+# CHMMM
 
-<!-- TODO: How to clone -->
-<!-- TODO: How to run -->
+This repository contains a prototype compiler for my master's thesis.
+
+It is a proof-of-concept implementation for a modified version of the C-- language showcasing type inference in the context of systems programming and inference-guided automatic resource management.
 
 ## Dependencies
-<!-- TODO: Update dependencies -->
 
-- llvm-9
-- ghc
-- cabal-install
-  - cabal packages:
-    - llvm-hs
-    - llvm-hs-pretty
-    - megaparsec
+- cabal (version 3.2+; preferably version 3.6.2 acquired through ghcup)
+- ghc (version 8.8.4 - 8.10.7; preferably version 8.10.7 acquired through ghcup)
+- llc (version 12+, preferably version 12)
 
-## CMM/r (CMM with records)
+The machines in MFF rotunda are equipped sufficiently enough
 
-- TODO: how to align
+## How to build
 
-```txt
-1) type Name = data { x: Int; y: Int }
-2) newtype Name = data { x: Int; y: Int }
+```sh
+git submodule init
+git submodule update
+cabal build --only-dependencies Compiler
+cabal build Compiler
 ```
 
-1) creates a type alias
-2) creates a new type
+## How to run
 
-## CMM/r -> llvm
+```sh
+cabal run Compiler -- [options...] input_file
+```
 
-## CHMMM
+For more information, try:
 
-- NCIS ("naming convention is syntax" or "naval criminal investigative service")
+```sh
+cabal run Compiler -- -h
+```
 
-If we have `Name foo` then `foo.Name` is the accessor to the record (typed `Name`) and so `foo.Name.x` is a type-safe access to a field `x`
+For `/dev/stdout` output, use:
+
+```sh
+cabal run Compiler -- -o - input_file
+```
+
+## How to run the provided examples (tests)
+
+```sh
+./run_examples.sh
+```
+
+## Modifications
+
