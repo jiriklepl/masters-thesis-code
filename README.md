@@ -10,9 +10,7 @@ It is a proof-of-concept implementation for a modified version of the C-- langua
 - ghc (version 8.8.4 - 8.10.7; preferably version 8.10.7 acquired through ghcup)
 - llc (version 12+, preferably version 12)
 
-The machines in MFF rotunda are equipped sufficiently enough
-
-## How to build
+## Building
 
 ```sh
 git submodule init
@@ -21,10 +19,18 @@ cabal build --only-dependencies Compiler
 cabal build Compiler
 ```
 
-## How to run
+## Running
+
+For general use:
 
 ```sh
 cabal run Compiler -- [options...] input_file
+```
+
+For running the examples (tests):
+
+```sh
+./run_examples.sh
 ```
 
 For more information, try:
@@ -37,12 +43,6 @@ For `/dev/stdout` output, use:
 
 ```sh
 cabal run Compiler -- -o - input_file
-```
-
-## How to run the provided examples (tests)
-
-```sh
-./run_examples.sh
 ```
 
 ## Modifications
