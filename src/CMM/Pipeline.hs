@@ -6,7 +6,7 @@ module CMM.Pipeline where
 import safe Text.Megaparsec
     ( SourcePos, runParser, errorBundlePretty )
 import safe CMM.Lexer ( tokenize )
-import safe Data.Bifunctor ( Bifunctor(first) )
+import safe Data.Bifunctor ( Bifunctor(first), second )
 import safe Data.Text ( Text )
 import safe CMM.AST.Annot ( Annot )
 import safe CMM.Parser ( program )
@@ -39,7 +39,7 @@ import safe CMM.Monomorphize.Error
     ( MonomorphizeError(InstantiatesToNothing), voidWrapped )
 import safe CMM.FillHoles ( FillHoles(fillHoles) )
 import safe CMM.Mangle ( Mangle(mangle) )
-import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, handleStart), opts, noTransl )
+import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, handleStart), opts, noTransl, flattenSrc, blockifySrc, preprocessSrc )
 import safe Options.Applicative ( execParser )
 import safe qualified Data.Text.IO as T
 import safe CMM.Err.IsError ( IsError )
@@ -59,6 +59,7 @@ import safe LLVM.IRBuilder.Internal.SnocList ( SnocList(SnocList) )
 import safe LLVM.Pretty ( ppllvm )
 import safe Control.Monad ( when )
 import safe CMM.Translator.State ( TranslState, initTranslState )
+import CMM.Pretty (prettyShow)
 
 newtype PipelineError
   = InferenceIncomplete Facts
@@ -103,36 +104,50 @@ runAll :: String -> Options -> Text -> Either String (String, ErrorState)
 runAll fileName options contents = do
   tokens <- tokenizer fileName contents
   ast <- parser fileName tokens
-  if prettify options
-    then return . (,nullVal) . show $ pretty ast -- we just output the prettyprinted source
-    else if monoSrc options
-      then do
-        -- we output the unflattened monomorphized source
-        (ast'', _, errState) <- runInferMono options ast
-        return . (,errState)  . show . pretty $ ast''
-      else do
-        (ast', bState, errState) <- runFlatBlock ast
-        (ast'', iState, errState') <- runInferMono options ast'
-        if noTransl options
-          then return . (,errState <> errState')  . show . pretty $ ast'' -- prettyprint flattened and monomorphized source
-          else do
-            (prettyprinted, _, errState'') <- translator options iState bState ast''
-            -- prettyprint the llvm representation of the source
-            return (prettyprinted ,errState <> errState' <> errState'')
+  runParsed options ast
 
--- | runs the flattener phase and the blockifier phase
-runFlatBlock :: (Blockify n a (a, BlockAnnot), GetPos a, Data (n a), Data a) => n a -> Either String (n (a, BlockAnnot), BlockifierState, ErrorState)
-runFlatBlock ast =
-  blockifier $ flattener ast
+runParsed options ast
+  | prettify options = return (prettyShow ast, nullVal)
+  | monoSrc options = do
+    -- we output the unflattened monomorphized source
+    (ast'', _, errState) <- runInferMono options ast
+    return (prettyShow ast'', errState)
+  | flattenSrc options =
+    return (prettyShow ast', nullVal)
+  | otherwise = runFlattened options ast'
+    where ast' = flattener ast
+
+runFlattened options ast = do
+  (ast', bState, errState) <- blockifier ast
+  if blockifySrc options
+    then return (show ast', errState)
+    else second (errState <>) <$> runBlockified options bState ast'
+
+runBlockified options bState ast = do
+  (ast', ~(Right iState), errState) <- runInferMono options ast
+  if preprocessSrc options
+    then return (show ast', errState)
+    else second (errState <>) <$> runMonomorphized options bState iState ast'
+
+runMonomorphized options bState iState ast =
+  if noTransl options
+    then return (prettyShow ast, nullVal) -- prettyprint flattened and monomorphized source
+    else do
+      (ast', _, errState') <- translator options iState bState ast
+      -- prettyprint the llvm representation of the source
+      return (ast', errState')
 
 -- | runs the inference phase and the monomorphizer phase
-runInferMono :: (GetPos a, GetPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), InferencerState, ErrorState)
+runInferMono :: (GetPos a, GetPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), Either PreprocessorState InferencerState, ErrorState)
 runInferMono options ast = do
   ((prepAST, facts'), pState, errState) <- preprocessor options ast
-  ((),iState, errState') <- inferencer options{handleStart=view handleCounter pState} prepAST facts'
-  (monoAST, (iState', _)) <- monomorphizer options iState prepAST
-  (ast', iState'', errState'') <- postprocessor iState' monoAST
-  return (ast', iState'', errState <> errState' <> errState'')
+  if preprocessSrc options
+    then return (prepAST, Left pState, errState)
+    else do
+      ((),iState, errState') <- inferencer options{handleStart=view handleCounter pState} prepAST facts'
+      (monoAST, (iState', _)) <- monomorphizer options iState prepAST
+      (ast', iState'', errState'') <- postprocessor iState' monoAST
+      return (ast', Right iState'', errState <> errState' <> errState'')
 
 -- | runs the tokenization
 tokenizer :: String
@@ -153,7 +168,7 @@ flattener = flatten
 -- | wraps the result in an `Either String` monad, choosing `Left` if the `ErrorState` contains any errors
 wrapStandardLayout :: HasErrorState s ErrorState => (a, s) -> Either String (a, s, ErrorState)
 wrapStandardLayout (result, state')
-  | countErrors errState /= 0 = Left . show $ pretty errState
+  | countErrors errState /= 0 = Left $ prettyShow errState
   | otherwise = Right (result, state', errState)
   where
       errState = view errorState state'
@@ -194,8 +209,8 @@ inferencer settings ast fs = wrapStandardLayout $
 monomorphizer :: (GetPos a, HasTypeHole a) => Options -> InferencerState -> Annot Unit a
   -> Either String (Annot Unit a, (InferencerState, MonomorphizeState a))
 monomorphizer settings iState ast = case result of
-      Left err -> Left . show $ pretty err
-      Right Nothing -> Left . show . pretty . InstantiatesToNothing $ voidWrapped ast
+      Left err -> Left $ prettyShow err
+      Right Nothing -> Left . prettyShow . InstantiatesToNothing $ voidWrapped ast
       Right (Just unit') -> Right (unit', states)
   where
     (result,states) = monomorphize mempty ast `runState` (iState, initMonomorphizeState settings)
@@ -221,5 +236,5 @@ translator _ iState bState ast = do
       (translated, tState) =
             runState moduleBuilder $ initTranslState iState bState
       module' = defaultModule { moduleName = "", moduleDefinitions = translated }
-      prettyprinted = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
-  wrapStandardLayout (show $ pretty  prettyprinted, tState)
+      ast' = evalModuleBuilder emptyModuleBuilder{builderDefs=SnocList translated} $ ppllvm module'
+  wrapStandardLayout (prettyShow ast', tState)

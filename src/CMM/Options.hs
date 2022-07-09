@@ -30,6 +30,9 @@ data Options = Options
   { monoSrc      :: Bool
   , prettify      :: Bool
   , noTransl      :: Bool
+  , flattenSrc      :: Bool
+  , blockifySrc      :: Bool
+  , preprocessSrc      :: Bool
   , output      :: String
   , handleStart      :: Int
   , maxCycles      :: Int
@@ -50,9 +53,21 @@ options = Options
       <> short 'p'
       <> help "Run as a prettyprinter" )
   <*> switch
-      ( long "no_translate"
+      ( long "no_translation"
       <> short 'n'
       <> help "Do not translate to llvm" )
+  <*> switch
+      ( long "flatten"
+      <> short 'f'
+      <> help "Print the flattened AST" )
+  <*> switch
+      ( long "blockify"
+      <> short 'b'
+      <> help "Print the IR after blockifying" )
+  <*> switch
+      ( long "preprocess"
+      <> short 'P'
+      <> help "Print the IR after preprocessing" )
   <*> strOption
       ( long "output"
       <> short 'o'
@@ -77,7 +92,7 @@ options = Options
       <> help "Set the maximum of monomorphization cycles" )
   <*> option auto
       ( long "max_fundeps"
-      <> short 'f'
+      <> short 'd'
       <> metavar "MAX_FUNDEPS"
       <> showDefault
       <> value 500

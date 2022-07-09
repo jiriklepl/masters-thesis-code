@@ -8,7 +8,7 @@ It is a proof-of-concept implementation for a modified version of the C-- langua
 
 - cabal (version 3.2+; preferably version 3.6.2 acquired through ghcup)
 - ghc (version 8.8.4 - 8.10.7; preferably version 8.10.7 acquired through ghcup)
-- llc (version 12+, preferably version 12)
+- llc (version 12+; preferably version 12)
 
 ## Building
 
@@ -17,6 +17,9 @@ git submodule init
 git submodule update
 cabal build --only-dependencies Compiler
 cabal build Compiler
+
+# documentation:
+cabal haddock Compiler
 ```
 
 ## Running

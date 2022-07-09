@@ -1,5 +1,4 @@
 packages: *.cabal vendor/*/*.cabal vendor/llvm-hs/*/*.cabal
 documentation: False
 tests: True
-haddock-all: False
 jobs: $ncpus

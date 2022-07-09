@@ -108,3 +108,6 @@ ifTrue bool x =
   if bool
     then x
     else mempty
+
+prettyShow :: Pretty a => a -> String
+prettyShow = show . pretty
