@@ -1,0 +1,7 @@
+foreign "C" f (auto x) -> "" bits32 {
+    a:
+    b:
+    c:
+    d:
+    return (x);
+}

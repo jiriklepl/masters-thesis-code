@@ -1,6 +1,4 @@
-f() {
-    bits32 x, y;
-    x, y = 5, 10;
+foreign "C" f(bits32 x, bits32 y) {
     x, y = y, x;
 
     return (x, y);
