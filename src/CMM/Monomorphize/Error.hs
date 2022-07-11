@@ -12,7 +12,7 @@ import safe Prettyprinter
 
 import safe CMM.Err.IsError ( IsError )
 import safe CMM.Monomorphize.Polytypeness ( PolyWhat, Absurdity )
-import safe CMM.Inference.Preprocess.TypeHole ( TypeHole )
+import safe CMM.Inference.Preprocess.Elaboration ( Elaboration )
 import safe CMM.Inference.TypeVar ( TypeVar )
 import safe CMM.Inference.Type ( Type )
 import CMM.AST.Wrap (ASTWrapper, MakeWrapped (makeWrapped))
@@ -31,12 +31,12 @@ data MonomorphizeError
   | AbsurdType Absurdity (ASTWrapper ())
   | IllegalPolyType PolyWhat (ASTWrapper ())
   | InstantiatesToNothing (ASTWrapper ())
-  | IllegalHole TypeHole (ASTWrapper ())
+  | IllegalElab Elaboration (ASTWrapper ())
   | IllegalScheme (Schematized ()) (ASTWrapper ())
   | NoInstance TypeVar TypeVar (ASTWrapper ())
   | IsNotScheme (ASTWrapper ())
   | CannotInstantiate Type Type [UnificationError] (ASTWrapper ())
-  | Ambiguity [TypeHole] (ASTWrapper ())
+  | Ambiguity [Elaboration] (ASTWrapper ())
   deriving (Show, Eq, IsError, Data)
 
 instance Pretty MonomorphizeError where
@@ -45,7 +45,7 @@ instance Pretty MonomorphizeError where
     AbsurdType absurdity node -> pretty node <+> "has absurd type:" <+> pretty absurdity
     IllegalPolyType polyWhat node -> pretty node <+> "is poly-typed in the context that requires monotypes:" <+> pretty polyWhat
     InstantiatesToNothing node -> pretty node <+> "instantiates into nothing"
-    IllegalHole hole node -> pretty node <+> "has an illegal type hole" <+> parens (pretty hole) <> report
+    IllegalElab hole node -> pretty node <+> "has an illegal elaboration" <+> parens (pretty hole) <> report
     IllegalScheme schematized node -> pretty node <+> case schematized of
       ProcedureScheme func -> "Is required to be a structure, but has been given a function:" <+> pretty func
       StructScheme struct -> "Is required to be a function, but has been given a structure:" <+> pretty struct
@@ -85,10 +85,10 @@ illegalPolyType :: (GetPos a, MakeWrapped n) =>
 illegalPolyType absurdity annotated@Annot{takeAnnot} =
   makeError takeAnnot . IllegalPolyType absurdity $ voidWrapped annotated
 
--- | helper for creating AST error containing `IllegalHole`
-illegalHole :: (GetPos a, MakeWrapped n) => TypeHole -> Annotation n a -> Error
+-- | helper for creating AST error containing `IllegalElab`
+illegalHole :: (GetPos a, MakeWrapped n) => Elaboration -> Annotation n a -> Error
 illegalHole hole annotated@Annot{takeAnnot} =
-  makeError takeAnnot . IllegalHole hole $ voidWrapped annotated
+  makeError takeAnnot . IllegalElab hole $ voidWrapped annotated
 
 -- | helper for creating AST error containing `IsNotScheme`
 isNotScheme :: (GetPos a, MakeWrapped n) => Annotation n a -> Error

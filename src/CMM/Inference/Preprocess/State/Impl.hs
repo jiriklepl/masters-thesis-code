@@ -18,9 +18,9 @@ import safe CMM.Inference.HandleCounter
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
-import safe CMM.Inference.Preprocess.TypeHole
-  ( HasTypeHole(getTypeHole)
-  , safeHoleHandle
+import safe CMM.Inference.Preprocess.Elaboration
+  ( HasElaboration(getElaboration)
+  , safeElabHandle
   )
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.TypeAnnot
@@ -99,7 +99,7 @@ instance Refresh Preprocessor where
 
 -- | Gets the handle of the current context
 getCtxHandle :: Preprocessor (Maybe TypeHandle)
-getCtxHandle = uses currentContext (safeHoleHandle . getTypeHole . head)
+getCtxHandle = uses currentContext (safeElabHandle . getElaboration . head)
 
 -- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
 freshNamedASTTypeHandle ::

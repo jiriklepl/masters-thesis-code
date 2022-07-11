@@ -71,19 +71,19 @@ import safe CMM.Inference.Fact as Fact
   , unstorableConstraint
   )
 import safe CMM.Inference.GetParent (makeAdoption)
-import safe CMM.Inference.Preprocess.Context (Context(StructCtx, ctxConstraint, ctxHole))
+import safe CMM.Inference.Preprocess.Context (Context(StructCtx, ctxConstraint, ctxElab))
 import safe CMM.Inference.Preprocess.State as State
   ( Preprocessor)
 import safe qualified CMM.Inference.Preprocess.State as State
-import safe CMM.Inference.Preprocess.TypeHole
-  ( HasTypeHole(getTypeHole)
-  , TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         MethodTypeHole, SimpleTypeHole)
-  , holeHandle
+import safe CMM.Inference.Preprocess.Elaboration
+  ( HasElaboration(getElaboration)
+  , Elaboration(EmptyElaboration, LVInstElaboration, MemberElaboration,
+         MethodElaboration, SimpleElaboration)
+  , eHandle
   )
-import safe CMM.Inference.Preprocess.WithTypeHole
-  ( WithTypeHole(withTypeHole)
-  , withEmptyTypeHole
+import safe CMM.Inference.Preprocess.WithElaboration
+  ( WithElaboration(withElaboration)
+  , withEmptyElaboration
   )
 import safe CMM.Inference.Refresh (Refresh(refresh), refreshNestedFact)
 import safe CMM.Inference.Subst (Apply(apply))
@@ -113,63 +113,63 @@ import safe CMM.AST.Wrap ( MakeWrapped(makeWrapped) )
 
 class Preprocess n a b where
   preprocess ::
-       (WithTypeHole a b, GetPos a) => Annot n a -> Preprocessor (Annot n b)
+       (WithElaboration a b, GetPos a) => Annot n a -> Preprocessor (Annot n b)
   preprocess =
     \case
       Annot n a -> preprocessFinalize a $ preprocessImpl a n
   preprocessImpl ::
-       (WithTypeHole a b, GetPos a) => a -> n a -> Preprocessor (TypeHole, n b)
+       (WithElaboration a b, GetPos a) => a -> n a -> Preprocessor (Elaboration, n b)
 
-preprocessTrivial :: (Functor n, WithTypeHole a b) => n a -> n b
-preprocessTrivial = fmap withEmptyTypeHole
+preprocessTrivial :: (Functor n, WithElaboration a b) => n a -> n b
+preprocessTrivial = fmap withEmptyElaboration
 
 preprocessFinalize ::
-     (Functor m, WithTypeHole a b) => a -> m (TypeHole, n b) -> m (Annot n b)
+     (Functor m, WithElaboration a b) => a -> m (Elaboration, n b) -> m (Annot n b)
 preprocessFinalize a preprocessed =
-  preprocessed <&> \(handle, n') -> withTypeHoledAnnot handle a n'
+  preprocessed <&> \(handle, n') -> withElaboratedAnnot handle a n'
 
 data PreprocessHint =
   PreprocessHint
 
 type instance Constraint PreprocessHint a b =
-     (WithTypeHole a b, GetPos a)
+     (WithElaboration a b, GetPos a)
 
 type instance Space PreprocessHint = Preprocess'
 
 class Preprocess' a b n where
-  preprocess' :: (WithTypeHole a b, GetPos a) => n a -> Preprocessor (n b)
+  preprocess' :: (WithElaboration a b, GetPos a) => n a -> Preprocessor (n b)
 
-instance WithTypeHole a b => Preprocess' a b AST.Name where
+instance WithElaboration a b => Preprocess' a b AST.Name where
   preprocess' = return . preprocessTrivial
 
 instance Preprocess n a b => Preprocess' a b (Annot n) where
   preprocess' = preprocess
 
 pass ::
-     (ASTmap PreprocessHint n a b, WithTypeHole a b, GetPos a)
+     (ASTmap PreprocessHint n a b, WithElaboration a b, GetPos a)
   => n a
   -> Preprocessor (n b)
 pass = astMapM PreprocessHint preprocess'
 
 instance {-# OVERLAPPABLE #-} ASTmap PreprocessHint n a b =>
                               Preprocess n a b where
-  preprocessImpl _ = fmap (EmptyTypeHole, ) . pass
+  preprocessImpl _ = fmap (EmptyElaboration, ) . pass
 
 preprocessT ::
-     (Preprocess n a b, WithTypeHole a b, Traversable t, GetPos a)
+     (Preprocess n a b, WithElaboration a b, Traversable t, GetPos a)
   => t (Annot n a)
   -> Preprocessor (t (Annot n b))
 preprocessT = traverse preprocess
 
-withTypeHoledAnnot :: WithTypeHole a b => TypeHole -> a -> n b -> Annot n b
-withTypeHoledAnnot = (withAnnot .) . withTypeHole
+withElaboratedAnnot :: WithElaboration a b => Elaboration -> a -> n b -> Annot n b
+withElaboratedAnnot = (withAnnot .) . withElaboration
 
 purePreprocess ::
-     (WithTypeHole a b, Functor n)
-  => TypeHole
+     (WithElaboration a b, Functor n)
+  => Elaboration
   -> n a
-  -> Preprocessor (TypeHole, n b)
-purePreprocess hole = return . (hole, ) . (withTypeHole hole <$>)
+  -> Preprocessor (Elaboration, n b)
+purePreprocess hole = return . (hole, ) . (withElaboration hole <$>)
 
 instance Preprocess AST.Unit a b where
   preprocessImpl _ unit@(AST.Unit topLevels) = do
@@ -192,11 +192,11 @@ instance Preprocess AST.Unit a b where
     for_ (Map.keys sMems) $ State.lookupSMem >=> storeFacts'
     topLevels' <- preprocessT topLevels
     State.storeFacts . factComment $ "END Preprocessing unit"
-    return (EmptyTypeHole, AST.Unit topLevels')
+    return (EmptyElaboration, AST.Unit topLevels')
 
 instance Preprocess AST.Section a b where
   preprocessImpl _ =
-    ((EmptyTypeHole, ) <$>) . \case
+    ((EmptyElaboration, ) <$>) . \case
       AST.SecDecl decl -> AST.SecDecl <$> preprocess decl
       AST.SecProcedure procedure -> AST.SecProcedure <$> preprocess procedure
       AST.SecDatum datum -> AST.SecDatum <$> preprocess datum
@@ -206,7 +206,7 @@ instance Preprocess AST.Section a b where
         return $ AST.SecSpan key' value' sectionItems'
 
 preprocessSpanCommon ::
-     (WithTypeHole a b, GetPos a)
+     (WithElaboration a b, GetPos a)
   => Annot AST.Expr a
   -> Annot AST.Expr a
   -> Preprocessor (Annot AST.Expr b, Annot AST.Expr b)
@@ -219,7 +219,7 @@ preprocessSpanCommon key value = do
 
 instance Preprocess AST.Decl a b where
   preprocessImpl _ =
-    fmap (EmptyTypeHole, ) . \case
+    fmap (EmptyElaboration, ) . \case
       AST.ImportDecl imports -> AST.ImportDecl <$> preprocessT imports
       AST.ExportDecl exports -> AST.ExportDecl <$> preprocessT exports
       AST.RegDecl invar registers -> AST.RegDecl invar <$> preprocess registers
@@ -256,7 +256,7 @@ instance Preprocess AST.Struct a b where
     State.pushParent tVar
     State.pushTypeVariables $ structVariables struct
     (constraint, paraName') <- preprocessParaName State.lookupTCon Star paraName
-    let hole = getTypeHole paraName'
+    let hole = getElaboration paraName'
     State.pushStruct (getName paraName, hole) (getName paraName, constraint)
     datums' <- preprocessDatums datums
     State.storeFacts . factComment $
@@ -267,22 +267,22 @@ instance Preprocess AST.Struct a b where
 preprocessClassCommon ::
      ( PreprocessParam param1 a1 b1
      , PreprocessParam param2 a2 b2
-     , WithTypeHole a1 b1
-     , WithTypeHole a2 b2
-     , WithTypeHole a3 b3
+     , WithElaboration a1 b1
+     , WithElaboration a2 b2
+     , WithElaboration a3 b3
      , Traversable t1
      , GetPos a1
      , GetPos a2
      , GetPos a3
      , Preprocess n a3 b3
      )
-  => (Text -> TypeHole -> (Text, Infer.Type) -> [(Text, Infer.Type)] -> Preprocessor ())
+  => (Text -> Elaboration -> (Text, Infer.Type) -> [(Text, Infer.Type)] -> Preprocessor ())
   -> ([Annot (AST.ParaName param1) b1] -> Annot (AST.ParaName param2) b2 -> t1 (Annot n b3) -> t2)
   -> [Annot (AST.ParaName param1) a1]
   -> Annot (AST.ParaName param2) a2
   -> t1 (Annot n a3)
   -> CollectorState
-  -> Preprocessor (TypeHole, t2)
+  -> Preprocessor (Elaboration, t2)
 preprocessClassCommon pushWhat constr paraNames paraName methods collector = do
   State.freshStar >>= State.pushParent . toTypeVar
   State.pushTypeVariables collector
@@ -291,10 +291,10 @@ preprocessClassCommon pushWhat constr paraNames paraName methods collector = do
   (constraint, paraName') <- preprocessParaName State.lookupClass Constraint paraName
   pushWhat
     (getName paraName)
-    (getTypeHole paraName')
+    (getElaboration paraName')
     (getName paraName, constraint)
     (fmap getName paraNames `zip` constraints)
-  (getTypeHole paraName', ) . constr paraNames' paraName' <$>
+  (getElaboration paraName', ) . constr paraNames' paraName' <$>
     preprocessT methods <*
     State.popContext <*
     State.popTypeVariables <*
@@ -326,21 +326,21 @@ class Preprocess param a b =>
       PreprocessParam param a b
   where
   preprocessParam ::
-       (WithTypeHole a b, GetPos a)
+       (WithElaboration a b, GetPos a)
     => Annot param a
     -> Preprocessor (Annot param b)
 
 instance PreprocessParam AST.Name a b where
   preprocessParam name = do
     handle <- State.lookupTVar name
-    return $ withTypeHole handle <$> name
+    return $ withElaboration handle <$> name
 
 instance PreprocessParam AST.Type a b where
   preprocessParam = preprocess
 
 preprocessParaName ::
-     (WithTypeHole a b, PreprocessParam param a b, GetPos a)
-  => (Text -> Preprocessor TypeHole)
+     (WithElaboration a b, PreprocessParam param a b, GetPos a)
+  => (Text -> Preprocessor Elaboration)
   -> TypeKind
   -> Annot (AST.ParaName param) a
   -> Preprocessor (Infer.Type, Annot (AST.ParaName param) b)
@@ -353,7 +353,7 @@ preprocessParaName looker kind (Annot (AST.ParaName name params) annot) = do
   State.storeFact $ handle `typeEquality` constraint
   return
     ( constraint
-    , withTypeHole (SimpleTypeHole handle) annot `withAnnot`
+    , withElaboration (SimpleElaboration handle) annot `withAnnot`
       AST.ParaName name' params')
 
 instance Preprocess AST.Import a b where
@@ -375,18 +375,18 @@ instance Preprocess AST.Type a b where
         purePreprocess hole t
       AST.TAuto Nothing -> do
         handle <- State.freshASTGeneric annot
-        purePreprocess (SimpleTypeHole handle) t
+        purePreprocess (SimpleElaboration handle) t
       AST.TAuto (Just name) -> do
         hole <- State.lookupTVar name
         purePreprocess hole t
       AST.TPar parType -> do
         parType' <- preprocess parType
-        return (getTypeHole parType', AST.TPar parType')
+        return (getElaboration parType', AST.TPar parType')
       AST.TPtr t' -> do
         ptr <- State.freshASTStar annot
         t'' <- preprocess t'
         State.storeFact $ ptr `typeEquality` makeAddrType t''
-        return (SimpleTypeHole ptr, AST.TPtr t'')
+        return (SimpleElaboration ptr, AST.TPtr t'')
       AST.TVoid -> trivialCase makeVoidType
       AST.TBool -> trivialCase makeBoolType
       AST.TLabel -> trivialCase makeLabelType
@@ -394,7 +394,7 @@ instance Preprocess AST.Type a b where
         trivialCase type' = do
           handle <- State.freshASTStar annot
           State.storeFact $ handle `typeEquality` type'
-          purePreprocess (SimpleTypeHole handle) t
+          purePreprocess (SimpleElaboration handle) t
 
 instance Preprocess AST.ParaType a b where
   preprocessImpl annot (AST.ParaType type' types') = do
@@ -402,7 +402,7 @@ instance Preprocess AST.ParaType a b where
     types'' <- traverse preprocess types'
     handle <- State.freshASTGeneric annot
     State.storeFact . typeEquality handle . foldApp $ toType type'' : fmap toType types''
-    return (SimpleTypeHole handle, AST.ParaType type'' types'')
+    return (SimpleElaboration handle, AST.ParaType type'' types'')
 
 maybeKindUnif ::
      (ToType t, ToType t', GetName n) => Maybe n -> t -> t' -> Preprocessor ()
@@ -427,12 +427,12 @@ instance Preprocess AST.Registers a b where
           hole <- State.lookupVar name
           maybeKindUnif mKind hole type''
           case mStrLit of
-            Nothing -> return (withTypeHole hole <$> name, Nothing)
+            Nothing -> return (withElaboration hole <$> name, Nothing)
             Just (AST.StrLit strLit) -> do
               State.storeFact $ strLit `registerConstraint` hole
-              return (withTypeHole hole <$> name, Just (AST.StrLit strLit))
+              return (withElaboration hole <$> name, Just (AST.StrLit strLit))
     nameStrLits' <- traverse go nameStrLits
-    return (EmptyTypeHole, AST.Registers mKind type'' nameStrLits')
+    return (EmptyElaboration, AST.Registers mKind type'' nameStrLits')
 
 class FormalNames a where
   formalNames :: a -> [Text]
@@ -453,7 +453,7 @@ instance FormalNames (AST.Procedure a) where
   formalNames (AST.Procedure header _) = formalNames header
 
 preprocessHeader ::
-     (WithTypeHole a b, GetPos a)
+     (WithElaboration a b, GetPos a)
   => Annot AST.ProcedureHeader a
   -> Preprocessor (Annot AST.ProcedureHeader b)
 preprocessHeader header =
@@ -461,9 +461,9 @@ preprocessHeader header =
   preprocessProcedureHeaderImpl header
 
 preprocessProcedureHeaderImpl ::
-     (WithTypeHole a b, GetPos a)
+     (WithElaboration a b, GetPos a)
   => Annot AST.ProcedureHeader a
-  -> Preprocessor (TypeHole, AST.ProcedureHeader b)
+  -> Preprocessor (Elaboration, AST.ProcedureHeader b)
 preprocessProcedureHeaderImpl (AST.ProcedureHeader mConv name formals mTypes `Annot` pos) = do
   formals' <- doOutsideCtx $ preprocessT formals
   mTypes' <- doOutsideCtx $ traverse preprocessT mTypes
@@ -518,12 +518,12 @@ instance Preprocess AST.Procedure a b where
     header' <- preprocessHeader header
     State.storeFacts . factComment $
       "END Preprocessing procedure " <> backQuote (getName header)
-    (getTypeHole header', AST.Procedure header' body') <$ State.popParent
+    (getElaboration header', AST.Procedure header' body') <$ State.popParent
 
 instance Preprocess AST.ProcedureDecl a b where
   preprocessImpl _ procedure@(AST.ProcedureDecl header) = do
     preprocessProcedureCommon procedure header
-    ((EmptyTypeHole, ) . AST.ProcedureDecl <$> preprocessHeader header) <* State.popParent
+    ((EmptyElaboration, ) . AST.ProcedureDecl <$> preprocessHeader header) <* State.popParent
 
 instance Preprocess AST.Formal a b where
   preprocessImpl _ (AST.Formal mKind invar type' name) = do
@@ -537,37 +537,37 @@ instance Preprocess AST.SemiFormal a b where
     handle <- State.freshStar
     type'' <- preprocess type'
     maybeKindUnif mKind handle type''
-    return (SimpleTypeHole handle, AST.SemiFormal mKind type'')
+    return (SimpleElaboration handle, AST.SemiFormal mKind type'')
 
 instance Preprocess AST.StackDecl a b where
   preprocessImpl _ (AST.StackDecl datums) =
-    (EmptyTypeHole, ) . AST.StackDecl <$> preprocessDatums datums
+    (EmptyElaboration, ) . AST.StackDecl <$> preprocessDatums datums
 
 instance Preprocess AST.Stmt a b where
   preprocessImpl pos stmt = case stmt of
-      AST.EmptyStmt -> purePreprocess EmptyTypeHole AST.EmptyStmt
+      AST.EmptyStmt -> purePreprocess EmptyElaboration AST.EmptyStmt
       AST.IfStmt cond thenBody mElseBody -> do
         cond' <- preprocess cond
         State.storeFacts
           [ cond' `typingEquality` makeBoolType
           , boolKind `minKindConstraint` cond'
           ]
-        (EmptyTypeHole, ) <$>
+        (EmptyElaboration, ) <$>
           liftA2 (AST.IfStmt cond') (preprocess thenBody) (preprocessT mElseBody)
       AST.SwitchStmt scrutinee arms -> do
         scrutinee' <- preprocess scrutinee
         arms' <- preprocessT arms
         traverse_ (State.storeFact . subType scrutinee') arms'
-        return (EmptyTypeHole, AST.SwitchStmt scrutinee' arms')
+        return (EmptyElaboration, AST.SwitchStmt scrutinee' arms')
       AST.SpanStmt key value body -> do
         (key', value') <- preprocessSpanCommon key value
         body' <- preprocess body
-        return (EmptyTypeHole, AST.SpanStmt key' value' body')
+        return (EmptyElaboration, AST.SpanStmt key' value' body')
       AST.AssignStmt lvalues exprs -> do
         lvalues' <- preprocessT lvalues
         exprs' <- preprocessT exprs
         zipWithM_ ((State.storeFact .) . subType) lvalues' exprs'
-        return (EmptyTypeHole, AST.AssignStmt lvalues' exprs')
+        return (EmptyElaboration, AST.AssignStmt lvalues' exprs')
       AST.PrimOpStmt {} -> notImplemented pos stmt
       AST.CallStmt names mConv expr actuals mTargets annots
        -> do
@@ -585,7 +585,7 @@ instance Preprocess AST.Stmt a b where
         zipWithM_ ((State.storeFact .) . subType) names' retTypes
         zipWithM_ ((State.storeFact .) . subType) argTypes actuals'
         return
-          ( EmptyTypeHole
+          ( EmptyElaboration
           , AST.CallStmt names' mConv expr' actuals' mTargets' annots')
       AST.JumpStmt {} -> notImplemented pos stmt
       AST.ReturnStmt mConv Nothing actuals
@@ -600,7 +600,7 @@ instance Preprocess AST.Stmt a b where
             | otherwise -> registerASTError pos $ UndefinedForeign conv
           Nothing -> return ()
         State.getCurrentReturn >>= State.storeFact . (`typeEquality` retType)
-        return (EmptyTypeHole, AST.ReturnStmt mConv Nothing actuals')
+        return (EmptyElaboration, AST.ReturnStmt mConv Nothing actuals')
       AST.ReturnStmt {} -> notImplemented pos stmt
       label@AST.LabelStmt {} -> do
         hole <- State.lookupVar label
@@ -618,14 +618,14 @@ instance Preprocess AST.Stmt a b where
           [ addressKind `minKindConstraint` expr'
           , expr' `typingEquality` makeLabelType
           ]
-        (EmptyTypeHole, ) . AST.GotoStmt expr' <$> preprocessT mTargets
+        (EmptyElaboration, ) . AST.GotoStmt expr' <$> preprocessT mTargets
       AST.CutToStmt {} -> notImplemented pos stmt
 
-notImplemented :: (GetPos a, MakeWrapped n, WithTypeHole a b, Functor n) =>
-  a -> n a -> Preprocessor (TypeHole, n b)
+notImplemented :: (GetPos a, MakeWrapped n, WithElaboration a b, Functor n) =>
+  a -> n a -> Preprocessor (Elaboration, n b)
 notImplemented pos node = do
   registerASTError pos . NotImplemented . makeWrapped $ void node
-  return . (EmptyTypeHole,) $  preprocessTrivial node
+  return . (EmptyElaboration,) $  preprocessTrivial node
 
 doOutsideCtx :: Preprocessor a -> Preprocessor a
 doOutsideCtx action = State.popTopContext >>= (action <*) . State.pushContext
@@ -635,7 +635,7 @@ instance Preprocess AST.KindName a b where
     nameType <- State.lookupVar name
     handle <- State.freshNamedASTStar (getName name) annot
     maybeKindUnif mKind handle nameType
-    return (SimpleTypeHole handle, AST.KindName mKind (preprocessTrivial name))
+    return (SimpleElaboration handle, AST.KindName mKind (preprocessTrivial name))
 
 instance Preprocess AST.Arm a b where
   preprocessImpl = notImplemented
@@ -652,14 +652,14 @@ instance Preprocess AST.Lit a b where
         AST.LitFloat {} -> floatKind
         AST.LitChar {} -> integerKind
     State.storeFact $ constExprConstraint handle
-    purePreprocess (SimpleTypeHole handle) lit
+    purePreprocess (SimpleElaboration handle) lit
 
 instance Preprocess AST.Actual a b where
   preprocessImpl annot (AST.Actual mKind expr) = do
     expr' <- preprocess expr
     handle <- State.freshASTStar annot
     maybeKindUnif mKind handle expr'
-    return (SimpleTypeHole handle, AST.Actual mKind expr')
+    return (SimpleElaboration handle, AST.Actual mKind expr')
 
 unionizeTypes :: ToType a => [a] -> Preprocessor ()
 unionizeTypes =
@@ -675,18 +675,18 @@ instance Preprocess AST.Init a b where
         handle <- State.freshASTStar annot
         State.storeFacts $ constExprConstraint <$> exprs'
         State.storeFacts $ (`subType` handle) <$> exprs'
-        return (SimpleTypeHole handle, AST.ExprInit exprs')
+        return (SimpleElaboration handle, AST.ExprInit exprs')
       strInit@AST.StrInit {} -> strInitCommon StringType strInit
       strInit@AST.Str16Init {} -> strInitCommon String16Type strInit
     where
-      strInitCommon :: TypeCompl Type -> AST.Init a -> Preprocessor (TypeHole, AST.Init b)
+      strInitCommon :: TypeCompl Type -> AST.Init a -> Preprocessor (Elaboration, AST.Init b)
       strInitCommon c strInit = do
         handle <- State.freshStar
         State.storeFact $ handle `typingEquality` ComplType c
-        purePreprocess (SimpleTypeHole handle) strInit
+        purePreprocess (SimpleElaboration handle) strInit
 
 preprocessDatums ::
-     (WithTypeHole a b, GetPos a)
+     (WithElaboration a b, GetPos a)
   => [Annot AST.Datum a]
   -> Preprocessor [Annot AST.Datum b]
 preprocessDatums datums = do
@@ -694,10 +694,10 @@ preprocessDatums datums = do
   zipWithM preprocessFinalize (takeAnnot <$> datums) (return <$> datumResults)
 
 preprocessDatumsImpl ::
-     (GetPos a, WithTypeHole a b)
-  => [TypeHole]
+     (GetPos a, WithElaboration a b)
+  => [Elaboration]
   -> [Annotation AST.Datum a]
-  -> Preprocessor [(TypeHole, AST.Datum b)]
+  -> Preprocessor [(Elaboration, AST.Datum b)]
 preprocessDatumsImpl _ [] = return []
 preprocessDatumsImpl cache ((Annot datum annot):others) =
   case datum of
@@ -710,10 +710,10 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
             let name' = fieldClassHelper $ getName name
             classHole <- State.lookupClass name'
             return $
-              MemberTypeHole
-                (holeHandle hole)
-                [(name', holeHandle classHole)]
-                [holeHandle mem]
+              MemberElaboration
+                (eHandle hole)
+                [(name', eHandle classHole)]
+                [eHandle mem]
                 []
           _ -> do
             tVar <- State.freshStar
@@ -725,10 +725,10 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
             return hole
       purePreprocess hole datum <:> preprocessDatumsImpl (hole : cache) others
     AST.DatumAlign _ -> do
-      purePreprocess EmptyTypeHole datum <:> preprocessDatumsImpl [] others
+      purePreprocess EmptyElaboration datum <:> preprocessDatumsImpl [] others
     AST.Datum new type' mSize mInit -> do
       uses State.currentContext head >>= \case
-        StructCtx {ctxHole, ctxConstraint = (_,structType)} -> do
+        StructCtx {ctxElab, ctxConstraint = (_,structType)} -> do
           tVars <- State.collectTVars
           State.pushFacts
           (hole, datum') <- goGeneral
@@ -743,10 +743,10 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                 Fact $ addressKind `kindConstraint` makeAddrType hole
               cache' =
                 cache <&> \case
-                  MemberTypeHole iMem [hole''] [mem] [] -> (hole'', iMem, mem)
+                  MemberElaboration iMem [hole''] [mem] [] -> (hole'', iMem, mem)
                   _ -> undefined
-              hole' = MemberTypeHole (holeHandle ctxHole) `uncurry3` unzip3 cache'
-              scheme (MemberTypeHole h [(name, classHandle)] _ _) = do
+              hole' = MemberElaboration (eHandle ctxElab) `uncurry3` unzip3 cache'
+              scheme (MemberElaboration h [(name, classHandle)] _ _) = do
                 method <-
                   refreshNestedFact . forall tVars [h `typeEquality` t] $
                   structAddrFact :
@@ -783,7 +783,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                 [ addressKind `kindConstraint` handle
                 , handle `typingEquality` makeAddrType type''
                 ]
-              return (SimpleTypeHole handle, AST.Datum new type'' mSize' mInit')
+              return (SimpleElaboration handle, AST.Datum new type'' mSize' mInit')
 
 instance Preprocess AST.Datum a b where
   preprocessImpl a datum = head <$> preprocessDatumsImpl [] [datum `Annot` a]
@@ -794,20 +794,20 @@ instance Preprocess AST.Size a b where
       AST.Size (Just expr) -> do
         expr' <- preprocess expr
         State.storeFact $ constExprConstraint expr'
-        return (getTypeHole expr', AST.Size $ Just expr')
-      size -> purePreprocess EmptyTypeHole size
+        return (getElaboration expr', AST.Size $ Just expr')
+      size -> purePreprocess EmptyElaboration size
 
 instance Preprocess AST.LValue a b where
   preprocessImpl annot =
     \case
       lvName@AST.LVName {} -> do
         State.lookupFVar lvName >>= \case
-          EmptyTypeHole -> State.lookupVar lvName >>= \case
-              EmptyTypeHole -> do
+          EmptyElaboration -> State.lookupVar lvName >>= \case
+              EmptyElaboration -> do
                 let name = getName lvName
                 registerASTError annot $ LVNotFound  name
                 handle <- State.freshNamedASTStar name annot
-                purePreprocess (SimpleTypeHole handle) lvName
+                purePreprocess (SimpleElaboration handle) lvName
               hole -> hole `purePreprocess` lvName
           scheme -> do
             inst <- State.freshNamedASTStar (getName lvName) annot
@@ -820,23 +820,23 @@ instance Preprocess AST.LValue a b where
               , addressKind `kindConstraint` handle
               , unstorableConstraint inst
               ]
-            purePreprocess (handle `LVInstTypeHole` holeHandle scheme) lvName
+            purePreprocess (handle `LVInstElaboration` eHandle scheme) lvName
       AST.LVRef Nothing expr mAsserts -> do
         expr' <- preprocess expr
         handle <- State.freshASTStar annot
-        let mAsserts' = (withTypeHole EmptyTypeHole <$>) <$> mAsserts
+        let mAsserts' = (withElaboration EmptyElaboration <$>) <$> mAsserts
         State.storeFacts
           [ expr' `typeEquality` makeAddrType handle
           , handle `subConst` expr'
           , addressKind `minKindConstraint` expr'
           ]
-        return (SimpleTypeHole handle, AST.LVRef Nothing expr' mAsserts')
+        return (SimpleElaboration handle, AST.LVRef Nothing expr' mAsserts')
       AST.LVRef (Just type') expr mAsserts -> do
         type'' <- preprocess type'
         expr' <- preprocess expr
-        let mAsserts' = (withTypeHole EmptyTypeHole <$>) <$> mAsserts
+        let mAsserts' = (withElaboration EmptyElaboration <$>) <$> mAsserts
         State.storeFact $ addressKind `minKindConstraint` expr'
-        return (getTypeHole type'', AST.LVRef (Just type'') expr' mAsserts')
+        return (getElaboration type'', AST.LVRef (Just type'') expr' mAsserts')
 
 instance Preprocess AST.Expr a b where
   preprocessImpl annot
@@ -844,7 +844,7 @@ instance Preprocess AST.Expr a b where
     \case
       AST.MemberExpr struct field ->
         State.lookupSMem field >>= \case
-          EmptyTypeHole -> undefined
+          EmptyElaboration -> undefined
           scheme -> do
             struct' <- preprocess struct
             inst <- makeHandle
@@ -867,7 +867,7 @@ instance Preprocess AST.Expr a b where
               , argType `subType` struct'
               ]
             return
-              ( MethodTypeHole handle (holeHandle scheme) inst
+              ( MethodElaboration handle (eHandle scheme) inst
               , AST.MemberExpr struct' $ preprocessTrivial field)
             where makeHandle = State.freshNamedASTStar (getName field) annot
       AST.ParExpr expr -> AST.ParExpr `preprocessInherit` expr
@@ -891,7 +891,7 @@ instance Preprocess AST.Expr a b where
                  , boolKind `kindConstraint` handle
                  ]
             else [handle `subType` left', handle `subType` right']
-        return (SimpleTypeHole handle, AST.BinOpExpr op left' right')
+        return (SimpleElaboration handle, AST.BinOpExpr op left' right')
       AST.NegExpr expr -> AST.NegExpr `preprocessInherit` expr
       AST.ComExpr expr -> AST.ComExpr `preprocessInherit` expr
       AST.LitExpr lit mType -> do
@@ -901,20 +901,20 @@ instance Preprocess AST.Expr a b where
             type'' <- preprocess type'
             State.storeFacts [type'' `subType` lit', constExprConstraint lit']
             return type''
-        return (getTypeHole lit', AST.LitExpr lit' mType')
+        return (getElaboration lit', AST.LitExpr lit' mType')
       AST.PrefixExpr name actuals -> do
         (handle, tupleType) <- fixCommon name
         actuals' <- preprocessT actuals
         State.storeFact $ tupleType `typeEquality` makeTuple actuals'
         return
-          (SimpleTypeHole handle, AST.PrefixExpr (preprocessTrivial name) actuals')
+          (SimpleElaboration handle, AST.PrefixExpr (preprocessTrivial name) actuals')
       AST.InfixExpr name left right -> do
         (handle, tupleType) <- fixCommon name
         left' <- preprocess left
         right' <- preprocess right
         State.storeFact $ tupleType `typeEquality` makeTuple [left', right']
         return
-          ( SimpleTypeHole handle
+          ( SimpleElaboration handle
           , AST.InfixExpr (preprocessTrivial name) left' right')
     where
       fixCommon name = do
@@ -933,7 +933,7 @@ instance Preprocess AST.Expr a b where
           , unstorableConstraint tupleType
           ]
         return (handle, tupleType)
-      preprocessInherit :: Preprocess m a b => (Annot m b -> n b) -> Annot m a -> Preprocessor (TypeHole, n b)
+      preprocessInherit :: Preprocess m a b => (Annot m b -> n b) -> Annot m a -> Preprocessor (Elaboration, n b)
       preprocessInherit c n = do
         n' <- preprocess n
-        return (getTypeHole n', c n')
+        return (getElaboration n', c n')

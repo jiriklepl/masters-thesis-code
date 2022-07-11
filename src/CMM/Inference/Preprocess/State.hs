@@ -53,9 +53,9 @@ import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
   ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx, ctxFunctionHandle, ctxConstraint, ctxSupers)
   )
-import safe CMM.Inference.Preprocess.TypeHole
-  ( TypeHole(EmptyTypeHole, MethodTypeHole, SimpleTypeHole)
-  , holeHandle
+import safe CMM.Inference.Preprocess.Elaboration
+  ( Elaboration(EmptyElaboration, MethodElaboration, SimpleElaboration)
+  , eHandle
   )
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Subst (Apply(apply))
@@ -107,8 +107,8 @@ import safe CMM.Inference.Preprocess.State.Impl
   )
 import CMM.Err.State (HasErrorState(errorState))
 
-noCurrentReturn :: TypeHole
-noCurrentReturn = EmptyTypeHole
+noCurrentReturn :: Elaboration
+noCurrentReturn = EmptyElaboration
 
 beginUnit :: CollectorState -> Preprocessor ()
 beginUnit collector = do
@@ -122,14 +122,14 @@ beginUnit collector = do
   untrivialize classHandles
   typeClasses .=
     Map.intersectionWith
-      (ClassData . SimpleTypeHole)
+      (ClassData . SimpleElaboration)
       classHandles
       ((^. _3) <$> (collector ^. CS.typeClasses))
   memberClasses <-
     declVars . Map.fromAscList $
     bimap fieldClassHelper (second $ \_ -> Star :-> Star :-> Constraint) <$>
     Map.toAscList members
-  let memberClassData = (`ClassData` mempty) . SimpleTypeHole <$> memberClasses
+  let memberClassData = (`ClassData` mempty) . SimpleElaboration <$> memberClasses
   typeClasses %= (`Map.union` memberClassData)
   Map.toList memberClasses `for_` \(name, handle) ->
     storeFacts
@@ -154,48 +154,48 @@ beginUnit collector = do
     members = collector ^. CS.structMembers
 
 -- | returns `NoType` on failure
-lookupVar :: GetName n => n -> Preprocessor TypeHole
+lookupVar :: GetName n => n -> Preprocessor Elaboration
 lookupVar named = lookupVarImpl named <$> use variables
 
-lookupFVar :: GetName n => n -> Preprocessor TypeHole
+lookupFVar :: GetName n => n -> Preprocessor Elaboration
 lookupFVar named = lookupVarImpl named <$> uses funcVariables pure
 
-lookupSMem :: GetName n => n -> Preprocessor TypeHole
+lookupSMem :: GetName n => n -> Preprocessor Elaboration
 lookupSMem named = lookupVarImpl named <$> uses structMembers pure
 
-lookupSIMem :: GetName n => n -> Preprocessor TypeHole
+lookupSIMem :: GetName n => n -> Preprocessor Elaboration
 lookupSIMem named = do
   handle <- freshTypeHelper Star
   structInstMembers %= Map.adjust (handle :) (getName named)
-  return $ SimpleTypeHole handle
+  return $ SimpleElaboration handle
 
-lookupFIVar :: GetName n => n -> Preprocessor TypeHole
+lookupFIVar :: GetName n => n -> Preprocessor Elaboration
 lookupFIVar named = do
   handle <- freshTypeHelper Star
   funcInstVariables %= Map.adjust (handle :) (getName named)
-  return $ SimpleTypeHole handle
+  return $ SimpleElaboration handle
 
-lookupFEVar :: GetName n => n -> Preprocessor TypeHole
+lookupFEVar :: GetName n => n -> Preprocessor Elaboration
 lookupFEVar named = lookupVarImpl named <$> uses funcElabVariables pure
 
-lookupProc :: GetName n => n -> Preprocessor (Maybe TypeHole)
+lookupProc :: GetName n => n -> Preprocessor (Maybe Elaboration)
 lookupProc =
-  uses variables . fmap (fmap SimpleTypeHole) . (. last) . Map.lookup . getName
+  uses variables . fmap (fmap SimpleElaboration) . (. last) . Map.lookup . getName
 
-lookupTCon :: GetName n => n -> Preprocessor TypeHole
+lookupTCon :: GetName n => n -> Preprocessor Elaboration
 lookupTCon named = lookupVarImpl named <$> use typeConstants
 
-lookupTVar :: GetName n => n -> Preprocessor TypeHole
+lookupTVar :: GetName n => n -> Preprocessor Elaboration
 lookupTVar named = lookupVarImpl named <$> use typeVariables
 
-lookupClass :: GetName n => n -> Preprocessor TypeHole
+lookupClass :: GetName n => n -> Preprocessor Elaboration
 lookupClass named =
-  uses typeClasses $ maybe EmptyTypeHole (^. classHole) .
+  uses typeClasses $ maybe EmptyElaboration (^. classHole) .
   (getName named `Map.lookup`)
 
-lookupVarImpl :: GetName n => n -> [Map Text TypeHandle] -> TypeHole
+lookupVarImpl :: GetName n => n -> [Map Text TypeHandle] -> Elaboration
 lookupVarImpl named vars =
-  maybe EmptyTypeHole SimpleTypeHole . foldr (<|>) Nothing $
+  maybe EmptyElaboration SimpleElaboration . foldr (<|>) Nothing $
   (getName named `Map.lookup`) <$>
   vars
 
@@ -214,7 +214,7 @@ untrivialize tCons =
       , lockFact handle
       ]
 
-beginProc :: Text -> TypeHole -> CollectorState -> Maybe Conv -> Preprocessor ()
+beginProc :: Text -> Elaboration -> CollectorState -> Maybe Conv -> Preprocessor ()
 beginProc name hole collector mConv = do
   vars <- declVars $ collector ^. CS.variables
   variables %= (vars :)
@@ -245,7 +245,7 @@ declVars =
   Map.traverseWithKey
     (\name (pos, kind) -> freshNamedASTTypeHandle name pos kind)
 
-endProc :: Preprocessor (Facts, TypeHole)
+endProc :: Preprocessor (Facts, Elaboration)
 endProc = do
   variables %= tail
   typeVariables %= init
@@ -258,7 +258,7 @@ poppedGlobalCtxError =
   error
     "(internal) Inconsistent context; probable cause: popped global context."
 
-lookupCtxFVar :: Text -> Preprocessor TypeHole
+lookupCtxFVar :: Text -> Preprocessor Elaboration
 lookupCtxFVar name = use currentContext >>= go
   where
     go =
@@ -272,12 +272,12 @@ lookupCtxFVar name = use currentContext >>= go
         StructCtx {}:_ -> lookupFVar name
         [] -> poppedGlobalCtxError
 
-getCurrentReturn :: Preprocessor TypeHole
+getCurrentReturn :: Preprocessor Elaboration
 getCurrentReturn = uses currentContext $ go . head
   where
     go =
       \case
-        FunctionCtx {ctxFunctionHandle} -> SimpleTypeHole ctxFunctionHandle
+        FunctionCtx {ctxFunctionHandle} -> SimpleElaboration ctxFunctionHandle
         _ -> noCurrentReturn
 
 getCtxName :: Preprocessor Text
@@ -298,7 +298,7 @@ getCtxClassConstraint = uses currentContext go
         StructCtx {}:others -> go others
         [] -> poppedGlobalCtxError
 
-storeProc :: ToType a => Text -> Facts -> a -> Preprocessor TypeHole
+storeProc :: ToType a => Text -> Facts -> a -> Preprocessor Elaboration
 storeProc name fs x = do
   tVars <- collectTVars
   subst <- refresh tVars
@@ -323,9 +323,9 @@ storeProc name fs x = do
     goIllegal = error "(internal) Illegal local function encountered." -- NOTE: not possible within the bounds of the syntax
     t = toType x
     storeElaboratedProc subst tVars facts' = do
-      handle <- holeHandle <$> lookupCtxFVar name
-      fHandle <- holeHandle <$> lookupFVar name
-      eHandle <- holeHandle <$> lookupFEVar name
+      handle <- eHandle <$> lookupCtxFVar name
+      fHandle <- eHandle <$> lookupFVar name
+      eHandle <- eHandle <$> lookupFEVar name
       iHandle <- freshTypeHelper Star
       classConstraint' <- getCtxClassConstraint
       let eType =
@@ -343,13 +343,13 @@ storeProc name fs x = do
             forall tVars [eHandle `typeEquality` eType] facts'
           storeFact . extT id adoption . apply subst $
             forall tVars [handle `typeEquality` t] [instFact, unionFact]
-          return . extT id adoption $ SimpleTypeHole handle
+          return . extT id adoption $ SimpleElaboration handle
         _ -> do
           storeFact . apply subst . forall tVars [handle `typeEquality` t] $
             instFact :
             unionFact :
             facts'
-          return $ MethodTypeHole handle fHandle eHandle
+          return $ MethodElaboration handle fHandle eHandle
 
 pushParent :: TypeVar -> Preprocessor ()
 pushParent parent = currentParent %= (parent :)
@@ -374,7 +374,7 @@ collectTVars :: Preprocessor (Set TypeVar)
 collectTVars =
   uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
 
-pushStruct :: (Text, TypeHole) -> (Text, Type) -> Preprocessor ()
+pushStruct :: (Text, Elaboration) -> (Text, Type) -> Preprocessor ()
 pushStruct (name, hole) constraint@(_, t) = do
   tVars <- collectTVars
   pushContext $ StructCtx name hole constraint
@@ -385,7 +385,7 @@ pushStruct (name, hole) constraint@(_, t) = do
       [Fact $ regularExprConstraint t]
 
 pushClass ::
-     Text -> TypeHole -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
+     Text -> Elaboration -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
 pushClass name hole constraint supers
  = do
   tVars <- collectTVars
@@ -397,7 +397,7 @@ pushClass name hole constraint supers
   pushContext $ ClassCtx name hole constraint supers
 
 pushInstance ::
-     Text -> TypeHole -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
+     Text -> Elaboration -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
 pushInstance name hole constraint supers
  = do
   tVars <- collectTVars

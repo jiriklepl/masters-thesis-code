@@ -16,8 +16,8 @@ import safe CMM.Inference.Preprocess.State
 import safe CMM.Inference.State ( InferencerState )
 import safe CMM.Monomorphize.State
     ( MonomorphizeState, initMonomorphizeState )
-import safe CMM.Inference.Preprocess.TypeHole
-    ( HasTypeHole, TypeHole )
+import safe CMM.Inference.Preprocess.Elaboration
+    ( HasElaboration, Elaboration )
 import safe CMM.Lexer.Token ( Token )
 import safe Data.Data ( Data, Typeable )
 import safe CMM.AST.Flattener ( flatten )
@@ -37,7 +37,7 @@ import safe CMM.Monomorphize ( Monomorphize(monomorphize) )
 import safe CMM.Parser.GetPos ( GetPos )
 import safe CMM.Monomorphize.Error
     ( MonomorphizeError(InstantiatesToNothing), voidWrapped )
-import safe CMM.FillHoles ( FillHoles(fillHoles) )
+import safe CMM.FillElabs ( FillElabs(fillHoles) )
 import safe CMM.Mangle ( Mangle(mangle) )
 import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, handleStart), opts, noTransl, flattenSrc, blockifySrc, preprocessSrc )
 import safe Options.Applicative ( execParser )
@@ -138,7 +138,7 @@ runMonomorphized options bState iState ast =
       return (ast', errState')
 
 -- | runs the inference phase and the monomorphizer phase
-runInferMono :: (GetPos a, GetPos (a, TypeHole), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, TypeHole), Either PreprocessorState InferencerState, ErrorState)
+runInferMono :: (GetPos a, GetPos (a, Elaboration), Data a) => Options -> Annot Unit a -> Either String (Annot Unit (a, Elaboration), Either PreprocessorState InferencerState, ErrorState)
 runInferMono options ast = do
   ((prepAST, facts'), pState, errState) <- preprocessor options ast
   if preprocessSrc options
@@ -180,11 +180,11 @@ blockifier flattened = wrapStandardLayout $
     blockify flattened `runState` initBlockifier
 
 -- | runs the inference preprocessor
-preprocessor :: (Preprocess n a (a, TypeHole), GetPos a) =>
+preprocessor :: (Preprocess n a (a, Elaboration), GetPos a) =>
   Options
   -> Annot n a
   -> Either
-      String ((Annot n (a, TypeHole), [Fact]), PreprocessorState, ErrorState)
+      String ((Annot n (a, Elaboration), [Fact]), PreprocessorState, ErrorState)
 preprocessor settings ast = wrapStandardLayout $
   action `runState` initPreprocessor settings
   where
@@ -193,7 +193,7 @@ preprocessor settings ast = wrapStandardLayout $
       uses facts $ (ast',) . reverse . head
 
 -- | runs the inferencer
-inferencer :: HasTypeHole a => Options -> Annot Unit a -> Facts
+inferencer :: HasElaboration a => Options -> Annot Unit a -> Facts
   -> Either String ((), InferencerState, ErrorState)
 inferencer settings ast fs = wrapStandardLayout $
   action `runState` initInferencer settings
@@ -206,7 +206,7 @@ inferencer settings ast fs = wrapStandardLayout $
         else registerError $ InferenceIncomplete fs'
 
 -- | runs the monomorphizer
-monomorphizer :: (GetPos a, HasTypeHole a) => Options -> InferencerState -> Annot Unit a
+monomorphizer :: (GetPos a, HasElaboration a) => Options -> InferencerState -> Annot Unit a
   -> Either String (Annot Unit a, (InferencerState, MonomorphizeState a))
 monomorphizer settings iState ast = case result of
       Left err -> Left $ prettyShow err
@@ -216,7 +216,7 @@ monomorphizer settings iState ast = case result of
     (result,states) = monomorphize mempty ast `runState` (iState, initMonomorphizeState settings)
 
 -- | runs the mangler and hole-filler
-postprocessor :: (Data a, HasTypeHole a, GetPos a) => InferencerState -> Annot Unit a -> Either String (Annot Unit a, InferencerState, ErrorState)
+postprocessor :: (Data a, HasElaboration a, GetPos a) => InferencerState -> Annot Unit a -> Either String (Annot Unit a, InferencerState, ErrorState)
 postprocessor iState ast = wrapStandardLayout $
     action `runState` iState
   where

@@ -26,8 +26,8 @@ import safe CMM.Inference.Subst ( Apply(apply), Subst )
 import safe CMM.Inference ( simplify )
 import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
 import Data.Functor ((<&>))
-import safe CMM.Inference.Preprocess.TypeHole
-    ( setHoleHandle, HasTypeHole(getTypeHole, setTypeHole), TypeHole(EmptyTypeHole) )
+import safe CMM.Inference.Preprocess.Elaboration
+    ( setHoleHandle, HasElaboration(getElaboration, setElaboration), Elaboration(EmptyElaboration) )
 
 -- | Contains the various absurd bounds (data kind or constness bounds) for an type
 data Absurdity =
@@ -174,15 +174,15 @@ kindingPolytypeness tVar = go <$> State.readKindingBounds tVar
                else kindPolymorphism tVar bounds
         else kindAbsurdity tVar bounds
 
--- | reconstruct the type hole of the given object according to the given substitution,
+-- | reconstruct the elaboration of the given object according to the given substitution,
 --   it is like applying the substitution on the corresponding type, but it uses the monadic `InferencerState`
-reconstructHole :: HasTypeHole a => Subst Type -> a -> Inferencer a
-reconstructHole subst holed =
-  case getTypeHole holed of
-    EmptyTypeHole -> return holed
+reconstructHole :: HasElaboration a => Subst Type -> a -> Inferencer a
+reconstructHole subst elab =
+  case getElaboration elab of
+    EmptyElaboration -> return elab
     hole -> do
       newHandle <- reconstructType subst hole >>= simplify >>= State.getHandle
-      return $ setTypeHole (setHoleHandle newHandle hole) holed
+      return $ setElaboration (setHoleHandle newHandle hole) elab
 
 -- | reconstructs the type from the given type variable after renaming it to its alive representant
 --   and applying the given substitution

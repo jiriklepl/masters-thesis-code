@@ -79,10 +79,10 @@ import safe CMM.Inference.Fact
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter (nextHandleCounter, handleCounter)
-import safe CMM.Inference.Preprocess.TypeHole
-  ( HasTypeHole(getTypeHole)
-  , TypeHole(EmptyTypeHole, LVInstTypeHole, MemberTypeHole,
-         MethodTypeHole, SimpleTypeHole)
+import safe CMM.Inference.Preprocess.Elaboration
+  ( HasElaboration(getElaboration)
+  , Elaboration(EmptyElaboration, LVInstElaboration, MemberElaboration,
+         MethodElaboration, SimpleElaboration)
   )
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe qualified CMM.Inference.State as State
@@ -196,18 +196,18 @@ pushTyping handle handle' = do
               False -> fixSubs
       safeHandlizeUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
 
-mineAST :: (HasTypeHole a, Foldable n) => n a -> Inferencer ()
-mineAST = traverse_ (addHandles . getTypeHole)
+mineAST :: (HasElaboration a, Foldable n) => n a -> Inferencer ()
+mineAST = traverse_ (addHandles . getElaboration)
   where
     addHandle handle = State.handlize %= Bimap.insert (handleId handle) handle
     addHandles =
       \case
-        EmptyTypeHole -> return ()
-        SimpleTypeHole handle -> addHandle handle
-        LVInstTypeHole handle handle' -> addHandle handle *> addHandle handle'
-        MethodTypeHole handle handle' handle'' ->
+        EmptyElaboration -> return ()
+        SimpleElaboration handle -> addHandle handle
+        LVInstElaboration handle handle' -> addHandle handle *> addHandle handle'
+        MethodElaboration handle handle' handle'' ->
           addHandle handle *> addHandle handle' *> addHandle handle''
-        MemberTypeHole handle classHandles handles handles' ->
+        MemberElaboration handle classHandles handles handles' ->
           addHandle handle *> traverse_ addHandle handles *> traverse_ (addHandle . snd) classHandles *>
           traverse_ addHandle handles'
 

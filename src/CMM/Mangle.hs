@@ -8,9 +8,9 @@ import safe qualified CMM.AST as AST
 
 import safe CMM.Inference.State.Impl ( Inferencer )
 import safe CMM.AST.Annot ( Annot, Annotation(Annot) )
-import safe CMM.Inference.Preprocess.TypeHole
-    ( HasTypeHole(getTypeHole),
-      TypeHole(MethodTypeHole, LVInstTypeHole, SimpleTypeHole) )
+import safe CMM.Inference.Preprocess.Elaboration
+    ( HasElaboration(getElaboration),
+      Elaboration(MethodElaboration, LVInstElaboration, SimpleElaboration) )
 import safe Data.Data ( Data(gmapM), Typeable )
 import safe Data.Generics.Aliases ( extM )
 import safe CMM.Parser.GetPos ( GetPos )
@@ -32,7 +32,7 @@ import safe CMM.Utils ( HasCallStack )
 
 data MangleError
   = NonConcreteType Ty.Type
-  | IllegalTypeInformation TypeHole
+  | IllegalTypeInformation Elaboration
   deriving (Show, Eq, IsError, Data)
 
 instance Pretty MangleError where
@@ -43,11 +43,11 @@ instance Pretty MangleError where
       "Cannot get the necessary type information from the intermediate data" <+> pretty hole
 
 class Mangle n where
-  mangle :: (Data (n a), Typeable n, HasTypeHole a, GetPos a, Data a) => Annot n a -> Inferencer (Annot n a)
+  mangle :: (Data (n a), Typeable n, HasElaboration a, GetPos a, Data a) => Annot n a -> Inferencer (Annot n a)
 
-mangledFromHoled :: (HasCallStack, HasTypeHole a, GetPos a) => Bool -> a -> Inferencer (Maybe Text)
+mangledFromHoled :: (HasCallStack, HasElaboration a, GetPos a) => Bool -> a -> Inferencer (Maybe Text)
 mangledFromHoled skipAddr holed = do
-  typing <- State.getTyping (toTypeVar $ getTypeHole holed)
+  typing <- State.getTyping (toTypeVar $ getElaboration holed)
   case mangleType skipAddr typing of
     Nothing -> do
       registerASTError holed $ NonConcreteType typing
@@ -94,24 +94,24 @@ instance Mangle n where
       go :: Data d => d -> Inferencer d
       go = gmapM go `extM` lValueCase `extM` procedureHeaderCase
       lValueCase (AST.LVName name `Annot` (a :: annot)) = do
-        name' <- case getTypeHole a of
-          SimpleTypeHole {} -> return name
-          LVInstTypeHole {} ->
+        name' <- case getElaboration a of
+          SimpleElaboration {} -> return name
+          LVInstElaboration {} ->
             AST.Name . addName name . fromMaybe "!error" <$> mangledFromHoled True a
           _ -> do
-            registerASTError a . IllegalTypeInformation $ getTypeHole a
+            registerASTError a . IllegalTypeInformation $ getElaboration a
             return name
         return $ AST.LVName name' `Annot` a
       lValueCase lvRef = gmapM go lvRef
       procedureHeaderCase (AST.ProcedureHeader mConv name formals semis `Annot` (a :: annot)) = do
-        name' <- case getTypeHole a of
-          SimpleTypeHole {} -> case mConv of
+        name' <- case getElaboration a of
+          SimpleElaboration {} -> case mConv of
             Just conv -> case conv of
               AST.Foreign (AST.StrLit "C") -> return name
               _ -> undefined
             Nothing -> AST.Name . addName name . fromMaybe "!error" <$> mangledFromHoled True a
-          MethodTypeHole {} -> AST.Name . addName name . fromMaybe "!error" <$> mangledFromHoled False a
+          MethodElaboration {} -> AST.Name . addName name . fromMaybe "!error" <$> mangledFromHoled False a
           _ -> do
-            registerASTError a . IllegalTypeInformation $ getTypeHole a
+            registerASTError a . IllegalTypeInformation $ getElaboration a
             return name
         return $ AST.ProcedureHeader mConv name' formals semis `Annot` a

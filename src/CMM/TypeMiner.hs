@@ -11,8 +11,8 @@ import safe CMM.Inference.TypeCompl
     ( TypeCompl(VoidType, TupleType, FunctionType, AppType, AddrType,
                 ConstType, StringType, String16Type, LabelType, TBitsType,
                 BoolType) )
-import safe CMM.Inference.Preprocess.TypeHole
-    ( HasTypeHole(getTypeHole), TypeHole(EmptyTypeHole, holeHandle) )
+import safe CMM.Inference.Preprocess.Elaboration
+    ( HasElaboration(getElaboration), Elaboration(EmptyElaboration, eHandle) )
 import safe Data.Text (Text)
 import safe CMM.AST.GetName ( GetName(getName) )
 import safe Data.Traversable ( for )
@@ -29,24 +29,24 @@ import safe CMM.Utils ( HasCallStack )
 
 type StructData = Map Text ([(Text, Int)], [L.Type])
 
-mineTypeHoled :: (HasCallStack, HasTypeHole a) => StructData -> a -> Inferencer L.Type
-mineTypeHoled structs = getTypeHole .> \case
-  EmptyTypeHole -> undefined
-  hole -> mineTypeHandle structs $ holeHandle hole
+mineElaborated :: (HasCallStack, HasElaboration a) => StructData -> a -> Inferencer L.Type
+mineElaborated structs = getElaboration .> \case
+  EmptyElaboration -> undefined
+  elab -> mineTypeHandle structs $ eHandle elab
 
-mineTypeHole :: HasCallStack => StructData -> TypeHole -> Inferencer L.Type
-mineTypeHole structs = \case
-  EmptyTypeHole -> undefined
-  hole -> mineTypeHandle structs $ holeHandle hole
+mineElaboration :: HasCallStack => StructData -> Elaboration -> Inferencer L.Type
+mineElaboration structs = \case
+  EmptyElaboration -> undefined
+  elab -> mineTypeHandle structs $ eHandle elab
 
 mineTypeHandle :: (ToTypeVar a, HasCallStack) => StructData
   -> a
   -> Inferencer L.Type
 mineTypeHandle structs = State.getTyping . toTypeVar >=> mineType structs
 
-mineStructName :: HasTypeHole a => a
+mineStructName :: HasElaboration a => a
   -> Inferencer Text
-mineStructName = fmap go . State.getTyping . toTypeVar . getTypeHole
+mineStructName = fmap go . State.getTyping . toTypeVar . getElaboration
   where
     go (t :: Type) = case t of
       VarType {} -> undefined
@@ -55,7 +55,7 @@ mineStructName = fmap go . State.getTyping . toTypeVar . getTypeHole
         AddrType t' -> go t'
         _ -> undefined
 
-collectStructs :: HasTypeHole annot =>
+collectStructs :: HasElaboration annot =>
   StructData
   -> Annotation AST.Unit annot
   -> Inferencer StructData
@@ -69,10 +69,10 @@ collectStructs structs (AST.Unit topLevels `Annot` _) = Map.fromList <$> do
     AST.TopStruct struct -> pure <$> mineStruct structs struct
   return $ concat collected
 
-mineStruct :: (HasCallStack, HasTypeHole annot) => StructData -> Annot AST.Struct annot -> Inferencer (Text, ([(Text, Int)], [L.Type]))
+mineStruct :: (HasCallStack, HasElaboration annot) => StructData -> Annot AST.Struct annot -> Inferencer (Text, ([(Text, Int)], [L.Type]))
 mineStruct structs (AST.Struct name datums `Annot` _) = (getName name,) <$> mineDatums structs datums
 
-mineDatums :: (HasCallStack, HasTypeHole annot) => StructData -> [Annot AST.Datum annot] -> Inferencer ([(Text, Int)], [L.Type])
+mineDatums :: (HasCallStack, HasElaboration annot) => StructData -> [Annot AST.Datum annot] -> Inferencer ([(Text, Int)], [L.Type])
 mineDatums structs = fmap fix . go
   where
     fix (ids, fs) = (second (length fs -) <$> ids, fs)
@@ -83,7 +83,7 @@ mineDatums structs = fmap fix . go
         AST.DatumLabel (AST.Name name) -> return ((name,length data') : points, data')
         AST.DatumAlign {} -> undefined
         AST.Datum _ t Nothing _ -> do
-          t' <- mineTypeHole structs $ getTypeHole t
+          t' <- mineElaboration structs $ getElaboration t
           return (points, t':data')
         AST.Datum {} -> undefined
 

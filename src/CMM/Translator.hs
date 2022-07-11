@@ -58,10 +58,10 @@ import safe CMM.Inference.State ( Inferencer )
 import safe qualified Data.Set as Set
 import safe Data.Set (Set)
 import safe CMM.TypeMiner
-    ( mineTypeHoled, mineStructName, mineStruct, makePacked )
-import safe qualified CMM.Inference.Preprocess.TypeHole as Ty
-import safe CMM.Inference.Preprocess.TypeHole
-    ( HasTypeHole(getTypeHole) )
+    ( mineElaborated, mineStructName, mineStruct, makePacked )
+import safe qualified CMM.Inference.Preprocess.Elaboration as Ty
+import safe CMM.Inference.Preprocess.Elaboration
+    ( HasElaboration(getElaboration) )
 import safe Data.List (sortOn)
 import safe LLVM.Prelude (Word32)
 import safe qualified Data.List as List
@@ -77,7 +77,7 @@ type MonadTranslator m
 type TranslAnnotAssumps a
    = ( HasBlockAnnot a
      , GetPos a
-     , HasTypeHole a
+     , HasElaboration a
      , Data a
      )
 
@@ -125,12 +125,12 @@ instance TranslAssumps a m =>
       struct' <- runInferencer $ mineStruct structs struct
       State.structs %= uncurry Map.insert struct'
 
-getType :: (MonadTranslator m, HasTypeHole a, HasCallStack) => a -> m LT.Type
+getType :: (MonadTranslator m, HasElaboration a, HasCallStack) => a -> m LT.Type
 getType annot = do
   structs' <- use State.structs
-  runInferencer $ mineTypeHoled structs' annot
+  runInferencer $ mineElaborated structs' annot
 
-getStructName :: (MonadTranslator m, HasTypeHole a) => a -> m Text
+getStructName :: (MonadTranslator m, HasElaboration a) => a -> m Text
 getStructName annot =
   runInferencer $ mineStructName annot
 
@@ -172,14 +172,14 @@ renameGeneric subst = go
       Just renamed -> renamed
       _ -> name
 
-collectVarTypes :: (Data (n a), Data a, HasTypeHole a) => Set Text -> Annot n a -> Map Text Ty.TypeHole
+collectVarTypes :: (Data (n a), Data a, HasElaboration a) => Set Text -> Annot n a -> Map Text Ty.Elaboration
 collectVarTypes names (n `Annot` (_ :: a)) = Map.fromList $ collectNames names (Proxy :: Proxy a) n
 
-collectNames :: (Data d, Data a, HasTypeHole a) => Set Text -> Proxy a -> d -> [(Text, Ty.TypeHole)]
+collectNames :: (Data d, Data a, HasElaboration a) => Set Text -> Proxy a -> d -> [(Text, Ty.Elaboration)]
 collectNames names (proxy :: Proxy a) = (concat  . gmapQ (collectNames names proxy)) `extQ` lvCase
   where
     lvCase ((AST.LVName (AST.Name name)) `Annot` (a :: a))
-      | name `Set.member` names = [(name, getTypeHole a)]
+      | name `Set.member` names = [(name, getElaboration a)]
     lvCase lValue = concat $ gmapQ (collectNames names proxy) lValue
 
 runInferencer :: MonadTranslator m => Inferencer a -> m a

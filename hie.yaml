@@ -117,7 +117,7 @@ cradle:
     - path: "src/CMM/Err/State.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/FillHoles.hs"
+    - path: "src/CMM/FillElabs.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/FlowAnalysis.hs"
@@ -168,10 +168,10 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/HasTypeHandle.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/Preprocess/WithTypeHole.hs"
+    - path: "src/CMM/Inference/Preprocess/WithElaboration.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/Preprocess/TypeHole.hs"
+    - path: "src/CMM/Inference/Preprocess/Elaboration.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Preprocess/State.hs"

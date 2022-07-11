@@ -1,7 +1,7 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module CMM.FillHoles where
+module CMM.FillElabs where
 
 
 import safe qualified CMM.Inference.State as State
@@ -9,8 +9,8 @@ import safe qualified CMM.AST as AST
 
 import safe CMM.Inference.State.Impl ( Inferencer )
 import safe CMM.AST.Annot ( withAnnot, Annot, Annotation(Annot) )
-import safe CMM.Inference.Preprocess.TypeHole
-    ( HasTypeHole(getTypeHole) )
+import safe CMM.Inference.Preprocess.Elaboration
+    ( HasElaboration(getElaboration) )
 import safe Data.Data ( Data(gmapM), Typeable )
 import safe Data.Generics.Aliases ( extM )
 import safe CMM.Parser.GetPos ( GetPos )
@@ -35,12 +35,12 @@ instance Pretty FillAnnotError where
   pretty (UnbackedType t) =
     "The intermediate form type" <+> pretty t <+> "is currently not reflected in the syntax of C--"
 
-class FillHoles n where
-  fillHoles :: (Data (n a), Typeable n, Data a, HasTypeHole a, GetPos a) => Annot n a -> Inferencer (Annot n a)
+class FillElabs n where
+  fillHoles :: (Data (n a), Typeable n, Data a, HasElaboration a, GetPos a) => Annot n a -> Inferencer (Annot n a)
 
-typeFromHoled :: (HasTypeHole a, GetPos a) => a -> Inferencer (Maybe (AST.Type a))
+typeFromHoled :: (HasElaboration a, GetPos a) => a -> Inferencer (Maybe (AST.Type a))
 typeFromHoled holed = do
-  typing <- State.getTyping . toTypeVar $ getTypeHole holed
+  typing <- State.getTyping . toTypeVar $ getElaboration holed
   case translType holed typing of
     Nothing -> do
       registerASTError holed $ UnbackedType typing
@@ -70,7 +70,7 @@ translType holed t = case t of
 
 
 
-instance FillHoles n where
+instance FillElabs n where
   fillHoles n@(_ `Annot` (_ :: annot)) = go n
     where
       go :: Data d => d -> Inferencer d
