@@ -313,6 +313,7 @@ instance GetMetadata ReadsVars (AST.Stmt a) where
       AST.ContStmt {} -> []
       AST.GotoStmt expr _ -> getMetadata t expr
       AST.CutToStmt expr actuals _ -> getMetadata t expr <> getMetadata t actuals
+      AST.DroppedStmt name -> [getName name]
 
 instance GetMetadata WritesVars (AST.Stmt a) where
   getMetadata t =
@@ -589,6 +590,7 @@ instance Blockify (Annot AST.Stmt) a b where
        ->
         registerReadsWrites stmt *> addBlockAnnot stmt <*
         when (neverReturns callAnnots) unsetBlock
+      AST.DroppedStmt {} -> registerReads stmt *> addBlockAnnot stmt
 
 -- | This is here just for completeness
 flatteningError :: GetPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()

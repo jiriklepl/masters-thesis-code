@@ -31,7 +31,7 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Unify.Error
   ( UnificationError(BadKind, Mismatch, Occurs)
   )
-import safe CMM.Utils ( HasCallStack )
+import safe CMM.Utils ( HasCallStack, logicError )
 
 unify :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
 unify = unifyDirected Both
@@ -86,7 +86,7 @@ instance Unify TypeVar TypeVar where
            in ( (setTypeKind kind'' <$> subst) <> Map.singleton tVar'' tVar'''
               , tVar''')
         | otherwise = pair
-      improve (_, NoType) = undefined -- TODO: logic error
+      improve (_, NoType) = logicError
   unifyDirected _ tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
 unifyLaxDirected ::

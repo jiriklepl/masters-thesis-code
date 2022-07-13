@@ -1,0 +1,15 @@
+class Id a | -> a {
+  id (auto (a) x) -> auto (a);
+}
+
+instance Id bits32 {
+  id (auto u) {
+    return (u);
+  }
+}
+
+instance Id bits64 {
+  id (auto u) {
+    return (u);
+  }
+}

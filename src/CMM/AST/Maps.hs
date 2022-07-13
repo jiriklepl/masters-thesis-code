@@ -101,9 +101,9 @@ instance ( ASTmapCTX8 hint a b AST.Export AST.Expr AST.Import AST.Name AST.Pragm
       AST.PragmaDecl a b -> liftA2 AST.PragmaDecl (f a) (f b)
       AST.TargetDecl a -> AST.TargetDecl <$> traverse f a
 
-instance ASTmapCTX3 hint a b (AST.ParaName AST.Name) (AST.ParaName AST.Type) AST.ProcedureDecl =>
+instance ASTmapCTX4 hint a b AST.FunDeps (AST.ParaName AST.Name) (AST.ParaName AST.Type) AST.ProcedureDecl =>
          ASTmap hint AST.Class a b where
-  astMapM _ f (AST.Class a b c) = liftA3 AST.Class (traverse f a) (f b) (traverse f c)
+  astMapM _ f (AST.Class a b c d) = liftA4 AST.Class (traverse f a) (f b) (traverse f c) (traverse f d)
 
 instance ASTmapCTX2 hint a b (AST.ParaName AST.Type) AST.Procedure =>
          ASTmap hint AST.Instance a b where
@@ -117,6 +117,14 @@ instance ASTmapCTX2 hint a b (AST.ParaName AST.Name) AST.Datum =>
 instance (ASTmapCTX1 hint a b param, Space hint a b AST.Name) =>
          ASTmap hint (AST.ParaName param) a b where
   astMapM _ f (AST.ParaName a b) = liftA2 AST.ParaName (f a) (traverse f b)
+
+instance ASTmapCTX1 hint a b AST.FunDep =>
+         ASTmap hint AST.FunDeps a b where
+  astMapM _ f (AST.FunDeps a) = AST.FunDeps <$> traverse f a
+
+instance ASTmapCTX1 hint a b AST.Name =>
+         ASTmap hint AST.FunDep a b where
+  astMapM _ f (AST.FunDep a b) = liftA2 AST.FunDep (traverse f a) (traverse f b)
 
 instance ASTmap hint AST.TargetDirective a b where
   astMapM _ _ = trivial
@@ -241,6 +249,7 @@ instance ( ASTmapCTX9 hint a b AST.Actual AST.Arm AST.Body AST.CallAnnot AST.Exp
       AST.ContStmt a b -> liftA2 AST.ContStmt (f a) (traverse f b)
       AST.GotoStmt a b -> liftA2 AST.GotoStmt (f a) (traverse f b)
       AST.CutToStmt a b c -> liftA3 AST.CutToStmt (f a) (traverse f b) (traverse f c)
+      AST.DroppedStmt a -> AST.DroppedStmt <$> f a
 
 instance Space hint a b AST.Name => ASTmap hint AST.KindName a b where
   astMapM _ f =

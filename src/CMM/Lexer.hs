@@ -121,6 +121,7 @@ token =
     , keyword T.continuationName $> T.Keyword T.Continuation
     , keyword T.cutName $> T.Keyword T.Cut
     , keyword T.cutsName $> T.Keyword T.Cuts
+    , keyword T.droppedName $> T.Keyword T.Dropped
     , keyword T.elseName $> T.Keyword T.Else
     , keyword T.equalName $> T.Keyword T.Equal
     , keyword T.exportName $> T.Keyword T.Export

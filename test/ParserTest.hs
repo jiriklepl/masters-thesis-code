@@ -70,13 +70,13 @@ checkReparse ::
      (Eq (n ()), Functor n, Pretty (n a)) => Parser (n b) -> n a -> Bool
 checkReparse parser ast =
   either (const False) ((== stripAnnots ast) . stripAnnots) .
-  either undefined (parse parser) . parse tokenize . T.pack . show $ -- TODO: clean this up (along with the other undefined)
+  either undefined (parse parser) . parse tokenize . T.pack . show $
   pretty ast
 
 testTemplate :: Pretty a => String -> Text -> Parser a -> (a -> Bool) -> Test
 testTemplate testName input parser validator =
   testName ~: assertion $
-  either (undefined . show) (parse parser) $ parse tokenize input
+  either undefined (parse parser) $ parse tokenize input
   where
     assertion (Left result) =
       assertFailure $

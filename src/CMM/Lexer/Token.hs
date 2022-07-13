@@ -32,6 +32,7 @@ data Reserved
   | Continuation
   | Cut
   | Cuts
+  | Dropped
   | Else
   | Equal
   | Export
@@ -88,6 +89,7 @@ instance Pretty Reserved where
     Continuation -> continuationName
     Cut -> cutName
     Cuts -> cutsName
+    Dropped -> droppedName
     Else -> elseName
     Equal -> equalName
     Export -> exportName
@@ -288,6 +290,9 @@ cutName = "cut"
 
 cutsName :: IsString a => a
 cutsName = "cuts"
+
+droppedName :: IsString a => a
+droppedName = "dropped"
 
 elseName :: IsString a => a
 elseName = "else"

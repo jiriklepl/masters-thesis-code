@@ -15,13 +15,13 @@ import safe CMM.Monomorphize.Polytypeness ( PolyWhat, Absurdity )
 import safe CMM.Inference.Preprocess.Elaboration ( Elaboration )
 import safe CMM.Inference.TypeVar ( TypeVar )
 import safe CMM.Inference.Type ( Type )
-import CMM.AST.Wrap (ASTWrapper, MakeWrapped (makeWrapped))
+import safe CMM.AST.Wrap (ASTWrapper, MakeWrapped (makeWrapped))
 import safe CMM.AST.Annot
     ( Annotation(Annot, takeAnnot), Annot, unAnnot )
-import CMM.Inference.Unify.Error (UnificationError)
+import safe CMM.Inference.Unify.Error (UnificationError)
 import safe CMM.Parser.GetPos ( GetPos )
-import CMM.Err.Error (Error)
-import qualified CMM.Err.Error as Error
+import safe CMM.Err.Error (Error)
+import safe qualified CMM.Err.Error as Error
 import safe CMM.Parser.ASTError ( makeASTError )
 import safe CMM.Monomorphize.Schematized ( Schematized (ProcedureScheme, StructScheme) )
 

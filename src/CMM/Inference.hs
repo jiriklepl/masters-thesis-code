@@ -119,8 +119,8 @@ import safe CMM.Inference.TypeVar
   , predecessor
   )
 import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
-import safe CMM.Inference.Utils (fieldClassPrefix, trileanSeq, funDepsClassPrefix)
-import safe CMM.Utils (HasCallStack, addPrefix, getPrefix, hasPrefix)
+import safe CMM.Inference.Utils (trileanSeq)
+import safe CMM.Utils (HasCallStack, addPrefix, logicError)
 import safe qualified CMM.Inference.State.Impl as State
 import safe CMM.Err.State ( nullErrorState )
 
@@ -428,7 +428,7 @@ wrapParent flatFacts wrapped =
     Nothing -> wrapped
   where
     determineParent [VarType tVar `Equality` _] = Just tVar
-    determineParent _ = undefined
+    determineParent _ = logicError
 
 unwrapParent :: Inferencer a -> Inferencer a
 unwrapParent unwrapped = do
@@ -439,13 +439,13 @@ flattenFacts :: HasCallStack => [NestedFact Type] -> FlatFacts
 flattenFacts = fmap go
   where
     go (Fact fact) = fact
-    go _ = undefined -- TODO: error
+    go _ = logicError
 
 reverseFacts :: HasCallStack => FlatFacts -> FlatFacts
 reverseFacts = fmap go
   where
     go (ClassFact name t) = ClassConstraint name t
-    go _ = undefined -- TODO: error
+    go _ = logicError
 
 reduceTemplates :: Facts -> Inferencer Facts
 reduceTemplates [] = return []
@@ -457,12 +457,9 @@ reduceTemplates (fact:facts) =
       State.addClassScheme name $ tVars' :. flattenFacts (subst `apply` nesteds) :=>
         apply subst t
       continue
-    NestedFact (tVars :. [ClassFact name t] :=> nesteds)
-      | hasPrefix name
-      , let prefix = getPrefix name
-      , prefix == fieldClassPrefix || prefix == funDepsClassPrefix -> do
+    NestedFact (tVars :. [ClassFact name t] :=> nesteds) ->
         State.lookupFunDep name >>= \case
-          Nothing -> skip
+          Nothing -> goOtherwise
           Just rules -> do
             traverse_ go rules
             continue
@@ -483,8 +480,8 @@ reduceTemplates (fact:facts) =
                       fs :=>
                       t'
                   chooseArg arg tVar = trilean arg tVar tVar
-      | otherwise -> do
-        State.lookupClassScheme name >>= \case
+      where
+        goOtherwise = State.lookupClassScheme name >>= \case
           Nothing -> skip
           Just (tVars' :. facts' :=> t') -> do
             subst <- refresh tVars'
@@ -584,12 +581,9 @@ reduceConstraint :: Facts -> Inferencer (Bool, Facts)
 reduceConstraint [] = fixAll $> (False, [])
 reduceConstraint (fact:facts) =
   case fact of
-    Fact (ClassConstraint name t)
-      | hasPrefix name
-      , let prefix = getPrefix name
-      , prefix == fieldClassPrefix || prefix == funDepsClassPrefix ->
-        State.lookupFunDep name >>= \case
-          Nothing -> undefined -- TODO: logic error
+    Fact (ClassConstraint name t) ->
+      State.lookupFunDep name >>= \case
+          Nothing -> goOtherwise
           Just rules -> do
             State.currentFunDeps += 1
             current <- use State.currentFunDeps
@@ -604,8 +598,8 @@ reduceConstraint (fact:facts) =
                     classConstraint
                       (fromString (trileanSeq rule) `addPrefix` name)
                       t
-      | otherwise ->
-        State.lookupFact name >>= \case
+      where
+        goOtherwise = State.lookupFact name >>= \case
           Nothing -> skip
           Just schemes' -> do
             tType <- simplify t >>= State.getTyping
@@ -767,7 +761,7 @@ laundry parent pTypeThings boundsMap subGraph =
               else mempty
         relevant tVar' =
           not . isTrivialOrAbsurd $ State.readBoundsFrom tVar' boundsMap <> bounds
-    getDepends _ _ = undefined -- TODO: error
+    getDepends _ _ = logicError
 
 minimizeBounds ::
      Bounded a
@@ -847,16 +841,14 @@ unSchematize (Fact (InstType (VarType scheme) inst):others) =
     Nothing -> (Fact (VarType scheme `Equality` inst) :) <$> unSchematize others
 unSchematize (fact:others) = (fact :) <$> unSchematize others
 
--- TODO: check whether all typings are set (otherwise error)
 schematize :: Facts -> Set TypeVar -> Inferencer Facts
 schematize facts tVars = do
   let tVarsList = Set.toList tVars
   parent <- getParent
-  x <- Set.toList . Set.unions <$> traverse State.collectPrimeTVarsAll tVarsList
+  x <- Set.toList . mappend (freeTypeVars facts) . Set.unions <$> traverse State.collectPrimeTVarsAll tVarsList
   reX <- traverse State.reconstruct x
   constings <- traverse State.getConsting x
   kindings <- traverse State.getKinding x
-  -- TODO: leave out trivial
   typings <- liftA2 (zip3 x) (traverse State.reconstruct x) (traverse State.getTyping x)
   let toTrivialDeps = fmap $ second Set.singleton . dupe
   subConsts <-
@@ -916,12 +908,13 @@ schematize facts tVars = do
         [ typingEquality t t'
         | (t, t'', t') <- typings
         , let useFilter =
-                (`Set.member` freeTypeVars t'') `fOr` parentedBy parent
+                (`Set.member` freeTypeVars t'') `fOr` parentedBy parent `fOr`
+                   (`Set.member` tVars) `fOr` (`Set.member` freeTypeVars facts')
         , toType t /= t'
         , useFilter t
         ]
       facts' =
-        typingFacts <> determineFacts <> constingFacts <> constFacts <>
+        determineFacts <> constingFacts <> constFacts <>
         kindingFacts <>
         kindFacts
   tVars `for_` \tVar -> do
@@ -931,7 +924,7 @@ schematize facts tVars = do
             ((`Set.member` freeTypeVars t) `fOr` parentedBy parent `fOr`
              (`Set.member` tVars))
             (freeTypeVars facts' <> freeTypeVars t) :.
-          facts' :=>
+          (typingFacts <> facts') :=>
           t
     registerScheme tVar scheme
   return factsRest

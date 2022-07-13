@@ -1,0 +1,28 @@
+struct A {
+    x: bits32;
+}
+
+struct B {
+    x: bits64;
+}
+
+access_x(auto s) {
+    auto x;
+    x = [s->x];
+    return (x);
+}
+
+f() {
+    stackdata {
+        a: A;
+        b: B;
+    }
+
+    auto x;
+    auto y;
+
+    x = access_x(a);
+    y = access_x(b);
+
+    return ();
+}

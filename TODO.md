@@ -18,7 +18,7 @@
 
 - [x] FlowAnalysis
   - [x] make the errors/warnings cleaner
-  - [ ] add "useless-write" warnings? (dead write)
+  - [x] add "useless-write" warnings? (dead write)
   - [x] errors/warnings should output to stderr
   - [x] refactor FlowAnalysis
 
@@ -76,14 +76,5 @@
 
 - [x] change `undefined` to `error s`
 
-- [~] draw a diagram for the architecture
+- [x] draw a diagram for the architecture
   - [x] draw a diagram for the overall pipeline
-  - [ ] draw a diagram for:
-    - [ ] Lexer + Parser
-    - [x] Flattener
-    - [ ] FlowAnalysis
-    - [ ] Blockifier
-    - [ ] Variables
-    - [ ] Inference Preprocess
-    - [ ] Inference
-    - [ ] Translator

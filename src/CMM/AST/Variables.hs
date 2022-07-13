@@ -55,7 +55,7 @@ structVariables (AST.Struct paraName datums) =
 
 -- | Returns a `CollectorState` containing the local variables of the given `AST.Class`
 classVariables :: GetPos a => AST.Class a -> CollectorState
-classVariables class'@(AST.Class _ paraName _) =
+classVariables class'@(AST.Class _ paraName _ _) =
   variablesCommon $ do
     addParaNameTVars paraName
     gmapM go $ getPos <$> class'
@@ -82,7 +82,7 @@ instanceVariables n = variablesCommon . go $ getPos <$> n
 variablesCommon :: Collector a -> CollectorState
 variablesCommon = (`execState` State.initCollector)
 
--- | Tje type of helper functions that add monotype cases to the polytype function, that monadically collects variables
+-- | The type of helper functions that add monotype cases to the polytype function, that monadically collects variables
 type CasesAdder m a
    = Data a =>
        (forall d. Data d =>
@@ -129,7 +129,7 @@ addGlobalCases go =
   where
     goClass =
       \case
-        class'@(Annot (AST.Class _ (Annot (AST.ParaName _ args) _) methods) (_ :: SourcePos)) -> do
+        class'@(Annot (AST.Class _ (Annot (AST.ParaName _ args) _ ) _ methods) (_ :: SourcePos)) -> do
           traverse_ addMethod methods
           class' <$
             State.addTClass

@@ -27,6 +27,7 @@ import safe CMM.AST.Annot as AST
 import safe CMM.AST.GetConv (GetConv(getConv))
 import safe CMM.AST.GetName as AST (GetName(getName))
 import safe CMM.AST.Maps as AST (ASTmap(astMapM), Constraint, Space)
+import safe qualified CMM.Data.Trilean as T
 import safe CMM.AST.Variables as AST
   ( classVariables
   , globalVariables
@@ -68,7 +69,7 @@ import safe CMM.Inference.Fact as Fact
   , subType
   , typingEquality
   , typeEquality
-  , unstorableConstraint
+  , unstorableConstraint, classFunDeps
   )
 import safe CMM.Inference.GetParent (makeAdoption)
 import safe CMM.Inference.Preprocess.Context (Context(StructCtx, ctxConstraint, ctxElab))
@@ -294,33 +295,59 @@ preprocessClassCommon pushWhat constr paraNames paraName methods collector = do
     (getElaboration paraName')
     (getName paraName, constraint)
     (fmap getName paraNames `zip` constraints)
-  (getElaboration paraName', ) . constr paraNames' paraName' <$>
-    preprocessT methods <*
+  constr' <- preprocessT methods <&> constr paraNames' paraName'
+  (getElaboration paraName', constr') <$
     State.popContext <*
     State.popTypeVariables <*
     State.popParent
 
+preprocessFunDep :: Annot (AST.ParaName AST.Name) a
+  -> Annot AST.FunDep a -> [T.Trilean]
+preprocessFunDep (AST.ParaName _ params `Annot` _) = \case
+  AST.FunDep {AST.fdFrom, AST.fdTo} `Annot` _ -> params'
+    where
+      params' = goParam . getName <$> params
+      goParam param
+        | param `Set.member` from = T.False
+        | param `Set.member` to = T.True
+        | otherwise = T.Unknown
+      from = Set.fromList $ getName <$> fdFrom
+      to = Set.fromList $ getName <$> fdTo
+
+preprocessFunDeps :: Annot (AST.ParaName AST.Name) a
+  -> Annot AST.FunDeps a -> Preprocessor ()
+preprocessFunDeps paraName = \case
+  AST.FunDeps funDeps `Annot` _ ->
+      State.storeFact $ classFunDeps (getName paraName) funDeps'
+      where funDeps' = preprocessFunDep paraName <$> funDeps
+
 instance Preprocess AST.Class a b where
-  preprocessImpl _ class'@(AST.Class paraNames paraName methods) = do
+  preprocessImpl _ class'@(AST.Class paraNames paraName mFunDeps methods) = do
     State.storeFacts . factComment $
-      "START Preprocessing class " <> backQuote (getName paraName)
+      "START Preprocessing class " <> backQuote name
+    preprocessFunDeps paraName `traverse_` mFunDeps
+    let
+      constr pNames pName ms = AST.Class pNames pName (fmap (withElaboration EmptyElaboration) <$> mFunDeps) ms
     result <-
-      preprocessClassCommon State.pushClass AST.Class paraNames paraName methods $
+      preprocessClassCommon State.pushClass constr paraNames paraName methods $
       classVariables class'
     State.storeFacts . factComment $
-      "END Preprocessing class " <> backQuote (getName paraName)
+      "END Preprocessing class " <> backQuote name
     return result
+    where
+      name = getName paraName
 
 instance Preprocess AST.Instance a b where
   preprocessImpl _ instance'@(AST.Instance paraNames paraName methods) = do
     State.storeFacts . factComment $
       "START Preprocessing instance " <> backQuote (getName paraName)
     result <-
-      preprocessClassCommon State.pushInstance AST.Instance paraNames paraName methods $
+      preprocessClassCommon State.pushInstance constr paraNames paraName methods $
       instanceVariables instance'
     State.storeFacts . factComment $
       "END Preprocessing instance " <> backQuote (getName paraName)
     return result
+    where constr pNames pName ms = AST.Instance pNames pName ms
 
 class Preprocess param a b =>
       PreprocessParam param a b

@@ -31,6 +31,11 @@ fieldClassHelper = addPrefix fieldClassPrefix
 fieldClassPrefix :: Text
 fieldClassPrefix = "HasField"
 
+-- | adds prefix to the given name that represents it is a class that has
+--   functional dependencies
+funDepsClassHelper :: Text -> Text
+funDepsClassHelper = addPrefix funDepsClassPrefix
+
 -- | the prefix given to the constraints generated according to the functional dependencies of certain classes
 funDepsClassPrefix :: Text
 funDepsClassPrefix = "FunDeps"

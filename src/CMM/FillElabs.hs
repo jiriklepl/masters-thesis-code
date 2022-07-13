@@ -3,7 +3,6 @@
 
 module CMM.FillElabs where
 
-
 import safe qualified CMM.Inference.State as State
 import safe qualified CMM.AST as AST
 
@@ -24,7 +23,7 @@ import safe CMM.Err.IsError ( IsError )
 import safe Prettyprinter ( (<+>), Pretty(pretty) )
 import safe CMM.Parser.ASTError ( registerASTError )
 import safe Data.Maybe ( fromMaybe )
-import CMM.Inference.Type (unfoldApp)
+import safe CMM.Inference.Type (unfoldApp)
 
 
 newtype FillAnnotError
@@ -50,7 +49,7 @@ typeFromHoled holed = do
 
 translType :: a -> T.Type -> Maybe (AST.Type a)
 translType holed t = case t of
-    T.VarType {} -> Nothing
+    T.VarType {} -> Just AST.TVoid
     T.ComplType tc -> case tc of
       TupleType {} -> Nothing
       FunctionType {} -> Nothing

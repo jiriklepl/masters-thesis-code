@@ -22,6 +22,9 @@ import safe Prettyprinter
 commaSep :: [Doc ann] -> Doc ann
 commaSep xs = hsep $ punctuate comma xs
 
+hsepPretty :: Pretty a => [a] -> Doc ann
+hsepPretty = hsep . fmap pretty
+
 commaPretty :: Pretty a => [a] -> Doc ann
 commaPretty = commaSep . fmap pretty
 

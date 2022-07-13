@@ -35,7 +35,7 @@ import safe CMM.Inference.BuiltIn
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
-  , FlatFact(ClassFunDeps)
+  , FlatFact
   , NestedFact(Fact)
   , classConstraint
   , classFact
@@ -46,7 +46,7 @@ import safe CMM.Inference.Fact
   , lockFact
   , regularExprConstraint
   , subConst
-  , typeEquality, unstorableConstraint
+  , typeEquality, unstorableConstraint, classFunDeps
   )
 import safe CMM.Inference.GetParent (makeAdoption)
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
@@ -133,7 +133,7 @@ beginUnit collector = do
   typeClasses %= (`Map.union` memberClassData)
   Map.toList memberClasses `for_` \(name, handle) ->
     storeFacts
-      [ ClassFunDeps name [[T.False, T.True]] :: FlatFact Type
+      [ classFunDeps name [[T.False, T.True]]
       , lockFact $ toType handle
       ]
   mems <- declVars members

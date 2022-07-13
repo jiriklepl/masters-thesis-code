@@ -19,6 +19,7 @@ class HasCallStack
 instance HasCallStack
 #endif
 
+-- | used to separate the prefix from the rest of the name
 prefixSeparator :: Char
 prefixSeparator = '$'
 
@@ -30,9 +31,12 @@ addPrefix prefix text = prefix <> T.cons prefixSeparator text
 getPrefix :: Text -> Text
 getPrefix = T.takeWhile (/= prefixSeparator)
 
+-- | for a prefixed name, returns a pair with the prefix
+--   as the first element and the rest of the name as the second
 extractPrefix :: Text -> (Text, Text)
 extractPrefix = second T.tail . T.span (/= prefixSeparator)
 
+-- | splits the input name by the `prefixSeparator`
 splitName :: Text -> [Text]
 splitName name
   | T.null rest = [first]
@@ -62,8 +66,14 @@ doWhile action = action >>= flip when (doWhile action)
 repeatUntil :: Monad m => m Bool -> m ()
 repeatUntil action = action >>= flip unless (repeatUntil action)
 
+-- | wraps the input in backQuotes
 backQuote :: (IsString a, Semigroup a) => a -> a
 backQuote string = "`" <> string <> "`"
 
+-- | transforms the input to text and wraps it in backQuotes
 backQuoteShow :: Show a => a -> String
 backQuoteShow = backQuote . show
+
+-- | Signifies a logic error
+logicError :: HasCallStack => a
+logicError = error "logicError"

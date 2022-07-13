@@ -1,0 +1,13 @@
+id (auto x) {
+    return (x);
+}
+
+foreign "C" f(bits32 x) {
+    x = id(x);
+    return (x);
+}
+
+foreign "C" g(bits64 x) {
+    x = id(x);
+    return (x);
+}

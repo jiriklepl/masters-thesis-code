@@ -65,11 +65,15 @@ symbol tok =
         else Nothing
 
 -- | parses an identifier
-identifier :: Parser (AST.Name SourcePos)
+identifier :: ULocParser AST.Name
 identifier =
   flip token Set.empty $ \case
     Annot (T.Ident n) _ -> Just $ AST.Name n
     _ -> Nothing
+
+-- | parses an identifier with `SourcePos`
+posIdentifier :: SourceParser AST.Name
+posIdentifier = withSourcePos identifier
 
 -- | parses a string literal
 stringLiteral :: Parser AST.StrLit
@@ -118,24 +122,36 @@ withSourcePos :: ULocParser a -> SourceParser a
 withSourcePos = liftA2 withAnnot getPos
 
 -- | parses a comma-separated list of identifiers
+identifierList :: Parser [Annot AST.Name SourcePos]
+identifierList = commaList posIdentifier
+
+-- | parses many identifier
 identifiers :: Parser [Annot AST.Name SourcePos]
-identifiers = commaList $ withSourcePos identifier
+identifiers = many posIdentifier
 
 -- | encloses the given parser into braces
 braces :: Parser a -> Parser a
-braces = between (symbol T.LBrace) (symbol T.RBrace)
+braces = symbol T.LBrace `between` symbol T.RBrace
 
 -- | encloses the given parser into parentheses
 parens :: Parser a -> Parser a
-parens = between (symbol T.LParen) (symbol T.RParen)
+parens = symbol T.LParen `between`symbol T.RParen
+
+-- | parses a backtick
+backTick :: Parser ()
+backTick = symbol T.Backtick
+
+-- | encloses the given parser into backTicks
+backTicks :: Parser a -> Parser a
+backTicks = backTick `between` backTick
 
 -- | encloses the given parser into brackets
 brackets :: Parser a -> Parser a
-brackets = between (symbol T.LBracket) (symbol T.RBracket)
+brackets = symbol T.LBracket `between` symbol T.RBracket
 
 -- | encloses the given parser into angle brackets
 angles :: Parser a -> Parser a
-angles = between (symbol T.Lt) (symbol T.Gt)
+angles = symbol T.Lt `between` symbol T.Gt
 
 -- | runs the parser multiple times, separated by commas
 commaList :: Parser a -> Parser [a]
@@ -149,9 +165,21 @@ program = unit <* symbol T.Eof
 comma :: Parser ()
 comma = symbol T.Comma
 
+-- | parses a pipe
+pipe :: Parser ()
+pipe = symbol T.Pipe
+
+-- | parses an arrow
+arrow :: Parser ()
+arrow = symbol T.Arr
+
 -- | parses a colon
 colon :: Parser ()
 colon = symbol T.Colon
+
+-- | parses an eqSign
+eqSign :: Parser ()
+eqSign = symbol T.EqSign
 
 -- | parses a semicolon
 semicolon :: Parser ()
@@ -174,7 +202,7 @@ topLevel =
     , AST.TopProcedure <$> try procedure
     ]
 
--- | parses a toplevel definition in a section
+-- | parses a topLevel definition in a section
 sectionTopLevel :: ULocParser AST.TopLevel
 sectionTopLevel =
   keyword T.Section *> liftA2 AST.TopSection stringLiteral (braces $ many section)
@@ -183,19 +211,32 @@ sectionTopLevel =
 classTopLevel :: ULocParser AST.TopLevel
 classTopLevel = keyword T.Class *> (AST.TopClass <$> class')
 
+-- | parses a functional dependency
+funDep :: SourceParser AST.FunDep
+funDep =
+  withSourcePos $
+    liftA2 AST.FunDep (identifiers <* arrow) identifiers
+
+-- | parses functional dependencies
+funDeps :: SourceParser AST.FunDeps
+funDeps = withSourcePos $ AST.FunDeps <$> commaList funDep
+
 -- | parses a class
 class' :: SourceParser AST.Class
 class' =
   withSourcePos $
   choice
     [ try $
-      liftA3 AST.Class (sepBy1 paraName comma <* symbol T.DArr) paraName classBody
-    , liftA2 (AST.Class []) paraName classBody
+      liftA4 AST.Class superClasses paraName mFunDeps classBody
+    , liftA3 (AST.Class []) paraName mFunDeps  classBody
     ]
   where
-    classBody =
-      braces $
-      many (withSourcePos $ AST.ProcedureDecl <$> procedureHeader <* semicolon)
+    classBody = braces $ many procedureDecl
+    mFunDeps = optional $ pipe *> funDeps
+    procedureDecl = withSourcePos $ AST.ProcedureDecl <$> procedureHeader <* semicolon
+
+superClasses :: Parser [Annot (AST.ParaName AST.Type) SourcePos]
+superClasses = sepBy1 paraName comma <* symbol T.DArr
 
 -- | parses an instance top level
 instanceTopLevel :: ULocParser AST.TopLevel
@@ -209,11 +250,12 @@ instance' =
     [ try $
       liftA3
         AST.Instance
-        (sepBy1 paraName comma <* symbol T.DArr)
+        superClasses
         paraName
-        (braces $ many procedureInstance)
-    , liftA2 (AST.Instance []) paraName (braces $ many procedureInstance)
+        instanceBody
+    , liftA2 (AST.Instance []) paraName instanceBody
     ]
+    where instanceBody = braces $ many procedureInstance
 
 -- | parses a struct top level
 structTopLevel :: ULocParser AST.TopLevel
@@ -221,18 +263,18 @@ structTopLevel = keyword T.Struct *> (AST.TopStruct <$> struct)
 
 -- | parses a struct
 struct :: SourceParser AST.Struct
-struct = withSourcePos $ liftA2 AST.Struct paraName (braces $ many datum)
+struct = withSourcePos . liftA2 AST.Struct paraName $ braces datums
 
 
 class ParaName' param where
   paraName :: SourceParser (AST.ParaName param)
 
 instance ParaName' AST.Type where
-  paraName = withSourcePos $ liftA2 AST.ParaName identifier (many type')
+  paraName = withSourcePos $ liftA2 AST.ParaName identifier types
 
 instance ParaName' AST.Name where
   paraName =
-    withSourcePos $ liftA2 AST.ParaName identifier (many $ withSourcePos identifier)
+    withSourcePos $ liftA2 AST.ParaName identifier identifiers
 
 -- | parses a section
 section :: SourceParser AST.Section
@@ -261,11 +303,11 @@ decl =
 
 -- | parses an import declaration
 importDecl :: ULocParser AST.Decl
-importDecl = keyword T.Import *> (AST.ImportDecl <$> commaList import') <* semicolon
+importDecl = keyword T.Import *> fmap AST.ImportDecl  imports <* semicolon
 
 -- | parses an export declaration
 exportDecl :: ULocParser AST.Decl
-exportDecl = keyword T.Export *> (AST.ExportDecl <$> commaList export) <* semicolon
+exportDecl = keyword T.Export *> fmap AST.ExportDecl exports <* semicolon
 
 -- | parses a constant declaration
 constDecl :: ULocParser AST.Decl
@@ -274,13 +316,13 @@ constDecl =
   liftA2
     (uncurry AST.ConstDecl)
     (try (liftA2 (,) (optional type') identifier) <|> (Nothing, ) <$> identifier)
-    (symbol T.EqSign *> expr) <*
+    (eqSign *> expr) <*
   semicolon
 
 -- | parses a typedef declaration
 typedefDecl :: ULocParser AST.Decl
 typedefDecl =
-  keyword T.Typedef *> liftA2 AST.TypedefDecl type' identifiers <* semicolon
+  keyword T.Typedef *> liftA2 AST.TypedefDecl type' identifierList <* semicolon
 
 -- | parses a pragma declaration
 pragmaDecl :: ULocParser AST.Decl
@@ -332,10 +374,10 @@ procedureHeader =
   withSourcePos $
   liftA4
     AST.ProcedureHeader
-    (optional convention)
+    mConvention
     identifier
     formals
-    (optional $ symbol T.Arr *> sepEndBy semiFormal comma)
+    (optional $ arrow *> sepEndBy semiFormal comma)
 
 -- | parses a method instance header
 procedureInstanceHeader :: SourceParser AST.ProcedureHeader
@@ -343,10 +385,10 @@ procedureInstanceHeader =
   withSourcePos $
   liftA4
     AST.ProcedureHeader
-    (optional convention)
+    mConvention
     identifier
     formalsInstance
-    (optional $ symbol T.Arr *> sepEndBy semiFormalInstance comma)
+    (optional $ arrow *> sepEndBy semiFormalInstance comma)
 
 -- | parses a procedure
 procedure :: SourceParser AST.Procedure
@@ -396,17 +438,26 @@ actuals = parens $ actual `sepEndBy` comma
 convention :: Parser AST.Conv
 convention = keyword T.Foreign *> (AST.Foreign <$> stringLiteral)
 
+mConvention :: Parser (Maybe AST.Conv)
+mConvention = optional convention
+
 -- | parses an import
 import' :: SourceParser AST.Import
 import' =
   withSourcePos $
   liftA2 AST.Import (optional (stringLiteral <* keyword T.As)) identifier
 
+imports :: Parser [Annot AST.Import SourcePos]
+imports = commaList import'
+
 -- | parses an export
 export :: SourceParser AST.Export
 export =
   withSourcePos $
   liftA2 AST.Export identifier (optional (keyword T.As *> stringLiteral))
+
+exports :: Parser [Annot AST.Export SourcePos]
+exports = commaList export
 
 -- | parses a body
 body :: SourceParser AST.Body
@@ -425,6 +476,9 @@ secSpan = keyword T.Span *> liftA3 AST.SecSpan expr expr (braces $ many section)
 -- | parses a datum
 datum :: SourceParser AST.Datum
 datum = withSourcePos $ choice [alignDatum, try labelDatum, justDatum]
+
+datums :: Parser [Annot AST.Datum SourcePos]
+datums = many datum
 
 -- | parses an "align" datum
 alignDatum :: ULocParser AST.Datum
@@ -469,12 +523,15 @@ registers =
     (commaList
        (liftA2
           (,)
-          (withSourcePos identifier)
-          (optional $ symbol T.EqSign *> stringLiteral)))
+          posIdentifier
+          (optional $ eqSign *> stringLiteral)))
 
 -- | parses a type
 type' :: SourceParser AST.Type
 type' = withSourcePos $ choice [parensType, ptrType, autoType, bitsType', nameType]
+
+types :: Parser [Annot AST.Type SourcePos]
+types = many type'
 
 -- | parses an `AST.TPar`
 parensType :: ULocParser AST.Type
@@ -502,7 +559,7 @@ nameType = AST.TName <$> identifier
 
 -- | parses a type with parameters
 paraType :: SourceParser AST.ParaType
-paraType = withSourcePos $ liftA2 AST.ParaType type' (many type')
+paraType = withSourcePos $ liftA2 AST.ParaType type' types
 
 -- | optionally parses a kind
 mKind :: Parser (Maybe AST.Kind)
@@ -515,7 +572,7 @@ pragma = error "Pragmas not specified" -- NOTE: pragmas not yet specified and wi
 -- | parses a stack declaration
 stackDecl :: SourceParser AST.StackDecl
 stackDecl =
-  withSourcePos $ keyword T.Stackdata *> braces (AST.StackDecl <$> many datum)
+  withSourcePos $ keyword T.Stackdata *> braces (AST.StackDecl <$> datums)
 
 -- | parses statement
 stmt :: SourceParser AST.Stmt
@@ -557,7 +614,7 @@ spanStmt = keyword T.Span *> liftA3 AST.SpanStmt expr expr body
 -- | parses an assignment statement
 assignStmt :: ULocParser AST.Stmt
 assignStmt =
-  liftA2 AST.AssignStmt (commaList lvalue <* symbol T.EqSign) (commaList expr) <*
+  liftA2 AST.AssignStmt (commaList lvalue <* eqSign) (commaList expr) <*
   semicolon
 
 -- | parses a primOp statement
@@ -565,7 +622,7 @@ primOpStmt :: ULocParser AST.Stmt
 primOpStmt =
   liftA4
     AST.PrimOpStmt
-    (identifier <* symbol T.EqSign)
+    (identifier <* eqSign)
     (symbol T.DPercent *> identifier)
     (optionalL actuals)
     (many flow) <*
@@ -576,8 +633,8 @@ callStmt :: ULocParser AST.Stmt
 callStmt =
   liftA6
     AST.CallStmt
-    (optionalL kindedNames <* symbol T.EqSign)
-    (optional convention)
+    (optionalL kindedNames <* eqSign)
+    mConvention
     expr
     actuals
     (optional targets)
@@ -589,7 +646,7 @@ jumpStmt :: ULocParser AST.Stmt
 jumpStmt =
   liftA4
     AST.JumpStmt
-    (optional convention <* keyword T.Jump)
+    (mConvention <* keyword T.Jump)
     expr
     (optionalL actuals)
     (optional targets) <*
@@ -600,7 +657,7 @@ returnStmt :: ULocParser AST.Stmt
 returnStmt =
   liftA3
     AST.ReturnStmt
-    (optional convention <* keyword T.Return)
+    (mConvention <* keyword T.Return)
     (optional . angles $
      liftA2 (,) (restrictedExpr <* symbol T.Slash) restrictedExpr)
     (optionalL actuals) <*
@@ -630,14 +687,14 @@ alignAssert =
   liftA2
     AST.AlignAssert
     (keyword T.Aligned *> (fst <$> intLit))
-    (optionalL $ keyword T.In *> (withSourcePos identifier `sepBy1` comma))
+    (optionalL $ keyword T.In *> (posIdentifier `sepBy1` comma))
 
 -- | parses an "in" assertion
 inAssert :: ULocParser AST.Asserts
 inAssert =
   liftA2
     AST.InAssert
-    (keyword T.In *> (withSourcePos identifier `sepBy1` comma))
+    (keyword T.In *> (posIdentifier `sepBy1` comma))
     (optional (keyword T.Aligned *> (fst <$> intLit)))
 
 -- | parses a label statement
@@ -687,15 +744,15 @@ alsoFlow =
 
 -- | parses an "also cuts to" flow annotation
 alsoCutsTo :: ULocParser AST.Flow
-alsoCutsTo = keywords [T.Cuts, T.To] *> (AST.AlsoCutsTo <$> identifiers)
+alsoCutsTo = keywords [T.Cuts, T.To] *> (AST.AlsoCutsTo <$> identifierList)
 
 -- | parses an "also unwinds to" flow annotation
 alsoUnwindsTo :: ULocParser AST.Flow
-alsoUnwindsTo = keywords [T.Unwinds, T.To] *> (AST.AlsoUnwindsTo <$> identifiers)
+alsoUnwindsTo = keywords [T.Unwinds, T.To] *> (AST.AlsoUnwindsTo <$> identifierList)
 
 -- | parses an "also returns to" flow annotation
 alsoReturnsTo :: ULocParser AST.Flow
-alsoReturnsTo = keywords [T.Returns, T.To] *> (AST.AlsoReturnsTo <$> identifiers)
+alsoReturnsTo = keywords [T.Returns, T.To] *> (AST.AlsoReturnsTo <$> identifierList)
 
 -- | parses an "also aborts" flow annotation
 alsoAborts :: ULocParser AST.Flow
@@ -711,15 +768,15 @@ alias = withSourcePos $ readsAlias <|> writesAlias
 
 -- | parses a reads alias
 readsAlias :: ULocParser AST.Alias
-readsAlias = keyword T.Reads *> (AST.Reads <$> identifiers)
+readsAlias = keyword T.Reads *> (AST.Reads <$> identifierList)
 
 -- | parses a writes alias
 writesAlias :: ULocParser AST.Alias
-writesAlias = keyword T.Writes *> (AST.Writes <$> identifiers)
+writesAlias = keyword T.Writes *> (AST.Writes <$> identifierList)
 
 -- | parses a targets annotation
 targets :: SourceParser AST.Targets
-targets = withSourcePos $ keyword T.Targets *> (AST.Targets <$> identifiers)
+targets = withSourcePos $ keyword T.Targets *> (AST.Targets <$> identifierList)
 
 -- | parses an expression
 expr :: SourceParser AST.Expr
@@ -767,7 +824,6 @@ parExpr :: SourceParser AST.Expr
 parExpr = withSourcePos $ AST.ParExpr <$> parens expr
 
 -- SYMBOLIC OPERATORS --
--- Source: https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf (7.4.1)
 infixExpr :: SourceParser AST.Expr
 infixExpr = opImplN ("`" :: Text) cmpExpr
 
@@ -826,8 +882,8 @@ memberExpr :: SourceParser AST.Expr
 memberExpr = do
   expr' <- simpleExpr
   choice
-    [ symbol T.Arr *>
-      withSourcePos (AST.MemberExpr expr' <$> withSourcePos identifier)
+    [ arrow *>
+      withSourcePos (AST.MemberExpr expr' <$> posIdentifier)
     , return expr'
     ]
 
@@ -865,6 +921,6 @@ instance OpImpl x => OpImpl [x] where
 
 instance OpImpl Text where
   opRestInner "`" next =
-    symbol T.Backtick *> (flip . AST.InfixExpr <$> identifier) <* symbol T.Backtick <*>
+    backTicks (flip . AST.InfixExpr <$> identifier) <*>
     next
   opRestInner _ _ = error "Parser not implemented for this operator"

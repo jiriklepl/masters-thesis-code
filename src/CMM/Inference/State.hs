@@ -129,7 +129,8 @@ pushKindBounds handle bounds =
 
 -- | adds the functional dependency for the given class
 addFunDeps :: Text -> [[Trilean]] -> Inferencer ()
-addFunDeps name rules = State.funDeps %= Map.insert name (addTrivialDep $ funDepsSimplify rules)
+addFunDeps name rules = State.funDeps %= Map.insert name rules'
+  where rules' = addTrivialDep $ funDepsSimplify rules
 
 -- | returns `True` iff the given class has any functional dependencies set
 hasFunDeps :: Text -> Inferencer Bool

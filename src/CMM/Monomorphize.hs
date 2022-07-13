@@ -13,6 +13,7 @@ import safe qualified Data.Map as Map
 import safe Data.Maybe (catMaybes)
 import safe qualified Data.Set as Set
 import safe Data.Traversable (for)
+import safe Data.Either (fromRight)
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot, takeAnnot), withAnnot, mapNode)
@@ -40,7 +41,7 @@ import safe CMM.Inference.TypeCompl
   ( TypeCompl(AddrType)
   )
 import safe CMM.Inference.TypeVar as Type (ToTypeVar(toTypeVar), TypeVar)
-import safe CMM.Inference.Unify (instantiateFrom)
+import safe CMM.Inference.Unify (instantiateFrom, unify)
 import safe CMM.Monomorphize.Polytypeness
   ( Polytypeness(Absurd, Mono, Poly)
   , typePolytypeness, reconstructType, reconstructHole
@@ -69,6 +70,8 @@ import safe CMM.Inference.Unify.Error ( UnificationError )
 import safe qualified CMM.Monomorphize.State as State
 import safe CMM.Monomorphize.State.Impl
     ( Monomorphizer, MonomorphizeState )
+import safe CMM.Inference.Fact (Scheme((:.)), Qual ((:=>)), FlatFact (Equality, TypingEquality), FlatFacts)
+import safe CMM.Utils (logicError)
 
 type InferMonomorphizer a = State (InferencerState, MonomorphizeState a)
 
@@ -331,28 +334,39 @@ instance HasElaboration a => Monomorphize (Annot AST.Datum) a where
 succeed :: Applicative f => a -> f (Either err a)
 succeed = pure . Right
 
+unifFacts :: FlatFacts -> Subst Type -> Subst Type
+unifFacts [] subst = subst
+unifFacts (fact : others) subst = case fact of
+  t `Equality` t' -> go t t'
+  t `TypingEquality` t' -> go t t'
+  _ -> unifFacts others subst
+  where
+    go t t' = unifFacts others . (`apply` subst) . fst$ fromRight logicError (apply subst t `unify` apply subst t')
+
 instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Procedure) a where
   monomorphize subst annotated@(procedure@(AST.Procedure header body) `Annot` a) = do
     schemeName <- useInferencer . State.fromOldName $ getElaborationId a
-    addScheme <- useInferencer (lookupScheme schemeName) >>= \case
-      Nothing -> failure $ isNotScheme annotated
-      Just scheme ->
-        useMonomorphizer . fmap Right $
-        State.addPolyScheme
-          (toTypeVar $ getElaboration a)
-          scheme
-          (ProcedureScheme $ withAnnot a procedure)
+    handle <- useInferencer $ State.getHandle schemeName
+    inst <- useInferencer $ reconstructType subst handle
+    subst' <- useInferencer (lookupScheme schemeName) >>= \case
+      Nothing -> logicError
+      Just scheme@(_ :. facts :=> t) -> do
+        let subst' = either logicError ((`apply` subst) . fst) (t `unify` inst)
+        useMonomorphizer  $
+          State.addPolyScheme
+            (toTypeVar $ getElaboration a)
+            scheme
+            (ProcedureScheme $ withAnnot a procedure)
+        return $ unifFacts facts subst'
     addMethod <- case getElaboration a of
       SimpleElaboration {} -> succeed ()
-      MethodElaboration inst scheme _ ->
-        useMonomorphizer . fmap Right $ State.addMethod (toTypeVar scheme) (toTypeVar inst)
+      MethodElaboration inst' scheme _ ->
+        useMonomorphizer . fmap Right $ State.addMethod (toTypeVar scheme) (toTypeVar inst')
       hole -> failure $ hole `illegalHole` annotated
-    handle <- useInferencer $ State.getHandle schemeName
-    (addScheme *> addMethod) `reThrow` \_ -> useInferencer
-      (typePolytypeness subst (getElaboration a)) >>= \case
+    addMethod `reThrow` \_ -> useInferencer
+      (typePolytypeness subst' (getElaboration a)) >>= \case
       Mono -> do
         hole <- return . toTypeVar $ getElaboration a
-        inst <- useInferencer $ reconstructType subst handle
         waves <- useMonomorphizer State.getWaves
         stored <- useMonomorphizer $
           case getElaboration a of
@@ -369,9 +383,9 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Procedure) a wh
                 MethodElaboration _ scheme _ -> Right <$> State.memorize (toTypeVar scheme) inst
                 hole' -> failure $ hole' `illegalHole` annotated
             addMemory `reThrow` \_ -> do
-              header' <- ensuredJustMonomorphize subst header
-              body' <- ensuredJustMonomorphize subst body
-              b <- useInferencer $ reconstructHole subst a
+              header' <- ensuredJustMonomorphize subst' header
+              body' <- ensuredJustMonomorphize subst' body
+              b <- useInferencer $ reconstructHole subst' a
               return $ do
                 header'' <- header'
                 body'' <- body'
@@ -513,9 +527,8 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.LValue) a where
     let annotated = withAnnot b lValue
     useInferencer
       (typePolytypeness subst (getElaboration a)) >>= \case
-      Poly {} -> succeed $ Just annotated
       Absurd absurdity -> failure $ absurdity `absurdType` annotated
-      Mono ->
+      _ ->
         case lValue of
           AST.LVName _ ->
             case getElaboration a of
@@ -565,8 +578,8 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Expr) a where
           lit'' <- lit'
           mType'' <- sequence mType'
           return $ withAnnot b <$> liftA2 AST.LitExpr lit'' (sequence mType'')
-      AST.LVExpr lValue -> monomorphizeTrivial subst a AST.LVExpr lValue
-      AST.ParExpr expr' -> monomorphizeTrivial subst a AST.ParExpr expr'
+      AST.LVExpr lValue -> monomorphizeTrivial subst b AST.LVExpr lValue
+      AST.ParExpr expr' -> monomorphizeTrivial subst b AST.ParExpr expr'
       AST.BinOpExpr op left right -> do
         left' <- monomorphize subst left
         right' <- monomorphize subst right
@@ -574,11 +587,11 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Expr) a where
           left'' <- left'
           right'' <- right'
           return $ withAnnot b <$> liftA2 (AST.BinOpExpr op) left'' right''
-      AST.ComExpr expr' -> monomorphizeTrivial subst a AST.ComExpr expr'
-      AST.NegExpr expr' -> monomorphizeTrivial subst a AST.NegExpr expr'
+      AST.ComExpr expr' -> monomorphizeTrivial subst b AST.ComExpr expr'
+      AST.NegExpr expr' -> monomorphizeTrivial subst b AST.NegExpr expr'
       AST.InfixExpr {} -> undefined
       AST.PrefixExpr {} -> undefined
-      AST.MemberExpr expr' field ->
+      AST.MemberExpr expr' field -> do
         case getElaboration a of
           MethodElaboration _ scheme inst ->
             useInferencer (typePolytypeness subst scheme) >>= \case

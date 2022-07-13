@@ -22,6 +22,7 @@ import safe Prettyprinter
   , space
   , squotes
   , vsep
+  , line, pipe
   )
 
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
@@ -37,7 +38,7 @@ import safe CMM.Pretty
   , ifTrue
   , inBraces
   , maybeSpacedL
-  , maybeSpacedR
+  , maybeSpacedR, hsepPretty
   )
 import safe CMM.Utils (backQuote, HasCallStack)
 import safe qualified CMM.Lexer.Token as T
@@ -125,6 +126,7 @@ data Class a =
   Class
     [Annot (ParaName Type) a]
     (Annot (ParaName Name) a)
+    (Maybe (Annot FunDeps a))
     [Annot ProcedureDecl a]
   deriving (Show, Functor, Foldable, Traversable, Data)
 
@@ -134,10 +136,15 @@ instance Pretty (Class a) where
   pretty class' =
     T.className <+>
     case class' of
-      Class [] paraName methods -> pretty paraName <+> bracesBlock methods
-      Class paraNames paraName methods ->
-        commaPretty paraNames <+>
-        darrow <+> pretty paraName <+> bracesBlock methods
+      Class paraNames paraName mFunDeps methods ->
+        pParaNames <+> pretty paraName <> pFunDeps <+> bracesBlock methods
+        where
+          pParaNames
+            | null paraNames = mempty
+            | otherwise = commaPretty paraNames <+> darrow <> space
+          pFunDeps
+            | Just funDeps <- mFunDeps = space <> pipe <+> pretty funDeps
+            | otherwise = mempty
 
 data Instance a =
   Instance
@@ -180,6 +187,35 @@ instance Pretty (param a) => Pretty (ParaName param a) where
     \case
       ParaName name [] -> pretty name
       ParaName name types -> pretty name <+> hsep (pretty <$> types)
+
+newtype FunDeps a =
+  FunDeps [Annot FunDep a]
+  deriving (Show, Functor, Foldable, Traversable, Data)
+
+deriving instance Eq (FunDeps ())
+
+instance Pretty (FunDeps a) where
+  pretty = \case
+    FunDeps funDeps -> commaPretty funDeps
+
+data FunDep a = FunDep
+  { fdFrom :: [Annot Name a]
+  , fdTo :: [Annot Name a]
+  }
+  deriving (Show, Functor, Foldable, Traversable, Data)
+
+deriving instance Eq (FunDep ())
+
+instance Pretty (FunDep a) where
+  pretty = \case
+    FunDep{fdFrom, fdTo} -> pFdFrom <> arrow <> pFdTo
+      where
+        pFdFrom
+          | null fdFrom = mempty
+          | otherwise = hsepPretty fdFrom <> space
+        pFdTo
+          | null fdTo = mempty
+          | otherwise = space <> hsepPretty fdTo
 
 data TargetDirective a
   = MemSize Int
@@ -255,7 +291,9 @@ prettyDatums [] = mempty
 prettyDatums (datum:others) =
   case datum of
     DatumLabel {} `Annot` _ -> pretty datum <+> prettyDatums others
-    _ -> pretty datum <> prettyDatums others
+    _
+      | null others -> pretty datum
+      | otherwise -> pretty datum <> line <> prettyDatums others
 
 data Init a
   = ExprInit [Annot Expr a]
@@ -453,6 +491,7 @@ data Stmt a
   | ContStmt (Name a) [Annot KindName a]
   | GotoStmt (Annot Expr a) (Maybe (Annot Targets a))
   | CutToStmt (Annot Expr a) [Annot Actual a] [Annot Flow a]
+  | DroppedStmt (Name a)
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Stmt ())
@@ -504,6 +543,8 @@ instance Pretty (Stmt a) where
         T.toName <+>
         pretty expr <>
         parens (commaPretty actuals) <> hsep (pretty <$> flows) <> semi
+      DroppedStmt name ->
+        T.droppedName <+> pretty name <> semi
 
 prettyCallStmtRest :: HasCallStack => Stmt a -> Doc ann
 prettyCallStmtRest =
@@ -676,8 +717,8 @@ instance Pretty (Type a) where
       TName name -> pretty name
       TAuto mName -> T.autoName <> maybe mempty (parens . pretty) mName
       TPtr t -> T.ptrName <> parens (pretty t)
-      TBool -> T.voidName
-      TVoid -> T.boolName
+      TBool -> T.boolName
+      TVoid -> T.voidName
       TLabel -> T.labelName
       TPar paraType -> parens $ pretty paraType
 

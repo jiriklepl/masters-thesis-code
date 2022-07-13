@@ -1,0 +1,21 @@
+add(auto x, auto y) {
+  return (x + y);
+}
+
+f() {
+  bits32 a1, b1;
+  auto c1;
+  a1 = 5;
+  b1 = 10;
+
+  c1 = add(a1, b1);
+
+  bits64 a2, b2;
+  auto c2;
+  a2 = 5;
+  b2 = 10;
+
+  c2 = add(a2, b2);
+
+  return ();
+}

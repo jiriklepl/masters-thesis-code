@@ -88,7 +88,7 @@ options = Options
       <> short 'c'
       <> metavar "MAX_CYCLES"
       <> showDefault
-      <> value 50
+      <> value 500
       <> help "Set the maximum of monomorphization cycles" )
   <*> option auto
       ( long "max_fundeps"

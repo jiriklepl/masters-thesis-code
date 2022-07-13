@@ -8,6 +8,7 @@ Maintainer  : jiriklepl@seznam.cz
 This module follows the `CMM.AST.LRAnalysis` module and translates the AST using its annotations into llvm.
 There is no AST-aware module that would follow this module.
 -}
+
 module CMM.Translator where
 
 import safe Control.Applicative
@@ -408,7 +409,6 @@ instance TranslAssumps a m =>
       t <- getIntWidth <$> getType annot
       return . LO.ConstantOperand $ LC.Int t . toInteger $ ord char
 
--- TODO: continue from here
 instance TranslAssumps a m =>
          Translate m AST.LValue a (Map Text LO.Operand -> m LO.Operand) where
   translate (Annot lValue annot) vars = do
@@ -422,13 +422,12 @@ instance TranslAssumps a m =>
         t <- getType annot
         return . LO.ConstantOperand . LC.GlobalReference t $ translateName name
 
-        -- TODO: traverse all frames (accessing global registers; also, accessing non-variables); remove the error
+        -- TODO: traverse all frames (accessing global registers; also, accessing non-variables)
       AST.LVRef Nothing expr Nothing ->
         translate expr vars >>= (`L.load` 0)
       AST.LVRef {} ->
         error "dereferences not yet implemented" -- TODO: implement lvref
 
--- TODO: continue from here
 instance TranslAssumps a m =>
          Translate m AST.StackDecl a (Map Text LO.Operand -> m (Map Text LO.Operand)) where
   translate (AST.StackDecl datums `Annot` _) = go mempty datums
@@ -443,6 +442,6 @@ instance TranslAssumps a m =>
           record <- L.alloca t' Nothing 0
           cache `forM_` \item ->
             State.records %= Map.insert item record
-          return vars
+          go [] datums' vars
         AST.Datum {} -> undefined
         AST.DatumAlign {} -> undefined
