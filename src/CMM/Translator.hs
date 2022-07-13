@@ -18,12 +18,20 @@ import safe Control.Monad.State
 import safe Data.Char ( ord )
 import safe Data.Foldable ( find, traverse_ )
 import safe Data.Function ( (&) )
+import safe Data.Maybe ( catMaybes, fromJust )
 import safe Data.Functor ( ($>), (<&>) )
 import safe qualified Data.Map as Map
 import safe Data.String ( IsString(fromString) )
 import safe Data.Text (Text)
 import safe qualified Data.Text as T
-
+import safe Data.Tuple.Extra (first, swap)
+import safe Data.Map (Map)
+import safe qualified Data.Set as Set
+import safe Data.Set (Set)
+import safe Data.Generics.Aliases ( extQ, extT )
+import safe Data.List (sortOn)
+import safe qualified Data.List as List
+import safe Data.Data (Proxy (Proxy), Data (gmapQ, gmapT))
 import safe Control.Lens
     ( (^.), use, uses, (%=), Field2(_2), Field3(_3) )
 
@@ -37,6 +45,8 @@ import qualified LLVM.IRBuilder.Constant as LC
 import qualified LLVM.IRBuilder.Instruction as L
 import qualified LLVM.IRBuilder.Module as L
 import qualified LLVM.IRBuilder.Monad as L
+import safe qualified LLVM.IRBuilder.Internal.SnocList as L
+import safe LLVM.Prelude (Word32)
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot ( Annot, Annotation(Annot) )
@@ -46,28 +56,16 @@ import safe CMM.AST.GetName ( GetName(getName) )
 import safe CMM.AST.Utils
     ( GetTrivialGotoTarget(getTrivialGotoTarget) )
 import safe CMM.Parser.GetPos ( GetPos )
-import safe CMM.Pretty ()
 import safe qualified CMM.Translator.State as State
 import safe CMM.Translator.State (TranslState)
-import safe Data.Tuple.Extra (first, swap)
 import safe CMM.Data.Function ( fOr )
-import safe Data.Map (Map)
-import safe Data.Maybe ( fromJust )
-import safe qualified LLVM.IRBuilder.Internal.SnocList as L
-import safe Data.Generics.Aliases ( extQ, extT )
 import safe CMM.Inference.State ( Inferencer )
-import safe qualified Data.Set as Set
-import safe Data.Set (Set)
 import safe CMM.TypeMiner
     ( mineElaborated, mineStructName, mineStruct, makePacked )
 import safe qualified CMM.Inference.Preprocess.Elaboration as Ty
 import safe CMM.Inference.Preprocess.Elaboration
     ( HasElaboration(getElaboration) )
-import safe Data.List (sortOn)
-import safe LLVM.Prelude (Word32)
-import safe qualified Data.List as List
-import safe CMM.Utils ( HasCallStack )
-import safe Data.Data (Proxy (Proxy), Data (gmapQ, gmapT))
+import safe CMM.Utils ( HasCallStack, logicError )
 
 type MonadTranslator m
    = ( L.MonadIRBuilder m
@@ -108,7 +106,7 @@ class TranslAssumps a m =>
 
 instance TranslAssumps a m =>
          Translate m AST.Formal a (m (LT.Type, L.ParameterName)) where
-  translate (AST.Formal _ True _ _ `Annot` _) = undefined
+  translate (AST.Formal _ True _ _ `Annot` _) = notYetImplemented
   translate (AST.Formal _ _ type' name `Annot` _) = do
     type'' <- getType type'
     return . (type'', ) $ translateParName name
@@ -116,11 +114,11 @@ instance TranslAssumps a m =>
 instance TranslAssumps a m =>
          Translate m AST.TopLevel a (m ()) where
   translate (topLevel `Annot` _) = case topLevel of
-    AST.TopSection {} -> undefined
-    AST.TopDecl {} -> undefined
+    AST.TopSection {} -> notYetImplemented
+    AST.TopDecl {} -> notYetImplemented
     AST.TopProcedure procedure -> void $ translate procedure
-    AST.TopClass {} -> undefined
-    AST.TopInstance {} -> undefined
+    AST.TopClass {} -> logicError
+    AST.TopInstance {} -> logicError
     AST.TopStruct struct -> do
       structs <- use State.structs
       struct' <- runInferencer $ mineStruct structs struct
@@ -158,7 +156,7 @@ instance TranslAssumps a m =>
                     { L.builderBlocks =  L.SnocList $ L.unSnocList (L.builderBlocks s) & renameGeneric rename'
                     , L.builderSupply = fromInteger $ toInteger (L.builderSupply s) - toInteger (Map.size rename')
                     }
-          _ -> undefined -- TODO: add nice error message for completeness
+          _ -> logicError
         where formalNames = getName <$> formals
 
 applyRename :: Ord k => Map k k -> k -> Maybe k
@@ -193,7 +191,7 @@ zip' = zipWith' (,)
 zipWith' :: (t1 -> t2 -> a) -> [t1] -> [t2] -> [a]
 zipWith' f (a:as) (b:bs) = f a b : zipWith' f as bs
 zipWith' _ [] [] = []
-zipWith' _ _ _ = undefined
+zipWith' _ _ _ = logicError
 
 instance TranslAssumps a m =>
          Translate m AST.Body a (Int -> Map Text LO.Operand -> m (Map LO.Operand LO.Operand)) where
@@ -219,7 +217,7 @@ instance TranslAssumps a m =>
       splitBlocks (item:items')
         | Begins idx <- getBlockAnnot item = (item:part, idx) : splitBlocks rest
         where (part, rest) = tillNext items'
-      splitBlocks _ = undefined
+      splitBlocks _ = logicError
       tillNext items'@(item:rest)
         | Begins {} <- annot = ([], items')
         | Unreachable {} <- annot = tillNext rest
@@ -257,15 +255,15 @@ translateMany (item:items) vars = translate item vars >>= translateMany items
 
 instance TranslAssumps a m =>
          Translate m AST.BodyItem a (Map Text LO.Operand -> m (Map Text LO.Operand)) where
-  translate (Annot (AST.BodyDecl decl) _) = translate decl -- TODO ?
+  translate (Annot (AST.BodyDecl decl) _) = translate decl
   translate (Annot (AST.BodyStackDecl stackDecl) _) =
-    translate stackDecl -- TODO ?
+    translate stackDecl
   translate (Annot (AST.BodyStmt stmt) _) = translate stmt
 
 instance TranslAssumps a m =>
-         Translate m AST.Decl a (Map Text LO.Operand -> m (Map Text LO.Operand)) -- TODO: continue from here
+         Translate m AST.Decl a (Map Text LO.Operand -> m (Map Text LO.Operand))
                                                                where
-  translate _ = return -- TODO: continue from here
+  translate _ = return
 
 {- |
 Guarantees:
@@ -293,17 +291,21 @@ instance TranslAssumps a m =>
           c' <- translate c vars
           L.condBr c' (L.mkName $ T.unpack tLab) (L.mkName $ T.unpack eLab)
           return vars
-      | otherwise -> error "internal inconsistency"
-    AST.SwitchStmt {} -> undefined -- TODO: this is taxing
-    AST.SpanStmt {} -> undefined
+      | otherwise -> logicError
+    AST.SwitchStmt {} -> notYetImplemented
+    AST.SpanStmt {} -> notYetImplemented
     AST.AssignStmt lvalues exprs -> do
-      assigns <- zipWithM translPair lvalues exprs -- TODO: check for duplicates -> error (also, check if modifiable)
-      let vars' = Map.fromList assigns <> vars -- TODO: traverse all frames (assignments to global registers)
+      assigns <- catMaybes <$> zipWithM translPair lvalues exprs -- TODO: error (check if modifiable)
+      let vars' = Map.fromList assigns <> vars
       return vars'
       where
-        translPair (Annot (AST.LVName n) _) e = (getName n, ) <$> translate e vars
-        translPair (Annot AST.LVRef {} _) _ = error "not implemented yet" -- TODO: make case for lvref
-    AST.PrimOpStmt {} -> undefined
+        translPair (Annot n@AST.LVName {} _) e = Just . (getName n, ) <$> translate e vars
+        translPair (Annot (AST.LVRef Nothing r Nothing) _) e = do
+          r' <- translate r vars
+          translate e vars >>= L.store r' 0
+          return Nothing
+        translPair (Annot AST.LVRef {} _) e = notYetImplemented
+    AST.PrimOpStmt {} -> notYetImplemented
     AST.CallStmt {}
       | AST.CallStmt rets _ expr actuals Nothing [] <- stmt -> do
         actuals' <- traverse (`translate` vars) actuals
@@ -314,27 +316,28 @@ instance TranslAssumps a m =>
           else (L.extractValue ret . pure) `traverse` [0..(fromInteger . toInteger $ length rets - 1)]
         let nVars = Map.fromList $ zip (getName <$> rets) extract
         return $ nVars <> vars
-      | otherwise -> undefined
-    AST.JumpStmt {} -> undefined
+      | otherwise -> notYetImplemented
+    AST.JumpStmt {} -> notYetImplemented
     AST.ReturnStmt {}
       | AST.ReturnStmt Nothing Nothing actuals <- stmt -> do
         retType <- makePacked <$> traverse getType actuals
         ret <-  translateManyExprs vars actuals >>= makeTuple retType
         L.ret ret $> vars
-      | otherwise -> undefined
+      | otherwise -> notYetImplemented
     AST.LabelStmt name -> (L.emitBlockStart . fromString . T.unpack . getName) name $> vars
-    AST.ContStmt {} -> undefined
+    AST.ContStmt {} -> notYetImplemented
     AST.GotoStmt {}
       | AST.GotoStmt _ Nothing <- stmt ->do
-            let Just lab = getTrivialGotoTarget stmt -- TODO: is this safe?
+            let Just lab = getTrivialGotoTarget stmt
             L.br (L.mkName $ T.unpack lab)
             return vars
-      | otherwise -> undefined
-    AST.CutToStmt {} -> undefined
+      | otherwise -> notYetImplemented
+    AST.CutToStmt {} -> notYetImplemented
+
 instance TranslAssumps a m =>
          Translate m AST.Actual a (Map Text LO.Operand -> m LO.Operand) where
   translate (Annot (AST.Actual Nothing expr) _) vars = translate expr vars
-  translate _ _ = undefined
+  translate _ _ = notYetImplemented
 
 undef :: LT.Type -> LO.Operand
 undef = LO.ConstantOperand . LC.Undef
@@ -366,7 +369,7 @@ instance TranslAssumps a m =>
       r' <- translate r vars
       (r' &) . (l' &) $
         case o of
-              -- https://llvm.org/docs/LangRef.html#icmp-instruction
+          -- https://llvm.org/docs/LangRef.html#icmp-instruction
           AST.AddOp -> L.add
           AST.SubOp -> L.sub
           AST.MulOp -> L.mul
@@ -403,7 +406,7 @@ instance TranslAssumps a m =>
   translate (lit `Annot` annot) = case lit of
     AST.LitInt int -> do
       t <- getIntWidth <$> getType annot
-      return . LO.ConstantOperand $ LC.Int t  $ toInteger int -- TODO: discuss this later
+      return . LO.ConstantOperand $ LC.Int t  $ toInteger int
     AST.LitFloat float -> return $ LC.single float
     AST.LitChar char -> do
       t <- getIntWidth <$> getType annot
@@ -422,11 +425,13 @@ instance TranslAssumps a m =>
         t <- getType annot
         return . LO.ConstantOperand . LC.GlobalReference t $ translateName name
 
-        -- TODO: traverse all frames (accessing global registers; also, accessing non-variables)
+        -- NOTE: add traversing all frames (accessing global registers; also, accessing non-variables)
       AST.LVRef Nothing expr Nothing ->
         translate expr vars >>= (`L.load` 0)
-      AST.LVRef {} ->
-        error "dereferences not yet implemented" -- TODO: implement lvref
+      AST.LVRef {} -> notYetImplemented
+
+notYetImplemented :: HasCallStack => a
+notYetImplemented = error "not yet implemented"
 
 instance TranslAssumps a m =>
          Translate m AST.StackDecl a (Map Text LO.Operand -> m (Map Text LO.Operand)) where
@@ -443,5 +448,5 @@ instance TranslAssumps a m =>
           cache `forM_` \item ->
             State.records %= Map.insert item record
           go [] datums' vars
-        AST.Datum {} -> undefined
-        AST.DatumAlign {} -> undefined
+        AST.Datum {} -> notYetImplemented
+        AST.DatumAlign {} -> notYetImplemented

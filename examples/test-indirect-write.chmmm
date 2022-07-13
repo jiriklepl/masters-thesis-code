@@ -1,0 +1,9 @@
+f() {
+    stackdata {
+        p: bits32;
+    }
+
+    [p] = 5;
+
+    return ();
+}
