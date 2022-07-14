@@ -1,14 +1,19 @@
 struct A {
-    x: bits32;
+    id: bits32;
 }
 
 struct B {
-    x: bits64;
+    id: bits64;
 }
 
-access_x(auto s) {
+update_id(auto s, auto x) {
+    [s->id] = x;
+    return ();
+}
+
+access_id(auto s) {
     auto x;
-    x = [s->x];
+    x = [s->id];
     return (x);
 }
 
@@ -21,8 +26,11 @@ f() {
     auto x;
     auto y;
 
-    x = access_x(a);
-    y = access_x(b);
+    = update_id(a, 5);
+    = update_id(b, 10);
+
+    x = access_id(a);
+    y = access_id(b);
 
     return ();
 }

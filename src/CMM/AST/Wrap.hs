@@ -21,6 +21,7 @@ data ASTWrapper a
   | WrappedDatum (AST.Datum a)
   | WrappedInit (AST.Init a)
   | WrappedRegisters (AST.Registers a)
+  | WrappedSize (AST.Size a)
   | WrappedBody (AST.Body a)
   | WrappedBodyItem (AST.BodyItem a)
   | WrappedProcedure (AST.Procedure a)
@@ -62,6 +63,7 @@ instance (Pretty (ASTWrapper a)) where
     WrappedDatum datum ->  pretty datum
     WrappedInit init' ->  pretty init'
     WrappedRegisters registers ->  pretty registers
+    WrappedSize size ->  pretty size
     WrappedBody body ->  pretty body
     WrappedBodyItem bodyItem ->  pretty bodyItem
     WrappedProcedure procedure ->  pretty procedure
@@ -130,6 +132,9 @@ instance MakeWrapped AST.Init where
 
 instance MakeWrapped AST.Registers where
   makeWrapped = WrappedRegisters
+
+instance MakeWrapped AST.Size where
+  makeWrapped = WrappedSize
 
 instance MakeWrapped AST.Body where
   makeWrapped = WrappedBody

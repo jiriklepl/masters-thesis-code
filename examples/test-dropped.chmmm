@@ -2,21 +2,19 @@ drop(auto a) {
     return ();
 }
 
-f() {
+foreign "C" f(bits32 a) {
     stackdata {
         x : y: new bits32;
     }
 
-
-
-    if 0 {
+    if a == 0 {
         dropped x;
         = drop(x);
         return ();
     }
 
-    if 5 {
-        if 10 {
+    if a == 5 {
+        if a == 10 {
             return ();
         } else {
             dropped y;

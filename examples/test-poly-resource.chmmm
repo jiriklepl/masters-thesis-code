@@ -1,0 +1,25 @@
+
+struct X {
+  x: bits32;
+}
+
+struct Y {
+  x: bits64;
+}
+
+drop(auto u) {
+  // ...
+  return ();
+}
+
+foreign "C" f(ptr(X) s, ptr(Y) t) {
+  stackdata {
+    x: new auto;
+    y: new auto;
+  }
+
+  [x] = [s->x];
+  [y] = [t->x];
+
+  return ();
+}

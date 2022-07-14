@@ -1,0 +1,35 @@
+
+struct X {
+  x: bits32;
+}
+
+struct Y {
+  x: bits64;
+}
+
+class Managed a {
+  drop(ptr(auto(a)) u ) -> ;
+}
+
+instance Managed X {
+  drop(auto u) {
+    auto y;
+    y = [u->x];
+    return ();
+  }
+}
+
+instance Managed Y {
+  drop(auto w) {
+    return ();
+  }
+}
+
+foreign "C" f(bits32 a) {
+  stackdata {
+    F: new X;
+    G: new Y;
+  }
+
+  return ();
+}

@@ -306,9 +306,10 @@ instance Monomorphize (Annot AST.Export) a where
   monomorphize = undefined
 
 instance HasElaboration a => Monomorphize (Annot AST.Datum) a where
-  monomorphize subst annotated@(datum `Annot` a) =
+  monomorphize subst annotated@(datum `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
     case datum of
-      AST.Datum {} -> do
+      AST.Datum new type' size init -> do
         case getElaboration a of
           MemberElaboration struct _ insts schemes' ->
             useInferencer
@@ -320,16 +321,43 @@ instance HasElaboration a => Monomorphize (Annot AST.Datum) a where
                     (State.addField $ toTypeVar struct)
                     (toTypeVar <$> schemes')
                     (toTypeVar <$> insts)
-                success
+                succeed . Just $ datum `Annot` b
           SimpleElaboration handle ->
             useInferencer (typePolytypeness subst handle) >>= \case
-              Mono -> success
+              Mono -> do
+                type'' <- ensuredJustMonomorphize subst type'
+                size' <- traverse (ensuredJustMonomorphize subst) size
+                init' <- traverse (ensuredJustMonomorphize subst) init
+                return $ do
+                  type''' <- type''
+                  size'' <- sequence size'
+                  init'' <- sequence init'
+                  return $ withAnnot b <$> liftA3 (AST.Datum new) type''' (sequence size'') (sequence init'')
               Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
               Absurd absurdity -> failure $ absurdity `absurdType` annotated
           hole -> failure $ illegalHole hole annotated
-      _ -> success
-    where
-      success = succeed $ Just annotated
+      _ -> succeed . Just $ datum `Annot` b
+
+instance HasElaboration a => Monomorphize (Annot AST.Init) a where
+  monomorphize subst (init `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    case init of
+      AST.StrInit strLit -> succeed . Just . withAnnot b $ AST.StrInit strLit
+      AST.Str16Init strLit -> succeed . Just . withAnnot b $ AST.Str16Init strLit
+      AST.ExprInit exprs -> do
+        exprs' <- traverse (ensuredJustMonomorphize subst) exprs
+        return $ do
+          exprs'' <- sequence exprs'
+          return $ withAnnot b . AST.ExprInit <$> sequence exprs''
+
+instance HasElaboration a => Monomorphize (Annot AST.Size) a where
+  monomorphize subst (AST.Size expr `Annot` a) = do
+    b <- useInferencer $ reconstructHole subst a
+    expr' <- traverse (ensuredJustMonomorphize subst) expr
+    return $ do
+      expr'' <- sequence expr'
+      return $ withAnnot b . AST.Size <$> sequence expr''
+
 
 succeed :: Applicative f => a -> f (Either err a)
 succeed = pure . Right

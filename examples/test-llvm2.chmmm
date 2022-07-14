@@ -1,0 +1,17 @@
+foreign "C" f(bits32 u, bits32 w) -> bits32{
+  auto r;
+
+  if u == w {
+    r, u = u, w;
+    return (u);
+  } else {
+    w, r = u, w;
+    u = r + w;
+    return (u);
+  }
+
+  u = u * 2;
+  w = u + r;
+
+  return (w);
+}

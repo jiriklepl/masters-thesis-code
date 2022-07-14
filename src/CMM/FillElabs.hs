@@ -49,7 +49,7 @@ typeFromHoled holed = do
 
 translType :: a -> T.Type -> Maybe (AST.Type a)
 translType holed t = case t of
-    T.VarType {} -> Just AST.TVoid
+    T.VarType {} -> Nothing
     T.ComplType tc -> case tc of
       TupleType {} -> Nothing
       FunctionType {} -> Nothing
@@ -73,10 +73,16 @@ instance FillElabs n where
   fillHoles n@(_ `Annot` (_ :: annot)) = go n
     where
       go :: Data d => d -> Inferencer d
-      go = gmapM go `extM` registersCase `extM` formalCase `extM` semiFormalCase
+      go = gmapM go `extM` registersCase `extM` formalCase `extM` semiFormalCase `extM` datumCase
       registersCase  (AST.Registers mKind (t `Annot` b) nameStrLits `Annot` (a :: annot)) = do
         t' <- fromMaybe t <$> typeFromHoled b
         return (AST.Registers mKind (withAnnot b t') nameStrLits `Annot` a)
+      datumCase  (AST.Datum new (t `Annot` b) size init `Annot` (a :: annot)) = do
+        t' <- fromMaybe t <$> typeFromHoled b
+        size' <- gmapM go size
+        init' <- gmapM go init
+        return (AST.Datum new (withAnnot b t') size' init' `Annot` a)
+      datumCase datum = gmapM go datum
       formalCase (AST.Formal mKind bool (t `Annot` b) name `Annot` (a :: annot)) = do
         t' <- fromMaybe t <$> typeFromHoled b
         return (AST.Formal mKind bool (withAnnot b t') name `Annot` a)
