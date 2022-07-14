@@ -63,6 +63,7 @@ executable Compiler
                        CMM.AST.Annot,
                        CMM.AST.Blockifier,
                        CMM.AST.Blockifier.Error,
+                       CMM.AST.Blockifier.FilterDropped,
                        CMM.AST.Blockifier.State,
                        CMM.AST.BlockAnnot,
                        CMM.AST.Flattener,

@@ -92,7 +92,7 @@ translateName = L.mkName . T.unpack . getName
 getIntWidth :: LT.Type -> Word32
 getIntWidth = \case
   LT.IntegerType int -> int
-  _ -> error "the operand does not have integral type"
+  _ -> error "the operand does not have integer type"
 
 translateParName :: GetName n => n -> L.ParameterName
 translateParName = (\(L.Name n) -> L.ParameterName n) . translateName
@@ -188,7 +188,7 @@ runInferencer action =
 zip' :: [a] -> [b] -> [(a, b)]
 zip' = zipWith' (,)
 
-zipWith' :: (t1 -> t2 -> a) -> [t1] -> [t2] -> [a]
+zipWith' :: HasCallStack => (t1 -> t2 -> a) -> [t1] -> [t2] -> [a]
 zipWith' f (a:as) (b:bs) = f a b : zipWith' f as bs
 zipWith' _ [] [] = []
 zipWith' _ _ _ = logicError

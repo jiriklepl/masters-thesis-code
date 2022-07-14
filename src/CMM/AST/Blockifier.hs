@@ -12,6 +12,9 @@ import safe Data.Foldable (traverse_)
 import safe Data.Functor (($>), void)
 import safe qualified Data.Map as Map
 import safe Data.Text (Text)
+import safe Data.Map (Map)
+import safe qualified Data.Text as T
+import safe qualified Data.Set as Set
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot, unAnnot)
@@ -22,12 +25,12 @@ import safe CMM.AST.BlockAnnot
   )
 import safe CMM.AST.Blockifier.Error
   ( BlockifierError(FlatteningInconsistency, GotoWithoutTargets,
-                UnreachableStatement, ProcedureFallthrough)
+                UnreachableStatement, ProcedureFallthrough, DroppingOutsideBlock, ReDropping)
   , continuationFallthrough
   , duplicateSymbol
   )
 import safe qualified CMM.AST.Blockifier.State as State
-import safe CMM.AST.Blockifier.State (Blockifier, BlockifierState, HasCurrentBlock (currentBlock))
+import safe CMM.AST.Blockifier.State (Blockifier, BlockifierState, HasCurrentBlock (currentBlock), BlockifyAssumps)
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.AST.Maps (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Utils
@@ -41,11 +44,9 @@ import safe CMM.AST.Variables.SymbolType
 import safe CMM.FlowAnalysis (analyzeFlow)
 import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.GetPos (GetPos(getPos), SourcePos)
-import safe CMM.Pretty ()
 import safe CMM.Utils (addPrefix)
-import safe Data.Map (Map)
-import CMM.Err.State (noErrorsState)
-import safe qualified Data.Text as T
+import safe CMM.Err.State (noErrorsState)
+import safe CMM.AST.Blockifier.FilterDropped (filterDropped)
 
 -- | Adds a prefix representing the blockifier phase to a name
 helperName :: Text -> Text
@@ -78,6 +79,9 @@ setCurrentBlock name = do
   State.currentBlock ?= index
   return index
 
+getCurrentBlock :: Blockifier (Maybe Int)
+getCurrentBlock = use State.currentBlock
+
 -- | Generates a fresh name for the given procedure's entry block
 newProcedureName :: Blockifier Text
 newProcedureName = do
@@ -89,7 +93,7 @@ newProcedureName = do
 updateBlock :: Maybe Text -> Blockifier ()
 updateBlock mName = do
   mIndex <- traverse blocksCache mName
-  use State.currentBlock >>= \case
+  getCurrentBlock >>= \case
     Just oldName -> do
       cData <- use State.currentData
       State.cacheData %= Map.insert oldName cData
@@ -105,6 +109,18 @@ setBlock = updateBlock . Just
 unsetBlock :: Blockifier ()
 unsetBlock = updateBlock Nothing
 
+-- | registers a `dropped` statement
+addDrop :: SourcePos -> Text -> Blockifier ()
+addDrop pos name = getCurrentBlock >>= \case
+   Nothing -> registerASTError pos $ DroppingOutsideBlock name
+   Just idx -> uses State.drops (Map.lookup idx) >>= \case
+      Nothing -> State.drops %= Map.insert idx singleton
+      Just set
+        | name `Set.member` set -> do
+          registerASTError pos $ ReDropping name
+        | otherwise -> State.drops %= Map.insert idx (name `Set.insert` set)
+    where singleton = Set.singleton name
+
 -- | Adds a `NoBlock` annotation to the annotation of the given node
 noBlockAnnots :: (Functor n, WithBlockAnnot a b) => n a -> n b
 noBlockAnnots = updateAnnots (withBlockAnnot NoBlock)
@@ -116,7 +132,7 @@ withNoBlockAnnot = withAnnot . withBlockAnnot NoBlock
 -- | Adds an edge from the current block (if it is set) to the target block
 addControlFlow :: Text -> Blockifier ()
 addControlFlow destBlock =
-  use State.currentBlock >>= \case
+  getCurrentBlock >>= \case
     Nothing -> pure ()
     Just block -> do
       index <- blocksCache destBlock
@@ -216,7 +232,7 @@ instance GetTargetNames (AST.Targets a) [Text] where
 addBlockAnnot ::
      (GetPos a, WithBlockAnnot a b) => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
 addBlockAnnot stmt@(Annot n annot) =
-  use State.currentBlock >>= \case
+  getCurrentBlock >>= \case
     Nothing ->
       registerASTWarning stmt (UnreachableStatement . void $ unAnnot stmt) $>
       withAnnot (withBlockAnnot Unreachable annot) (noBlockAnnots n)
@@ -385,8 +401,6 @@ instance GetMetadata DeclaresVars (AST.Arm a) where
     \case
       AST.Arm _ body -> getMetadata t body
 
-type BlockifyAssumps a b = (WithBlockAnnot a b, GetPos a)
-
 -- | Blockifies the given node, annotating the statements with basic blocks they appear in
 class Blockify n a b where
   blockify :: BlockifyAssumps a b => n a -> Blockifier (n b)
@@ -426,7 +440,7 @@ instance Blockify (Annot AST.Datum) a b where
 
 -- | Blockifies the given procedure header
 blockifyProcedureHeader ::
-     (GetPos a, WithBlockAnnot a b)
+     (BlockifyAssumps a b)
   => Annotation AST.ProcedureHeader a
   -> Blockifier (Annot AST.ProcedureHeader b)
 blockifyProcedureHeader (AST.ProcedureHeader mConv name formals mType `Annot` a) = do
@@ -444,7 +458,7 @@ instance Blockify (Annot AST.Procedure) a b where
     index <- newProcedureName >>= setCurrentBlock
     header' <- blockifyProcedureHeader header
     withAnnot (Begins index `withBlockAnnot` a) <$>
-      (AST.Procedure header' <$> blockify body) <*
+      (AST.Procedure header' <$> (blockify body >>= filterDropped)) <*
       finalize <*
       State.clearBlockifier
     where
@@ -476,10 +490,9 @@ forbidFallthrough a =
 -- | takes a wrapped object, the constructor of the wrapper and its annotation, generates a new wrapped object after blockifying the inside
 constructBlockified ::
      ( Blockify (Annot n1) a1 b1
-     , WithBlockAnnot a1 b1
-     , WithBlockAnnot a2 b2
-     , GetPos a1
-     )
+     , BlockifyAssumps a1 b1
+     , BlockifyAssumps a2 b2
+     , Functor n1)
   => (Annot n1 b1 -> n2 b2)
   -> a2
   -> Annot n1 a1
@@ -590,7 +603,7 @@ instance Blockify (Annot AST.Stmt) a b where
        ->
         registerReadsWrites stmt *> addBlockAnnot stmt <*
         when (neverReturns callAnnots) unsetBlock
-      AST.DroppedStmt {} -> registerReads stmt *> addBlockAnnot stmt
+      AST.DroppedStmt {} -> addDrop (getPos a) (getName stmt) *> registerReads stmt *> addBlockAnnot stmt
 
 -- | This is here just for completeness
 flatteningError :: GetPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()

@@ -1,0 +1,17 @@
+drop(auto a) {
+    return ();
+}
+
+f() {
+    stackdata {
+        x : y: new bits32;
+    }
+
+
+
+    if 0 {
+        dropped x;
+    }
+
+    return ();
+}

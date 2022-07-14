@@ -7,13 +7,14 @@ import safe Data.Text (Text)
 
 import safe CMM.AST (Conv)
 import safe CMM.AST.GetConv (GetConv(getConv))
-import safe CMM.AST.GetName (GetName(getName))
+import safe CMM.AST.GetName (GetName(getName, mapName))
 import safe CMM.Inference.Preprocess.Elaboration
   ( HasElaboration(getElaboration, setElaboration)
   , Elaboration
   )
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeHandle (TypeHandle)
+import CMM.Utils (logicError)
 
 -- | An object representing the given context
 data Context
@@ -27,6 +28,8 @@ data Context
 
 instance GetName Context where
   getName = ctxName
+  mapName _ GlobalCtx {} = logicError
+  mapName f ctx = ctx{ctxName = f `mapName` ctxName ctx}
 
 instance HasElaboration Context where
   getElaboration = ctxElab

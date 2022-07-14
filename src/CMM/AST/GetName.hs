@@ -171,11 +171,13 @@ instance GetName (AST.Stmt a) where
     \case
       AST.LabelStmt n -> getName n
       AST.ContStmt n _ -> getName n
+      AST.DroppedStmt n -> getName n
       _ -> noNameStmt
   mapName f =
     \case
       AST.LabelStmt n -> AST.LabelStmt $ mapName f n
       AST.ContStmt n ks -> mapName f n `AST.ContStmt` ks
+      AST.DroppedStmt n -> AST.DroppedStmt $ mapName f n
       _ -> noNameStmt
 
 noNameStmt :: HasCallStack => a

@@ -580,6 +580,7 @@ stmt =
   withSourcePos $
   choice
     [ emptyStmt
+    , droppedStmt
     , ifStmt
     , switchStmt
     , spanStmt
@@ -597,6 +598,10 @@ stmt =
 -- | parses an empty statement
 emptyStmt :: ULocParser AST.Stmt
 emptyStmt = semicolon $> AST.EmptyStmt
+
+-- | parses an dropped statement
+droppedStmt :: ULocParser AST.Stmt
+droppedStmt = keyword T.Dropped *> fmap AST.DroppedStmt identifier
 
 -- | parses an if statement
 ifStmt :: ULocParser AST.Stmt

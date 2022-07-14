@@ -1,0 +1,16 @@
+drop(auto a) {
+    return ();
+}
+
+f() {
+    stackdata {
+        x : y: new bits32;
+    }
+
+
+
+    dropped x;
+    dropped y;
+
+    return ();
+}

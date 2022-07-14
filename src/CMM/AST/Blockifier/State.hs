@@ -5,16 +5,17 @@ module CMM.AST.Blockifier.State where
 
 import safe Control.Lens
     ( makeFieldsNoPrefix, use, uses, (%=), (<>=), (.=) )
-
 import safe Data.Map (Map)
 import safe Data.Text (Text)
 import safe Control.Monad.State ( State )
-
-import safe CMM.AST.BlockAnnot (BlockData, BlockVars)
-import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
-import safe CMM.Parser.GetPos (SourcePos)
 import safe qualified Data.Map as Map
 import safe Data.Tuple ( swap )
+import safe Data.Set (Set)
+import safe Data.Data ( Data )
+
+import safe CMM.AST.BlockAnnot (BlockData, BlockVars, WithBlockAnnot)
+import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
+import safe CMM.Parser.GetPos (SourcePos, GetPos)
 
 -- | Contains various data used by `Blockifier`
 data BlockifierState =
@@ -22,6 +23,7 @@ data BlockifierState =
     { _currentFlow :: [(Int, Int)] -- ^ [(from, to)] edges in the control-flow graph
     , _allFlow :: [(Int, Int)] -- ^ [(from, to)] edges in the control-flow graph
     , _blocksCache :: Map Text Int -- ^ Maps block names to their respective indices
+    , _drops :: Map Int (Set Text) -- ^ Maps block indexes to sets of dropped contracts
     , _allBlocks :: Map Int Text -- ^ Maps block names to their respective indices
     , _numBlocks :: Map Int Int -- ^ Maps each procedure's entry block to the number of blocks of that procedure
     , _currentBlock :: Maybe Int -- ^ Contains the index of the current block
@@ -52,6 +54,7 @@ initBlockifier =
     , _currentData = mempty
     , _cacheData = mempty
     , _allData = mempty
+    , _drops = mempty
     , _registers = mempty
     , _imports = mempty
     , _constants = mempty
@@ -66,6 +69,7 @@ makeFieldsNoPrefix ''BlockifierState
 
 -- | Type constructor for blockifier function return types
 type Blockifier = State BlockifierState
+type BlockifyAssumps a b = (Data b, WithBlockAnnot a b, GetPos a, GetPos b)
 
 -- | Resets `Blockifier` between different functions
 clearBlockifier :: Blockifier ()
@@ -76,6 +80,7 @@ clearBlockifier = do
   registers .= mempty
   currentBlock .= Nothing
   currentData .= mempty
+  drops .= mempty
   controlFlow' <- use currentFlow
   allFlow <>= controlFlow'
   currentFlow .= mempty

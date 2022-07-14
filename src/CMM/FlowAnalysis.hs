@@ -4,7 +4,7 @@ module CMM.FlowAnalysis
   ( analyzeFlow
   ) where
 
-import safe Control.Lens ( (^.), use, uses, (.=), _3 )
+import safe Control.Lens ( (^.), use, uses, (.=), _3, (%=) )
 import safe Control.Monad (unless)
 import safe qualified Data.Graph as Graph
 import safe Data.List (elemIndex, sortOn )
@@ -41,8 +41,9 @@ analyzeFlow procedure@(Annot _ _)
   labelsWarning <- makeMessageFromVisible <$> uses State.labels removeReachable
   continuationsWarning <-
     makeMessageFromVisible <$> uses State.continuations removeReachable
-  unless (null labelsWarning && null continuationsWarning) $ do
+  unless (null labelsWarning) $
     registerASTWarning procedure $ UnreachableLabels labelsWarning
+  unless (null continuationsWarning) $
     registerASTWarning procedure $ UnreachableContinuations continuationsWarning
   preCleanData <-
     uses State.registers (fmap . flip Map.restrictKeys . Map.keysSet) <*>
@@ -63,6 +64,7 @@ analyzeFlow procedure@(Annot _ _)
     Just blockData -> Map.keys $ Map.filter (^. _3) blockData
   unless (null uninitialized) $
     registerASTError procedure $ UninitializedRegisters uninitialized
+  State.cacheData %= Map.filterWithKey (\k _ -> k `Set.member` reachable)
 
 updateFlowPair :: (Int, Int) -> Blockifier Bool
 updateFlowPair (f, t) = do

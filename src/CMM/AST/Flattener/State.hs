@@ -4,19 +4,20 @@
 
 module CMM.AST.Flattener.State where
 
-import Control.Lens
-    ( use, uses, (%=), (+=), (.=), makeFieldsNoPrefix )
-import Control.Monad.State ( State )
-import Data.Map (Map)
-import Data.Text (Text)
-import CMM.AST ( Name(Name) )
-import qualified Data.Text as T
-import CMM.Utils ( addPrefix )
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import Data.Set (Set)
-import Data.Foldable ( for_ )
+import safe Control.Lens
+    ( use, uses, (%=), (+=), (.=), makeFieldsNoPrefix, (<&>) )
+import safe Control.Monad.State ( State )
+import safe Data.Map (Map)
+import safe Data.Text (Text)
+import safe qualified Data.Text as T
+import safe qualified Data.Map as Map
+import safe qualified Data.Set as Set
+import safe Data.Set (Set)
+import safe Data.Foldable ( for_ )
+import safe Data.Maybe ( fromMaybe )
 
+import safe CMM.AST ( Name(Name) )
+import safe CMM.Utils ( addPrefix )
 
 -- | contains the state of the flattener
 data FlattenerState
@@ -60,6 +61,10 @@ registerContractors :: [Text] -> Text -> Flattener ()
 registerContractors contractors contract = do
   (contract:contractors) `for_` \contractor ->
     contractorMap %= Map.insert contractor contract
+
+getContract :: Text -> Flattener Text
+getContract contractor =
+  uses contractorMap (Map.lookup contractor) <&> fromMaybe contractor
 
 -- Gets the list of contractors of the given procedure
 getContracts :: Flattener (Set Text)

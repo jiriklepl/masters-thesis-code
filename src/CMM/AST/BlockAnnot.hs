@@ -5,8 +5,10 @@ module CMM.AST.BlockAnnot where
 import safe Data.Data (Data)
 import safe Data.Map (Map)
 import safe Data.Text (Text)
+import safe Data.Function ( (&) )
+import safe Data.Bifunctor ( Bifunctor(second, first) )
 
-import safe CMM.AST.Annot (Annot, takeAnnot)
+import safe CMM.AST.Annot (Annot, takeAnnot, Annotation (Annot))
 
 -- | Contains information about basic-block structure
 data BlockAnnot
@@ -19,18 +21,30 @@ data BlockAnnot
 -- | A class of types that contain a `BlockAnnot`
 class HasBlockAnnot a where
   getBlockAnnot :: a -> BlockAnnot -- ^ retrieves a `BlockAnnot`
+  setBlockAnnot :: BlockAnnot -> a -> a
+
+getBlockMembership :: HasBlockAnnot a => a -> Maybe Int
+getBlockMembership a = getBlockAnnot a & \case
+   PartOf idx -> Just idx
+   Begins idx -> Just idx
+   _ -> Nothing
 
 instance HasBlockAnnot BlockAnnot where
   getBlockAnnot = id
+  setBlockAnnot = const
 
 instance HasBlockAnnot (a, BlockAnnot) where
   getBlockAnnot = snd
+  setBlockAnnot = second . const
 
 instance HasBlockAnnot ((a, BlockAnnot), b) where
   getBlockAnnot = snd . fst
+  setBlockAnnot = first . second . const
 
-instance HasBlockAnnot a => HasBlockAnnot (Annot n a) where
+instance (HasBlockAnnot a, Functor n) => HasBlockAnnot (Annot n a) where
   getBlockAnnot = getBlockAnnot . takeAnnot
+  setBlockAnnot b = \case
+    n `Annot` a -> (setBlockAnnot b <$> n) `Annot` setBlockAnnot b a
 
 -- | Adds `BlockAnnot` to an annotation
 class HasBlockAnnot b =>

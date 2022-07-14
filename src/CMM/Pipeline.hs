@@ -21,9 +21,9 @@ import safe CMM.Inference.Preprocess.Elaboration
 import safe CMM.Lexer.Token ( Token )
 import safe Data.Data ( Data, Typeable )
 import safe CMM.AST.Flattener ( flatten )
-import safe CMM.AST.Blockifier ( Blockify (blockify), BlockifyAssumps )
+import safe CMM.AST.Blockifier ( Blockify (blockify) )
 import safe CMM.AST.Blockifier.State
-    ( initBlockifier, BlockifierState )
+    ( initBlockifier, BlockifierState, BlockifyAssumps )
 import safe Control.Monad.State ( runState )
 import safe CMM.Err.State ( ErrorState, HasErrorState (errorState), registerError, countErrors )
 import safe Control.Lens ( uses, view )
@@ -43,7 +43,6 @@ import safe CMM.Options ( Options (output, prettify, monoSrc, input, quiet, hand
 import safe Options.Applicative ( execParser )
 import safe qualified Data.Text.IO as T
 import safe CMM.Err.IsError ( IsError )
-import safe CMM.AST.BlockAnnot ( BlockAnnot )
 import safe System.IO (stdin, IOMode (ReadMode), withFile, stderr, hPrint)
 import safe System.Exit ( die )
 import safe CMM.Inference.HandleCounter ( handleCounter )

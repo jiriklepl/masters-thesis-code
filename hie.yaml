@@ -15,6 +15,9 @@ cradle:
     - path: "src/CMM/AST/Blockifier/Error.hs"
       component: "Compiler:exe:Compiler"
 
+    - path: "src/CMM/AST/Blockifier/FilterDropped.hs"
+      component: "Compiler:exe:Compiler"
+
     - path: "src/CMM/AST/Blockifier/State.hs"
       component: "Compiler:exe:Compiler"
 

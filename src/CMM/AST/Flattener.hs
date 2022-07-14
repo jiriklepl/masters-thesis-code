@@ -5,9 +5,10 @@ module CMM.AST.Flattener where
 import safe Control.Applicative (liftA2)
 import safe Control.Monad.State (evalState)
 import safe Data.Data (Data(gmapM), Typeable)
-
-import safe qualified CMM.AST.Flattener.State as State
-import safe CMM.AST.Flattener.State (Flattener)
+import safe Data.List (partition)
+import safe Data.Generics.Aliases (extM)
+import safe qualified Data.Set as Set
+import safe Data.Functor ((<&>))
 
 import safe CMM.AST
   ( Arm(Arm)
@@ -16,14 +17,13 @@ import safe CMM.AST
   , Expr(LVExpr)
   , LValue(LVName)
   , Name(Name)
-  , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt, ReturnStmt, CallStmt), StackDecl (StackDecl), Datum (DatumLabel, Datum), Actual (Actual)
+  , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt, ReturnStmt, CallStmt, DroppedStmt), StackDecl (StackDecl), Datum (DatumLabel, Datum), Actual (Actual)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
-import Data.List (partition)
-import Data.Generics.Aliases (extM)
-import safe CMM.AST.GetName ( GetName(getName) )
-import qualified Data.Set as Set
-import Data.Functor ((<&>))
+import safe CMM.AST.GetName ( GetName(getName, setName) )
+
+import safe qualified CMM.AST.Flattener.State as State
+import safe CMM.AST.Flattener.State (Flattener)
 
 -- | Flattens the given AST node, more specifically nested blocks
 flatten ::
@@ -191,4 +191,7 @@ instance FlattenStmt (Annot Stmt) where
       ReturnStmt {} -> do
         calls' <- makeContractCalls annot
         pure $ toBodyStmt <$> calls' <> [stmt]
+      DroppedStmt name -> do
+        name' <- State.getContract $ getName name
+        pure [toBodyStmt $ setName name' stmt]
       _ -> pure [toBodyStmt stmt]

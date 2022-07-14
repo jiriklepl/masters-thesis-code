@@ -1,0 +1,30 @@
+drop(auto a) {
+    return ();
+}
+
+f() {
+    stackdata {
+        x : y: new bits32;
+    }
+
+
+
+    if 0 {
+        dropped x;
+        = drop(x);
+        return ();
+    }
+
+    if 5 {
+        if 10 {
+            return ();
+        } else {
+            dropped y;
+            return ();
+        }
+
+
+    }
+
+    return ();
+}

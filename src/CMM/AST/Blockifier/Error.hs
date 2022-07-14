@@ -25,6 +25,9 @@ data BlockifierError
   | GotoWithoutTargets (Stmt ())   -- ^ Indirect goto statement without specified targets is illegal
   | FlatteningInconsistency (Stmt ())  -- ^ Compilation internal failure in the flattening phase
   | ProcedureFallthrough -- ^ Fallthrough to the end of procedure
+  | DroppingOutsideBlock Text -- ^ Attempted to make `dropped` outside of control flow
+  | ReDropping Text -- ^ Attempted to make `reDropped`
+  | AlternativePath Text -- ^ Alternative path to a dropped item
   deriving (Eq, Show, IsError, Data)
 
 instance Pretty BlockifierError where
@@ -42,6 +45,9 @@ instance Pretty BlockifierError where
     ProcedureFallthrough -> "Fallthrough to the end of procedure"
     GotoWithoutTargets stmt -> "Goto statement with no targets:" <+> pretty stmt
     FlatteningInconsistency stmt -> "Nonflat statement:" <+> pretty stmt
+    DroppingOutsideBlock name -> "Attempted to make" <+> pretty name <+> " `dropped` outside of control flow"
+    ReDropping name -> "Attempted to make" <+> pretty name <+> " `dropped` twice"
+    AlternativePath name -> "Alternative path to a dropped item:" <+> pretty name
 
 -- | `DuplicateSymbol` generalized over inputs in `GetName`
 duplicateSymbol :: GetName n => SymbolType -> n -> BlockifierError
