@@ -1,6 +1,15 @@
 {-# LANGUAGE Safe #-}
 
 
+{-|
+Module      : CMM.Options
+Description : Compiler options
+Maintainer  : jiriklepl@seznam.cz
+
+This module contains the definition of options of the compiler and the argument parser for these options.
+-}
+
+
 module CMM.Options where
 import safe Options.Applicative
     ( (<**>),

@@ -3,6 +3,15 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE Rank2Types #-}
 
+{-|
+Module      : CMM.AST.Blockifier
+Description : Blockifier layer
+Maintainer  : jiriklepl@seznam.cz
+
+This module defines the blockifier layer that annotates the flattened input AST with block annotations
+and performs flow analysis on each input procedure, while also storing some more metadata about each procedure.
+-}
+
 module CMM.AST.Blockifier where
 
 import safe Control.Lens

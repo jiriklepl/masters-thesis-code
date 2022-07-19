@@ -1,6 +1,14 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
+{-|
+Module      : CMM.Mangle
+Description : Mangling layer
+Maintainer  : jiriklepl@seznam.cz
+
+This module defines the mangling postprocessing layer.
+-}
+
 module CMM.Mangle where
 
 import safe qualified CMM.Inference.State as State

@@ -1,6 +1,16 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-|
+Module      : CMM.Utils
+Description : Type inference preprocessing layer
+Maintainer  : jiriklepl@seznam.cz
+
+This module defines type inference preprocessing of the given AST,
+elaborating it with elaborations with 'preprocess' method of the 'Preprocess' class
+and generating facts (constraints) that capture the semantics of the code.
+-}
+
 module CMM.Inference.Preprocess where
 
 import safe Control.Applicative (liftA2)
@@ -112,6 +122,7 @@ import safe CMM.Inference.Preprocess.Error
     ( PreprocessError(NotImplemented, UndefinedForeign, LVNotFound) )
 import safe CMM.AST.Wrap ( MakeWrapped(makeWrapped) )
 
+-- | Runs the type inference preprocessor on the given node, elaborating it and all its subnodes
 class Preprocess n a b where
   preprocess ::
        (WithElaboration a b, GetPos a) => Annot n a -> Preprocessor (Annot n b)

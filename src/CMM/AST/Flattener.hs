@@ -1,5 +1,13 @@
 {-# LANGUAGE Safe #-}
 
+{-|
+Module      : CMM.AST.Flattener
+Description : Flattener layer
+Maintainer  : jiriklepl@seznam.cz
+
+This module contains definition of flattening of the input AST into a flattened form.
+-}
+
 module CMM.AST.Flattener where
 
 import safe Control.Applicative (liftA2)

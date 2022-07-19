@@ -1,5 +1,13 @@
 {-# LANGUAGE Safe #-}
 
+{-|
+Module      : CMM.TypeMiner
+Description : Type-translation to LLVM
+Maintainer  : jiriklepl@seznam.cz
+
+This module translates types from the type inference to LLVM
+-}
+
 module CMM.TypeMiner where
 
 import safe qualified CMM.AST as AST

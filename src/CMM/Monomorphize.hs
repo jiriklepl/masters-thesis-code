@@ -1,6 +1,14 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+{-|
+Module      : CMM.Monomorphizer
+Description : The monomorphization layer
+Maintainer  : jiriklepl@seznam.cz
+
+This module defines monomorphization performed by the compiler.
+-}
+
 module CMM.Monomorphize where
 
 import safe Control.Applicative (liftA2, liftA3)
@@ -696,7 +704,7 @@ monomorphizeMethod scheme inst = do
   where
     go set = do
       set' <- Set.toList set `for` \item -> monomorphizeMethodInner item inst
-      return $ first (error $ show (fmap (fmap (fmap void)) set')) $ oneRight set' -- TODO: Ambiguity + Nihility
+      return . first head $ oneRight set'
 
 recallField :: TypeVar
   -> TypeVar
@@ -725,7 +733,7 @@ monomorphizeField scheme inst =
       map'' <-
         Map.toList map' `for` \(item, struct) ->
           monomorphizeFieldInner item inst struct
-      return $ first head $ oneRight map'' -- TODO: Ambiguity + Nihility
+      return . first head $ oneRight map''
 
 instantiationError :: Monad m =>
   Type

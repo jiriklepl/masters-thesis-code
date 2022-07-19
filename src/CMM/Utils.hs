@@ -1,6 +1,14 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE CPP #-}
 
+{-|
+Module      : CMM.Utils
+Description : Various general utilities
+Maintainer  : jiriklepl@seznam.cz
+
+This module contains various utilities used in other modules
+-}
+
 module CMM.Utils where
 
 import safe Control.Monad (unless, when)

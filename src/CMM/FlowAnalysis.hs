@@ -1,5 +1,13 @@
 {-# LANGUAGE Safe #-}
 
+{-|
+Module      : CMM.FlowAnalysis
+Description : Flow analysis
+Maintainer  : jiriklepl@seznam.cz
+
+This module contains the definition of the flow analysis performed after blockifying.
+-}
+
 module CMM.FlowAnalysis
   ( analyzeFlow
   ) where

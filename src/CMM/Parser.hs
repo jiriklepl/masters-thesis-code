@@ -1,5 +1,13 @@
 {-# LANGUAGE Safe #-}
 
+{-|
+Module      : CMM.Parser
+Description : The parser layer
+Maintainer  : jiriklepl@seznam.cz
+
+This module contains the definition of parsing of the language
+-}
+
 module CMM.Parser where
 
 import safe Control.Applicative

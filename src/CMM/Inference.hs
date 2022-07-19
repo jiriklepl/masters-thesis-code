@@ -1,8 +1,18 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE Rank2Types #-}
 
-module CMM.Inference where
+{-|
+Module      : CMM.Inference
+Description : Inference layer
+Maintainer  : jiriklepl@seznam.cz
 
+This module defines the inference layer of the compiler.
+
+The most important function is `reduce` - it runs the whole type inference.
+Then, `reduceTrivial` contains most cases for constraint solving.
+-}
+
+module CMM.Inference where
 
 import safe Control.Applicative (Applicative(liftA2))
 import safe Control.Lens
@@ -621,6 +631,7 @@ reduceMany = repeatStep reduceTrivial >=> reduceTemplates . snd >=> go
         then repeatStep what facts'
         else return result
 
+-- | runs the whole inference algorithm
 reduce :: Facts -> Inferencer (Bool, Facts)
 reduce facts = do
   (change, facts') <- reduceMany facts
@@ -632,6 +643,7 @@ reduce facts = do
       (change', facts''') <- closeSCCs facts'' sccs
       return (change || change', facts''')
 
+-- | the subtype dimension minimization phase
 minimizeSubs :: TypeVar -> Set TypeVar -> Inferencer ()
 minimizeSubs parent pTypeVars = do
   pTypeConstings <-
@@ -642,9 +654,9 @@ minimizeSubs parent pTypeVars = do
   constBounds <- use State.constingBounds
   kindings <- uses State.subKinding (transformMap pTypeKindings)
   kindBounds <- use State.kindingBounds
-  let (cSubsts, cRest) = laundry parent pTypeConstings constBounds constings
+  let (cSubsts, cRest) = minimizeInner parent pTypeConstings constBounds constings
       cSubst = foldTVarSubsts cSubsts
-      (kSubsts, kRest) = laundry parent pTypeKindings kindBounds kindings
+      (kSubsts, kRest) = minimizeInner parent pTypeKindings kindBounds kindings
       kSubst = foldTVarSubsts kSubsts
   fixSubGraph True State.subConsting cSubst
   fixBounds True State.constingBounds cSubst
@@ -673,7 +685,8 @@ minimizeSubs parent pTypeVars = do
     mapFilter pTypeThings from _ =
       tVarParent from == parent && not (from `Set.member` pTypeThings)
 
-laundry ::
+-- | helper function for subtype minimization
+minimizeInner ::
      ( Bounded a
      , Lattice a
      , Eq a
@@ -686,7 +699,7 @@ laundry ::
   -> Map TypeVar (Bounds a)
   -> [(TypeVar, Set TypeVar)]
   -> ([Map TypeVar TypeVar], [f ((Ordered a, Set TypeVar), TypeVar)])
-laundry parent pTypeThings boundsMap subGraph =
+minimizeInner parent pTypeThings boundsMap subGraph =
   let scc =
         Graph.stronglyConnCompR $
         (\(from, to) -> (from `State.readBoundsFrom` boundsMap, from, Set.toList to)) <$>
@@ -730,6 +743,7 @@ laundry parent pTypeThings boundsMap subGraph =
           not . isTrivialOrAbsurd $ State.readBoundsFrom tVar' boundsMap <> bounds
     getDepends _ _ = logicError
 
+-- | helper function for minimization of bounds
 minimizeBounds ::
      Bounded a
   => Lens' InferencerState (Map TypeVar (Bounds a))
@@ -739,34 +753,34 @@ minimizeBounds what tVar = do
   low <- uses what (tVar `State.readLowerBound`)
   what %= Map.insert tVar (low `Bounds` low)
 
-freeParented :: Set TypeVar -> Inferencer ([TypeVar], [TypeVar])
-freeParented ts = do
+freeSubtypeVars :: Set TypeVar -> Inferencer ([TypeVar], [TypeVar])
+freeSubtypeVars ts = do
   parent <- getParent
   let
-    isFreeParented tIngs with tVar@TypeVar {} =
+    isFreeSubtypeVar tIngs with tVar@TypeVar {} =
       not (tVar `Map.member` with) && tVarParent tVar == parent &&
       not (tVar `Set.member` tIngs)
-    isFreeParented _ _ NoType = False
+    isFreeSubtypeVar _ _ NoType = False
   (consts, kinds) <- uses State.typeProps $ unzip . fmap mineSubs . Bimap.elems
   subConsts <- use State.subConsting
   subKinds <- use State.subKinding
   tConsts <- fmap Set.fromList . traverse State.getConsting $ Set.toList ts
   tKinds <- fmap Set.fromList . traverse State.getKinding $ Set.toList ts
   return
-    ( filter (isFreeParented tConsts subConsts) consts
-    , filter (isFreeParented tKinds subKinds) kinds)
+    ( filter (isFreeSubtypeVar tConsts subConsts) consts
+    , filter (isFreeSubtypeVar tKinds subKinds) kinds)
   where
     mineSubs props = (props ^. consting, props ^. kinding)
 
 minimizeFree :: Set TypeVar -> Inferencer ()
 minimizeFree ts = do
-  (consts, kinds) <- freeParented ts
+  (consts, kinds) <- freeSubtypeVars ts
   minimizeBounds State.constingBounds `traverse_` consts
   minimizeBounds State.kindingBounds `traverse_` kinds
 
 floatSubs :: Set TypeVar -> Inferencer ()
 floatSubs ts = do
-  (consts, kinds) <- (both %~ Set.fromList) <$> freeParented ts
+  (consts, kinds) <- (both %~ Set.fromList) <$> freeSubtypeVars ts
   constBounds <- use State.constingBounds
   kindBounds <- use State.kindingBounds
   Set.intersection consts kinds `for_` \tVar -> do
@@ -796,27 +810,27 @@ reParent newParent oldParents = go
       | otherwise = tVar
     tVarCase NoType = NoType
 
-unSchematize :: Facts -> Inferencer Facts
-unSchematize [] = return []
-unSchematize (Fact (InstType (VarType scheme) inst):others) =
+toUnifsComponent :: Facts -> Inferencer Facts
+toUnifsComponent [] = return []
+toUnifsComponent (Fact (InstType (VarType scheme) inst):others) =
   State.fromOldName scheme >>= State.lookupScheme >>= \case
     Just (tVars :. facts :=> t) -> do
       instSubst <- refresh tVars
       let facts' = Fact . apply instSubst <$> facts
           t' = instSubst `apply` t
-      ((Fact (inst `Equality` t') : facts') <>) <$> unSchematize others
-    Nothing -> (Fact (VarType scheme `Equality` inst) :) <$> unSchematize others
-unSchematize (fact:others) = (fact :) <$> unSchematize others
+      ((Fact (inst `Equality` t') : facts') <>) <$> toUnifsComponent others
+    Nothing -> (Fact (VarType scheme `Equality` inst) :) <$> toUnifsComponent others
+toUnifsComponent (fact:others) = (fact :) <$> toUnifsComponent others
 
-schematize :: Facts -> Set TypeVar -> Inferencer Facts
-schematize facts tVars = do
+closeScheme :: Facts -> Set TypeVar -> Inferencer Facts
+closeScheme facts tVars = do
   let tVarsList = Set.toList tVars
   parent <- getParent
-  x <- Set.toList . mappend (freeTypeVars facts) . Set.unions <$> traverse State.collectPrimeTVarsAll tVarsList
-  reX <- traverse State.reconstruct x
-  constings <- traverse State.getConsting x
-  kindings <- traverse State.getKinding x
-  typings <- liftA2 (zip3 x) (traverse State.reconstruct x) (traverse State.getTyping x)
+  relevantVars <- Set.toList . mappend (freeTypeVars facts) . Set.unions <$> traverse State.collectPrimeTVarsAll tVarsList
+  relevantTypes <- traverse State.reconstruct relevantVars
+  constings <- traverse State.getConsting relevantVars
+  kindings <- traverse State.getKinding relevantVars
+  typings <- liftA2 (zip3 relevantVars) (traverse State.reconstruct relevantVars) (traverse State.getTyping relevantVars)
   let toTrivialDeps = fmap $ second Set.singleton . dupe
   subConsts <-
     uses State.subConsting $ filter (presentIn tVarsList) .
@@ -825,16 +839,16 @@ schematize facts tVars = do
   subKinds <-
     uses State.subKinding $ filter (presentIn tVarsList) . (toTrivialDeps kindings <>) .
     Map.toList
-  let constingsSubst = Map.fromList $ zip constings reX
+  let constingsSubst = Map.fromList $ zip constings relevantTypes
       constingFacts =
         [ constEquality t' t
-        | (t', t) <- zip (constingsSubst `apply` fmap toType constings) reX
+        | (t', t) <- zip (constingsSubst `apply` fmap toType constings) relevantTypes
         , t' /= t
         ]
-      kindingsSubst = Map.fromList $ zip kindings reX
+      kindingsSubst = Map.fromList $ zip kindings relevantTypes
       kindingFacts =
         [ kindEquality t' t
-        | (t', t) <- zip (kindingsSubst `apply` fmap toType kindings) reX
+        | (t', t) <- zip (kindingsSubst `apply` fmap toType kindings) relevantTypes
         , t' /= t
         ]
   constFacts <-
@@ -865,7 +879,7 @@ schematize facts tVars = do
        let (filtered, rest) =
              partition
                (any
-                  ((`Set.member` Set.fromList x) `fOr` parentedBy parent `fOr`
+                  ((`Set.member` Set.fromList relevantVars) `fOr` parentedBy parent `fOr`
                    (`Set.member` tVars)) .
                 freeTypeVars .
                 view _1)
@@ -948,13 +962,13 @@ closeSCCs facts (scc:others) =
         (<> fmap rePar facts) .
         concat
       parents' <- uses State.renaming ((<$> parents) . apply)
-      x <- Set.unions <$> State.collectPrimeTVarsAll `traverse` parents'
-      minimizeSubs parent x
-      minimizeFree x
+      boundBySignatureVars <- Set.unions <$> State.collectPrimeTVarsAll `traverse` parents'
+      minimizeSubs parent boundBySignatureVars
+      minimizeFree boundBySignatureVars
       _ <- fixAll
       parent' <- uses State.renaming (`apply` parent)
       State.popParent *> State.pushParent parent'
-      floatSubs x
+      floatSubs boundBySignatureVars
       _ <- fixAll
       parent'' <- uses State.renaming (`apply` parent')
       State.popParent *> State.pushParent parent''
@@ -962,11 +976,11 @@ closeSCCs facts (scc:others) =
       parent''' <- uses State.renaming (`apply` parent'')
       State.popParent *> State.pushParent parent'''
       parents'' <- uses State.renaming ((<$> parents) . apply)
-      facts''' <- schematize facts'' $ Set.fromList parents''
+      facts''' <- closeScheme facts'' $ Set.fromList parents''
       (_1 .~ True) <$> (State.popParent *> closeSCCs facts''' others)
     transformFact (NestedFact (_ :. [fact] :=> fs), _, _) = do
       fact' <- uses State.renaming (`apply` fact)
-      (Fact fact' :) <$> unSchematize fs
+      (Fact fact' :) <$> toUnifsComponent fs
     transformFact _ = logicError
     getParents =
       \case

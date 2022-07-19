@@ -1,6 +1,14 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
+{-|
+Module      : CMM.Pipeline
+Description : The compiler pipeline
+Maintainer  : jiriklepl@seznam.cz
+
+This module contains the compiler pipeline (high-level logic)
+-}
+
 module CMM.Pipeline where
 
 import safe Text.Megaparsec

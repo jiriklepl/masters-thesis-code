@@ -2,11 +2,10 @@
 
 {-|
 Module      : CMM.Translator
-Description : Cmm to llvm translation layer
+Description : The translation layer
 Maintainer  : jiriklepl@seznam.cz
 
-This module follows the `CMM.AST.LRAnalysis` module and translates the AST using its annotations into llvm.
-There is no AST-aware module that would follow this module.
+This module translates the AST with type annotations and block annotations int LLVM.
 -}
 
 module CMM.Translator where

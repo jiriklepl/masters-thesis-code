@@ -1,5 +1,13 @@
 {-# LANGUAGE Safe #-}
 
+{-|
+Module      : CMM.Lexer
+Description : Tokenization layer
+Maintainer  : jiriklepl@seznam.cz
+
+This module defines the tokenization layer of the compiler
+-}
+
 module CMM.Lexer
   ( Lexer
   , tokenize

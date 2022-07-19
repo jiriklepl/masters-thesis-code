@@ -1,6 +1,14 @@
 {-# LANGUAGE Safe #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
+{-|
+Module      : CMM.Pretty
+Description : Some utilities for prettyprinting
+Maintainer  : jiriklepl@seznam.cz
+
+This module contains various utilities used for prettyprinting
+-}
+
 module CMM.Pretty where
 
 import safe Data.String (IsString)

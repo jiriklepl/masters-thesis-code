@@ -1,6 +1,14 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
+{-|
+Module      : CMM.FillElabs
+Description : Elaboration filling
+Maintainer  : jiriklepl@seznam.cz
+
+This module defines filling of elaborations in the monomorphized input AST.
+-}
+
 module CMM.FillElabs where
 
 import safe qualified CMM.Inference.State as State

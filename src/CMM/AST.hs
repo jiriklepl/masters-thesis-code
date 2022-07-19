@@ -1,5 +1,13 @@
 {-# LANGUAGE Safe #-}
 
+{-|
+Module      : CMM.AST
+Description : AST
+Maintainer  : jiriklepl@seznam.cz
+
+This module defines the abstract syntactic tree for the extended C-- language.
+-}
+
 module CMM.AST where
 
 import safe Data.Data (Data)

@@ -132,7 +132,6 @@ executable Compiler
                        CMM.Inference.Unify,
                        CMM.Inference.Unify.Error,
                        CMM.Inference.Utils,
-                       CMM.Lens,
                        CMM.Lexer,
                        CMM.Lexer.Token,
                        CMM.Mangle,
