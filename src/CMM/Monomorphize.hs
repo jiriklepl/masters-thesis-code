@@ -280,13 +280,13 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Struct) a where
   monomorphize subst annotated@(struct `Annot` a) =
     case struct of
       AST.Struct name datums -> do
-        handle <- useInferencer . fmap toTypeVar . State.getHandle $ getElaborationId a
+        props <- useInferencer . fmap toTypeVar . State.getProps $ getElaborationId a
         schemeName <- useInferencer . State.fromOldName $ getElaborationId a
         addScheme <- useInferencer (lookupScheme schemeName) >>= \case
           Nothing -> failure $ isNotScheme annotated
           Just scheme ->
             useMonomorphizer . fmap Right $
-            State.addPolyScheme handle scheme (StructScheme $ withAnnot a struct)
+            State.addPolyScheme props scheme (StructScheme $ withAnnot a struct)
         addScheme `reThrow` \_ ->
           useInferencer
           (typePolytypeness subst $ getElaboration a) >>= \case
@@ -322,8 +322,8 @@ instance HasElaboration a => Monomorphize (Annot AST.Datum) a where
                     (toTypeVar <$> schemes')
                     (toTypeVar <$> insts)
                 succeed . Just $ datum `Annot` b
-          SimpleElaboration handle ->
-            useInferencer (typePolytypeness subst handle) >>= \case
+          SimpleElaboration props ->
+            useInferencer (typePolytypeness subst props) >>= \case
               Mono -> do
                 type'' <- ensuredJustMonomorphize subst type'
                 size' <- traverse (ensuredJustMonomorphize subst) size
@@ -374,8 +374,8 @@ unifFacts (fact : others) subst = case fact of
 instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Procedure) a where
   monomorphize subst annotated@(procedure@(AST.Procedure header body) `Annot` a) = do
     schemeName <- useInferencer . State.fromOldName $ getElaborationId a
-    handle <- useInferencer $ State.getHandle schemeName
-    inst <- useInferencer $ reconstructType subst handle
+    props <- useInferencer $ State.getProps schemeName
+    inst <- useInferencer $ reconstructType subst props
     subst' <- useInferencer (lookupScheme schemeName) >>= \case
       Nothing -> logicError
       Just scheme@(_ :. facts :=> t) -> do
@@ -534,7 +534,8 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Stmt) a where
           Mono -> succeed $ Just annotated
           Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
           Absurd absurdity -> failure $ absurdity `absurdType` annotated
-      AST.ContStmt _ _ -> notYetImplemented
+      AST.ContStmt {} -> notYetImplemented
+      AST.DroppedStmt {} -> succeed $ Just annotated
       AST.GotoStmt expr targets -> do
         expr' <- ensuredJustMonomorphize subst expr
         targets' <- traverse (ensuredJustMonomorphize subst) targets
@@ -561,7 +562,7 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.LValue) a where
           AST.LVName _ ->
             case getElaboration a of
               SimpleElaboration {} -> succeed $ Just annotated
-              LVInstElaboration handle scheme ->
+              LVInstElaboration props scheme ->
                 useInferencer
                   (typePolytypeness
                       subst
@@ -570,10 +571,10 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.LValue) a where
                   _ -> do
                     inst <-
                       useInferencer $
-                      State.reconstructOld (toTypeVar handle) >>=
+                      State.reconstructOld (toTypeVar props) >>=
                       simplify . apply subst >>=
-                      fmap toTypeVar . State.getHandle
-                    instType <- useInferencer $ reconstructType subst handle
+                      fmap toTypeVar . State.getProps
+                    instType <- useInferencer $ reconstructType subst props
                     useMonomorphizer $ State.addGenerate (mapNode makeWrapped annotated) (toTypeVar scheme) inst instType
                     succeed $ Just annotated
               hole -> failure $ hole `illegalHole` annotated
@@ -629,7 +630,7 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Expr) a where
                 inst' <-
                   useInferencer $
                   State.reconstructOld (toTypeVar inst) >>= simplify . apply subst >>=
-                  fmap toTypeVar . State.getHandle
+                  fmap toTypeVar . State.getProps
                 instType <-
                   useInferencer $
                   State.reconstructOld (toTypeVar inst) <&> apply subst
@@ -753,7 +754,7 @@ monomorphizeFieldInner scheme (inst, instWrapper) struct = do
       case inst'' `instantiateFrom` scheme'' of
         Left err -> instantiationError scheme'' inst'' instWrapper err
         Right (subst, _) -> do
-          struct' <- useInferencer . fmap toTypeVar $ State.getHandle struct
+          struct' <- useInferencer . fmap toTypeVar $ State.getProps struct
           useMonomorphizer (uses State.polySchemes $ Map.lookup struct') >>= \case
             Nothing -> failure $ isNotScheme instWrapper
             Just (_, schematized) ->

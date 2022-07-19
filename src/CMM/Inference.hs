@@ -100,16 +100,15 @@ import safe CMM.Inference.Type
   , foldApp
   , unfoldApp
   )
-import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot))
 import safe CMM.Inference.TypeCompl
   ( PrimType
-  , TypeCompl(AddrType, AppType, FunctionType, TupleType)
+  , TypeCompl
   )
-import safe CMM.Inference.TypeHandle
-  ( TypeHandle
+import safe CMM.Inference.Properties
+  ( Properties
   , consting
-  , handleId
-  , initTypeHandle
+  , propsId
+
   , kinding
   , typing
   )
@@ -124,66 +123,34 @@ import safe CMM.Utils (HasCallStack, addPrefix, logicError, notYetImplemented)
 import safe qualified CMM.Inference.State.Impl as State
 import safe CMM.Err.State ( nullErrorState )
 
-class FactCheck a where
-  factCheck :: a -> Inferencer ()
-
-instance (Foldable t, FactCheck a) => FactCheck (t a) where
-  factCheck = traverse_ factCheck
-
-instance {-# OVERLAPPING #-} FactCheck (TypeCompl Type) where
-  factCheck =
-    \case
-      TupleType ts -> factCheck ts
-      FunctionType ts t -> factCheck ts *> factCheck t
-      AppType t t' -> factCheck t *> factCheck t'
-      AddrType t -> factCheck t
-      _ -> return ()
-
-instance FactCheck Type where
-  factCheck =
-    \case
-      VarType t -> factCheck t
-      ComplType t -> factCheck t
-
-instance {-# OVERLAPPING #-} FactCheck Fact where
-  factCheck fact =
-    case fact of
-      Fact f -> factCheck f
-      NestedFact (tVars :. facts :=> fact') ->
-        factCheck tVars *> factCheck facts *> factCheck fact'
-
-instance FactCheck TypeVar where
-  factCheck tVar = do
-    State.handlize %= Bimap.tryInsert tVar (initTypeHandle NoTypeAnnot tVar)
-
-elaborate :: PrimType -> Inferencer (TypeCompl Type)
-elaborate primType = do
-  handles <- use State.handlize
-  let oneLevel t = maybe (VarType t) (view typing) (t `Bimap.lookup` handles)
+createTyping :: PrimType -> Inferencer (TypeCompl Type)
+createTyping primType = do
+  props <- use State.typeProps
+  let oneLevel t = maybe (VarType t) (view typing) (t `Bimap.lookup` props)
   return $ oneLevel <$> primType
 
 simplify :: HasCallStack => Type -> Inferencer TypeVar
 simplify =
   \case
     VarType tVar -> do
-      uses State.handlize (tVar `Bimap.lookup`) >>= \case
+      uses State.typeProps (tVar `Bimap.lookup`) >>= \case
         Just _ -> return tVar
-        Nothing -> State.handlizeTVar tVar
+        Nothing -> State.typePropsTVar tVar
     ComplType complType ->
       traverse simplify complType >>= \primType ->
-        uses State.typize (primType `Bimap.lookupR`) >>= \case
+        uses State.typings (primType `Bimap.lookupR`) >>= \case
           Nothing -> do
             tVar <- State.freshTypeHelperWithHandle $ getTypeKind primType
-            State.typize %= Bimap.insert tVar primType
-            t <- elaborate primType
-            State.handlize %= Bimap.adjust (typing .~ ComplType t) tVar
+            State.typings %= Bimap.insert tVar primType
+            t <- createTyping primType
+            State.typeProps %= Bimap.adjust (typing .~ ComplType t) tVar
             return tVar
           Just tVar -> return tVar
 
-pushTyping :: TypeHandle -> TypeHandle -> Inferencer ()
-pushTyping handle handle' = do
-  let t = handle ^. typing
-      t' = handle' ^. typing
+pushTyping :: Properties -> Properties -> Inferencer ()
+pushTyping props props' = do
+  let t = props ^. typing
+      t' = props' ^. typing
   case unify t t' of
     Left errs -> State.addUnificationErrors errs
     Right (subst, _) -> do
@@ -197,19 +164,19 @@ pushTyping handle handle' = do
       safeHandlizeUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
 
 mineAST :: (HasElaboration a, Foldable n) => n a -> Inferencer ()
-mineAST = traverse_ (addHandles . getElaboration)
+mineAST = traverse_ (addPropss . getElaboration)
   where
-    addHandle handle = State.handlize %= Bimap.insert (handleId handle) handle
-    addHandles =
+    addProps props = State.typeProps %= Bimap.insert (propsId props) props
+    addPropss =
       \case
         EmptyElaboration -> return ()
-        SimpleElaboration handle -> addHandle handle
-        LVInstElaboration handle handle' -> addHandle handle *> addHandle handle'
-        MethodElaboration handle handle' handle'' ->
-          addHandle handle *> addHandle handle' *> addHandle handle''
-        MemberElaboration handle classHandles handles handles' ->
-          addHandle handle *> traverse_ addHandle handles *> traverse_ (addHandle . snd) classHandles *>
-          traverse_ addHandle handles'
+        SimpleElaboration props -> addProps props
+        LVInstElaboration props props' -> addProps props *> addProps props'
+        MethodElaboration props props' props'' ->
+          addProps props *> addProps props' *> addProps props''
+        MemberElaboration props classProps propss propss' ->
+          addProps props *> traverse_ addProps propss *> traverse_ (addProps . snd) classProps *>
+          traverse_ addProps propss'
 
 fixAll :: Inferencer Bool
 fixAll = do
@@ -262,18 +229,18 @@ fixBounds isShallow which subst = do
 
 fixSubs :: Inferencer Bool
 fixSubs = do
-  unifs' <- use State.unifs
+  renaming' <- use State.renaming
   let fixBoth ::
            (Bounded a, Eq a, Ord (Ordered a), Lattice a)
         => Lens' InferencerState (Map TypeVar (Set TypeVar))
         -> Lens' InferencerState (Map TypeVar (Bounds a))
         -> Inferencer (Subst TypeVar)
       fixBoth sub bounds = do
-        fixSubGraph False sub unifs'
-        fixBounds False bounds unifs'
+        fixSubGraph False sub renaming'
+        fixBounds False bounds renaming'
         subst <- subUnifs
         fixSubGraph True sub subst
-        fixBounds True bounds $ subst `apply` unifs'
+        fixBounds True bounds $ subst `apply` renaming'
         propagateBounds bounds sub
         boundsUnifs bounds >>= go subst
         where
@@ -298,36 +265,36 @@ fixSubs = do
 unsafeTypizeUpdate ::
      ((TypeVar, PrimType) -> (TypeVar, PrimType)) -> Inferencer ()
 unsafeTypizeUpdate change =
-  State.typize %= Bimap.fromList . (change <$>) . Bimap.toList
+  State.typings %= Bimap.fromList . (change <$>) . Bimap.toList
 
 unsafeHandlizeUpdate ::
-     ((TypeVar, TypeHandle) -> (TypeVar, TypeHandle)) -> Inferencer ()
+     ((TypeVar, Properties) -> (TypeVar, Properties)) -> Inferencer ()
 unsafeHandlizeUpdate change =
-  State.handlize %= Bimap.fromList . (change <$>) . Bimap.toList
+  State.typeProps %= Bimap.fromList . (change <$>) . Bimap.toList
 
 isSingleton :: Set a -> Bool
 isSingleton = (== 1) . Set.size
 
 safeHandlizeUpdate ::
-     ((TypeVar, TypeHandle) -> (TypeVar, TypeHandle)) -> Inferencer Bool
+     ((TypeVar, Properties) -> (TypeVar, Properties)) -> Inferencer Bool
 safeHandlizeUpdate change = do
-  handles' <- uses State.handlize ((change <$>) . Bimap.toList)
-  let handlize' = Bimap.fromList handles'
-      collapsedKeys = mapCollect handles'
-      collapsedValues = mapCollect (swap <$> handles')
+  propss' <- uses State.typeProps ((change <$>) . Bimap.toList)
+  let typeProps' = Bimap.fromList propss'
+      collapsedKeys = mapCollect propss'
+      collapsedValues = mapCollect (swap <$> propss')
       goValues [] tSubst cSubst kSubst = return (tSubst, cSubst, kSubst)
-      goValues ((handle:handle':handles):others) tSubst cSubst kSubst = do
+      goValues ((props:props':propss):others) tSubst cSubst kSubst = do
         (tSubst', _) <-
-          apply tSubst (handle ^. typing) `unify`
-          apply tSubst (handle' ^. typing)
+          apply tSubst (props ^. typing) `unify`
+          apply tSubst (props' ^. typing)
         (cSubst', _) <-
-          apply cSubst (handle ^. consting) `unifyLax`
-          apply cSubst (handle' ^. consting)
+          apply cSubst (props ^. consting) `unifyLax`
+          apply cSubst (props' ^. consting)
         (kSubst', _) <-
-          apply kSubst (handle ^. kinding) `unifyLax`
-          apply kSubst (handle' ^. kinding)
+          apply kSubst (props ^. kinding) `unifyLax`
+          apply kSubst (props' ^. kinding)
         goValues
-          ((handle' : handles) : others)
+          ((props' : propss) : others)
           (tSubst' `apply` tSubst)
           (cSubst' `apply` cSubst)
           (kSubst' `apply` kSubst)
@@ -338,7 +305,7 @@ safeHandlizeUpdate change = do
         (subst', _) <- apply subst tVar `unify` apply subst tVar'
         goKeys ((tVar' : tVars) : others) $ subst' `apply` subst
       goKeys (_:others) subst = goKeys others subst
-  State.handlize .= handlize'
+  State.typeProps .= typeProps'
   if all isSingleton collapsedKeys && all isSingleton collapsedValues
     then return False
     else do
@@ -359,7 +326,7 @@ safeHandlizeUpdate change = do
           State.addUnificationErrors errs
           return False
         Right (tSubst, cSubst, kSubst, subst) -> do
-          State.unifs %= apply subst
+          State.renaming %= apply subst
           fixSubGraph True State.subConsting cSubst
           fixSubGraph True State.subKinding kSubst
           fixBounds True State.constingBounds cSubst
@@ -370,7 +337,7 @@ safeHandlizeUpdate change = do
             (_2 . kinding %~ applyShallow kSubst)
 
 fixHandlize :: Inferencer Bool
-fixHandlize = uses State.unifs apply >>= safeHandlizeUpdate
+fixHandlize = uses State.renaming apply >>= safeHandlizeUpdate
 
 mapCollect :: (Ord a, Ord b) => [(a, b)] -> Map a (Set b)
 mapCollect = Map.fromListWith mappend . fmap (_2 %~ Set.singleton)
@@ -384,8 +351,8 @@ onCandidates [] _ _ = Nothing
 
 fixTypize :: Inferencer Bool
 fixTypize = do
-  types' <- uses State.unifs (fmap . apply) <*> uses State.typize Bimap.toList
-  let typize' = Bimap.fromList types'
+  types' <- uses State.renaming (fmap . apply) <*> uses State.typings Bimap.toList
+  let typings' = Bimap.fromList types'
       collapsedKeys = mapCollect types'
       collapsedValues = mapCollect $ swap <$> types'
       goValues [] subst = return subst
@@ -406,7 +373,7 @@ fixTypize = do
           Right (subst', _) ->
             goKeys ((tVar' : tVars) : others) $ subst' `apply` subst
       goKeys (_:others) subst = goKeys others subst
-  State.typize .= typize'
+  State.typings .= typings'
   if all isSingleton collapsedKeys && all isSingleton collapsedValues
     then return False
     else do
@@ -415,11 +382,11 @@ fixTypize = do
           (Set.toList . snd <$> Map.toList collapsedValues)
           (mempty :: Subst TypeVar) >>=
         goKeys (Set.toList . snd <$> Map.toList collapsedKeys)
-      State.unifs %= apply subst
+      State.renaming %= apply subst
       True <$ fixTypize
 
 fixFacts :: Facts -> Inferencer Facts
-fixFacts facts = uses State.unifs $ flip fmap facts . apply
+fixFacts facts = uses State.renaming $ flip fmap facts . apply
 
 wrapParent :: HasCallStack => FlatFacts -> Inferencer a -> Inferencer a
 wrapParent flatFacts wrapped =
@@ -518,14 +485,14 @@ reduceTrivial (fact:facts) =
       continueWith $ Fact (tVar `subKind` tVar') : Fact (tVar' `subKind` tVar) :
         facts
     Fact (SubKind t t') -> do
-      handle <- simplify t >>= State.getHandle
-      handle' <- simplify t' >>= State.getHandle
-      State.pushSubKind handle handle'
+      props <- simplify t >>= State.getProps
+      props' <- simplify t' >>= State.getProps
+      State.pushSubKind props props'
       continue
     Fact (SubConst t t') -> do
-      handle <- simplify t >>= State.getHandle
-      handle' <- simplify t' >>= State.getHandle
-      State.pushSubConst handle handle'
+      props <- simplify t >>= State.getProps
+      props' <- simplify t' >>= State.getProps
+      State.pushSubConst props props'
       continue
     Fact (ConstEquality t t') -> do
       tVar <- simplify t
@@ -533,30 +500,30 @@ reduceTrivial (fact:facts) =
       continueWith $ Fact (tVar `subConst` tVar') : Fact (tVar' `subConst` tVar) :
         facts
     Fact (TypingEquality t t') -> do
-      handle <- simplify t >>= State.getHandle
-      handle' <- simplify t' >>= State.getHandle
-      pushTyping handle handle'
+      props <- simplify t >>= State.getProps
+      props' <- simplify t' >>= State.getProps
+      pushTyping props props'
       fixFacts facts >>= continueWith
     Fact (Equality t t') -> do
       tVar <- simplify t
       tVar' <- simplify t'
       case tVar `unify` tVar' of
         Left errs -> State.addUnificationErrors errs
-        Right (subst, _) -> State.unifs %= (subst `apply`)
+        Right (subst, _) -> State.renaming %= (subst `apply`)
       _ <- fixAll
       fixFacts facts >>= continueWith
     Fact (ConstnessBounds bounds t) -> do
-      handle <- simplify t >>= State.getHandle
-      State.pushConstBounds handle bounds
+      props <- simplify t >>= State.getProps
+      State.pushConstBounds props bounds
       continue
     Fact (KindBounds (Bounds (Ordered minKind) (Ordered maxKind)) t) -> do
-      handle <- simplify t >>= State.getHandle
-      State.pushKindBounds handle $ minKind `Bounds` maxKind
+      props <- simplify t >>= State.getProps
+      State.pushKindBounds props $ minKind `Bounds` maxKind
       continue
     Fact (OnRegister reg t) -> do
-      handle <- simplify t >>= State.getHandle
+      props <- simplify t >>= State.getProps
       kind <- registerKind reg
-      State.pushKindBounds handle $ kind `Bounds` kind
+      State.pushKindBounds props $ kind `Bounds` kind
       continue
     Fact (Lock t) -> do
       tVar <- simplify t
@@ -780,7 +747,7 @@ freeParented ts = do
       not (tVar `Map.member` with) && tVarParent tVar == parent &&
       not (tVar `Set.member` tIngs)
     isFreeParented _ _ NoType = False
-  (consts, kinds) <- uses State.handlize $ unzip . fmap mineSubs . Bimap.elems
+  (consts, kinds) <- uses State.typeProps $ unzip . fmap mineSubs . Bimap.elems
   subConsts <- use State.subConsting
   subKinds <- use State.subKinding
   tConsts <- fmap Set.fromList . traverse State.getConsting $ Set.toList ts
@@ -789,7 +756,7 @@ freeParented ts = do
     ( filter (isFreeParented tConsts subConsts) consts
     , filter (isFreeParented tKinds subKinds) kinds)
   where
-    mineSubs handle = (handle ^. consting, handle ^. kinding)
+    mineSubs props = (props ^. consting, props ^. kinding)
 
 minimizeFree :: Set TypeVar -> Inferencer ()
 minimizeFree ts = do
@@ -885,11 +852,11 @@ schematize facts tVars = do
       (KindBounds . fmap Ordered)
       subKinds
   (determineFacts, factsRest) <-
-    do let elaborate' t = do
+    do let createTyping' t = do
              tVar <- simplify t
              State.reconstruct tVar
            construct (Fact (ClassConstraint name t):others) = do
-             t' <- elaborate' t
+             t' <- createTyping' t
              let pair = (t', ClassConstraint name t')
              (_1 %~ (pair :)) <$> construct others
            construct (fact:others) = (_2 %~ (fact :)) <$> construct others
@@ -968,37 +935,37 @@ closeSCCs facts (scc:others) =
           parent = head parents
           rePar :: Data d => d -> d
           rePar = reParent parent (Set.fromList parents)
-      State.typize %= Bimap.fromList . rePar . Bimap.toList
-      State.handlize %= Bimap.fromList . rePar . Bimap.toList
+      State.typings %= Bimap.fromList . rePar . Bimap.toList
+      State.typeProps %= Bimap.fromList . rePar . Bimap.toList
       State.subConsting %= rePar
       State.constingBounds %= rePar
       State.subKinding %= rePar
       State.kindingBounds %= rePar
-      State.unifs %= rePar
+      State.renaming %= rePar
       State.pushParent parent
       (_, facts') <-
         traverse transformFact (fmap rePar trios) >>= reduceMany .
         (<> fmap rePar facts) .
         concat
-      parents' <- uses State.unifs ((<$> parents) . apply)
+      parents' <- uses State.renaming ((<$> parents) . apply)
       x <- Set.unions <$> State.collectPrimeTVarsAll `traverse` parents'
       minimizeSubs parent x
       minimizeFree x
       _ <- fixAll
-      parent' <- uses State.unifs (`apply` parent)
+      parent' <- uses State.renaming (`apply` parent)
       State.popParent *> State.pushParent parent'
       floatSubs x
       _ <- fixAll
-      parent'' <- uses State.unifs (`apply` parent')
+      parent'' <- uses State.renaming (`apply` parent')
       State.popParent *> State.pushParent parent''
       (_, facts'') <- fixFacts facts' >>= reduceMany
-      parent''' <- uses State.unifs (`apply` parent'')
+      parent''' <- uses State.renaming (`apply` parent'')
       State.popParent *> State.pushParent parent'''
-      parents'' <- uses State.unifs ((<$> parents) . apply)
+      parents'' <- uses State.renaming ((<$> parents) . apply)
       facts''' <- schematize facts'' $ Set.fromList parents''
       (_1 .~ True) <$> (State.popParent *> closeSCCs facts''' others)
     transformFact (NestedFact (_ :. [fact] :=> fs), _, _) = do
-      fact' <- uses State.unifs (`apply` fact)
+      fact' <- uses State.renaming (`apply` fact)
       (Fact fact' :) <$> unSchematize fs
     transformFact _ = logicError
     getParents =
@@ -1033,13 +1000,13 @@ collectCounts = foldr countIn mempty
         _ -> id
 
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]
-collectPairs way handles from = pairs <&> both %~ \i -> fromJust $ i `Map.lookup` varMap
+collectPairs way propss from = pairs <&> both %~ \i -> fromJust $ i `Map.lookup` varMap
   where
     edges = concat ((\(f, t) -> (f, ) <$> Set.toList t) <$> Map.toList from)
     varMap =
       Map.fromList $ (\tVar -> (tVarId tVar, tVar)) <$>
       uncurry (<>) (unzip edges)
-    graph = Graph.buildG (1, handles) $ (both %~ tVarId) <$> edges
+    graph = Graph.buildG (1, propss) $ (both %~ tVarId) <$> edges
     vs = Map.keys varMap
     list' cond = [(v, v') | v <- vs, v' <- vs, cond v v']
     pairs =
@@ -1050,9 +1017,9 @@ collectPairs way handles from = pairs <&> both %~ \i -> fromJust $ i `Map.lookup
           Both -> v < v' && Graph.path graph v v' && Graph.path graph v' v
 
 deduceUnifs :: Int -> Map TypeVar (Set TypeVar) -> Map TypeVar TypeVar
-deduceUnifs handles which = go pairs mempty
+deduceUnifs propss which = go pairs mempty
   where
-    pairs = collectPairs Both handles which
+    pairs = collectPairs Both propss which
     go [] subst = subst
     go ((tVar, tVar'):others) subst =
       case apply subst tVar `unifyLax` apply subst tVar' of

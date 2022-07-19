@@ -1,7 +1,7 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module CMM.Inference.TypeHandle where
+module CMM.Inference.Properties where
 
 import safe Control.Lens (makeLenses)
 
@@ -15,8 +15,8 @@ import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
 import safe CMM.Pretty (constingSymbol, kindingSymbol, typingSymbol)
 
 -- | contains the typing, constness and data kind of a type (identifier is the same as the type variable's it has been initialized from)
-data TypeHandle =
-  TypeHandle
+data Properties =
+  Properties
     { _identifier :: TypeVar
     , _typing :: Type
     , _consting :: TypeVar
@@ -25,24 +25,24 @@ data TypeHandle =
     }
   deriving (Show, Data)
 
-instance Eq TypeHandle where
-  TypeHandle {_identifier} == TypeHandle { _identifier = i'} =
+instance Eq Properties where
+  Properties {_identifier} == Properties { _identifier = i'} =
     _identifier == i'
 
-instance Ord TypeHandle where
-  TypeHandle {_identifier} `compare` TypeHandle { _identifier = i'} =
+instance Ord Properties where
+  Properties {_identifier} `compare` Properties { _identifier = i'} =
     compare _identifier i'
 
-instance ToType TypeHandle where
-  toType = toType . handleId
+instance ToType Properties where
+  toType = toType . propsId
 
-instance ToTypeVar TypeHandle where
-  toTypeVar = toTypeVar . handleId
+instance ToTypeVar Properties where
+  toTypeVar = toTypeVar . propsId
 
-instance Pretty TypeHandle where
+instance Pretty Properties where
   pretty =
     \case
-      TypeHandle { _identifier = tId
+      Properties { _identifier = tId
                  , _typing = typing
                  , _consting = consting
                  , _kinding = kinding
@@ -54,10 +54,10 @@ instance Pretty TypeHandle where
         parens (constingSymbol <+> "~" <+> pretty consting) <+>
         parens (kindingSymbol <+> "~" <+> pretty kinding) <+> pretty annot
 
--- | initializes a type handle from the given type variable and the given annotation
-initTypeHandle :: TypeAnnot -> TypeVar -> TypeHandle
-initTypeHandle annotation tVar =
-  TypeHandle
+-- | initializes a type properties from the given type variable and the given annotation
+initProperties :: TypeAnnot -> TypeVar -> Properties
+initProperties annotation tVar =
+  Properties
     { _identifier = tVar
     , _typing = VarType tVar
     , _consting = tVar
@@ -65,8 +65,8 @@ initTypeHandle annotation tVar =
     , _annot = annotation
     }
 
--- | returns the identifier of the given handle
-handleId :: TypeHandle -> TypeVar
-handleId = _identifier
+-- | returns the identifier of the given type properties
+propsId :: Properties -> TypeVar
+propsId = _identifier
 
-makeLenses ''TypeHandle
+makeLenses ''Properties

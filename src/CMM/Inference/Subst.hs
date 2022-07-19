@@ -14,7 +14,7 @@ import safe CMM.Data.Generics ((*|*))
 import safe CMM.Inference.Fact (Fact, FlatFact, NestedFact, Qual, Scheme((:.)))
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeCompl (PrimType)
-import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
+import safe CMM.Inference.Properties (Properties, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar, tVarParent))
 
 -- | Defines the type of a substitution - mapping from a type variable to something
@@ -115,7 +115,7 @@ instance (Apply a t, Apply b t) => Apply (a, b) t where
   subst `apply` (a, b) = (subst `apply` a, subst `apply` b)
 
 instance (Apply TypeVar t, ToType t, Typeable t, TypeCase t) =>
-         Apply TypeHandle t where
+         Apply Properties t where
   apply subst =
     (typing %~ apply subst) .
     (consting %~ apply subst) . (kinding %~ apply subst)

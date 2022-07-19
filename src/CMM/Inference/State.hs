@@ -30,7 +30,7 @@ import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.FunDeps (funDepsSimplify, addTrivialDep)
 import safe CMM.Inference.Subst (apply)
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType, VarType))
-import safe CMM.Inference.TypeHandle (TypeHandle, consting, kinding, typing)
+import safe CMM.Inference.Properties (Properties, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Inference.Unify.Error (UnificationError)
 import safe CMM.Utils (HasCallStack, backQuoteShow)
@@ -49,15 +49,15 @@ pushParent parent = State.currentParent %= (parent :)
 popParent :: Inferencer ()
 popParent = State.currentParent %= tail
 
--- | gets the type handle representing the type represented by the given type variable
-getHandle :: HasCallStack => TypeVar -> Inferencer TypeHandle
-getHandle = fmap fromJust . tryGetHandle
+-- | gets the type properties representing the type represented by the given type variable
+getProps :: HasCallStack => TypeVar -> Inferencer Properties
+getProps = fmap fromJust . tryGetProps
 
--- | gets `Just` the type handle representing the type represented by the given type variable,
+-- | gets `Just` the type properties representing the type represented by the given type variable,
 --   or `Nothing` if the type variable does represent none
-tryGetHandle :: TypeVar -> Inferencer (Maybe TypeHandle)
-tryGetHandle tVar =
-  uses State.handlize (flip Bimap.lookup) <*> uses State.unifs (`apply` tVar)
+tryGetProps :: TypeVar -> Inferencer (Maybe Properties)
+tryGetProps tVar =
+  uses State.typeProps (flip Bimap.lookup) <*> uses State.renaming (`apply` tVar)
 
 -- | looks up the closest known concrete values bounding the given variable from the given database
 readBoundsFrom :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> Bounds a
@@ -73,7 +73,7 @@ readUpperBound = (view upperBound .) . readBoundsFrom
 
 -- | returns the type variable representing the constness of the given type variable
 getConsting :: HasCallStack => TypeVar -> Inferencer TypeVar
-getConsting tVar = view consting <$> getHandle tVar
+getConsting tVar = view consting <$> getProps tVar
 
 -- | Same as `readBoundsFrom`, but using the monadic state for the database of constnesses
 readConstingBounds :: TypeVar -> Inferencer (Bounds Constness)
@@ -85,23 +85,23 @@ readKindingBounds tVar = uses State.kindingBounds (readBoundsFrom tVar)
 
 -- | returns the type variable representing the data kind of the given type variable
 getKinding :: HasCallStack => TypeVar -> Inferencer TypeVar
-getKinding tVar = view kinding <$> getHandle tVar
+getKinding tVar = view kinding <$> getProps tVar
 
 -- | returns the type representing the typing of the given type variable
 getTyping :: HasCallStack => TypeVar -> Inferencer Type
-getTyping tVar = view typing <$> getHandle tVar
+getTyping tVar = view typing <$> getProps tVar
 
 -- | returns the leaf type variables from the reconstructed definition of the type represented by the given type variable
 collectPrimeTVars :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVars tVar =
-  uses State.typize (Bimap.lookup tVar) >>= \case
+  uses State.typings (Bimap.lookup tVar) >>= \case
     Just primType -> fold <$> traverse collectPrimeTVars primType
     Nothing -> return $ Set.singleton tVar
 
 -- | returns the type variables representing EACH subterm in the reconstructed definition of the type represented by the given type variable
 collectPrimeTVarsAll :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVarsAll tVar =
-  uses State.typize (Bimap.lookup tVar) >>= \case
+  uses State.typings (Bimap.lookup tVar) >>= \case
     Just primType ->
       Set.insert tVar . fold <$> traverse collectPrimeTVarsAll primType
     Nothing -> return $ Set.singleton tVar
@@ -113,19 +113,19 @@ insertEdge :: Ord a => a -> a -> Map a (Set a) -> Map a (Set a)
 insertEdge a b = Map.insertWith Set.union a (Set.singleton b)
 
 -- | pushes an edge to the `State.subKinding` graph
-pushSubKind :: TypeHandle -> TypeHandle -> Inferencer ()
-pushSubKind handle handle' =
-  State.subKinding %= view kinding handle `insertEdge` view kinding handle'
+pushSubKind :: Properties -> Properties -> Inferencer ()
+pushSubKind props props' =
+  State.subKinding %= view kinding props `insertEdge` view kinding props'
 
 -- | pushes an edge to the `State.subConsting` graph
-pushSubConst :: TypeHandle -> TypeHandle -> Inferencer ()
-pushSubConst handle handle' =
-  State.subConsting %= view consting handle `insertEdge` view consting handle'
+pushSubConst :: Properties -> Properties -> Inferencer ()
+pushSubConst props props' =
+  State.subConsting %= view consting props `insertEdge` view consting props'
 
 -- | adds the kind bounds of the given type
-pushKindBounds :: TypeHandle -> Bounds DataKind -> Inferencer ()
-pushKindBounds handle bounds =
-  State.kindingBounds %= Map.insertWith (<>) (handle ^. kinding) bounds
+pushKindBounds :: Properties -> Bounds DataKind -> Inferencer ()
+pushKindBounds props bounds =
+  State.kindingBounds %= Map.insertWith (<>) (props ^. kinding) bounds
 
 -- | adds the functional dependency for the given class
 addFunDeps :: Text -> [[Trilean]] -> Inferencer ()
@@ -141,9 +141,9 @@ lookupFunDep :: Text -> Inferencer (Maybe [[Trilean]])
 lookupFunDep = uses State.funDeps . Map.lookup
 
 -- | adds the constness bounds of the given type
-pushConstBounds :: TypeHandle -> Bounds Constness -> Inferencer ()
-pushConstBounds handle bounds =
-  State.constingBounds %= Map.insertWith (<>) (handle ^. consting) bounds
+pushConstBounds :: Properties -> Bounds Constness -> Inferencer ()
+pushConstBounds props bounds =
+  State.constingBounds %= Map.insertWith (<>) (props ^. consting) bounds
 
 -- | "locks" the given type variable (just marking it as "locked" - can be done only once for each type variable)
 lock :: (ToType a, HasCallStack) => a -> TypeVar -> Inferencer ()
@@ -253,12 +253,12 @@ addClassScheme name scheme =
 
 -- | translates a type variable to its alive representant if if has been forgotten
 fromOldName :: TypeVar -> Inferencer TypeVar
-fromOldName tVar = uses State.unifs (`apply` tVar)
+fromOldName tVar = uses State.renaming (`apply` tVar)
 
 -- | reconstructs a type from the given type variable
 reconstruct :: TypeVar -> Inferencer Type
 reconstruct tVar =
-  uses State.typize (Bimap.lookup tVar) >>= \case
+  uses State.typings (Bimap.lookup tVar) >>= \case
     Just primType -> ComplType <$> traverse reconstruct primType
     Nothing -> return $ VarType tVar
 

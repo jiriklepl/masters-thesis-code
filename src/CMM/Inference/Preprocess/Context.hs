@@ -13,15 +13,15 @@ import safe CMM.Inference.Preprocess.Elaboration
   , Elaboration
   )
 import safe CMM.Inference.Type (Type)
-import safe CMM.Inference.TypeHandle (TypeHandle)
+import safe CMM.Inference.Properties (Properties)
 import CMM.Utils (logicError)
 
 -- | An object representing the given context
 data Context
   = GlobalCtx -- ^ Represents the global context
-  | ClassCtx { ctxName ::Text, ctxElab :: Elaboration, ctxConstraint :: (Text, Type), superSupers :: [(Text, Type)] } -- ^ class name, class handle, super-class handles
-  | FunctionCtx { ctxName :: Text, ctxElab :: Elaboration, ctxFunctionHandle :: TypeHandle, ctxFunctionConv :: Maybe Conv } -- ^ function name, function handle, the call convention (eg foreign "C")
-  | InstanceCtx { ctxName :: Text, ctxElab :: Elaboration, ctxConstraint :: (Text, Type), ctxSupers :: [(Text, Type)] } -- ^ class name, class handle, assumptions handles
+  | ClassCtx { ctxName ::Text, ctxElab :: Elaboration, ctxConstraint :: (Text, Type), superSupers :: [(Text, Type)] } -- ^ class name, class type properties, super-class type properties
+  | FunctionCtx { ctxName :: Text, ctxElab :: Elaboration, ctxFunctionHandle :: Properties, ctxFunctionConv :: Maybe Conv } -- ^ function name, function type properties, the call convention (eg foreign "C")
+  | InstanceCtx { ctxName :: Text, ctxElab :: Elaboration, ctxConstraint :: (Text, Type), ctxSupers :: [(Text, Type)] } -- ^ class name, class type properties, assumptions type properties
   | StructCtx { ctxName :: Text, ctxElab :: Elaboration, ctxConstraint :: (Text, Type) }
   deriving (Data)
   --- | SectionCtx Text

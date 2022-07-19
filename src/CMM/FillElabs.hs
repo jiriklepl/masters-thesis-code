@@ -74,11 +74,11 @@ instance FillElabs n where
       registersCase  (AST.Registers mKind (t `Annot` b) nameStrLits `Annot` (a :: annot)) = do
         t' <- fromMaybe t <$> typeFromHoled b
         return (AST.Registers mKind (withAnnot b t') nameStrLits `Annot` a)
-      datumCase  (AST.Datum new (t `Annot` b) size init `Annot` (a :: annot)) = do
+      datumCase  (AST.Datum new (t `Annot` b) size init' `Annot` (a :: annot)) = do
         t' <- fromMaybe t <$> typeFromHoled b
         size' <- gmapM go size
-        init' <- gmapM go init
-        return (AST.Datum new (withAnnot b t') size' init' `Annot` a)
+        init'' <- gmapM go init'
+        return (AST.Datum new (withAnnot b t') size' init'' `Annot` a)
       datumCase datum = gmapM go datum
       formalCase (AST.Formal mKind bool (t `Annot` b) name `Annot` (a :: annot)) = do
         t' <- fromMaybe t <$> typeFromHoled b

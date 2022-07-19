@@ -22,9 +22,9 @@ import safe CMM.Utils ( addPrefix )
 -- | contains the state of the flattener
 data FlattenerState
   = FlattenerState
-    { _branchIdHandles :: Int -- ^ the counter of if statements, used to name each's labels uniquely
-    , _contractorMap :: Map Text Text -- ^ the map of all contractors (references to resource handles) to the respective objects
-    , _contractIdHandles :: Int -- ^ the counter of the resource handles, used to name each uniquely
+    { _branchIdProps :: Int -- ^ the counter of if statements, used to name each's labels uniquely
+    , _contractorMap :: Map Text Text -- ^ the map of all contractors (references to resource props) to the respective objects
+    , _contractIdProps :: Int -- ^ the counter of the resource props, used to name each uniquely
     }
     deriving (Show)
 
@@ -32,8 +32,8 @@ data FlattenerState
 initFlattenerState :: FlattenerState
 initFlattenerState =
   FlattenerState
-    { _branchIdHandles = 0
-    , _contractIdHandles = 0
+    { _branchIdProps = 0
+    , _contractIdProps = 0
     , _contractorMap = mempty
     }
 
@@ -44,8 +44,8 @@ makeFieldsNoPrefix ''FlattenerState
 -- | Generates a fresh integer
 freshBranch :: Flattener Int
 freshBranch = do
-  branchIdHandles += 1
-  use branchIdHandles
+  branchIdProps += 1
+  use branchIdProps
 
 freshBranchNum :: Flattener String
 freshBranchNum = fmap show freshBranch
@@ -53,8 +53,8 @@ freshBranchNum = fmap show freshBranch
 -- | Generates a fresh integer
 freshContract :: Flattener Int
 freshContract = do
-  contractIdHandles += 1
-  use contractIdHandles
+  contractIdProps += 1
+  use contractIdProps
 
 -- Registers a list of contractors to the given resource object's name
 registerContractors :: [Text] -> Text -> Flattener ()

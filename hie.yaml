@@ -168,7 +168,7 @@ cradle:
     - path: "src/CMM/Inference/Preprocess/Error.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/Preprocess/HasTypeHandle.hs"
+    - path: "src/CMM/Inference/Preprocess/HasProperties.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Preprocess/WithElaboration.hs"
@@ -204,7 +204,7 @@ cradle:
     - path: "src/CMM/Inference/TypeCompl.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/TypeHandle.hs"
+    - path: "src/CMM/Inference/Properties.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/TypeKind.hs"

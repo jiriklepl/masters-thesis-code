@@ -27,7 +27,7 @@ import safe CMM.Inference ( simplify )
 import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
 import Data.Functor ((<&>))
 import safe CMM.Inference.Preprocess.Elaboration
-    ( setHoleHandle, HasElaboration(getElaboration, setElaboration), Elaboration(EmptyElaboration) )
+    ( setElabHandle, HasElaboration(getElaboration, setElaboration), Elaboration(EmptyElaboration) )
 
 -- | Contains the various absurd bounds (data kind or constness bounds) for an type
 data Absurdity =
@@ -181,8 +181,8 @@ reconstructHole subst elab =
   case getElaboration elab of
     EmptyElaboration -> return elab
     hole -> do
-      newHandle <- reconstructType subst hole >>= simplify >>= State.getHandle
-      return $ setElaboration (setHoleHandle newHandle hole) elab
+      props <- reconstructType subst hole >>= simplify >>= State.getProps
+      return $ setElaboration (setElabHandle props hole) elab
 
 -- | reconstructs the type from the given type variable after renaming it to its alive representant
 --   and applying the given substitution

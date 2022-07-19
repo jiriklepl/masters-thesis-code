@@ -14,7 +14,7 @@ import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Parser.GetPos (SourcePos)
 import CMM.Pretty (commaSep, genSymbol)
 
--- | annotations used in type handles
+-- | annotations used in type properties
 data TypeAnnot
   = NoTypeAnnot -- ^ no annotation
   | TypeInst TypeVar -- ^ represents an monotype instance of the given polytype type variable

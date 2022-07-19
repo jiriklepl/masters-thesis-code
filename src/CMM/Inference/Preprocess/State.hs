@@ -65,7 +65,7 @@ import safe CMM.Inference.TypeCompl
   , makeApplication
   , makeFunction
   )
-import safe CMM.Inference.TypeHandle (TypeHandle, handleId)
+import safe CMM.Inference.Properties (Properties, propsId)
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind)
   , TypeKind((:->), Constraint, Star)
@@ -87,10 +87,10 @@ import safe CMM.Inference.Preprocess.State.Impl
   , facts
   , freshASTGeneric
   , freshASTStar
-  , freshASTTypeHandle
+  , freshASTProperties
   , freshGeneric
   , freshNamedASTStar
-  , freshNamedASTTypeHandle
+  , freshNamedASTProperties
   , freshStar
   , freshTypeHelper
   , funcElabVariables
@@ -131,10 +131,10 @@ beginUnit collector = do
     Map.toAscList members
   let memberClassData = (`ClassData` mempty) . SimpleElaboration <$> memberClasses
   typeClasses %= (`Map.union` memberClassData)
-  Map.toList memberClasses `for_` \(name, handle) ->
+  Map.toList memberClasses `for_` \(name, props) ->
     storeFacts
       [ classFunDeps name [[T.False, T.True]]
-      , lockFact $ toType handle
+      , lockFact $ toType props
       ]
   mems <- declVars members
   structMembers .= mems
@@ -165,15 +165,15 @@ lookupSMem named = lookupVarImpl named <$> uses structMembers pure
 
 lookupSIMem :: GetName n => n -> Preprocessor Elaboration
 lookupSIMem named = do
-  handle <- freshTypeHelper Star
-  structInstMembers %= Map.adjust (handle :) (getName named)
-  return $ SimpleElaboration handle
+  props <- freshTypeHelper Star
+  structInstMembers %= Map.adjust (props :) (getName named)
+  return $ SimpleElaboration props
 
 lookupFIVar :: GetName n => n -> Preprocessor Elaboration
 lookupFIVar named = do
-  handle <- freshTypeHelper Star
-  funcInstVariables %= Map.adjust (handle :) (getName named)
-  return $ SimpleElaboration handle
+  props <- freshTypeHelper Star
+  funcInstVariables %= Map.adjust (props :) (getName named)
+  return $ SimpleElaboration props
 
 lookupFEVar :: GetName n => n -> Preprocessor Elaboration
 lookupFEVar named = lookupVarImpl named <$> uses funcElabVariables pure
@@ -193,25 +193,25 @@ lookupClass named =
   uses typeClasses $ maybe EmptyElaboration (^. classHole) .
   (getName named `Map.lookup`)
 
-lookupVarImpl :: GetName n => n -> [Map Text TypeHandle] -> Elaboration
+lookupVarImpl :: GetName n => n -> [Map Text Properties] -> Elaboration
 lookupVarImpl named vars =
   maybe EmptyElaboration SimpleElaboration . foldr (<|>) Nothing $
   (getName named `Map.lookup`) <$>
   vars
 
 storeVar :: Text -> Type -> Preprocessor ()
-storeVar name handle = do
+storeVar name props = do
   vars <- use variables
-  storeVarImpl name handle vars
+  storeVarImpl name props vars
 
-untrivialize :: Map Text TypeHandle -> Preprocessor ()
+untrivialize :: Map Text Properties -> Preprocessor ()
 untrivialize tCons =
-  Map.toList tCons `for_` \(name', handle) ->
+  Map.toList tCons `for_` \(name', props) ->
     storeFacts
-      [ handle `typeEquality`
-        ComplType (ConstType name' (getTypeKind $ handleId handle) NoType)
-      , getDataKind "" `kindConstraint` handle
-      , lockFact handle
+      [ props `typeEquality`
+        ComplType (ConstType name' (getTypeKind $ propsId props) NoType)
+      , getDataKind "" `kindConstraint` props
+      , lockFact props
       ]
 
 beginProc :: Text -> Elaboration -> CollectorState -> Maybe Conv -> Preprocessor ()
@@ -240,10 +240,10 @@ openProc collector = do
   ~(h:t) <- uses typeVariables reverse
   typeVariables .= reverse ((tVars' <> h) : t)
 
-declVars :: Map Text (SourcePos, TypeKind) -> Preprocessor (Map Text TypeHandle)
+declVars :: Map Text (SourcePos, TypeKind) -> Preprocessor (Map Text Properties)
 declVars =
   Map.traverseWithKey
-    (\name (pos, kind) -> freshNamedASTTypeHandle name pos kind)
+    (\name (pos, kind) -> freshNamedASTProperties name pos kind)
 
 endProc :: Preprocessor (Facts, Elaboration)
 endProc = do
@@ -264,8 +264,8 @@ lookupCtxFVar name = use currentContext >>= go
     go =
       \case
         ClassCtx {}:_ -> lookupFVar name
-        FunctionCtx name' handle _ _:others
-          | name == name' -> return handle
+        FunctionCtx name' props _ _:others
+          | name == name' -> return props
           | otherwise -> go others
         GlobalCtx:_ -> lookupFVar name
         InstanceCtx {}:_ -> lookupFIVar name
@@ -323,7 +323,7 @@ storeProc name fs x = do
     goIllegal = error "(internal) Illegal local function encountered." -- NOTE: not possible within the bounds of the syntax
     t = toType x
     storeElaboratedProc subst tVars facts' = do
-      handle <- eHandle <$> lookupCtxFVar name
+      props <- eHandle <$> lookupCtxFVar name
       fHandle <- eHandle <$> lookupFVar name
       eHandle <- eHandle <$> lookupFEVar name
       iHandle <- freshTypeHelper Star
@@ -342,14 +342,14 @@ storeProc name fs x = do
           storeFact . extT id adoption . apply subst $
             forall tVars [eHandle `typeEquality` eType] facts'
           storeFact . extT id adoption . apply subst $
-            forall tVars [handle `typeEquality` t] [instFact, unionFact]
-          return . extT id adoption $ SimpleElaboration handle
+            forall tVars [props `typeEquality` t] [instFact, unionFact]
+          return . extT id adoption $ SimpleElaboration props
         _ -> do
-          storeFact . apply subst . forall tVars [handle `typeEquality` t] $
+          storeFact . apply subst . forall tVars [props `typeEquality` t] $
             instFact :
             unionFact :
             facts'
-          return $ MethodElaboration handle fHandle eHandle
+          return $ MethodElaboration props fHandle eHandle
 
 pushParent :: TypeVar -> Preprocessor ()
 pushParent parent = currentParent %= (parent :)
@@ -372,7 +372,7 @@ popTypeVariables = do
 
 collectTVars :: Preprocessor (Set TypeVar)
 collectTVars =
-  uses typeVariables (Set.fromList . (handleId <$>) . Map.elems . Map.unions)
+  uses typeVariables (Set.fromList . (propsId <$>) . Map.elems . Map.unions)
 
 pushStruct :: (Text, Elaboration) -> (Text, Type) -> Preprocessor ()
 pushStruct (name, hole) constraint@(_, t) = do
@@ -426,18 +426,18 @@ popTop from = do
   from .= t
   return h
 
--- | Stores the given type variable `handle` under the given `name` to the state monad
+-- | Stores the given type variable properties `props` under the given `name` to the state monad
 storeTCon :: ToType a => Text -> a -> Preprocessor ()
-storeTCon name handle = use typeConstants >>= storeVarImpl name handle
+storeTCon name props = use typeConstants >>= storeVarImpl name props
 
--- | Stores the given type variable `handle` under the given `name` to the state monad
+-- | Stores the given type variable properties `props` under the given `name` to the state monad
 storeTVar :: ToType a => Text -> a -> Preprocessor ()
-storeTVar name handle = use typeVariables >>= storeVarImpl name handle
+storeTVar name props = use typeVariables >>= storeVarImpl name props
 
 storeVarImpl ::
-     (ToType a, GetName n) => n -> a -> [Map Text TypeHandle] -> Preprocessor ()
-storeVarImpl named handle vars =
-  storeFact $ lookupVarImpl named vars `typeEquality` handle
+     (ToType a, GetName n) => n -> a -> [Map Text Properties] -> Preprocessor ()
+storeVarImpl named props vars =
+  storeFact $ lookupVarImpl named vars `typeEquality` props
 
 -- | Stores the given `fact` to the state monad
 class StoreFact a where

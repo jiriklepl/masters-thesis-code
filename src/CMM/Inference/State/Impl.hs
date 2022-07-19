@@ -29,7 +29,7 @@ import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
 import safe CMM.Inference.TypeCompl (PrimType)
-import safe CMM.Inference.TypeHandle (TypeHandle, handleId, initTypeHandle)
+import safe CMM.Inference.Properties (Properties, propsId, initProperties)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
 import safe CMM.Options (Options(Options))
@@ -44,12 +44,12 @@ data InferencerState =
     , _subConsting :: Map TypeVar (Set TypeVar)
     -- ^ Maps variables to their respective subConsting variables (forms a graph - should overlap with transposed `_kinding` graph)
     , _constingBounds :: Map TypeVar (Bounds Constness)
-    -- ^ TODO: Unifs
-    , _unifs :: Map TypeVar TypeVar
+    -- ^ TODO: Result renaming
+    , _renaming :: Map TypeVar TypeVar
     -- ^ TODO: Typize
-    , _typize :: Bimap TypeVar PrimType
+    , _typings :: Bimap TypeVar PrimType
     -- ^ TODO: Handlize
-    , _handlize :: Bimap TypeVar TypeHandle
+    , _typeProps :: Bimap TypeVar Properties
     -- ^ Maps variables to their respective superKinding variables (forms a graph)
     , _handleCounter :: Int
     -- ^ TODO
@@ -78,9 +78,9 @@ initInferencer Options {Options.maxFunDeps = maxFunDeps, Options.handleStart = h
     , _kindingBounds = nullVal
     , _subConsting = nullVal
     , _constingBounds = nullVal
-    , _unifs = nullVal
-    , _typize = Bimap.empty
-    , _handlize = nullVal
+    , _renaming = nullVal
+    , _typings = Bimap.empty
+    , _typeProps = nullVal
     , _handleCounter = handleCounter'
     , _classSchemes = nullVal
     , _classFacts = nullVal
@@ -112,18 +112,18 @@ instance Refresh Inferencer where
 
 freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Inferencer TypeVar
 freshAnnotatedTypeHelper annot tKind = do
-  handle <- getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
-  let tVar = handleId handle
-  handlize %= Bimap.insert tVar handle
+  props <- getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
+  let tVar = propsId props
+  typeProps %= Bimap.insert tVar props
   return tVar
 
 freshTypeHelper :: TypeKind -> Inferencer TypeVar
 freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
 freshTypeHelperWithHandle :: TypeKind -> Inferencer TypeVar
-freshTypeHelperWithHandle kind = freshTypeHelper kind >>= handlizeTVar
+freshTypeHelperWithHandle kind = freshTypeHelper kind >>= typePropsTVar
 
-handlizeTVar :: TypeVar -> Inferencer TypeVar
-handlizeTVar tVar = do
-  handlize %= Bimap.insert tVar (initTypeHandle NoTypeAnnot tVar)
+typePropsTVar :: TypeVar -> Inferencer TypeVar
+typePropsTVar tVar = do
+  typeProps %= Bimap.insert tVar (initProperties NoTypeAnnot tVar)
   return tVar

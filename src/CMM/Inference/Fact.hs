@@ -217,14 +217,14 @@ registerConstraint = (. toType) . OnRegister
 kindConstraint :: ToType a => DataKind -> a -> FlatFact Type
 kindConstraint kind = kindingBounds $ kind `Bounds` kind
 
--- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
+-- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` properties
 classConstraint :: ToType a => Text -> a -> FlatFact Type
 classConstraint name t = name `ClassConstraint` toType t
 
 classFunDeps :: Text -> [[Trilean]] -> FlatFact Type
 classFunDeps = ClassFunDeps
 
--- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` handle
+-- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` properties
 classFact :: ToType a => Text -> a -> FlatFact Type
 classFact name t = name `ClassFact` toType t
 

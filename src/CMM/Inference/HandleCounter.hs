@@ -6,7 +6,7 @@ import safe Control.Lens ( use, (+=), Lens' )
 import safe Control.Monad.State (MonadState)
 
 import safe CMM.Inference.TypeAnnot (TypeAnnot)
-import safe CMM.Inference.TypeHandle (TypeHandle, initTypeHandle)
+import safe CMM.Inference.Properties (Properties, initProperties)
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar, typeVarIdLast)
 
@@ -27,6 +27,6 @@ freshAnnotatedTypeHelperWithParent ::
   => TypeAnnot
   -> TypeKind
   -> TypeVar
-  -> m TypeHandle
+  -> m Properties
 freshAnnotatedTypeHelperWithParent annot tKind parent =
-  initTypeHandle annot . typeVarIdLast tKind parent <$> nextHandleCounter
+  initProperties annot . typeVarIdLast tKind parent <$> nextHandleCounter
