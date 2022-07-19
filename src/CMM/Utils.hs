@@ -77,3 +77,6 @@ backQuoteShow = backQuote . show
 -- | Signifies a logic error
 logicError :: HasCallStack => a
 logicError = error "logicError"
+
+notYetImplemented :: HasCallStack => a
+notYetImplemented = error "not yet implemented"

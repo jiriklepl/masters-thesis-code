@@ -9,7 +9,7 @@ import safe Prettyprinter (Pretty(pretty), parens)
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Inference.Arity (Arity(arity))
 import safe CMM.Pretty (arrowNice, deltaBig, question, star)
-import safe CMM.Utils (backQuote, HasCallStack)
+import safe CMM.Utils (backQuote, HasCallStack, logicError)
 
 infixr 6 :->
 
@@ -108,4 +108,4 @@ combineTypeKind a b = getTypeKind a `go` getTypeKind b
     GenericType `go` kind = kind
     kind `go` GenericType = kind
     (l :-> r) `go` (l' :-> r') = go l l' :-> go r r'
-    _ `go` _ = undefined
+    _ `go` _ = logicError

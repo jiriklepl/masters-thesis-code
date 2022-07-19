@@ -53,7 +53,7 @@ instance Pretty MonomorphizeError where
     IsNotScheme node -> "There is no scheme registered for" <+> pretty node <> report
     CannotInstantiate scheme inst unifErrors node ->
       pretty node <+> "cannot be instantiated from the type" <+> pretty scheme <+>
-      "to the type" <+> pretty inst <+> "due to" <> list (pretty <$> unifErrors) <> report
+      "to the type" <+> pretty inst <+> "due to" <+> list (pretty <$> unifErrors)
     Ambiguity holes node -> case holes of
       [_] -> pretty node <+> " was not instantiated due to broken contract in monomorphization"
       [] -> pretty node <+> " cannot be instantiated, there are no suitable schemes"

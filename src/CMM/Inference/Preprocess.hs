@@ -105,7 +105,7 @@ import safe CMM.Inference.TypeKind (TypeKind(Constraint, Star))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
 import safe CMM.Inference.Utils (fieldClassHelper)
 import safe CMM.Parser.GetPos (GetPos)
-import safe CMM.Utils (backQuote)
+import safe CMM.Utils (backQuote, logicError)
 import safe CMM.Err.State ( HasErrorState(errorState) )
 import CMM.Parser.ASTError (registerASTError)
 import safe CMM.Inference.Preprocess.Error
@@ -771,7 +771,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
               cache' =
                 cache <&> \case
                   MemberElaboration iMem [hole''] [mem] [] -> (hole'', iMem, mem)
-                  _ -> undefined
+                  _ -> logicError
               hole' = MemberElaboration (eHandle ctxElab) `uncurry3` unzip3 cache'
               scheme (MemberElaboration h [(name, classHandle)] _ _) = do
                 method <-
@@ -791,7 +791,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
                       , structPtr
                       , toType hole
                       ]
-              scheme _ = undefined
+              scheme _ = logicError
           schemes <- traverse scheme cache
           State.storeFacts $ concat schemes
           ((hole', datum') :) <$> preprocessDatumsImpl [] others
@@ -871,7 +871,7 @@ instance Preprocess AST.Expr a b where
     \case
       AST.MemberExpr struct field ->
         State.lookupSMem field >>= \case
-          EmptyElaboration -> undefined
+          EmptyElaboration -> logicError
           scheme -> do
             struct' <- preprocess struct
             inst <- makeHandle

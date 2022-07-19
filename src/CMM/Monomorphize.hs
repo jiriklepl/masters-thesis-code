@@ -71,7 +71,7 @@ import safe qualified CMM.Monomorphize.State as State
 import safe CMM.Monomorphize.State.Impl
     ( Monomorphizer, MonomorphizeState )
 import safe CMM.Inference.Fact (Scheme((:.)), Qual ((:=>)), FlatFact (Equality, TypingEquality), FlatFacts)
-import safe CMM.Utils (logicError)
+import safe CMM.Utils (logicError, notYetImplemented)
 
 type InferMonomorphizer a = State (InferencerState, MonomorphizeState a)
 
@@ -237,19 +237,19 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Section) a wher
       AST.SecProcedure procedure ->
         monomorphizeTrivial subst a AST.SecProcedure procedure
       AST.SecDatum datum -> monomorphizeTrivial subst a AST.SecDatum datum
-      AST.SecSpan {} -> undefined
+      AST.SecSpan {} -> notYetImplemented
 
 instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Decl) a where
   monomorphize subst (decl `Annot` a) =
     case decl of
       AST.ImportDecl imports -> monomorphizeTrivials subst a AST.ImportDecl imports
       AST.ExportDecl exports -> monomorphizeTrivials subst a AST.ExportDecl exports
-      AST.ConstDecl {} -> undefined
-      AST.TypedefDecl {} -> undefined
+      AST.ConstDecl {} -> notYetImplemented
+      AST.TypedefDecl {} -> notYetImplemented
       AST.RegDecl bool registers -> do
         monomorphizeTrivial subst a (AST.RegDecl bool) registers
-      AST.PragmaDecl {} -> undefined
-      AST.TargetDecl {} -> undefined
+      AST.PragmaDecl {} -> notYetImplemented
+      AST.TargetDecl {} -> notYetImplemented
 
 instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Registers) a where
   monomorphize subst (AST.Registers mKind t nameStrs `Annot` a) = do
@@ -300,16 +300,16 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Struct) a where
           Absurd absurdity -> failure $ absurdity `absurdType` annotated
 
 instance Monomorphize (Annot AST.Import) a where
-  monomorphize = undefined
+  monomorphize = notYetImplemented
 
 instance Monomorphize (Annot AST.Export) a where
-  monomorphize = undefined
+  monomorphize = notYetImplemented
 
 instance HasElaboration a => Monomorphize (Annot AST.Datum) a where
   monomorphize subst annotated@(datum `Annot` a) = do
     b <- useInferencer $ reconstructHole subst a
     case datum of
-      AST.Datum new type' size init -> do
+      AST.Datum new type' size init' -> do
         case getElaboration a of
           MemberElaboration struct _ insts schemes' ->
             useInferencer
@@ -327,21 +327,21 @@ instance HasElaboration a => Monomorphize (Annot AST.Datum) a where
               Mono -> do
                 type'' <- ensuredJustMonomorphize subst type'
                 size' <- traverse (ensuredJustMonomorphize subst) size
-                init' <- traverse (ensuredJustMonomorphize subst) init
+                init'' <- traverse (ensuredJustMonomorphize subst) init'
                 return $ do
                   type''' <- type''
                   size'' <- sequence size'
-                  init'' <- sequence init'
-                  return $ withAnnot b <$> liftA3 (AST.Datum new) type''' (sequence size'') (sequence init'')
+                  init''' <- sequence init''
+                  return $ withAnnot b <$> liftA3 (AST.Datum new) type''' (sequence size'') (sequence init''')
               Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
               Absurd absurdity -> failure $ absurdity `absurdType` annotated
           hole -> failure $ illegalHole hole annotated
       _ -> succeed . Just $ datum `Annot` b
 
 instance HasElaboration a => Monomorphize (Annot AST.Init) a where
-  monomorphize subst (init `Annot` a) = do
+  monomorphize subst (init' `Annot` a) = do
     b <- useInferencer $ reconstructHole subst a
-    case init of
+    case init' of
       AST.StrInit strLit -> succeed . Just . withAnnot b $ AST.StrInit strLit
       AST.Str16Init strLit -> succeed . Just . withAnnot b $ AST.Str16Init strLit
       AST.ExprInit exprs -> do
@@ -487,8 +487,8 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Stmt) a where
           tBody'' <- tBody'
           eBody'' <- sequence eBody'
           return $ annotate <$> liftA3 AST.IfStmt cond'' tBody'' (sequence eBody'')
-      AST.SwitchStmt {} -> undefined
-      AST.SpanStmt {} -> undefined
+      AST.SwitchStmt {} -> notYetImplemented
+      AST.SpanStmt {} -> notYetImplemented
       AST.AssignStmt lValues exprs -> do
         lValues' <- traverse (ensuredJustMonomorphize subst) lValues
         exprs' <- traverse (ensuredJustMonomorphize subst) exprs
@@ -498,7 +498,7 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Stmt) a where
           return $
             annotate <$>
             liftA2 AST.AssignStmt (sequence lValues'') (sequence exprs'')
-      AST.PrimOpStmt {} -> undefined
+      AST.PrimOpStmt {} -> notYetImplemented
       AST.CallStmt rets mConv func actuals mTargs callAnnots -> do
         rets' <- traverse (ensuredJustMonomorphize subst) rets
         func' <- ensuredJustMonomorphize subst func
@@ -521,20 +521,20 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Stmt) a where
               (sequence actuals'')
               (sequence mTargs'')
               (sequence callAnnots'')
-      AST.JumpStmt {} -> undefined
+      AST.JumpStmt {} -> notYetImplemented
       AST.ReturnStmt mConv Nothing actuals -> do
         actuals' <- traverse (ensuredJustMonomorphize subst) actuals
         return $ do
           actuals'' <- sequence actuals'
           return $ annotate . AST.ReturnStmt mConv Nothing <$> sequence actuals''
-      AST.ReturnStmt _ (Just _) _ -> undefined
+      AST.ReturnStmt _ (Just _) _ -> notYetImplemented
       AST.LabelStmt {} ->
         useInferencer
           (typePolytypeness subst (getElaboration a)) >>= \case
           Mono -> succeed $ Just annotated
           Poly polyWhat -> failure $ polyWhat `illegalPolyType` annotated
           Absurd absurdity -> failure $ absurdity `absurdType` annotated
-      AST.ContStmt _ _ -> undefined
+      AST.ContStmt _ _ -> notYetImplemented
       AST.GotoStmt expr targets -> do
         expr' <- ensuredJustMonomorphize subst expr
         targets' <- traverse (ensuredJustMonomorphize subst) targets
@@ -542,7 +542,7 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Stmt) a where
           expr'' <- expr'
           targets'' <- sequence targets'
           return $ annotate <$> liftA2 AST.GotoStmt expr'' (sequence targets'')
-      AST.CutToStmt {} -> undefined
+      AST.CutToStmt {} -> notYetImplemented
 
 instance Monomorphize (Annot AST.KindName) a where
   monomorphize subst (kindName `Annot` a) = do
@@ -592,7 +592,7 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.LValue) a where
                 liftA3 AST.LVRef (sequence mType'') expr'' (sequence mAsserts'')
 
 instance Monomorphize (Annot AST.Targets) a where
-  monomorphize = undefined
+  monomorphize = notYetImplemented
 
 instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Expr) a where
   monomorphize subst (expr `Annot` a) = do
@@ -617,8 +617,8 @@ instance (GetPos a, HasElaboration a) => Monomorphize (Annot AST.Expr) a where
           return $ withAnnot b <$> liftA2 (AST.BinOpExpr op) left'' right''
       AST.ComExpr expr' -> monomorphizeTrivial subst b AST.ComExpr expr'
       AST.NegExpr expr' -> monomorphizeTrivial subst b AST.NegExpr expr'
-      AST.InfixExpr {} -> undefined
-      AST.PrefixExpr {} -> undefined
+      AST.InfixExpr {} -> notYetImplemented
+      AST.PrefixExpr {} -> notYetImplemented
       AST.MemberExpr expr' field -> do
         case getElaboration a of
           MethodElaboration _ scheme inst ->
@@ -793,7 +793,7 @@ illegalScheme schematized instWrapper =
   failure . makeError (takeAnnot instWrapper) . IllegalScheme (void schematized) $ voidWrapped instWrapper
 
 instance Monomorphize (Annot AST.CallAnnot) a where
-  monomorphize = undefined
+  monomorphize = notYetImplemented
 
 instance Monomorphize (Annot AST.Asserts) a where
-  monomorphize = undefined
+  monomorphize = notYetImplemented

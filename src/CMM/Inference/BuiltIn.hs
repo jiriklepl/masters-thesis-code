@@ -30,14 +30,15 @@ import safe CMM.Inference.TypeCompl
   )
 import safe CMM.Inference.TypeKind (TypeKind((:->), Constraint, Star))
 import safe CMM.Inference.TypeVar as Infer (TypeVar(NoType))
+import safe CMM.Utils (notYetImplemented)
 
 -- | gets a named operator supported on the architecture
 getNamedOperator :: Text -> Infer.Type
-getNamedOperator = undefined -- NOTE: the imaginary architecture does not support any named operators
+getNamedOperator = notYetImplemented -- NOTE: the imaginary architecture does not support any named operators
 
 -- | gets a symbolic operator supported on the architecture
 getSymbolicOperator :: Op -> Infer.Type
-getSymbolicOperator = undefined -- NOTE: the imaginary architecture does not support any symbolic operators on top of the standard ones
+getSymbolicOperator = notYetImplemented -- NOTE: the imaginary architecture does not support any symbolic operators on top of the standard ones
 
 -- | Maps data kind names to the corresponding data kinds and back
 builtInKinds :: Bimap Text (Ordered DataKind)

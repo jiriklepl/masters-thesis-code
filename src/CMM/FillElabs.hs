@@ -46,7 +46,6 @@ typeFromHoled holed = do
       return Nothing
     Just type' -> return $ Just type'
 
-
 translType :: a -> T.Type -> Maybe (AST.Type a)
 translType holed t = case t of
     T.VarType {} -> Nothing
@@ -66,8 +65,6 @@ translType holed t = case t of
       TBitsType n -> Just $ AST.TBits n
       BoolType -> Just AST.TBool
       VoidType -> Just AST.TVoid
-
-
 
 instance FillElabs n where
   fillHoles n@(_ `Annot` (_ :: annot)) = go n

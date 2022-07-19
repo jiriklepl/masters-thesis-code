@@ -28,7 +28,7 @@ import safe CMM.Err.IsError ( IsError )
 import safe Prettyprinter ( (<+>), Pretty(pretty) )
 import safe CMM.Parser.ASTError ( registerASTError )
 import safe Data.Maybe ( fromMaybe )
-import safe CMM.Utils ( HasCallStack )
+import safe CMM.Utils ( HasCallStack, logicError, notYetImplemented )
 
 data MangleError
   = NonConcreteType Ty.Type
@@ -59,7 +59,7 @@ enclosed txt = "$L" <> txt <> "R$"
 
 mangleType :: Bool -> Ty.Type -> Maybe Text
 mangleType skipAddr = \case
-    Ty.VarType {} -> undefined
+    Ty.VarType {} -> logicError
     Ty.ComplType tc -> case tc of
       TupleType types -> do
         types' <- traverse (mangleType False) types
@@ -108,7 +108,7 @@ instance Mangle n where
           SimpleElaboration {} -> case mConv of
             Just conv -> case conv of
               AST.Foreign (AST.StrLit "C") -> return name
-              _ -> undefined
+              _ -> notYetImplemented
             Nothing -> AST.Name . addName name . fromMaybe "!error" <$> mangledFromHoled True a
           MethodElaboration {} -> AST.Name . addName name . fromMaybe "!error" <$> mangledFromHoled False a
           _ -> do

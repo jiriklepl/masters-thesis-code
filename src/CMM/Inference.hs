@@ -120,7 +120,7 @@ import safe CMM.Inference.TypeVar
   )
 import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
 import safe CMM.Inference.Utils (trileanSeq)
-import safe CMM.Utils (HasCallStack, addPrefix, logicError)
+import safe CMM.Utils (HasCallStack, addPrefix, logicError, notYetImplemented)
 import safe qualified CMM.Inference.State.Impl as State
 import safe CMM.Err.State ( nullErrorState )
 
@@ -1000,7 +1000,7 @@ closeSCCs facts (scc:others) =
     transformFact (NestedFact (_ :. [fact] :=> fs), _, _) = do
       fact' <- uses State.unifs (`apply` fact)
       (Fact fact' :) <$> unSchematize fs
-    transformFact _ = undefined
+    transformFact _ = logicError
     getParents =
       \case
         [] -> []
@@ -1013,12 +1013,12 @@ makeCallGraph = (_2 %~ stronglyConnCompR) . foldr transform ([], [])
       case fact of
         NestedFact (_ :. [Equality (VarType tVar) _] :=> fs) ->
           _2 %~ ((fact, tVar, foldr out [] fs) :)
-        NestedFact (_ :. [Equality {}] :=> _) -> undefined -- logic error, broken contract
+        NestedFact (_ :. [Equality {}] :=> _) -> logicError
         _ -> _1 %~ (fact :)
     out fact =
       case fact of
         Fact (InstType (VarType scheme) _) -> (scheme :)
-        Fact InstType {} -> undefined -- logic error, broken contract
+        Fact InstType {} -> logicError
         _ -> id
 
 collectCounts :: Facts -> Subst Int
@@ -1029,7 +1029,7 @@ collectCounts = foldr countIn mempty
         NestedFact (_ :. [Equality (VarType tVar) _] :=> _) ->
           Map.insertWith (+) tVar 1
         NestedFact (_ :. [Equality {}] :=> _) ->
-          undefined -- logic error, broken contract
+          logicError
         _ -> id
 
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]
@@ -1056,7 +1056,7 @@ deduceUnifs handles which = go pairs mempty
     go [] subst = subst
     go ((tVar, tVar'):others) subst =
       case apply subst tVar `unifyLax` apply subst tVar' of
-        Left _ -> undefined -- logic error
+        Left _ -> logicError
         Right (subst', _) -> go others $ subst' `apply` subst
 
 propagateBounds ::
@@ -1091,10 +1091,10 @@ boundsUnifs which = do
   where
     go ((x:y:others):rest) subst =
       case apply subst x `unifyLax` apply subst y of
-        Left _ -> undefined -- logic error
+        Left _ -> logicError
         Right (subst', _) -> go ((x : others) : rest) $ subst' `apply` subst
     go (_:rest) subst = go rest subst
     go [] subst = subst
 
 registerKind :: Text -> Inferencer DataKind
-registerKind = undefined
+registerKind = notYetImplemented

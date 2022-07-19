@@ -65,7 +65,7 @@ import safe CMM.TypeMiner
 import safe qualified CMM.Inference.Preprocess.Elaboration as Ty
 import safe CMM.Inference.Preprocess.Elaboration
     ( HasElaboration(getElaboration) )
-import safe CMM.Utils ( HasCallStack, logicError )
+import safe CMM.Utils ( HasCallStack, logicError, notYetImplemented )
 
 type MonadTranslator m
    = ( L.MonadIRBuilder m
@@ -304,7 +304,7 @@ instance TranslAssumps a m =>
           r' <- translate r vars
           translate e vars >>= L.store r' 0
           return Nothing
-        translPair (Annot AST.LVRef {} _) e = notYetImplemented
+        translPair (Annot AST.LVRef {} _) _ = notYetImplemented
     AST.PrimOpStmt {} -> notYetImplemented
     AST.CallStmt {}
       | AST.CallStmt rets _ expr actuals Nothing [] <- stmt -> do
@@ -333,6 +333,7 @@ instance TranslAssumps a m =>
             return vars
       | otherwise -> notYetImplemented
     AST.CutToStmt {} -> notYetImplemented
+    AST.DroppedStmt {} -> logicError
 
 instance TranslAssumps a m =>
          Translate m AST.Actual a (Map Text LO.Operand -> m LO.Operand) where
@@ -362,7 +363,8 @@ instance TranslAssumps a m =>
          Translate m AST.Expr a (Map Text LO.Operand -> m LO.Operand) where
   translate (expr `Annot` _) vars = case expr of
     AST.LitExpr lit Nothing -> translate lit
-    AST.ParExpr expr -> translate expr vars
+    AST.LitExpr _ Just {} -> notYetImplemented
+    AST.ParExpr expr' -> translate expr' vars
     AST.LVExpr lvalue -> translate lvalue vars
     AST.BinOpExpr o l r -> do
       l' <- translate l vars
@@ -386,20 +388,22 @@ instance TranslAssumps a m =>
           AST.LtOp -> L.icmp L.ULT
           AST.GeOp -> L.icmp L.UGE
           AST.LeOp -> L.icmp L.ULE
-    AST.ComExpr expr -> do
-      expr' <- translate expr vars
-      L.typeOf expr' >>= \case
+    AST.ComExpr expr' -> do
+      expr'' <- translate expr' vars
+      L.typeOf expr'' >>= \case
         Right (LT.IntegerType bits) ->
-          L.xor expr' . LO.ConstantOperand $ LC.Int bits (-1)
+          L.xor expr'' . LO.ConstantOperand $ LC.Int bits (-1)
         _ -> error "Cannot create a binary complement to a non-int"
-    AST.NegExpr expr ->
-      translate expr vars >>= L.icmp L.EQ (LC.bit 0)
-    AST.MemberExpr expr@(_ `Annot` eAnnot) (AST.Name name `Annot` _) -> do
+    AST.NegExpr expr' ->
+      translate expr' vars >>= L.icmp L.EQ (LC.bit 0)
+    AST.MemberExpr expr'@(_ `Annot` eAnnot) (AST.Name name `Annot` _) -> do
       sName <- getStructName eAnnot
       ~(Just (accessors, _)) <- uses State.structs $ Map.lookup sName
       let Just idx = name `List.lookup` accessors
-      expr' <- translate expr vars
-      L.gep expr' [LC.int32 0, LC.int32 . fromInteger $ toInteger idx]
+      expr'' <- translate expr' vars
+      L.gep expr'' [LC.int32 0, LC.int32 . fromInteger $ toInteger idx]
+    AST.InfixExpr {} -> notYetImplemented
+    AST.PrefixExpr {} -> notYetImplemented
 
 instance TranslAssumps a m =>
          Translate m AST.Lit a (m LO.Operand) where
@@ -429,9 +433,6 @@ instance TranslAssumps a m =>
       AST.LVRef Nothing expr Nothing ->
         translate expr vars >>= (`L.load` 0)
       AST.LVRef {} -> notYetImplemented
-
-notYetImplemented :: HasCallStack => a
-notYetImplemented = error "not yet implemented"
 
 instance TranslAssumps a m =>
          Translate m AST.StackDecl a (Map Text LO.Operand -> m (Map Text LO.Operand)) where

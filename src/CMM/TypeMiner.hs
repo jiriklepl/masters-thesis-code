@@ -25,18 +25,18 @@ import safe CMM.Inference.TypeVar ( ToTypeVar(toTypeVar) )
 import safe Control.Monad ( (>=>) )
 import safe CMM.Data.Function ((.>))
 import safe Data.Tuple.Extra (second)
-import safe CMM.Utils ( HasCallStack )
+import safe CMM.Utils ( HasCallStack, logicError, notYetImplemented )
 
 type StructData = Map Text ([(Text, Int)], [L.Type])
 
 mineElaborated :: (HasCallStack, HasElaboration a) => StructData -> a -> Inferencer L.Type
 mineElaborated structs = getElaboration .> \case
-  EmptyElaboration -> undefined
+  EmptyElaboration -> logicError
   elab -> mineTypeHandle structs $ eHandle elab
 
 mineElaboration :: HasCallStack => StructData -> Elaboration -> Inferencer L.Type
 mineElaboration structs = \case
-  EmptyElaboration -> undefined
+  EmptyElaboration -> logicError
   elab -> mineTypeHandle structs $ eHandle elab
 
 mineTypeHandle :: (ToTypeVar a, HasCallStack) => StructData
@@ -49,11 +49,11 @@ mineStructName :: HasElaboration a => a
 mineStructName = fmap go . State.getTyping . toTypeVar . getElaboration
   where
     go (t :: Type) = case t of
-      VarType {} -> undefined
+      VarType {} -> logicError
       ComplType tc -> case tc of
         ConstType name _ _ -> name
         AddrType t' -> go t'
-        _ -> undefined
+        _ -> logicError
 
 collectStructs :: HasElaboration annot =>
   StructData
@@ -61,7 +61,7 @@ collectStructs :: HasElaboration annot =>
   -> Inferencer StructData
 collectStructs structs (AST.Unit topLevels `Annot` _) = Map.fromList <$> do
   collected <- reverse topLevels `for` \(topLevel `Annot` _) -> case topLevel of
-    AST.TopSection {} -> undefined
+    AST.TopSection {} -> notYetImplemented
     AST.TopDecl {} -> return []
     AST.TopProcedure {} -> return []
     AST.TopClass {} -> return []
@@ -81,11 +81,11 @@ mineDatums structs = fmap fix . go
       (points, data') <- go others
       case datum of
         AST.DatumLabel (AST.Name name) -> return ((name,length data') : points, data')
-        AST.DatumAlign {} -> undefined
+        AST.DatumAlign {} -> notYetImplemented
         AST.Datum _ t Nothing _ -> do
           t' <- mineElaboration structs $ getElaboration t
           return (points, t':data')
-        AST.Datum {} -> undefined
+        AST.Datum {} -> notYetImplemented
 
 makePacked :: [L.Type] -> L.Type
 makePacked = L.StructureType True
@@ -102,16 +102,16 @@ mineType structs t = case t of
       args' <- traverse (mineType structs) args
       ret' <- mineType structs ret
       return $ L.FunctionType ret' args' False
-    AppType {} -> undefined
+    AppType {} -> notYetImplemented
     AddrType arg -> L.ptr <$> mineType structs arg
     ConstType name _ _  -> case getTypeKind t of
       Star -> case name `Map.lookup` structs of
-        Nothing -> undefined
+        Nothing -> logicError
         Just (_, datums) -> do
           return $ makeUnpacked datums
-      _ -> undefined
-    StringType -> undefined
-    String16Type -> undefined
+      _ -> notYetImplemented
+    StringType -> notYetImplemented
+    String16Type -> notYetImplemented
     LabelType -> return L.LabelType
     TBitsType n -> return . L.IntegerType . fromInteger $ toInteger n
     BoolType -> return L.i1
