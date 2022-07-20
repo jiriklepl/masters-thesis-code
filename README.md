@@ -38,7 +38,7 @@ For running the examples (tests):
 #   represent incorrect inputs
 ```
 
-For more information, try:
+For more information:
 
 ```sh
 cabal run Compiler -- -h
