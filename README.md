@@ -64,7 +64,7 @@ When reading the source files of the program, we suggest using Haskell Language 
 
 ### Project outline
 
-The project contains many modules documented with Haddock of varying significance, here we list the main ones:
+The project contains many modules of varying significance documented with Haddock, here we list the main ones:
 
 - `CMM.Pipeline`: contains the high-level logic of the compiler and wrappers for the main phases of the compiler pipeline
 - `CMM.Lexer`: contains the definition of the tokenization phase
