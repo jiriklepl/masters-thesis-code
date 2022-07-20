@@ -62,6 +62,10 @@ This command is quite verbose but its output ends with the location of the index
 
 When reading the source files of the program, we suggest using Haskell Language Server (HLS), which parses the documentation comments and makes the documentation more easily accessible.
 
+### Development requirements
+
+The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without and warnings and the script `.\run_examples.sh` should compile all files and succesfully interpret them by `llc`.
+
 ### Project outline
 
 The project contains many modules of varying significance documented with Haddock, here we list the main ones:
