@@ -95,4 +95,4 @@ The project contains many modules of varying significance documented with Haddoc
 
 ## Code style and testing
 
-The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings. The script `.\run_examples.sh` should compile all example files and successfully interpret them by `llc`.
+The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings (tested with ghc-8.10.7). The script `.\run_examples.sh` should compile all example files and successfully interpret them by `llc`.
