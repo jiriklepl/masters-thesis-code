@@ -1,3 +1,4 @@
+// tests whether the compiler correctly identifies bad calls
 
 g (bits32 a, bits32 b) {
   return (a);

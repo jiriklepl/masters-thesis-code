@@ -6,6 +6,8 @@ Description : AST
 Maintainer  : jiriklepl@seznam.cz
 
 This module defines the abstract syntactic tree for the extended C-- language.
+
+All deviations from https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf explicitly stated
 -}
 
 module CMM.AST where

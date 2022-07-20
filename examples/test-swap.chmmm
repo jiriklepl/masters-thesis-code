@@ -1,3 +1,5 @@
+// tests whether the compiler correctly interprets the special C-- syntax for assignments
+
 foreign "C" f(bits32 x, bits32 y) {
     x, y = y, x;
 

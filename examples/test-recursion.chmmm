@@ -1,3 +1,5 @@
+// tests simple nontrivial recursion
+
 g(auto a) {
   a = f(a);
   return (a);

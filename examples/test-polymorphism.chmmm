@@ -1,3 +1,5 @@
+// tests whether the compiler correctly produces monomorphic copies of polymorphic definitions
+
 g(bits32 x) -> bits32 {
   bits32 r;
 

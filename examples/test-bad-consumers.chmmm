@@ -1,3 +1,5 @@
+// tests whether the compiler correctly identifies bad consumptions of calls
+
 g() {
     return(5, 10);
 }

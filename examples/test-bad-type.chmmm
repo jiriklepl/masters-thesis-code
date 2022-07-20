@@ -1,3 +1,5 @@
+// tests simple unification error
+
 f (bits32 x) -> bits64 {
 
   return (x);

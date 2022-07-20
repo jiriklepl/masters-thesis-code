@@ -1,3 +1,5 @@
+// a function from the language specification
+
 sp1(bits32 n) {
     bits32 s, p;
 

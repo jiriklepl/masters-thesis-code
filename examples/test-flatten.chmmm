@@ -1,3 +1,5 @@
+// tests whether the compiler correctly flattens a nested set of if statements
+
 foreign "C" f ("" bits32 x) {
     if x != 1 {
         if x != 2 {

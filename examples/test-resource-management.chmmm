@@ -1,3 +1,4 @@
+// tests simple use of automatic resource management
 
 struct X {
   x: bits32;

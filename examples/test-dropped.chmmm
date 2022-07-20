@@ -1,3 +1,5 @@
+// tests a simple use of dropped statements
+
 drop(auto a) {
     return ();
 }

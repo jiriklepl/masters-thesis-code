@@ -1,3 +1,5 @@
+// simple test of monomorphization (code example in the thesis)
+
 add(auto x, auto y) {
   return (x + y);
 }

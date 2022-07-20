@@ -8,8 +8,23 @@ instance Id bits32 bits32 {
   }
 }
 
-g(bits32 x) -> auto {
-  x = id(x);
+instance Id bits64 bits64 {
+  id (auto u) {
+    return (u);
+  }
+}
+
+f() {
+  bits32 x;
+  auto id_x;
+  bits64 y;
+  auto id_y;
+
+  x = 5;
+  y = 10;
+
+  id_x = id(x);
+  id_y = id(y);
 
   return (x);
 }

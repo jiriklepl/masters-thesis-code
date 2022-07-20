@@ -1,2 +1,4 @@
+// tests whether the compiler correctly identifies illegal fallthrough out of procedure
+
 f(bits32 x) {
 }

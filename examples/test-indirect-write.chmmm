@@ -1,3 +1,5 @@
+// tests whether the compiler correctly interprets indirect writes
+
 f() {
     stackdata {
         p: bits32;

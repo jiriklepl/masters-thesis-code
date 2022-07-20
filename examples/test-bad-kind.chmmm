@@ -1,3 +1,5 @@
+// tests whether the compiler correctly identifies wrong type kinds
+
 struct A {
 
 }

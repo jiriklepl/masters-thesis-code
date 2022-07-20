@@ -1,3 +1,5 @@
+// tests whether the compiler correctly interprets polymorphic functions that include field accessors
+
 struct A {
     id: bits32;
 }

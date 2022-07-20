@@ -1,3 +1,5 @@
+// tests whether the compiler correctly identifies ambiguous superclasses
+
 class EQ a {
     eq(auto(a) x, auto(a) y) -> bits1;
 }

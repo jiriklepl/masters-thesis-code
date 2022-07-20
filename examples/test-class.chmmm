@@ -1,3 +1,5 @@
+// tests whether the compiler correctly interprets classes and instances
+
 class Id a {
   id (auto (a) x) -> auto (a);
 }

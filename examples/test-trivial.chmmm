@@ -1,3 +1,5 @@
+// very simple function
+
 foreign "C" f ("" bits32 x) {
     auto y;
     y = x + 1;

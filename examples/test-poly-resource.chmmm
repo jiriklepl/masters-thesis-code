@@ -1,3 +1,4 @@
+// tests a combination of resource management and polymorphism
 
 struct X {
   x: bits32;

@@ -33,18 +33,24 @@ import safe CMM.Inference.Unify.Error
   )
 import safe CMM.Utils ( HasCallStack, logicError )
 
+-- | Unifies the given types (variables)
 unify :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
 unify = unifyDirected Both
 
+-- | returns 'True' if the given types are unifiable
 unifiable :: (HasCallStack, Unify a b) => a -> a -> Bool
 unifiable = (isRight .) . unify
 
+-- | returns 'True' if the left-hand operand is an instance of the right-hand one
 instanceOf :: (HasCallStack, Unify a b) => a -> a -> Bool
 inst `instanceOf` scheme = isRight $ unifyDirected Backward inst scheme
 
+-- | gets the instantiating substitution from the right-hand operand to the left-hand operand
+--   if we apply this substitution to the right-hand operand, we get the left-hand one
 instantiateFrom :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
 instantiateFrom = unifyDirected Backward
 
+-- | flipped version of 'instanceOf'
 schemeOf :: Unify a b => a -> a -> Bool
 schemeOf = flip instanceOf
 
@@ -56,6 +62,7 @@ unifyLax ::
 unifyLax = unifyLaxDirected Both
 
 class Unify a b | a -> b where
+  -- | unifies the given types (~) while adhering to the substitution direction
   unifyDirected :: HasCallStack => Way -> a -> a -> Either [UnificationError] (Subst b, a)
 
 bind :: Way -> TypeVar -> Type -> Either [UnificationError] (Subst Type, Type)

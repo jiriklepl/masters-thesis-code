@@ -1,3 +1,5 @@
+// tests a special case of functional dependencies
+
 class Id a | -> a {
   id (auto (a) x) -> auto (a);
 }

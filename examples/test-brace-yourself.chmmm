@@ -1,3 +1,5 @@
+// tests whether the compiler correctly flattens if statements
+
 g(bits32 x) {
 
   if 0 {if 0 {if 0 {if 0 {if 0 {if 0 {if 0 {if 0 {if 0 {}else{}}else{}}else{}}else{}}else{}}else{}}else{}}else{}}else{}

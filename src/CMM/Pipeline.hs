@@ -107,13 +107,14 @@ runWithOptions options = do
         Left prettyError -> die prettyError -- prints errors and dies
         Right result -> return result
 
--- runs the compiler pipeline as an `Either String` monad
+-- | runs the compiler pipeline as an `Either String` monad
 runAll :: String -> Options -> Text -> Either String (String, ErrorState)
 runAll fileName options contents = do
   tokens <- tokenizer fileName contents
   ast <- parser fileName tokens
   runParsed options ast
 
+-- | runs the compiler pipeline on a parsed program
 runParsed ::
   Options
   -> Annot Unit SourcePos
@@ -139,6 +140,7 @@ runFlattened options ast = do
     then return (show ast', errState)
     else second (errState <>) <$> runBlockified options bState ast'
 
+-- | runs the compiler pipeline on a parsed and blockified program
 runBlockified ::
   Options
   -> BlockifierState
@@ -150,6 +152,7 @@ runBlockified options bState ast = do
     then return (show ast', errState)
     else second (errState <>) <$> runMonomorphized options bState iState ast'
 
+-- | runs the last, translation, phases of the compiler
 runMonomorphized :: Options
   -> BlockifierState
   -> InferencerState

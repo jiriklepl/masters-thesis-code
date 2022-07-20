@@ -1,3 +1,5 @@
+// tests whether the compiler correctly identifies double dropped statement
+
 drop(auto a) {
     return ();
 }

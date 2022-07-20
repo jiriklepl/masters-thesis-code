@@ -1,3 +1,5 @@
+// simple test of monomorphization (code example in the thesis)
+
 id (auto x) {
     return (x);
 }
