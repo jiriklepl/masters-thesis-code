@@ -3,7 +3,7 @@
 
 module CMM.Inference.GetParent where
 
-import safe Control.Monad.State (modify, MonadState)
+import safe Control.Monad.State (MonadState, modify)
 import safe Data.Data (Data)
 import safe qualified Data.Set as Set
 

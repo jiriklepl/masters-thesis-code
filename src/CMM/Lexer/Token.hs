@@ -2,18 +2,18 @@
 
 module CMM.Lexer.Token where
 
-import safe Data.String ( IsString )
-import safe Data.Text ( Text )
-import safe Prettyprinter
-    ( Pretty(pretty), hsep, dquotes, squotes )
+import safe Data.String (IsString)
+import safe Data.Text (Text)
+import safe Prettyprinter (Pretty(pretty), dquotes, hsep, squotes)
 
-import safe CMM.AST.Annot ( takeAnnot, Annot )
+import safe CMM.AST.Annot (Annot, takeAnnot)
+import safe Data.List.NonEmpty (toList)
 import safe Text.Megaparsec
-    ( SourcePos,
-      TraversableStream(reachOffset),
-      VisualStream (showTokens, tokensLength),
-      PosState(PosState) )
-import safe Data.List.NonEmpty ( toList )
+  ( PosState(PosState)
+  , SourcePos
+  , TraversableStream(reachOffset)
+  , VisualStream(showTokens, tokensLength)
+  )
 
 -- | Tokens for the reserved keywords
 data Reserved
@@ -73,60 +73,61 @@ data Reserved
   deriving (Eq, Ord, Show)
 
 instance Pretty Reserved where
-  pretty = \case
-    Aborts -> abortsName
-    Align -> alignName
-    Aligned -> alignedName
-    Also -> alsoName
-    As -> asName
-    Auto -> autoName
-    Big -> bigName
-    Bits -> bitsName
-    Byteorder -> byteorderName
-    Case -> caseName
-    Class -> className
-    Const -> constName
-    Continuation -> continuationName
-    Cut -> cutName
-    Cuts -> cutsName
-    Dropped -> droppedName
-    Else -> elseName
-    Equal -> equalName
-    Export -> exportName
-    Foreign -> foreignName
-    Goto -> gotoName
-    If -> ifName
-    Import -> importName
-    In -> inName
-    Instance -> instanceName
-    Invariant -> invariantName
-    Invisible -> invisibleName
-    Jump -> jumpName
-    Little -> littleName
-    Memsize -> memsizeName
-    Never -> neverName
-    New -> newName
-    Ptr -> ptrName
-    Pointersize -> pointersizeName
-    Pragma -> pragmaName
-    Reads -> readsName
-    Register -> registerName
-    Return -> returnName
-    Returns -> returnsName
-    Section -> sectionName
-    Semi -> semiName
-    Span -> spanName
-    Stackdata -> stackdataName
-    Struct -> structName
-    Switch -> switchName
-    Target -> targetName
-    Targets -> targetsName
-    To -> toName
-    Typedef -> typedefName
-    Unicode -> unicodeName
-    Unwinds -> unwindsName
-    Writes -> writesName
-    Wordsize -> wordsizeName
+  pretty =
+    \case
+      Aborts -> abortsName
+      Align -> alignName
+      Aligned -> alignedName
+      Also -> alsoName
+      As -> asName
+      Auto -> autoName
+      Big -> bigName
+      Bits -> bitsName
+      Byteorder -> byteorderName
+      Case -> caseName
+      Class -> className
+      Const -> constName
+      Continuation -> continuationName
+      Cut -> cutName
+      Cuts -> cutsName
+      Dropped -> droppedName
+      Else -> elseName
+      Equal -> equalName
+      Export -> exportName
+      Foreign -> foreignName
+      Goto -> gotoName
+      If -> ifName
+      Import -> importName
+      In -> inName
+      Instance -> instanceName
+      Invariant -> invariantName
+      Invisible -> invisibleName
+      Jump -> jumpName
+      Little -> littleName
+      Memsize -> memsizeName
+      Never -> neverName
+      New -> newName
+      Ptr -> ptrName
+      Pointersize -> pointersizeName
+      Pragma -> pragmaName
+      Reads -> readsName
+      Register -> registerName
+      Return -> returnName
+      Returns -> returnsName
+      Section -> sectionName
+      Semi -> semiName
+      Span -> spanName
+      Stackdata -> stackdataName
+      Struct -> structName
+      Switch -> switchName
+      Target -> targetName
+      Targets -> targetsName
+      To -> toName
+      Typedef -> typedefName
+      Unicode -> unicodeName
+      Unwinds -> unwindsName
+      Writes -> writesName
+      Wordsize -> wordsizeName
 
 -- | All the tokens of the CHMMM language
 data Token a
@@ -173,69 +174,69 @@ data Token a
   | Eof
   deriving (Functor, Eq, Ord, Show)
 
-
 instance Pretty (Token a) where
-  pretty = \case
-    Keyword kw -> pretty kw
-    Ident name -> pretty name
-    StrLit txt -> dquotes $ pretty txt
-    BitsType int -> bitsName <> pretty int
-    CharLit char -> squotes $ pretty char
-    FloatLit float -> pretty float
-    IntLit int -> pretty int
-    Arr -> "->"
-    DArr -> "=>"
-    Colon -> ":"
-    DColon -> "::"
-    Semicolon -> ";"
-    LBrace -> "{"
-    RBrace -> "}"
-    LParen -> "("
-    RParen -> ")"
-    LBracket -> "["
-    RBracket -> "]"
-    Lt -> "<"
-    Gt -> ">"
-    Leq -> "<="
-    Geq -> ">="
-    ShL -> "<<"
-    ShR -> ">>"
-    Eq -> "=="
-    Neq -> "!="
-    Comma -> ","
-    Backtick -> "`"
-    Percent -> "%"
-    DPercent -> "%%"
-    Tilde -> "~"
-    Minus -> "-"
-    Plus -> "+"
-    Slash -> "/"
-    Star -> "*"
-    Ampersand -> "&"
-    Pipe -> "|"
-    EqSign -> "="
-    DotDot -> ".."
-    Caret -> "^"
-    Eof -> ""
+  pretty =
+    \case
+      Keyword kw -> pretty kw
+      Ident name -> pretty name
+      StrLit txt -> dquotes $ pretty txt
+      BitsType int -> bitsName <> pretty int
+      CharLit char -> squotes $ pretty char
+      FloatLit float -> pretty float
+      IntLit int -> pretty int
+      Arr -> "->"
+      DArr -> "=>"
+      Colon -> ":"
+      DColon -> "::"
+      Semicolon -> ";"
+      LBrace -> "{"
+      RBrace -> "}"
+      LParen -> "("
+      RParen -> ")"
+      LBracket -> "["
+      RBracket -> "]"
+      Lt -> "<"
+      Gt -> ">"
+      Leq -> "<="
+      Geq -> ">="
+      ShL -> "<<"
+      ShR -> ">>"
+      Eq -> "=="
+      Neq -> "!="
+      Comma -> ","
+      Backtick -> "`"
+      Percent -> "%"
+      DPercent -> "%%"
+      Tilde -> "~"
+      Minus -> "-"
+      Plus -> "+"
+      Slash -> "/"
+      Star -> "*"
+      Ampersand -> "&"
+      Pipe -> "|"
+      EqSign -> "="
+      DotDot -> ".."
+      Caret -> "^"
+      Eof -> ""
 
 instance Ord a => VisualStream [Annot Token a] where
   showTokens _ = show . hsep . fmap pretty . toList
   tokensLength proxy = length . showTokens proxy
 
 instance TraversableStream [Annot Token SourcePos] where
-  reachOffset int = \case
-    state@(PosState ts n _ pos s) -> go ts n
-      where
-        go [] _ = (Nothing, state)
-        go tokens'@(token':tokens'') n'
-          | n'' <= int = go tokens'' n''
-          | otherwise = (Just $ s <> string, PosState tokens' n' (takeAnnot token') pos "")
-          where
-            n'' = len + n'
-            string = show $ pretty token'
-            len = length string
-
-
+  reachOffset int =
+    \case
+      state@(PosState ts n _ pos s) -> go ts n
+        where go [] _ = (Nothing, state)
+              go tokens'@(token':tokens'') n'
+                | n'' <= int = go tokens'' n''
+                | otherwise =
+                  ( Just $ s <> string
+                  , PosState tokens' n' (takeAnnot token') pos "")
+                where
+                  n'' = len + n'
+                  string = show $ pretty token'
+                  len = length string
 
 abortsName :: IsString a => a
 abortsName = "aborts"

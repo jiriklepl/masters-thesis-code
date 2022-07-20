@@ -9,7 +9,7 @@ import safe Prettyprinter (Pretty(pretty), parens)
 import safe CMM.Data.Nullable (Fallbackable((??)), Nullable(nullVal))
 import safe CMM.Inference.Arity (Arity(arity))
 import safe CMM.Pretty (arrowNice, deltaBig, question, star)
-import safe CMM.Utils (backQuote, HasCallStack, logicError)
+import safe CMM.Utils (HasCallStack, backQuote, logicError)
 
 infixr 6 :->
 
@@ -79,7 +79,8 @@ instance Pretty TypeKind where
         | otherwise -> parens (pretty left) <> arrowNice <> pretty right
 
 -- | logic error for illegal type kind updates
-setTypeKindInvariantLogicError :: (HasCallStack, HasTypeKind a, Show a) => a -> TypeKind -> a
+setTypeKindInvariantLogicError ::
+     (HasCallStack, HasTypeKind a, Show a) => a -> TypeKind -> a
 setTypeKindInvariantLogicError what kind =
   error $
   "(internal) " ++
@@ -100,7 +101,8 @@ matchKind a b = getTypeKind a `go` getTypeKind b
     _ `go` _ = False
 
 -- | combines the type kinds of the given objects
-combineTypeKind :: (HasCallStack, HasTypeKind a, HasTypeKind b) => a -> b -> TypeKind
+combineTypeKind ::
+     (HasCallStack, HasTypeKind a, HasTypeKind b) => a -> b -> TypeKind
 combineTypeKind a b = getTypeKind a `go` getTypeKind b
   where
     kind `go` kind'

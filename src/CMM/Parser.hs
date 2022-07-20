@@ -7,7 +7,6 @@ Maintainer  : jiriklepl@seznam.cz
 
 This module contains the definition of parsing of the language
 -}
-
 module CMM.Parser where
 
 import safe Control.Applicative
@@ -143,7 +142,7 @@ braces = symbol T.LBrace `between` symbol T.RBrace
 
 -- | encloses the given parser into parentheses
 parens :: Parser a -> Parser a
-parens = symbol T.LParen `between`symbol T.RParen
+parens = symbol T.LParen `between` symbol T.RParen
 
 -- | parses a backtick
 backTick :: Parser ()
@@ -213,7 +212,8 @@ topLevel =
 -- | parses a topLevel definition in a section
 sectionTopLevel :: ULocParser AST.TopLevel
 sectionTopLevel =
-  keyword T.Section *> liftA2 AST.TopSection stringLiteral (braces $ many section)
+  keyword T.Section *>
+  liftA2 AST.TopSection stringLiteral (braces $ many section)
 
 -- | parses a class top level
 classTopLevel :: ULocParser AST.TopLevel
@@ -221,9 +221,7 @@ classTopLevel = keyword T.Class *> (AST.TopClass <$> class')
 
 -- | parses a functional dependency
 funDep :: SourceParser AST.FunDep
-funDep =
-  withSourcePos $
-    liftA2 AST.FunDep (identifiers <* arrow) identifiers
+funDep = withSourcePos $ liftA2 AST.FunDep (identifiers <* arrow) identifiers
 
 -- | parses functional dependencies
 funDeps :: SourceParser AST.FunDeps
@@ -234,14 +232,14 @@ class' :: SourceParser AST.Class
 class' =
   withSourcePos $
   choice
-    [ try $
-      liftA4 AST.Class superClasses paraName mFunDeps classBody
-    , liftA3 (AST.Class []) paraName mFunDeps  classBody
+    [ try $ liftA4 AST.Class superClasses paraName mFunDeps classBody
+    , liftA3 (AST.Class []) paraName mFunDeps classBody
     ]
   where
     classBody = braces $ many procedureDecl
     mFunDeps = optional $ pipe *> funDeps
-    procedureDecl = withSourcePos $ AST.ProcedureDecl <$> procedureHeader <* semicolon
+    procedureDecl =
+      withSourcePos $ AST.ProcedureDecl <$> procedureHeader <* semicolon
 
 superClasses :: Parser [Annot (AST.ParaName AST.Type) SourcePos]
 superClasses = sepBy1 paraName comma <* symbol T.DArr
@@ -255,15 +253,11 @@ instance' :: SourceParser AST.Instance
 instance' =
   withSourcePos $
   choice
-    [ try $
-      liftA3
-        AST.Instance
-        superClasses
-        paraName
-        instanceBody
+    [ try $ liftA3 AST.Instance superClasses paraName instanceBody
     , liftA2 (AST.Instance []) paraName instanceBody
     ]
-    where instanceBody = braces $ many procedureInstance
+  where
+    instanceBody = braces $ many procedureInstance
 
 -- | parses a struct top level
 structTopLevel :: ULocParser AST.TopLevel
@@ -273,7 +267,6 @@ structTopLevel = keyword T.Struct *> (AST.TopStruct <$> struct)
 struct :: SourceParser AST.Struct
 struct = withSourcePos . liftA2 AST.Struct paraName $ braces datums
 
-
 class ParaName' param where
   paraName :: SourceParser (AST.ParaName param)
 
@@ -281,8 +274,7 @@ instance ParaName' AST.Type where
   paraName = withSourcePos $ liftA2 AST.ParaName identifier types
 
 instance ParaName' AST.Name where
-  paraName =
-    withSourcePos $ liftA2 AST.ParaName identifier identifiers
+  paraName = withSourcePos $ liftA2 AST.ParaName identifier identifiers
 
 -- | parses a section
 section :: SourceParser AST.Section
@@ -311,7 +303,7 @@ decl =
 
 -- | parses an import declaration
 importDecl :: ULocParser AST.Decl
-importDecl = keyword T.Import *> fmap AST.ImportDecl  imports <* semicolon
+importDecl = keyword T.Import *> fmap AST.ImportDecl imports <* semicolon
 
 -- | parses an export declaration
 exportDecl :: ULocParser AST.Decl
@@ -334,7 +326,8 @@ typedefDecl =
 
 -- | parses a pragma declaration
 pragmaDecl :: ULocParser AST.Decl
-pragmaDecl = keyword T.Pragma *> liftA2 AST.PragmaDecl identifier (braces pragma)
+pragmaDecl =
+  keyword T.Pragma *> liftA2 AST.PragmaDecl identifier (braces pragma)
 
 -- | parses a target declaration
 targetDecl :: ULocParser AST.Decl
@@ -370,7 +363,8 @@ endian = choice [keyword T.Little $> AST.Little, keyword T.Big $> AST.Big]
 
 -- | parses a pointer size directive
 pointerSizeDirective :: ULocParser AST.TargetDirective
-pointerSizeDirective = keyword T.Pointersize *> (AST.PointerSize . fst <$> intLit)
+pointerSizeDirective =
+  keyword T.Pointersize *> (AST.PointerSize . fst <$> intLit)
 
 -- | parses a word size directive
 wordSizeDirective :: ULocParser AST.TargetDirective
@@ -404,7 +398,8 @@ procedure = withSourcePos $ liftA2 AST.Procedure procedureHeader body
 
 -- | parses a method instance
 procedureInstance :: SourceParser AST.Procedure
-procedureInstance = withSourcePos $ liftA2 AST.Procedure procedureInstanceHeader body
+procedureInstance =
+  withSourcePos $ liftA2 AST.Procedure procedureInstanceHeader body
 
 -- | parses a formal argument
 formal :: SourceParser AST.Formal
@@ -412,7 +407,8 @@ formal = withSourcePos $ liftA4 AST.Formal mKind invariant type' identifier
 
 -- | parses a formal argument of a method instance
 formalInstance :: SourceParser AST.Formal
-formalInstance = withSourcePos $ liftA4 AST.Formal mKind invariant justAutoType identifier
+formalInstance =
+  withSourcePos $ liftA4 AST.Formal mKind invariant justAutoType identifier
 
 -- | parses a semiformal (return) of a procedure
 semiFormal :: SourceParser AST.SemiFormal
@@ -475,7 +471,8 @@ body = withSourcePos . braces $ AST.Body <$> many bodyItem
 bodyItem :: SourceParser AST.BodyItem
 bodyItem =
   withSourcePos $
-  AST.BodyDecl <$> try decl <|> AST.BodyStackDecl <$> stackDecl <|> AST.BodyStmt <$> stmt
+  AST.BodyDecl <$> try decl <|> AST.BodyStackDecl <$> stackDecl <|>
+  AST.BodyStmt <$> stmt
 
 -- | parses a section span
 secSpan :: ULocParser AST.Section
@@ -498,7 +495,14 @@ labelDatum = AST.DatumLabel <$> identifier <* colon
 
 -- | parses a datum that defines a field
 justDatum :: ULocParser AST.Datum
-justDatum = liftA4 AST.Datum (fmap isJust . optional $ keyword T.New) type' (optional size) (optional init') <* semicolon
+justDatum =
+  liftA4
+    AST.Datum
+    (fmap isJust . optional $ keyword T.New)
+    type'
+    (optional size)
+    (optional init') <*
+  semicolon
 
 -- | parses an initializer
 init' :: SourceParser AST.Init
@@ -528,15 +532,12 @@ registers =
     AST.Registers
     mKind
     type'
-    (commaList
-       (liftA2
-          (,)
-          posIdentifier
-          (optional $ eqSign *> stringLiteral)))
+    (commaList (liftA2 (,) posIdentifier (optional $ eqSign *> stringLiteral)))
 
 -- | parses a type
 type' :: SourceParser AST.Type
-type' = withSourcePos $ choice [parensType, ptrType, autoType, bitsType', nameType]
+type' =
+  withSourcePos $ choice [parensType, ptrType, autoType, bitsType', nameType]
 
 types :: Parser [Annot AST.Type SourcePos]
 types = many type'
@@ -614,7 +615,8 @@ droppedStmt = keyword T.Dropped *> fmap AST.DroppedStmt identifier
 -- | parses an if statement
 ifStmt :: ULocParser AST.Stmt
 ifStmt =
-  keyword T.If *> liftA3 AST.IfStmt expr body (optional $ keyword T.Else *> body)
+  keyword T.If *>
+  liftA3 AST.IfStmt expr body (optional $ keyword T.Else *> body)
 
 -- | parses a switch statement
 switchStmt :: ULocParser AST.Stmt
@@ -683,7 +685,11 @@ lvalue = withSourcePos $ try lvRef <|> lvName
 -- | parses an lvalue reference
 lvRef :: ULocParser AST.LValue
 lvRef =
-  liftA3 AST.LVRef (optional type') (symbol T.LBracket *> expr) (optional asserts) <*
+  liftA3
+    AST.LVRef
+    (optional type')
+    (symbol T.LBracket *> expr)
+    (optional asserts) <*
   symbol T.RBracket
 
 -- | parses a reference to a named object
@@ -739,11 +745,13 @@ kindedNames = commaList . withSourcePos $ liftA2 AST.KindName mKind identifier
 -- | parses an arm of a switch statement
 arm :: SourceParser AST.Arm
 arm =
-  withSourcePos $ keyword T.Case *> liftA2 AST.Arm (commaList range <* colon) body
+  withSourcePos $
+  keyword T.Case *> liftA2 AST.Arm (commaList range <* colon) body
 
 -- | parses a range of an arm
 range :: SourceParser AST.Range
-range = withSourcePos $ liftA2 AST.Range expr (optional $ symbol T.DotDot *> expr)
+range =
+  withSourcePos $ liftA2 AST.Range expr (optional $ symbol T.DotDot *> expr)
 
 -- | parses a flow annotation
 flow :: SourceParser AST.Flow
@@ -761,11 +769,13 @@ alsoCutsTo = keywords [T.Cuts, T.To] *> (AST.AlsoCutsTo <$> identifierList)
 
 -- | parses an "also unwinds to" flow annotation
 alsoUnwindsTo :: ULocParser AST.Flow
-alsoUnwindsTo = keywords [T.Unwinds, T.To] *> (AST.AlsoUnwindsTo <$> identifierList)
+alsoUnwindsTo =
+  keywords [T.Unwinds, T.To] *> (AST.AlsoUnwindsTo <$> identifierList)
 
 -- | parses an "also returns to" flow annotation
 alsoReturnsTo :: ULocParser AST.Flow
-alsoReturnsTo = keywords [T.Returns, T.To] *> (AST.AlsoReturnsTo <$> identifierList)
+alsoReturnsTo =
+  keywords [T.Returns, T.To] *> (AST.AlsoReturnsTo <$> identifierList)
 
 -- | parses an "also aborts" flow annotation
 alsoAborts :: ULocParser AST.Flow
@@ -773,7 +783,8 @@ alsoAborts = keyword T.Aborts *> optional comma $> AST.AlsoAborts
 
 -- | parses a "never returns" flow annotation
 neverReturns :: ULocParser AST.Flow
-neverReturns = keywords [T.Never, T.Returns] *> optional comma $> AST.NeverReturns
+neverReturns =
+  keywords [T.Never, T.Returns] *> optional comma $> AST.NeverReturns
 
 -- | parses an alias annotation
 alias :: SourceParser AST.Alias
@@ -867,22 +878,27 @@ andExpr = opImplL (AST.AndOp, T.Ampersand :: T.Token SourcePos) shExpr
 
 -- | parses a shift expression
 shExpr :: SourceParser AST.Expr
-shExpr = opImplL [(AST.ShLOp, T.ShL :: T.Token SourcePos), (AST.ShROp, T.ShR)] addExpr
+shExpr =
+  opImplL [(AST.ShLOp, T.ShL :: T.Token SourcePos), (AST.ShROp, T.ShR)] addExpr
 
 -- | parses an add (or sub) expression
 addExpr :: SourceParser AST.Expr
 addExpr =
-  opImplL [(AST.AddOp, T.Plus :: T.Token SourcePos), (AST.SubOp, T.Minus)] mulExpr
+  opImplL
+    [(AST.AddOp, T.Plus :: T.Token SourcePos), (AST.SubOp, T.Minus)]
+    mulExpr
 
 -- | parses an mul (or div, mod) expression
 mulExpr :: SourceParser AST.Expr
 mulExpr =
   opImplL
-    [(AST.DivOp, T.Slash :: T.Token SourcePos), (AST.MulOp, T.Star), (AST.ModOp, T.Percent)]
+    [ (AST.DivOp, T.Slash :: T.Token SourcePos)
+    , (AST.MulOp, T.Star)
+    , (AST.ModOp, T.Percent)
+    ]
     negExpr
 
 -- SYMBOLIC OPERATORS -- END
-
 -- | parses a negation expression
 negExpr :: SourceParser AST.Expr
 negExpr =
@@ -895,8 +911,7 @@ memberExpr :: SourceParser AST.Expr
 memberExpr = do
   expr' <- simpleExpr
   choice
-    [ arrow *>
-      withSourcePos (AST.MemberExpr expr' <$> posIdentifier)
+    [ arrow *> withSourcePos (AST.MemberExpr expr' <$> posIdentifier)
     , return expr'
     ]
 
@@ -924,7 +939,9 @@ class OpImpl a where
     -> Parser (Annot AST.Expr SourcePos -> Annot AST.Expr SourcePos)
   opRestImplN x next = withAnnot <$> getPos <*< opRestInner x next <|> pure id
   opRestInner ::
-       a -> SourceParser AST.Expr -> Parser (Annot AST.Expr SourcePos -> AST.Expr SourcePos)
+       a
+    -> SourceParser AST.Expr
+    -> Parser (Annot AST.Expr SourcePos -> AST.Expr SourcePos)
 
 instance OpImpl (AST.Op, T.Token SourcePos) where
   opRestInner (op, str) next = flip (AST.BinOpExpr op) <$> (symbol str *> next)
@@ -934,6 +951,5 @@ instance OpImpl x => OpImpl [x] where
 
 instance OpImpl Text where
   opRestInner "`" next =
-    backTicks (flip . AST.InfixExpr <$> identifier) <*>
-    next
+    backTicks (flip . AST.InfixExpr <$> identifier) <*> next
   opRestInner _ _ = error "Parser not implemented for this operator"

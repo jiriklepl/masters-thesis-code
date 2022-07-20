@@ -2,9 +2,9 @@
 
 module CMM.AST.Variables.SymbolType where
 
-import safe Data.Data ( Data )
+import safe Data.Data (Data)
 
-import safe Prettyprinter ( Pretty(pretty) )
+import safe Prettyprinter (Pretty(pretty))
 
 -- Symbol types used by `DuplicateSymbol` error in the `Blockifier`
 data SymbolType
@@ -17,10 +17,11 @@ data SymbolType
   deriving (Eq, Show, Data)
 
 instance Pretty SymbolType where
-  pretty = \case
-    ConstDeclSymbol -> "constant declaration"
-    ContSymbol -> "continuation"
-    DatumLabelSymbol -> "datum label"
-    ImportSymbol -> "import"
-    LabelSymbol -> "label"
-    RegisterSymbol -> "register"
+  pretty =
+    \case
+      ConstDeclSymbol -> "constant declaration"
+      ContSymbol -> "continuation"
+      DatumLabelSymbol -> "datum label"
+      ImportSymbol -> "import"
+      LabelSymbol -> "label"
+      RegisterSymbol -> "register"

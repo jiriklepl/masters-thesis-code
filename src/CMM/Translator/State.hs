@@ -3,7 +3,7 @@
 
 module CMM.Translator.State where
 
-import safe Control.Lens ( makeFieldsNoPrefix, (.=), (^.) )
+import safe Control.Lens ((.=), (^.), makeFieldsNoPrefix)
 
 import safe Data.Map (Map)
 import safe Data.Text (Text)
@@ -11,11 +11,17 @@ import safe Data.Text (Text)
 import safe qualified LLVM.AST.Operand as L
 
 import safe CMM.AST.BlockAnnot (BlockData)
-import safe CMM.Inference.State ( InferencerState )
+import safe CMM.AST.Blockifier.State
+  ( BlockifierState
+  , allBlocks
+  , allData
+  , allFlow
+  , numBlocks
+  )
+import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
+import safe CMM.Inference.State (InferencerState)
+import safe Control.Monad.State (MonadState)
 import qualified LLVM.AST.Type as L
-import safe Control.Monad.State ( MonadState )
-import safe CMM.Err.State ( ErrorState, HasErrorState(errorState) )
-import safe CMM.AST.Blockifier.State (BlockifierState, allFlow, allData, allBlocks, numBlocks)
 
 data TranslState =
   TranslState

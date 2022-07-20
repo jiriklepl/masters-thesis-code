@@ -3,7 +3,7 @@
 
 module CMM.Inference.State.Impl where
 
-import safe Control.Lens ( makeFieldsNoPrefix, uses, (%=) )
+import safe Control.Lens ((%=), makeFieldsNoPrefix, uses)
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe Control.Monad.State (State)
@@ -25,10 +25,10 @@ import safe CMM.Inference.HandleCounter
   ( HasHandleCounter(handleCounter)
   , freshTypeHelperWithParent
   )
+import safe CMM.Inference.Properties (Properties, initProperties, propsId)
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeCompl (PrimType)
-import safe CMM.Inference.Properties (Properties, propsId, initProperties)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
 import safe CMM.Options (Options(Options))
@@ -73,7 +73,9 @@ data InferencerState =
   deriving (Show)
 
 initInferencer :: Options -> InferencerState
-initInferencer Options {Options.maxFunDeps = maxFunDeps, Options.handleStart = handleCounter'} =
+initInferencer Options { Options.maxFunDeps = maxFunDeps
+                       , Options.handleStart = handleCounter'
+                       } =
   InferencerState
     { _subKinding = nullVal
     , _kindingBounds = nullVal
@@ -105,11 +107,7 @@ instance GetParent Inferencer TypeVar where
   getParent = uses currentParent head
 
 instance Refresh Inferencer where
-  refresh tVars =
-    sequence $
-    Map.fromSet
-      (freshTypeHelper . getTypeKind)
-      tVars
+  refresh tVars = sequence $ Map.fromSet (freshTypeHelper . getTypeKind) tVars
 
 freshTypeHelper :: TypeKind -> Inferencer TypeVar
 freshTypeHelper tKind = do

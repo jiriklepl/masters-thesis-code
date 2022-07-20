@@ -5,7 +5,7 @@ module CMM.Inference.State
   , module CMM.Inference.State
   ) where
 
-import safe Control.Lens ( (^.), uses, view, (%=), (<>=) )
+import safe Control.Lens ((%=), (<>=), (^.), uses, view)
 import safe Control.Monad (filterM, unless)
 import safe Data.Data (Data)
 import safe Data.Foldable (fold, traverse_)
@@ -23,22 +23,23 @@ import safe CMM.Data.Trilean (Trilean)
 import safe CMM.Err.Error (Error(Error))
 import safe CMM.Err.Severity (Severity(ErrorLevel))
 import safe CMM.Err.State (ErrorState(ErrorState), HasErrorState(errorState))
+import safe CMM.Inference.BuiltIn ()
 import safe CMM.Inference.Constness (Constness)
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact (Qual((:=>)), Scheme((:.)))
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
-import safe CMM.Inference.FunDeps (funDepsSimplify, addTrivialDep)
+import safe CMM.Inference.FunDeps (addTrivialDep, funDepsSimplify)
+import safe CMM.Inference.Properties (Properties, consting, kinding, typing)
 import safe CMM.Inference.Subst (apply)
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType, VarType))
-import safe CMM.Inference.Properties (Properties, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Inference.Unify.Error (UnificationError)
 import safe CMM.Utils (HasCallStack, backQuoteShow)
-import safe CMM.Inference.BuiltIn ()
 
 import safe CMM.Inference.State.Impl
   ( Inferencer
-  , InferencerState(InferencerState))
+  , InferencerState(InferencerState)
+  )
 import safe qualified CMM.Inference.State.Impl as State
 
 -- | adds a new parent to the list of parents of the nested contexts
@@ -57,7 +58,8 @@ getProps = fmap fromJust . tryGetProps
 --   or `Nothing` if the type variable does represent none
 tryGetProps :: TypeVar -> Inferencer (Maybe Properties)
 tryGetProps tVar =
-  uses State.typeProps (flip Bimap.lookup) <*> uses State.renaming (`apply` tVar)
+  uses State.typeProps (flip Bimap.lookup) <*>
+  uses State.renaming (`apply` tVar)
 
 -- | looks up the closest known concrete values bounding the given variable from the given database
 readBoundsFrom :: Bounded a => TypeVar -> Map TypeVar (Bounds a) -> Bounds a
@@ -130,7 +132,8 @@ pushKindBounds props bounds =
 -- | adds the functional dependency for the given class
 addFunDeps :: Text -> [[Trilean]] -> Inferencer ()
 addFunDeps name rules = State.funDeps %= Map.insert name rules'
-  where rules' = addTrivialDep $ funDepsSimplify rules
+  where
+    rules' = addTrivialDep $ funDepsSimplify rules
 
 -- | returns `True` iff the given class has any functional dependencies set
 hasFunDeps :: Text -> Inferencer Bool
@@ -206,18 +209,14 @@ getUnlockedVars =
 
 -- | checks whether the given scheme has no unlocked free variables, otherwise adds them to the quantifier and locks them
 sanitizeClosed ::
-     (HasCallStack, Data a, ToType b)
-  => Scheme a
-  -> b
-  -> Inferencer (Scheme a)
+     (HasCallStack, Data a, ToType b) => Scheme a -> b -> Inferencer (Scheme a)
 sanitizeClosed scheme@(tVars :. q) b = do
   freeVars <- getUnlockedVars scheme
   lockVars b freeVars
   return $ (tVars <> Set.fromList freeVars) :. q
 
 -- | adds a class fact to the monadic inferencer state
-addClassFact ::
-     HasCallStack => Text -> Scheme Type -> Inferencer ()
+addClassFact :: HasCallStack => Text -> Scheme Type -> Inferencer ()
 addClassFact name scheme =
   case scheme of
     tVars :. _ :=> t -> do
@@ -225,8 +224,7 @@ addClassFact name scheme =
       State.classFacts %= Map.insertWith mappend name [scheme]
 
 -- | adds a function scheme to the monadic inferencer state after sanitizing it
-addScheme ::
-     HasCallStack => TypeVar -> Scheme Type -> Inferencer ()
+addScheme :: HasCallStack => TypeVar -> Scheme Type -> Inferencer ()
 addScheme tVar scheme =
   case scheme of
     tVars :. _ :=> _ -> do
@@ -235,8 +233,7 @@ addScheme tVar scheme =
       State.schemes %= Map.insert tVar scheme'
 
 -- | adds a class scheme to the monadic inferencer state after sanitizing it
-addClassScheme ::
-     HasCallStack => Text -> Scheme Type -> Inferencer ()
+addClassScheme :: HasCallStack => Text -> Scheme Type -> Inferencer ()
 addClassScheme name scheme =
   case scheme of
     tVars :. _ :=> t -> do

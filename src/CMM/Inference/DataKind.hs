@@ -53,7 +53,6 @@ instance Semigroup DataKind where
 instance Monoid DataKind where
   mempty = Unstorable
 
-
 instance Ord (Ordered DataKind) where
   Ordered GenericData `compare` Ordered GenericData = EQ
   Ordered Unstorable `compare` Ordered Unstorable = EQ

@@ -3,13 +3,14 @@
 
 module CMM.Inference.Preprocess.State.Impl where
 
-import safe Control.Lens ( makeFieldsNoPrefix, uses )
+import safe Control.Lens (makeFieldsNoPrefix, uses)
 import safe Control.Monad.State (State)
 import safe Data.Data (Data)
 import safe Data.Map (Map)
-import safe Data.Text (Text)
 import safe qualified Data.Map as Map
+import safe Data.Text (Text)
 
+import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import safe CMM.Inference.Fact (Facts)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
@@ -22,14 +23,13 @@ import safe CMM.Inference.Preprocess.Elaboration
   ( HasElaboration(getElaboration)
   , safeElabHandle
   )
-import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Properties (Properties, propsId)
+import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind)
   , TypeKind(GenericType, Star)
   )
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import CMM.Options (Options(Options))
 
 -- | Contains the state of the preprocessor
@@ -52,7 +52,7 @@ data PreprocessorState =
     , _errorState :: ErrorState -- ^ the error state of the preprocessor
     , _currentParent :: [TypeVar] -- ^ The head refers to the parent of the current context
     }
-    deriving (Data)
+  deriving (Data)
 
 -- | Initiates a preprocessor state with initial values dictated by the given `Options` object
 initPreprocessor :: Options -> PreprocessorState
@@ -86,10 +86,7 @@ instance GetParent Preprocessor TypeVar where
 
 instance Refresh Preprocessor where
   refresh tVars =
-    sequence $
-    Map.fromSet
-      (fmap propsId . freshTypeHelper . getTypeKind)
-      tVars
+    sequence $ Map.fromSet (fmap propsId . freshTypeHelper . getTypeKind) tVars
 
 -- | Gets the properties of the current context
 getCtxHandle :: Preprocessor (Maybe Properties)

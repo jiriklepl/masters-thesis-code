@@ -7,16 +7,20 @@ import safe Data.Functor (void)
 
 import safe Prettyprinter (Pretty(pretty))
 
-import safe CMM.Inference.Preprocess.Elaboration (HasElaboration(getElaboration, setElaboration))
+import safe CMM.Inference.Preprocess.Elaboration
+  ( HasElaboration(getElaboration, setElaboration)
+  )
 import safe CMM.Inference.Type (ToType(toType))
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar))
 import safe CMM.Parser.GetPos (GetPos(getPos))
 
 -- | Annotation used to append extra information to nodes in AST
 data Annotation node annot =
-  Annot { unAnnot :: node annot, takeAnnot :: annot }
+  Annot
+    { unAnnot :: node annot
+    , takeAnnot :: annot
+    }
   deriving (Show, Foldable, Traversable, Functor, Data)
-
 
 deriving instance (Eq (n a), Eq a) => Eq (Annotation n a)
 
@@ -24,7 +28,7 @@ deriving instance (Ord (n a), Ord a) => Ord (Annotation n a)
 
 instance HasElaboration a => HasElaboration (Annot n a) where
   getElaboration = getElaboration . takeAnnot
-  setElaboration s (n `Annot` a) =  n `Annot` setElaboration s a
+  setElaboration s (n `Annot` a) = n `Annot` setElaboration s a
 
 instance HasElaboration a => ToType (Annot n a) where
   toType = toType . getElaboration
@@ -49,16 +53,18 @@ withAnnot = flip Annot
 
 -- | transforms an `Annot` object to an equivalent tuple
 toTuple :: Annot n a -> (a, n a)
-toTuple = \case
-  Annot {unAnnot, takeAnnot} -> (takeAnnot, unAnnot)
+toTuple =
+  \case
+    Annot {unAnnot, takeAnnot} -> (takeAnnot, unAnnot)
 
 -- | creates an `Annot` object from an equivalent tuple
 fromTuple :: (a, n a) -> Annot n a
 fromTuple (takeAnnot, unAnnot) = Annot {unAnnot, takeAnnot}
 
 mapNode :: (n a -> m a) -> Annot n a -> Annot m a
-mapNode f = \case
-  n `Annot` a -> f n `Annot` a
+mapNode f =
+  \case
+    n `Annot` a -> f n `Annot` a
 
 -- | Applies an update function to all annotations inside the given node
 updateAnnots :: Functor n => (a -> b) -> n a -> n b

@@ -7,28 +7,31 @@ Maintainer  : jiriklepl@seznam.cz
 
 This module contains definition of flattening of the input AST into a flattened form.
 -}
-
 module CMM.AST.Flattener where
 
 import safe Control.Applicative (liftA2)
 import safe Control.Monad.State (evalState)
 import safe Data.Data (Data(gmapM), Typeable)
-import safe Data.List (partition)
-import safe Data.Generics.Aliases (extM)
-import safe qualified Data.Set as Set
 import safe Data.Functor ((<&>))
+import safe Data.Generics.Aliases (extM)
+import safe Data.List (partition)
+import safe qualified Data.Set as Set
 
 import safe CMM.AST
-  ( Arm(Arm)
+  ( Actual(Actual)
+  , Arm(Arm)
   , Body(Body)
-  , BodyItem(BodyStmt, BodyStackDecl)
+  , BodyItem(BodyStackDecl, BodyStmt)
+  , Datum(Datum, DatumLabel)
   , Expr(LVExpr)
   , LValue(LVName)
   , Name(Name)
-  , Stmt(EmptyStmt, GotoStmt, IfStmt, LabelStmt, SpanStmt, SwitchStmt, ReturnStmt, CallStmt, DroppedStmt), StackDecl (StackDecl), Datum (DatumLabel, Datum), Actual (Actual)
+  , StackDecl(StackDecl)
+  , Stmt(CallStmt, DroppedStmt, EmptyStmt, GotoStmt, IfStmt, LabelStmt,
+     ReturnStmt, SpanStmt, SwitchStmt)
   )
 import safe CMM.AST.Annot (Annot, Annotation(Annot), withAnnot)
-import safe CMM.AST.GetName ( GetName(getName, setName) )
+import safe CMM.AST.GetName (GetName(getName, setName))
 
 import safe qualified CMM.AST.Flattener.State as State
 import safe CMM.AST.Flattener.State (Flattener)
@@ -67,27 +70,30 @@ class FlattenStmt n where
 
 -- | Returns `True` iff the body item is a `BodyStmt`
 isBodyStmt :: Annot BodyItem a -> Bool
-isBodyStmt (item `Annot` _) = case item of
-  BodyStmt {} -> True
-  _ -> False
+isBodyStmt (item `Annot` _) =
+  case item of
+    BodyStmt {} -> True
+    _ -> False
 
 -- | Finds resource objects, names them, and registers their respective contractors
 determineContractors :: Annot BodyItem a -> Flattener (Annot BodyItem a)
-determineContractors (bodyItem `Annot` annot) = withAnnot annot <$>
+determineContractors (bodyItem `Annot` annot) =
+  withAnnot annot <$>
   case bodyItem of
     BodyStackDecl (StackDecl datums `Annot` annot') ->
-      BodyStackDecl. withAnnot annot' . StackDecl <$> go [] datums
+      BodyStackDecl . withAnnot annot' . StackDecl <$> go [] datums
     item -> return item
-    where
-      go _ [] = return []
-      go cache (annotated@(Annot datum a):datums) = case datum of
-        DatumLabel name -> (annotated :) <$> go (getName name:cache) datums
+  where
+    go _ [] = return []
+    go cache (annotated@(Annot datum a):datums) =
+      case datum of
+        DatumLabel name -> (annotated :) <$> go (getName name : cache) datums
         Datum True _ _ _ -> do
           name <- State.freshContractName
           State.registerContractors cache $ getName name
           datums' <- go [] datums
           return $ withAnnot a (DatumLabel name) : annotated : datums'
-        _ -> (annotated:) <$> go [] datums
+        _ -> (annotated :) <$> go [] datums
 
 instance FlattenBodyItems (Annot BodyItem) where
   flattenBodyItems bodyItems = do
@@ -128,10 +134,11 @@ brCond cond tName eName a =
 makeContractCalls :: a -> Flattener [Annot Stmt a]
 makeContractCalls annot = do
   contracts <- State.getContracts
-  return $ Set.toList contracts <&> \contract ->
-    makeCall "drop" contract `Annot` annot
+  return $
+    Set.toList contracts <&> \contract -> makeCall "drop" contract `Annot` annot
   where
-    makeCall name arg = CallStmt [] Nothing (makeExpr name) [makeArg arg] Nothing []
+    makeCall name arg =
+      CallStmt [] Nothing (makeExpr name) [makeArg arg] Nothing []
     makeReference name = LVName (Name name) `Annot` annot
     makeExpr name = LVExpr (makeReference name) `Annot` annot
     makeArg arg = Actual Nothing (makeExpr arg) `Annot` annot
@@ -142,7 +149,9 @@ instance FlattenStmt (Annot Stmt) where
   flattenStmt stmt@(stmt' `Annot` annot) =
     case stmt' of
       LabelStmt n ->
-        return $ toBodyStmt (trivialGoto annot n) : [toBodyStmt $ LabelStmt n `Annot` annot]
+        return $
+        toBodyStmt (trivialGoto annot n) :
+        [toBodyStmt $ LabelStmt n `Annot` annot]
       IfStmt cond tBody Nothing -> do
         num <- State.freshBranchNum
         let tName = State.helperName $ "then_" ++ num
@@ -151,7 +160,10 @@ instance FlattenStmt (Annot Stmt) where
         pure $
           toBodyStmt (brCond cond tName fName annot) :
           (toBodyStmt . withAnnot annot $ LabelStmt tName) :
-          tTransl ++ [toBodyStmt (trivialGoto annot fName), toBodyStmt . withAnnot annot $ LabelStmt fName]
+          tTransl ++
+          [ toBodyStmt (trivialGoto annot fName)
+          , toBodyStmt . withAnnot annot $ LabelStmt fName
+          ]
       IfStmt cond tBody (Just eBody) -> do
         num <- State.freshBranchNum
         let tName = State.helperName $ "then_" ++ num
@@ -165,7 +177,10 @@ instance FlattenStmt (Annot Stmt) where
           tTransl ++
           toBodyStmt (trivialGoto annot fName) :
           (toBodyStmt . withAnnot annot $ LabelStmt eName) :
-          eTransl ++ [toBodyStmt (trivialGoto annot fName), toBodyStmt . withAnnot annot $ LabelStmt fName]
+          eTransl ++
+          [ toBodyStmt (trivialGoto annot fName)
+          , toBodyStmt . withAnnot annot $ LabelStmt fName
+          ]
       SwitchStmt expr arms -> do
         num <- State.freshBranchNum
         let endName = State.helperName $ "switch_" ++ num ++ "_end"

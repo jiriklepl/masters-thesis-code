@@ -7,22 +7,21 @@ Maintainer  : jiriklepl@seznam.cz
 
 This module contains the definition of the flow analysis performed after blockifying (most notably, live-range analysis).
 -}
-
 module CMM.FlowAnalysis
   ( analyzeFlow
   ) where
 
-import safe Control.Lens ( (^.), use, uses, (.=), _3, (%=) )
+import safe Control.Lens ((%=), (.=), (^.), _3, use, uses)
 import safe Control.Monad (unless)
 import safe qualified Data.Graph as Graph
-import safe Data.List (elemIndex, sortOn )
+import safe Data.List (elemIndex, sortOn)
 import safe qualified Data.Map as Map
 import safe qualified Data.Set as Set
 import safe Data.Tuple (swap)
 
 import safe CMM.AST (Procedure)
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
-import CMM.AST.Blockifier.Error
+import safe CMM.AST.Blockifier.Error
   ( BlockifierError(UninitializedRegisters, UnreachableContinuations,
                 UnreachableLabels)
   )
@@ -32,20 +31,22 @@ import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.GetPos (GetPos)
 import safe CMM.Pretty ()
 import safe CMM.Utils (doWhile, hasPrefix)
-import safe Data.Maybe ( fromJust )
-import safe Data.Functor ( (<&>) )
+import safe Data.Functor ((<&>))
+import safe Data.Maybe (fromJust)
 
 -- | analyzes the flow of the given procedure (with a blockifier state)
 analyzeFlow :: GetPos a => Annot Procedure a -> Blockifier ()
-analyzeFlow procedure@(Annot _ _)
- = do
+analyzeFlow procedure@(Annot _ _) = do
   flow <- use State.currentFlow
   blocks <- use State.blocksCache
   zero <- uses State.allBlocks Map.size
   let graph = Graph.buildG (zero, zero + Map.size blocks - 1) flow -- one block is guaranteed (procedure)
       blockNames = Map.fromList $ swap <$> Map.toList blocks
       reachable = Set.fromList $ Graph.reachable graph zero
-      removeReachable = (`Map.withoutKeys` Set.map (fromJust . (`Map.lookup` blockNames)) reachable)
+      removeReachable =
+        (`Map.withoutKeys` Set.map
+                             (fromJust . (`Map.lookup` blockNames))
+                             reachable)
       makeMessageFromVisible = filter (not . hasPrefix) . Map.keys
   labelsWarning <- makeMessageFromVisible <$> uses State.labels removeReachable
   continuationsWarning <-
@@ -68,9 +69,10 @@ analyzeFlow procedure@(Annot _ _)
   State.cacheData .= cleanData
   State.currentFlow .= cleanFlow
   doWhile $ or <$> traverse updateFlowPair cleanFlow
-  uninitialized <- uses State.cacheData (Map.lookup zero) <&> \case
-    Nothing -> []
-    Just blockData -> Map.keys $ Map.filter (^. _3) blockData
+  uninitialized <-
+    uses State.cacheData (Map.lookup zero) <&> \case
+      Nothing -> []
+      Just blockData -> Map.keys $ Map.filter (^. _3) blockData
   unless (null uninitialized) $
     registerASTError procedure $ UninitializedRegisters uninitialized
   State.cacheData %= Map.filterWithKey (\k _ -> k `Set.member` reachable)

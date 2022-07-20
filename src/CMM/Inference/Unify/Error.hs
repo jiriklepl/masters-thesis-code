@@ -3,10 +3,10 @@
 
 module CMM.Inference.Unify.Error where
 
+import safe Data.Data (Data)
 import safe Data.Text (Text)
-import safe Data.Data ( Data )
 
-import safe Prettyprinter ( Pretty(pretty), (<+>), parens )
+import safe Prettyprinter (Pretty(pretty), (<+>), parens)
 
 import safe CMM.Err.IsError (IsError)
 import safe CMM.Inference.Type (Type)
@@ -20,10 +20,13 @@ data UnificationError
   | BadKind Type Type -- ^ The type kinds of the given types do not match
   deriving (Show, Eq, IsError, Data)
 
-
 instance Pretty UnificationError where
-  pretty = \case
-    Occurs tVar t -> "Occurs:" <+> pretty tVar <+> "in" <+> pretty t
-    Mismatch reason tVar tVar' -> "Type mismatch:" <+> pretty tVar <+> "and" <+> pretty tVar' <+> parens (pretty reason)
-    GotErrorType reason -> "Type error:" <+> pretty reason
-    BadKind tVar tVar' -> "Kind mismatch:" <+> pretty tVar <+>"and" <+> pretty tVar'
+  pretty =
+    \case
+      Occurs tVar t -> "Occurs:" <+> pretty tVar <+> "in" <+> pretty t
+      Mismatch reason tVar tVar' ->
+        "Type mismatch:" <+>
+        pretty tVar <+> "and" <+> pretty tVar' <+> parens (pretty reason)
+      GotErrorType reason -> "Type error:" <+> pretty reason
+      BadKind tVar tVar' ->
+        "Kind mismatch:" <+> pretty tVar <+> "and" <+> pretty tVar'

@@ -10,8 +10,7 @@ import safe Text.Megaparsec.Pos (SourcePos, sourcePosPretty)
 
 --  | A class for objects we can get `SourcePos` from
 class GetPos a where
-  getPos :: a -> SourcePos
-  -- ^ Retrieves a `SourcePos` annotation from the given variable
+  getPos :: a -> SourcePos -- ^ Retrieves a `SourcePos` annotation from the given variable
 
 instance GetPos SourcePos where
   getPos = id

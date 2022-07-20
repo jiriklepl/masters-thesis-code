@@ -7,7 +7,7 @@ import safe qualified Data.Text as T
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot), mapNode)
-import safe CMM.Utils ( HasCallStack )
+import safe CMM.Utils (HasCallStack)
 
 -- | Gets the name of the given node
 class GetName n where
@@ -43,13 +43,15 @@ instance GetName (AST.TopLevel a) where
       AST.TopClass c -> getName c
       AST.TopInstance i -> getName i
       AST.TopStruct s -> getName s
-  mapName f = \case
-    AST.StrLit n `AST.TopSection` secs -> AST.StrLit (f n) `AST.TopSection` secs
-    AST.TopDecl d -> AST.TopDecl $ mapName f d
-    AST.TopProcedure p -> AST.TopProcedure $ mapName f p
-    AST.TopClass c -> AST.TopClass $ mapName f c
-    AST.TopInstance i -> AST.TopInstance $ mapName f i
-    AST.TopStruct s -> AST.TopStruct $ mapName f s
+  mapName f =
+    \case
+      AST.StrLit n `AST.TopSection` secs ->
+        AST.StrLit (f n) `AST.TopSection` secs
+      AST.TopDecl d -> AST.TopDecl $ mapName f d
+      AST.TopProcedure p -> AST.TopProcedure $ mapName f p
+      AST.TopClass c -> AST.TopClass $ mapName f c
+      AST.TopInstance i -> AST.TopInstance $ mapName f i
+      AST.TopStruct s -> AST.TopStruct $ mapName f s
 
 instance GetName (AST.Decl a) where
   getName =
@@ -57,10 +59,11 @@ instance GetName (AST.Decl a) where
       AST.ConstDecl _ n _ -> getName n
       AST.PragmaDecl n _ -> getName n
       _ -> noNameDecl
-  mapName f = \case
-    AST.ConstDecl t n e -> AST.ConstDecl t (mapName f n) e
-    AST.PragmaDecl n p -> AST.PragmaDecl (mapName f n) p
-    _ -> noNameDecl
+  mapName f =
+    \case
+      AST.ConstDecl t n e -> AST.ConstDecl t (mapName f n) e
+      AST.PragmaDecl n p -> AST.PragmaDecl (mapName f n) p
+      _ -> noNameDecl
 
 noNameDecl :: HasCallStack => a
 noNameDecl = error "This declaration does not have a name"
@@ -148,7 +151,8 @@ instance GetName (AST.ProcedureHeader a) where
       AST.ProcedureHeader _ n _ _ -> getName n
   mapName f =
     \case
-      AST.ProcedureHeader c n fs sfs -> AST.ProcedureHeader c (mapName f n) fs sfs
+      AST.ProcedureHeader c n fs sfs ->
+        AST.ProcedureHeader c (mapName f n) fs sfs
 
 instance GetName (AST.Formal a) where
   getName =

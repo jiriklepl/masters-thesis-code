@@ -7,7 +7,6 @@ Maintainer  : jiriklepl@seznam.cz
 
 This module defines the tokenization layer of the compiler
 -}
-
 module CMM.Lexer
   ( Lexer
   , tokenize
@@ -25,14 +24,17 @@ import safe qualified Data.Text as T
 import safe Data.Text (Text)
 import safe Data.Void (Void)
 import safe Text.Megaparsec
-  ( MonadParsec(eof, notFollowedBy, try, label, withRecovery)
+  ( MonadParsec(eof, label, notFollowedBy, try, withRecovery)
+  , ParseError
   , Parsec
   , SourcePos
+  , anySingle
   , choice
   , getSourcePos
   , many
   , manyTill
-  , oneOf, ParseError, anySingle, registerParseError
+  , oneOf
+  , registerParseError
   )
 import safe Text.Megaparsec.Char
   ( alphaNumChar
@@ -45,10 +47,9 @@ import safe qualified Text.Megaparsec.Char.Lexer as L
 
 import safe qualified CMM.Lexer.Token as T
 import safe CMM.Lexer.Token (Token)
-import safe Data.List.Extra ( snoc )
+import safe Data.List.Extra (snoc)
 
 type Lexer = Parsec Void Text
-
 
 type SourceLexer = Lexer (Annot Token SourcePos)
 
@@ -64,7 +65,9 @@ symbol :: Text -> Lexer Text
 symbol = L.symbol sc
 
 keyword :: Text -> Lexer ()
-keyword k = void . label (T.unpack k) . lexeme $ try (string k <* notFollowedBy alphaNumChar)
+keyword k =
+  void . label (T.unpack k) . lexeme $
+  try (string k <* notFollowedBy alphaNumChar)
 
 stringLiteral :: ULocLexer
 stringLiteral =
@@ -76,7 +79,8 @@ charLiteral = lexeme $ char '\'' *> (T.CharLit <$> L.charLiteral) <* char '\''
 identifier :: ULocLexer
 identifier =
   lexeme $
-  T.Ident . T.pack <$> liftA2 (:) (letterChar <|> otherIdentChars) identifierRest
+  T.Ident . T.pack <$>
+  liftA2 (:) (letterChar <|> otherIdentChars) identifierRest
 
 identifierRest :: Lexer String
 identifierRest = many $ alphaNumChar <|> otherIdentChars
@@ -191,7 +195,8 @@ token =
     , symbol "|" $> T.Pipe
     , symbol "^" $> T.Caret
     , symbol "!=" $> T.Neq
-    , symbol "=" *> choice [symbol "=" $> T.Eq, symbol ">" $> T.DArr, pure T.EqSign]
+    , symbol "=" *>
+      choice [symbol "=" $> T.Eq, symbol ">" $> T.DArr, pure T.EqSign]
     , stringLiteral
     , charLiteral
     , try float
@@ -207,13 +212,10 @@ token =
     ]
 
 tokenSafe :: SourceLexer
-tokenSafe =
-  token >?= \e -> registerParseError e *> anySingle *> tokenSafe
+tokenSafe = token >?= \e -> registerParseError e *> anySingle *> tokenSafe
 
-(>?=) :: MonadParsec e s m => m a
-  -> (ParseError s e -> m a)
-  -> m a
+(>?=) :: MonadParsec e s m => m a -> (ParseError s e -> m a) -> m a
 (>?=) = flip withRecovery
 
 tokenize :: Lexer [Annot Token SourcePos]
-tokenize = sc *> liftA2 snoc (many tokenSafe) (withSourcePos  $ T.Eof <$ eof)
+tokenize = sc *> liftA2 snoc (many tokenSafe) (withSourcePos $ T.Eof <$ eof)

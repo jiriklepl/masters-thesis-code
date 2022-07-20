@@ -11,35 +11,46 @@ Maintainer  : jiriklepl@seznam.cz
 This module defines the blockifier layer that annotates the flattened input AST with block annotations
 and performs flow analysis on each input procedure, while also storing some more metadata about each procedure.
 -}
-
 module CMM.AST.Blockifier where
 
-import safe Control.Lens
-    ( use, uses, (%=), (.=), (?=), (+=), Lens )
+import safe Control.Lens (Lens, (%=), (+=), (.=), (?=), use, uses)
 import safe Control.Monad.State (when)
 import safe Data.Foldable (traverse_)
 import safe Data.Functor (($>), void)
 import safe qualified Data.Map as Map
-import safe Data.Text (Text)
 import safe Data.Map (Map)
-import safe qualified Data.Text as T
 import safe qualified Data.Set as Set
+import safe Data.Text (Text)
+import safe qualified Data.Text as T
 
 import safe qualified CMM.AST as AST
-import safe CMM.AST.Annot (Annot, Annotation(Annot), updateAnnots, withAnnot, unAnnot)
+import safe CMM.AST.Annot
+  ( Annot
+  , Annotation(Annot)
+  , unAnnot
+  , updateAnnots
+  , withAnnot
+  )
 import safe CMM.AST.BlockAnnot
   ( BlockAnnot(Begins, NoBlock, PartOf, Unreachable)
   , HasBlockAnnot(getBlockAnnot)
   , WithBlockAnnot(withBlockAnnot)
   )
 import safe CMM.AST.Blockifier.Error
-  ( BlockifierError(FlatteningInconsistency, GotoWithoutTargets,
-                UnreachableStatement, ProcedureFallthrough, DroppingOutsideBlock, ReDropping)
+  ( BlockifierError(DroppingOutsideBlock, FlatteningInconsistency,
+                GotoWithoutTargets, ProcedureFallthrough, ReDropping,
+                UnreachableStatement)
   , continuationFallthrough
   , duplicateSymbol
   )
+import safe CMM.AST.Blockifier.FilterDropped (filterDropped)
 import safe qualified CMM.AST.Blockifier.State as State
-import safe CMM.AST.Blockifier.State (Blockifier, BlockifierState, HasCurrentBlock (currentBlock), BlockifyAssumps)
+import safe CMM.AST.Blockifier.State
+  ( Blockifier
+  , BlockifierState
+  , BlockifyAssumps
+  , HasCurrentBlock(currentBlock)
+  )
 import safe CMM.AST.GetName (GetName(getName))
 import safe CMM.AST.Maps (ASTmap(astMapM), Constraint, Space)
 import safe CMM.AST.Utils
@@ -50,12 +61,11 @@ import safe CMM.AST.Variables.SymbolType
   ( SymbolType(ConstDeclSymbol, ContSymbol, DatumLabelSymbol,
            ImportSymbol, LabelSymbol, RegisterSymbol)
   )
+import safe CMM.Err.State (noErrorsState)
 import safe CMM.FlowAnalysis (analyzeFlow)
 import safe CMM.Parser.ASTError (registerASTError, registerASTWarning)
 import safe CMM.Parser.GetPos (GetPos(getPos), SourcePos)
 import safe CMM.Utils (addPrefix)
-import safe CMM.Err.State (noErrorsState)
-import safe CMM.AST.Blockifier.FilterDropped (filterDropped)
 
 -- | Adds a prefix representing the blockifier phase to a name
 helperName :: Text -> Text
@@ -120,15 +130,16 @@ unsetBlock = updateBlock Nothing
 
 -- | registers a `dropped` statement
 addDrop :: SourcePos -> Text -> Blockifier ()
-addDrop pos name = getCurrentBlock >>= \case
-   Nothing -> registerASTError pos $ DroppingOutsideBlock name
-   Just idx -> uses State.drops (Map.lookup idx) >>= \case
-      Nothing -> State.drops %= Map.insert idx singleton
-      Just set
-        | name `Set.member` set -> do
-          registerASTError pos $ ReDropping name
-        | otherwise -> State.drops %= Map.insert idx (name `Set.insert` set)
-    where singleton = Set.singleton name
+addDrop pos name =
+  getCurrentBlock >>= \case
+    Nothing -> registerASTError pos $ DroppingOutsideBlock name
+    Just idx ->
+      uses State.drops (Map.lookup idx) >>= \case
+        Nothing -> State.drops %= Map.insert idx singleton
+        Just set
+          | name `Set.member` set -> do registerASTError pos $ ReDropping name
+          | otherwise -> State.drops %= Map.insert idx (name `Set.insert` set)
+      where singleton = Set.singleton name
 
 -- | Adds a `NoBlock` annotation to the annotation of the given node
 noBlockAnnots :: (Functor n, WithBlockAnnot a b) => n a -> n b
@@ -239,7 +250,9 @@ instance GetTargetNames (AST.Targets a) [Text] where
 
 -- | Annotates the given statement with the given node (or marks it unreachable)
 addBlockAnnot ::
-     (GetPos a, WithBlockAnnot a b) => Annot AST.Stmt a -> Blockifier (Annot AST.Stmt b)
+     (GetPos a, WithBlockAnnot a b)
+  => Annot AST.Stmt a
+  -> Blockifier (Annot AST.Stmt b)
 addBlockAnnot stmt@(Annot n annot) =
   getCurrentBlock >>= \case
     Nothing ->
@@ -332,12 +345,14 @@ instance GetMetadata ReadsVars (AST.Stmt a) where
       AST.PrimOpStmt _ _ actuals _ -> getMetadata t actuals
       AST.CallStmt _ _ expr actuals _ _ ->
         getMetadata t expr <> getMetadata t actuals
-      AST.JumpStmt _ expr actuals _ -> getMetadata t expr <> getMetadata t actuals
+      AST.JumpStmt _ expr actuals _ ->
+        getMetadata t expr <> getMetadata t actuals
       AST.ReturnStmt _ _ actuals -> getMetadata t actuals
       AST.LabelStmt {} -> []
       AST.ContStmt {} -> []
       AST.GotoStmt expr _ -> getMetadata t expr
-      AST.CutToStmt expr actuals _ -> getMetadata t expr <> getMetadata t actuals
+      AST.CutToStmt expr actuals _ ->
+        getMetadata t expr <> getMetadata t actuals
       AST.DroppedStmt name -> [getName name]
 
 instance GetMetadata WritesVars (AST.Stmt a) where
@@ -429,7 +444,7 @@ class Blockify' a b n where
 instance Blockify (Annot n) a b => Blockify' a b (Annot n) where
   blockify' = blockify
 
-instance Blockify (Annot AST.Struct ) a b where
+instance Blockify (Annot AST.Struct) a b where
   blockify n = return $ withBlockAnnot NoBlock <$> n
 
 instance Blockify' a b AST.Name where
@@ -444,7 +459,8 @@ instance Blockify (Annot AST.Datum) a b where
   blockify datum@(datum' `Annot` _) =
     case datum' of
       AST.DatumLabel {} ->
-        storeSymbol State.stackLabels DatumLabelSymbol datum $> noBlockAnnots datum
+        storeSymbol State.stackLabels DatumLabelSymbol datum $>
+        noBlockAnnots datum
       _ -> return $ noBlockAnnots datum
 
 -- | Blockifies the given procedure header
@@ -471,8 +487,7 @@ instance Blockify (Annot AST.Procedure) a b where
       finalize <*
       State.clearBlockifier
     where
-      finalize =
-        noErrorsState >>= (`when` finalizations)
+      finalize = noErrorsState >>= (`when` finalizations)
       finalizations = do
         forbidFallthrough a -- forbids a fallthrough through the procedure's end
         analyzeFlow procedure -- performs the lr analysis on the procedure's control flow
@@ -501,7 +516,8 @@ constructBlockified ::
      ( Blockify (Annot n1) a1 b1
      , BlockifyAssumps a1 b1
      , BlockifyAssumps a2 b2
-     , Functor n1)
+     , Functor n1
+     )
   => (Annot n1 b1 -> n2 b2)
   -> a2
   -> Annot n1 a1
@@ -515,7 +531,8 @@ instance Blockify (Annot AST.BodyItem) a b where
     case item of
       AST.BodyStmt stmt -> constructBlockified AST.BodyStmt a stmt
       AST.BodyDecl decl -> constructBlockified AST.BodyDecl a decl
-      AST.BodyStackDecl stackDecl -> constructBlockified AST.BodyStackDecl a stackDecl
+      AST.BodyStackDecl stackDecl ->
+        constructBlockified AST.BodyStackDecl a stackDecl
 
 instance Blockify (Annot AST.StackDecl) a b where
   blockify (AST.StackDecl datums `Annot` a) =
@@ -579,11 +596,13 @@ instance Blockify (Annot AST.Stmt) a b where
               then addControlFlow name
               else traverse_ addControlFlow targets
           (Just name, _) -> addControlFlow name
-          (Nothing, _) -> registerASTError stmt . GotoWithoutTargets . void $ unAnnot stmt
+          (Nothing, _) ->
+            registerASTError stmt . GotoWithoutTargets . void $ unAnnot stmt
         registerReads stmt *> addBlockAnnot stmt <* unsetBlock
       AST.CutToStmt {} ->
         error "'Cut to' statements are not currently implemented"
-      AST.ReturnStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
+      AST.ReturnStmt {} ->
+        registerReads stmt *> addBlockAnnot stmt <* unsetBlock
       AST.JumpStmt {} -> registerReads stmt *> addBlockAnnot stmt <* unsetBlock
       AST.EmptyStmt {} ->
         addBlockAnnot stmt -- This should be completely redundant, included just for completeness
@@ -606,17 +625,22 @@ instance Blockify (Annot AST.Stmt) a b where
           Nothing -> flatteningError stmt
         addBlockAnnot stmt <* unsetBlock
       AST.SpanStmt key value body ->
-        withNoBlockAnnot a . AST.SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
+        withNoBlockAnnot a .
+        AST.SpanStmt (noBlockAnnots key) (noBlockAnnots value) <$>
         blockify body
       AST.CallStmt _ _ _ _ _ callAnnots -- NOTE: `cut to` statements not supported
        ->
         registerReadsWrites stmt *> addBlockAnnot stmt <*
         when (neverReturns callAnnots) unsetBlock
-      AST.DroppedStmt {} -> addDrop (getPos a) (getName stmt) *> registerReads stmt *> addBlockAnnot stmt
+      AST.DroppedStmt {} ->
+        addDrop (getPos a) (getName stmt) *> registerReads stmt *>
+        addBlockAnnot stmt
 
 -- | This is here just for completeness
-flatteningError :: GetPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()
-flatteningError stmt = registerASTError stmt . FlatteningInconsistency . void $ unAnnot stmt
+flatteningError ::
+     GetPos (Annot AST.Stmt a) => Annot AST.Stmt a -> Blockifier ()
+flatteningError stmt =
+  registerASTError stmt . FlatteningInconsistency . void $ unAnnot stmt
 
 -- | Blockifies a label statement
 blockifyLabelStmt ::

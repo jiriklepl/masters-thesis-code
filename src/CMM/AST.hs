@@ -9,7 +9,6 @@ This module defines the abstract syntactic tree for the extended C-- language.
 
 All deviations from https://www.cs.tufts.edu/~nr/c--/extern/man2.pdf explicitly stated
 -}
-
 module CMM.AST where
 
 import safe Data.Data (Data)
@@ -26,16 +25,18 @@ import safe Prettyprinter
   , dquotes
   , equals
   , hsep
+  , line
   , parens
+  , pipe
   , semi
   , slash
   , space
   , squotes
   , vsep
-  , line, pipe
   )
 
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
+import safe qualified CMM.Lexer.Token as T
 import safe CMM.Pretty
   ( arrow
   , bquotes
@@ -45,13 +46,13 @@ import safe CMM.Pretty
   , darrow
   , dcolon
   , ddot
+  , hsepPretty
   , ifTrue
   , inBraces
   , maybeSpacedL
-  , maybeSpacedR, hsepPretty
+  , maybeSpacedR
   )
-import safe CMM.Utils (backQuote, HasCallStack)
-import safe qualified CMM.Lexer.Token as T
+import safe CMM.Utils (HasCallStack, backQuote)
 
 -- | This AST node represents the whole compilation unit (program)
 newtype Unit a =
@@ -81,7 +82,8 @@ deriving instance Eq (TopLevel ())
 instance Pretty (TopLevel a) where
   pretty =
     \case
-      TopSection name items -> T.sectionName <+> pretty name <+> bracesBlock items
+      TopSection name items ->
+        T.sectionName <+> pretty name <+> bracesBlock items
       TopDecl decl -> pretty decl
       TopProcedure procedure -> pretty procedure
       TopClass class' -> pretty class'
@@ -154,13 +156,12 @@ instance Pretty (Class a) where
     case class' of
       Class paraNames paraName mFunDeps methods ->
         pParaNames <+> pretty paraName <> pFunDeps <+> bracesBlock methods
-        where
-          pParaNames
-            | null paraNames = mempty
-            | otherwise = commaPretty paraNames <+> darrow <> space
-          pFunDeps
-            | Just funDeps <- mFunDeps = space <> pipe <+> pretty funDeps
-            | otherwise = mempty
+        where pParaNames
+                | null paraNames = mempty
+                | otherwise = commaPretty paraNames <+> darrow <> space
+              pFunDeps
+                | Just funDeps <- mFunDeps = space <> pipe <+> pretty funDeps
+                | otherwise = mempty
 
 -- | AST node for a typeclass instance - specific to CHMMM
 data Instance a =
@@ -217,28 +218,30 @@ newtype FunDeps a =
 deriving instance Eq (FunDeps ())
 
 instance Pretty (FunDeps a) where
-  pretty = \case
-    FunDeps funDeps -> commaPretty funDeps
+  pretty =
+    \case
+      FunDeps funDeps -> commaPretty funDeps
 
 -- | AST node for a functional dependency (From -> To) - specific to CHMMM
-data FunDep a = FunDep
-  { fdFrom :: [Annot Name a] -- ^ (type variables) the assumptions of the given dependency
-  , fdTo :: [Annot Name a] -- ^ (type variables) the results of the given dependency
-  }
+data FunDep a =
+  FunDep
+    { fdFrom :: [Annot Name a] -- ^ (type variables) the assumptions of the given dependency
+    , fdTo :: [Annot Name a] -- ^ (type variables) the results of the given dependency
+    }
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (FunDep ())
 
 instance Pretty (FunDep a) where
-  pretty = \case
-    FunDep{fdFrom, fdTo} -> pFdFrom <> arrow <> pFdTo
-      where
-        pFdFrom
-          | null fdFrom = mempty
-          | otherwise = hsepPretty fdFrom <> space
-        pFdTo
-          | null fdTo = mempty
-          | otherwise = space <> hsepPretty fdTo
+  pretty =
+    \case
+      FunDep {fdFrom, fdTo} -> pFdFrom <> arrow <> pFdTo
+        where pFdFrom
+                | null fdFrom = mempty
+                | otherwise = hsepPretty fdFrom <> space
+              pFdTo
+                | null fdTo = mempty
+                | otherwise = space <> hsepPretty fdTo
 
 -- | AST node for a target directive
 data TargetDirective a
@@ -592,8 +595,7 @@ instance Pretty (Stmt a) where
         T.toName <+>
         pretty expr <>
         parens (commaPretty actuals) <> hsep (pretty <$> flows) <> semi
-      DroppedStmt name ->
-        T.droppedName <+> pretty name <> semi
+      DroppedStmt name -> T.droppedName <+> pretty name <> semi
 
 prettyCallStmtRest :: HasCallStack => Stmt a -> Doc ann
 prettyCallStmtRest =
@@ -626,7 +628,8 @@ deriving instance Eq (Arm ())
 instance Pretty (Arm a) where
   pretty =
     \case
-      Arm ranges body -> T.caseName <+> commaPretty ranges <> colon <+> pretty body
+      Arm ranges body ->
+        T.caseName <+> commaPretty ranges <> colon <+> pretty body
 
 -- | AST node for a switch arm range
 data Range a =
@@ -672,9 +675,12 @@ data Flow a
 instance Pretty (Flow a) where
   pretty =
     \case
-      AlsoCutsTo names -> T.alsoName <+> T.cutsName <+> T.toName <+> commaPretty names
-      AlsoUnwindsTo names -> T.alsoName <+> T.unwindsName <+> T.toName <+> commaPretty names
-      AlsoReturnsTo names -> T.alsoName <+> T.returnsName <+> T.toName <+> commaPretty names
+      AlsoCutsTo names ->
+        T.alsoName <+> T.cutsName <+> T.toName <+> commaPretty names
+      AlsoUnwindsTo names ->
+        T.alsoName <+> T.unwindsName <+> T.toName <+> commaPretty names
+      AlsoReturnsTo names ->
+        T.alsoName <+> T.returnsName <+> T.toName <+> commaPretty names
       AlsoAborts -> T.alsoName <+> T.abortsName
       NeverReturns -> T.neverName <+> T.returnsName
 
@@ -726,8 +732,8 @@ data Expr a
   | InfixExpr (Name a) (Annot Expr a) (Annot Expr a)
   | PrefixExpr (Name a) [Annot Actual a]
   | MemberExpr
-    (Annot Expr a) -- ^ expression that evaluates to a struct
-    (Annot Name a) -- ^ field name
+      (Annot Expr a) -- ^ expression that evaluates to a struct
+      (Annot Name a) -- ^ field name
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Expr ())

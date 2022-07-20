@@ -4,9 +4,9 @@
 module CMM.Parser.ASTError where
 
 import safe Control.Monad.State (MonadState)
-import safe Data.Data ( Data )
+import safe Data.Data (Data)
 
-import safe Prettyprinter ( Pretty(pretty), (<+>) )
+import safe Prettyprinter (Pretty(pretty), (<+>))
 
 import safe CMM.Err.IsError (IsError)
 import safe CMM.Err.State
@@ -26,8 +26,9 @@ data ASTError err =
 deriving instance IsError err => IsError (ASTError err)
 
 instance Pretty err => Pretty (ASTError err) where
-  pretty = \case
-    ASTError pos err -> pretty (sourcePosPretty pos) <+> pretty err
+  pretty =
+    \case
+      ASTError pos err -> pretty (sourcePosPretty pos) <+> pretty err
 
 -- | wraps the given error to a new `ASTError` with a location retrieved from the given object
 --   the result is then added to the error state of the monadic state as an info

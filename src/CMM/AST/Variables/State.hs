@@ -6,7 +6,7 @@ module CMM.AST.Variables.State
   , module CMM.AST.Variables.State
   ) where
 
-import safe Control.Lens ( uses, (%=), Lens' )
+import safe Control.Lens (Lens', (%=), uses)
 import safe Control.Monad (unless)
 import safe Control.Monad.State (State)
 import safe qualified Data.Map as Map
@@ -78,7 +78,8 @@ addTAliasTrivial n tKind = n <$ addTAlias n tKind
 
 -- | adds a type variable to the `Collector`
 addTVar :: (GetPos n, GetName n) => n -> TypeKind -> Collector ()
-addTVar node tKind = typeVariables %= Map.insert (getName node) (getPos node, tKind)
+addTVar node tKind =
+  typeVariables %= Map.insert (getName node) (getPos node, tKind)
 
 -- | adds a type variable to the `Collector` and return the given node
 addTVarTrivial :: (GetPos n, GetName n) => n -> TypeKind -> Collector n

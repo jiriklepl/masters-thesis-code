@@ -10,15 +10,15 @@ import safe Data.Map (Map)
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 
+import safe CMM.AST.Annot (Annot)
+import safe CMM.AST.Wrap (ASTWrapper)
 import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.Type (Type)
 import safe CMM.Inference.TypeVar (TypeVar)
 import safe CMM.Monomorphize.Schematized (Schematized)
-import CMM.Parser.GetPos ( SourcePos )
-import CMM.AST.Wrap ( ASTWrapper )
-import CMM.AST.Annot ( Annot )
-import CMM.Options (Options (Options))
-import qualified CMM.Options as Options
+import safe CMM.Options (Options(Options))
+import safe qualified CMM.Options as Options
+import safe CMM.Parser.GetPos (SourcePos)
 
 -- | maps each scheme to already memorized instances
 newtype PolyMemory =

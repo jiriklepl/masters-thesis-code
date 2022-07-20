@@ -3,12 +3,11 @@
 
 module CMM.Err.State where
 
-import safe Control.Lens
-    ( makeFieldsNoPrefix, view, uses, (%=), Lens' )
+import safe Control.Lens (Lens', (%=), makeFieldsNoPrefix, uses, view)
 import safe Control.Monad.State (MonadState)
-import Data.Data ( Data )
+import safe Data.Data (Data)
 
-import Prettyprinter ( vsep, Pretty(pretty) )
+import safe Prettyprinter (Pretty(pretty), vsep)
 
 import safe CMM.Data.List (count)
 import safe CMM.Data.Nullable (Nullable(nullVal))
@@ -32,10 +31,10 @@ instance Monoid ErrorState where
 instance Nullable ErrorState where
   nullVal = ErrorState mempty
 
-
 instance Pretty ErrorState where
-  pretty = \case
-    ErrorState errs -> vsep . fmap pretty $ reverse errs
+  pretty =
+    \case
+      ErrorState errs -> vsep . fmap pretty $ reverse errs
 
 -- | A lens for all state objects containing `ErrorState`
 class a ~ ErrorState =>
@@ -51,16 +50,17 @@ makeFieldsNoPrefix ''ErrorState
 
 -- | The `ErrorState` retrieved from the monadic state is empty
 nullErrorState :: (HasErrorState s e, MonadState s m) => m Bool
-nullErrorState = uses errorState (==nullVal)
+nullErrorState = uses errorState (== nullVal)
 
 -- | The `ErrorState` retrieved from the monadic state has no errors
 noErrorsState :: (HasErrorState s e, MonadState s m) => m Bool
-noErrorsState = uses errorState $ (==0) . countErrors
+noErrorsState = uses errorState $ (== 0) . countErrors
 
 -- | Counts all error objects with the given severity level in the given `ErrorState`
 countSeverity :: Severity -> ErrorState -> Int
-countSeverity s = \case
-  ErrorState errs -> count checkSeverity errs
+countSeverity s =
+  \case
+    ErrorState errs -> count checkSeverity errs
   where
     checkSeverity e = view errSeverity e == s
 
@@ -78,8 +78,9 @@ countInfos = countSeverity InfoLevel
 
 -- | Adds an error object with the given `Severity` to the given `ErrorState`
 addError :: IsError err => Severity -> err -> ErrorState -> ErrorState
-addError s e = \case
-  ErrorState errs -> ErrorState $ Error s e : errs
+addError s e =
+  \case
+    ErrorState errs -> ErrorState $ Error s e : errs
 
 -- | Adds the given error object to the `ErrorState` in the monadic state as info
 registerInfo ::

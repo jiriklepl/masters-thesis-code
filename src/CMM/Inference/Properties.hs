@@ -24,11 +24,10 @@ data Properties =
   deriving (Show, Data)
 
 instance Eq Properties where
-  Properties {_identifier} == Properties { _identifier = i'} =
-    _identifier == i'
+  Properties {_identifier} == Properties {_identifier = i'} = _identifier == i'
 
 instance Ord Properties where
-  Properties {_identifier} `compare` Properties { _identifier = i'} =
+  Properties {_identifier} `compare` Properties {_identifier = i'} =
     compare _identifier i'
 
 instance ToType Properties where

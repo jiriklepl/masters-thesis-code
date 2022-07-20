@@ -22,9 +22,10 @@ freeTypeVars = go
   where
     go :: Data d => d -> Set TypeVar
     go = (Set.unions . gmapQ go) `extQ` factCase `extQ` tVarCase
-    factCase =
-      \case
+    factCase
         -- does not return the free type variables of the object to be instantiated
+     =
+      \case
         Fact (InstType _ t') -> freeTypeVars t'
         -- does not propagate the quantified tVars
         NestedFact (tVars :. flatFacts :=> nestedFacts) ->

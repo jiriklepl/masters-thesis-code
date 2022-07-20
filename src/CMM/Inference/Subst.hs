@@ -12,9 +12,9 @@ import safe Data.Maybe (fromMaybe)
 
 import safe CMM.Data.Generics ((*|*))
 import safe CMM.Inference.Fact (Fact, FlatFact, NestedFact, Qual, Scheme((:.)))
+import safe CMM.Inference.Properties (Properties, consting, kinding, typing)
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
 import safe CMM.Inference.TypeCompl (PrimType)
-import safe CMM.Inference.Properties (Properties, consting, kinding, typing)
 import safe CMM.Inference.TypeVar (TypeVar(NoType, TypeVar, tVarParent))
 
 -- | Defines the type of a substitution - mapping from a type variable to something
@@ -28,8 +28,8 @@ termSchemeCase subst (tVars :. qN) =
 class (ToType b, Typeable b, Data a, TypeCase b) =>
       Apply a b
   where
-  -- | applies the substitution to the given object (recursively), including the parents of type variables
   apply :: Map TypeVar b -> a -> a
+  -- ^ applies the substitution to the given object (recursively), including the parents of type variables
   apply subst = go
     where
       go :: Data d => d -> d
@@ -42,8 +42,8 @@ class (ToType b, Typeable b, Data a, TypeCase b) =>
 class (ToType b, Typeable b, Data a, TypeCaseShallow b) =>
       ApplyShallow a b
   where
-  -- | applies the substitutions to the given object (recursively), not including the parents of type variables
   applyShallow :: Map TypeVar b -> a -> a
+  -- ^ applies the substitutions to the given object (recursively), not including the parents of type variables
   applyShallow subst = go
     where
       go :: Data d => d -> d

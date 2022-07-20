@@ -3,7 +3,7 @@
 
 module CMM.Inference.BuiltIn where
 
-import safe Control.Lens ( (%~), _2 )
+import safe Control.Lens ((%~), _2)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.String (IsString(fromString))
@@ -66,7 +66,8 @@ translateDataKind name = Ordered name `Bimap.lookupR` builtInKinds
 
 -- | returns a bijection between register names of the architecture and their numeric identifiers
 builtInRegisters :: Bimap Text Int
-builtInRegisters = Bimap.fromList $ zip [integerRegisterName, floatRegisterName] [0 ..]
+builtInRegisters =
+  Bimap.fromList $ zip [integerRegisterName, floatRegisterName] [0 ..]
 
 -- | name of the imaginary integer register
 integerRegisterName :: IsString a => a

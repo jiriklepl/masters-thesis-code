@@ -2,10 +2,9 @@
 
 module CMM.Err.Severity where
 
-import safe Data.Data ( Data )
+import safe Data.Data (Data)
 
-import safe Prettyprinter ( Pretty(pretty) )
-
+import safe Prettyprinter (Pretty(pretty))
 
 -- | Represents a severity of an `Error`
 data Severity
@@ -17,7 +16,8 @@ data Severity
 deriving instance Bounded Severity
 
 instance Pretty Severity where
-  pretty = \case
-    InfoLevel -> "Info"
-    WarningLevel -> "Warning"
-    ErrorLevel -> "Error"
+  pretty =
+    \case
+      InfoLevel -> "Info"
+      WarningLevel -> "Warning"
+      ErrorLevel -> "Error"

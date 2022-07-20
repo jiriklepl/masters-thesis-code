@@ -3,10 +3,10 @@
 
 module CMM.Inference.Refresh where
 
+import safe Data.Functor ((<&>))
 import safe qualified Data.Map as Map
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
-import safe Data.Functor ((<&>))
 
 import safe CMM.Inference.Fact
   ( NestedFact(NestedFact)
@@ -31,7 +31,7 @@ refreshScheme =
     tVars :. facts :=> nested -> do
       refresh tVars <&> \subst ->
         Set.fromAscList (Map.elems subst) :. (apply subst <$> facts) :=>
-         apply subst nested
+        apply subst nested
 
 refreshNestedFact ::
      (Refresh s, Apply n TypeVar) => NestedFact n -> s (NestedFact n)

@@ -2,7 +2,7 @@
 
 module CMM.Inference.Unify where
 
-import safe Control.Lens ( (%~), _1, _2 )
+import safe Control.Lens ((%~), _1, _2)
 import safe Data.Either (isRight)
 import safe qualified Data.Map as Map
 import safe Data.Map (Map)
@@ -11,10 +11,7 @@ import safe qualified Data.Set as Set
 import safe CMM.Data.Way (Way(Backward, Both, Forward), otherWay)
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.Subst (Apply(apply), Subst)
-import safe CMM.Inference.Type
-  ( ToType(toType)
-  , Type(ComplType, VarType)
-  )
+import safe CMM.Inference.Type (ToType(toType), Type(ComplType, VarType))
 import safe CMM.Inference.TypeCompl
   ( PrimType
   , TypeCompl(AddrType, AppType, FunctionType, TupleType)
@@ -31,10 +28,14 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Unify.Error
   ( UnificationError(BadKind, Mismatch, Occurs)
   )
-import safe CMM.Utils ( HasCallStack, logicError )
+import safe CMM.Utils (HasCallStack, logicError)
 
 -- | Unifies the given types (variables)
-unify :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
+unify ::
+     (HasCallStack, Unify a b)
+  => a
+  -> a
+  -> Either [UnificationError] (Subst b, a)
 unify = unifyDirected Both
 
 -- | returns 'True' if the given types are unifiable
@@ -47,7 +48,11 @@ inst `instanceOf` scheme = isRight $ unifyDirected Backward inst scheme
 
 -- | gets the instantiating substitution from the right-hand operand to the left-hand operand
 --   if we apply this substitution to the right-hand operand, we get the left-hand one
-instantiateFrom :: (HasCallStack, Unify a b) => a -> a -> Either [UnificationError] (Subst b, a)
+instantiateFrom ::
+     (HasCallStack, Unify a b)
+  => a
+  -> a
+  -> Either [UnificationError] (Subst b, a)
 instantiateFrom = unifyDirected Backward
 
 -- | flipped version of 'instanceOf'
@@ -62,8 +67,9 @@ unifyLax ::
 unifyLax = unifyLaxDirected Both
 
 class Unify a b | a -> b where
-  -- | unifies the given types (~) while adhering to the substitution direction
-  unifyDirected :: HasCallStack => Way -> a -> a -> Either [UnificationError] (Subst b, a)
+  unifyDirected ::
+       HasCallStack => Way -> a -> a -> Either [UnificationError] (Subst b, a)
+  -- ^ unifies the given types (~) while adhering to the substitution direction
 
 bind :: Way -> TypeVar -> Type -> Either [UnificationError] (Subst Type, Type)
 bind Backward tVar t' = Left [toType tVar `unifyMismatch` t']
@@ -115,7 +121,12 @@ unifyLaxDirected way tVar@TypeVar {} tVar'@TypeVar {}
 unifyLaxDirected _ tVar tVar' = Left [toType tVar `unifyMismatch` toType tVar']
 
 unifyMany ::
-     (HasCallStack, Unify a b1, Apply a b2, Apply (Map TypeVar b2) b1, Apply b2 b2)
+     ( HasCallStack
+     , Unify a b1
+     , Apply a b2
+     , Apply (Map TypeVar b2) b1
+     , Apply b2 b2
+     )
   => Way
   -> [UnificationError]
   -> [a]

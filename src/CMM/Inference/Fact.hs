@@ -22,6 +22,7 @@ import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.Trilean (Trilean)
 import safe CMM.Inference.Constness (Constness(ConstExpr, LinkExpr, Regular))
+import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Type (ToType(toType), Type)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind, setTypeKind))
 import safe CMM.Inference.TypeVar (TypeVar)
@@ -36,7 +37,6 @@ import safe CMM.Pretty
   , regingSymbol
   , typingSymbol
   )
-import safe CMM.Inference.DataKind ( DataKind )
 
 infix 6 :=>
 
@@ -120,7 +120,8 @@ instance (Pretty a, Pretty DataKind) => Pretty (FlatFact a) where
       KindEquality sup sub -> pretty sub <+> "~" <> kindingSymbol <+> pretty sup
       FactComment txt -> squotes . squotes . squotes $ pretty txt
       SubConst sup sub -> pretty sub <+> "≤" <> constingSymbol <+> pretty sup
-      ConstEquality sup sub -> pretty sub <+> "~" <> constingSymbol <+> pretty sup
+      ConstEquality sup sub ->
+        pretty sub <+> "~" <> constingSymbol <+> pretty sup
       Lock t -> "lock" <+> pretty t
       InstType poly mono -> pretty poly <+> instSymbol <+> pretty mono
       ClassConstraint name t -> pretty name <> "?" <> parens (pretty t)
@@ -183,7 +184,8 @@ instType :: (ToType a, ToType b) => a -> b -> FlatFact Type
 instType t t' = toType t `InstType` toType t'
 
 kindingBounds :: ToType a => Bounds DataKind -> a -> FlatFact Type
-kindingBounds (low `Bounds` high) = (. toType) . KindBounds $ Ordered low `Bounds` Ordered high
+kindingBounds (low `Bounds` high) =
+  (. toType) . KindBounds $ Ordered low `Bounds` Ordered high
 
 -- | States the minimum kind `DataKind` of a `TypeVar` type variable
 minKindConstraint :: ToType a => DataKind -> a -> FlatFact Type
@@ -228,7 +230,6 @@ classFunDeps = ClassFunDeps
 -- | States that the given list of `TypeVar` type variables is to be an instance of the class given by the `ClassHandle` properties
 classFact :: ToType a => Text -> a -> FlatFact Type
 classFact name t = name `ClassFact` toType t
-
 #ifdef FACT_COMMENTS
 factComment :: Text -> [FlatFact Type]
 factComment = pure . FactComment

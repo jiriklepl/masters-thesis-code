@@ -3,10 +3,10 @@
 module CMM.Inference.FunDeps where
 
 import safe qualified Data.Bool as B
-import safe Data.Tuple ()
-import safe Data.Tuple.Extra (first3, thd3)
 import safe Data.Bool (bool)
 import safe Data.List (sortOn)
+import safe Data.Tuple ()
+import safe Data.Tuple.Extra (first3, thd3)
 
 import safe CMM.Data.List (count)
 import safe CMM.Data.Trilean (Trilean, trilean)
@@ -150,11 +150,12 @@ funDepsSimplify original = generalize composed []
 
 -- | returns `True` iff the given functional dependency rule is trivial
 --   (assumes all type variables are set, has no consequences)
-isTrival :: [Trilean] -> Bool
-isTrival = all (==T.False)
+isTrivial :: [Trilean] -> Bool
+isTrivial = all (== T.False)
 
 -- | adds a trivial functional dependency rule to the given functional dependency set
 addTrivialDep :: [[Trilean]] -> [[Trilean]]
-addTrivialDep rules = case rules of
-  [] -> []
-  rule : _ -> (T.False <$ rule) : rules
+addTrivialDep rules =
+  case rules of
+    [] -> []
+    rule:_ -> (T.False <$ rule) : rules

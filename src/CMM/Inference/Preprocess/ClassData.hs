@@ -21,7 +21,6 @@ data ClassData =
 
 -- | Creates a `ClassData` object with the given parameters
 initClassData :: Elaboration -> Set Text -> ClassData
-initClassData hole decls =
-  ClassData {_classHole = hole, _methodDecls = decls}
+initClassData hole decls = ClassData {_classHole = hole, _methodDecls = decls}
 
 makeLenses ''ClassData

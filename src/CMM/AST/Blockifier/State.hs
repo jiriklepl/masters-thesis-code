@@ -3,19 +3,18 @@
 
 module CMM.AST.Blockifier.State where
 
-import safe Control.Lens
-    ( makeFieldsNoPrefix, use, uses, (%=), (<>=), (.=) )
+import safe Control.Lens ((%=), (.=), (<>=), makeFieldsNoPrefix, use, uses)
+import safe Control.Monad.State (State)
+import safe Data.Data (Data)
 import safe Data.Map (Map)
-import safe Data.Text (Text)
-import safe Control.Monad.State ( State )
 import safe qualified Data.Map as Map
-import safe Data.Tuple ( swap )
 import safe Data.Set (Set)
-import safe Data.Data ( Data )
+import safe Data.Text (Text)
+import safe Data.Tuple (swap)
 
 import safe CMM.AST.BlockAnnot (BlockData, BlockVars, WithBlockAnnot)
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
-import safe CMM.Parser.GetPos (SourcePos, GetPos)
+import safe CMM.Parser.GetPos (GetPos, SourcePos)
 
 -- | Contains various data used by `Blockifier`
 data BlockifierState =
@@ -69,6 +68,7 @@ makeFieldsNoPrefix ''BlockifierState
 
 -- | Type constructor for blockifier function return types
 type Blockifier = State BlockifierState
+
 type BlockifyAssumps a b = (Data b, WithBlockAnnot a b, GetPos a, GetPos b)
 
 -- | Resets `Blockifier` between different functions

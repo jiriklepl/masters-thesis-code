@@ -7,10 +7,11 @@ import safe Data.List (foldl')
 
 import safe Prettyprinter (Pretty(pretty))
 
-import safe CMM.Inference.TypeCompl (TypeCompl(AddrType, AppType, TBitsType, VoidType, LabelType, BoolType))
-import safe CMM.Inference.TypeKind
-  ( HasTypeKind(getTypeKind, setTypeKind)
+import safe CMM.Inference.TypeCompl
+  ( TypeCompl(AddrType, AppType, BoolType, LabelType, TBitsType,
+          VoidType)
   )
+import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind, setTypeKind))
 import safe CMM.Inference.TypeVar (FromTypeVar(fromTypeVar), TypeVar)
 
 -- | type is either a type variable or a primitive pattern applied to some types

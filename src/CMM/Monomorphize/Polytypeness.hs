@@ -3,31 +3,33 @@
 
 module CMM.Monomorphize.Polytypeness where
 
-import safe Data.Set (Set)
 import safe Data.Data (Data)
-import safe qualified Data.Set as Set
+import safe Data.Functor ((<&>))
 import safe qualified Data.PartialOrd as PartialOrd
+import safe Data.Set (Set)
+import safe qualified Data.Set as Set
 
-import safe Prettyprinter
-    ( Pretty(pretty), (<+>), list, Doc )
+import safe Prettyprinter (Doc, Pretty(pretty), (<+>), list)
 
-import safe CMM.Data.Bounds (Bounds (Bounds))
+import safe CMM.Data.Bounds (Bounds(Bounds))
 import safe CMM.Data.Nullable (Fallbackable((??)))
-import safe CMM.Inference.Constness (Constness (LinkExpr))
+import safe CMM.Inference (simplify)
+import safe CMM.Inference.BuiltIn ()
+import safe CMM.Inference.Constness (Constness(LinkExpr))
 import safe CMM.Inference.DataKind (DataKind)
-import safe CMM.Inference.Type (Type, ToType)
-import safe CMM.Inference.TypeVar (TypeVar, ToTypeVar (toTypeVar))
-import safe CMM.Inference.Fact ( constnessBounds, kindingBounds )
-import safe CMM.Pretty ( lambda )
-import safe CMM.Inference.BuiltIn()
+import safe CMM.Inference.Fact (constnessBounds, kindingBounds)
+import safe CMM.Inference.FreeTypeVars (freeTypeVars)
+import safe CMM.Inference.Preprocess.Elaboration
+  ( Elaboration(EmptyElaboration)
+  , HasElaboration(getElaboration, setElaboration)
+  , setElabHandle
+  )
 import safe CMM.Inference.State (Inferencer)
 import safe qualified CMM.Inference.State as State
-import safe CMM.Inference.Subst ( Apply(apply), Subst )
-import safe CMM.Inference ( simplify )
-import safe CMM.Inference.FreeTypeVars ( freeTypeVars )
-import Data.Functor ((<&>))
-import safe CMM.Inference.Preprocess.Elaboration
-    ( setElabHandle, HasElaboration(getElaboration, setElaboration), Elaboration(EmptyElaboration) )
+import safe CMM.Inference.Subst (Apply(apply), Subst)
+import safe CMM.Inference.Type (ToType, Type)
+import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
+import safe CMM.Pretty (lambda)
 
 -- | Contains the various absurd bounds (data kind or constness bounds) for an type
 data Absurdity =
@@ -39,8 +41,8 @@ data Absurdity =
 
 instance Semigroup Absurdity where
   Absurdity {absurdKind = kind, absurdConst = const'} <> Absurdity { absurdKind = kind'
-                                                                  , absurdConst = const''
-                                                                  } =
+                                                                   , absurdConst = const''
+                                                                   } =
     Absurdity {absurdKind = kind <> kind', absurdConst = const' <> const''}
 
 instance Pretty Absurdity where
@@ -70,9 +72,9 @@ data PolyWhat =
 
 instance Semigroup PolyWhat where
   PolyWhat {polyKind = kind, polyConst = const', polyType = typ} <> PolyWhat { polyKind = kind'
-                                                                            , polyConst = const''
-                                                                            , polyType = typ'
-                                                                            } =
+                                                                             , polyConst = const''
+                                                                             , polyType = typ'
+                                                                             } =
     PolyWhat
       { polyKind = kind <> kind'
       , polyConst = const' <> const''
@@ -83,8 +85,10 @@ instance Pretty PolyWhat where
   pretty PolyWhat {polyKind, polyConst, polyType} =
     "type freedom:" <+> list goAll
     where
-      goAll = fmap prettyKind polyKind <> fmap prettyConst polyConst <> fmap goTyping polyType
-      goTyping (_, tVars) = list $ (lambda<>) . pretty <$> Set.toList tVars
+      goAll =
+        fmap prettyKind polyKind <>
+        fmap prettyConst polyConst <> fmap goTyping polyType
+      goTyping (_, tVars) = list $ (lambda <>) . pretty <$> Set.toList tVars
 
 -- | prettyPrints an information about a type variable's data kind bounds
 prettyKind :: (ToType a, Pretty DataKind) => (a, Bounds DataKind) -> Doc ann
@@ -198,5 +202,4 @@ reconstructType subst tVar =
 -- | returns the `Polytypeness` object that contains the information about the type being monotype, polytype, or absurd
 --   and it uses the fields of the respective cases of `Polytypeness` to give more reasons
 typePolytypeness :: ToTypeVar a => Subst Type -> a -> Inferencer Polytypeness
-typePolytypeness subst tVar =
-  reconstructType subst tVar <&> typingPolytypeness
+typePolytypeness subst tVar = reconstructType subst tVar <&> typingPolytypeness

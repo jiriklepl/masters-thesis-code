@@ -3,8 +3,8 @@
 module CMM.Inference.Preprocess.WithElaboration where
 
 import safe CMM.Inference.Preprocess.Elaboration
-  ( HasElaboration
-  , Elaboration(EmptyElaboration)
+  ( Elaboration(EmptyElaboration)
+  , HasElaboration
   )
 
 -- | A class that appends a type hole to the given AST node annotation

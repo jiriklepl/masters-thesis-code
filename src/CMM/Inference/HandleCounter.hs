@@ -2,7 +2,7 @@
 
 module CMM.Inference.HandleCounter where
 
-import safe Control.Lens ( use, (+=), Lens' )
+import safe Control.Lens (Lens', (+=), use)
 import safe Control.Monad.State (MonadState)
 
 import safe CMM.Inference.Properties (Properties, initProperties)

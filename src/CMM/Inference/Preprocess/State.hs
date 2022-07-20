@@ -6,9 +6,8 @@ module CMM.Inference.Preprocess.State
   , module CMM.Inference.Preprocess.State.Impl
   ) where
 
-import safe Control.Applicative ( (<|>))
-import safe Control.Lens
-    ( (^.), use, uses, (%=), (.=), (<~), (<>=), _3, Lens' )
+import safe Control.Applicative ((<|>))
+import safe Control.Lens (Lens', (%=), (.=), (<>=), (<~), (^.), _3, use, uses)
 import safe Control.Monad.State (MonadState)
 import safe Data.Bifunctor (Bifunctor(bimap, second))
 import safe Data.Foldable (for_, traverse_)
@@ -39,6 +38,7 @@ import safe CMM.Inference.Fact
   , NestedFact(Fact)
   , classConstraint
   , classFact
+  , classFunDeps
   , constExprConstraint
   , forall
   , instType
@@ -46,17 +46,20 @@ import safe CMM.Inference.Fact
   , lockFact
   , regularExprConstraint
   , subConst
-  , typeEquality, unstorableConstraint, classFunDeps
+  , typeEquality
+  , unstorableConstraint
   )
 import safe CMM.Inference.GetParent (makeAdoption)
 import safe CMM.Inference.Preprocess.ClassData (ClassData(ClassData), classHole)
 import safe CMM.Inference.Preprocess.Context
-  ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx, ctxFunctionHandle, ctxConstraint, ctxSupers)
+  ( Context(ClassCtx, FunctionCtx, GlobalCtx, InstanceCtx, StructCtx,
+        ctxConstraint, ctxFunctionHandle, ctxSupers)
   )
 import safe CMM.Inference.Preprocess.Elaboration
   ( Elaboration(EmptyElaboration, MethodElaboration, SimpleElaboration)
   , eHandle
   )
+import safe CMM.Inference.Properties (Properties, propsId)
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Subst (Apply(apply))
 import safe CMM.Inference.Type (ToType(toType), Type(ComplType))
@@ -65,7 +68,6 @@ import safe CMM.Inference.TypeCompl
   , makeApplication
   , makeFunction
   )
-import safe CMM.Inference.Properties (Properties, propsId)
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind)
   , TypeKind((:->), Constraint, Star)
@@ -78,6 +80,7 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Utils (fieldClassHelper)
 import safe CMM.Parser.GetPos (SourcePos)
 
+import CMM.Err.State (HasErrorState(errorState))
 import safe CMM.Inference.Preprocess.State.Impl
   ( Preprocessor
   , PreprocessorState(PreprocessorState)
@@ -100,7 +103,6 @@ import safe CMM.Inference.Preprocess.State.Impl
   , typeVariables
   , variables
   )
-import CMM.Err.State (HasErrorState(errorState))
 
 noCurrentReturn :: Elaboration
 noCurrentReturn = EmptyElaboration
@@ -124,13 +126,11 @@ beginUnit collector = do
     declVars . Map.fromAscList $
     bimap fieldClassHelper (second $ \_ -> Star :-> Star :-> Constraint) <$>
     Map.toAscList members
-  let memberClassData = (`ClassData` mempty) . SimpleElaboration <$> memberClasses
+  let memberClassData =
+        (`ClassData` mempty) . SimpleElaboration <$> memberClasses
   typeClasses %= (`Map.union` memberClassData)
   Map.toList memberClasses `for_` \(name, props) ->
-    storeFacts
-      [ classFunDeps name [[T.False, T.True]]
-      , lockFact $ toType props
-      ]
+    storeFacts [classFunDeps name [[T.False, T.True]], lockFact $ toType props]
   mems <- declVars members
   structMembers .= mems
   mems `for_` \mem -> do
@@ -175,7 +175,8 @@ lookupFEVar named = lookupVarImpl named <$> uses funcElabVariables pure
 
 lookupProc :: GetName n => n -> Preprocessor (Maybe Elaboration)
 lookupProc =
-  uses variables . fmap (fmap SimpleElaboration) . (. last) . Map.lookup . getName
+  uses variables . fmap (fmap SimpleElaboration) . (. last) . Map.lookup .
+  getName
 
 lookupTCon :: GetName n => n -> Preprocessor Elaboration
 lookupTCon named = lookupVarImpl named <$> use typeConstants
@@ -209,7 +210,8 @@ untrivialize tCons =
       , lockFact props
       ]
 
-beginProc :: Text -> Elaboration -> CollectorState -> Maybe Conv -> Preprocessor ()
+beginProc ::
+     Text -> Elaboration -> CollectorState -> Maybe Conv -> Preprocessor ()
 beginProc name hole collector mConv = do
   vars <- declVars $ collector ^. CS.variables
   variables %= (vars :)
@@ -221,9 +223,7 @@ beginProc name hole collector mConv = do
   pushFacts
   currentReturn <- freshTypeHelper Star
   storeFacts
-    [ constExprConstraint currentReturn
-    , unstorableConstraint currentReturn
-    ]
+    [constExprConstraint currentReturn, unstorableConstraint currentReturn]
   pushContext $ FunctionCtx name hole currentReturn mConv
 
 openProc :: CollectorState -> Preprocessor ()
@@ -306,8 +306,7 @@ storeProc name fs x = do
       Fact (uncurry classConstraint ctxConstraint) :
       fs
     InstanceCtx {ctxConstraint, ctxSupers} ->
-      storeElaboratedProc subst tVars' $
-      Fact (uncurry classFact ctxConstraint) :
+      storeElaboratedProc subst tVars' $ Fact (uncurry classFact ctxConstraint) :
       (Fact . uncurry classFact <$> ctxSupers) <>
       fs
     FunctionCtx {} -> goIllegal
@@ -372,15 +371,11 @@ pushStruct (name, hole) constraint@(_, t) = do
   tVars <- collectTVars
   pushContext $ StructCtx name hole constraint
   storeFact $
-    forall
-      tVars
-      [hole `typeEquality` t]
-      [Fact $ regularExprConstraint t]
+    forall tVars [hole `typeEquality` t] [Fact $ regularExprConstraint t]
 
 pushClass ::
      Text -> Elaboration -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
-pushClass name hole constraint supers
- = do
+pushClass name hole constraint supers = do
   tVars <- collectTVars
   storeFact $
     forall
@@ -391,8 +386,7 @@ pushClass name hole constraint supers
 
 pushInstance ::
      Text -> Elaboration -> (Text, Type) -> [(Text, Type)] -> Preprocessor ()
-pushInstance name hole constraint supers
- = do
+pushInstance name hole constraint supers = do
   tVars <- collectTVars
   storeFact $
     forall

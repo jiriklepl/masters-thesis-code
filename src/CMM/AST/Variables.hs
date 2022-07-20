@@ -5,15 +5,13 @@ module CMM.AST.Variables where
 
 import safe Control.Monad.State (execState)
 import safe Data.Data (Data(gmapM))
-import safe qualified Data.Set as Set
 import safe Data.Foldable (traverse_)
+import safe qualified Data.Set as Set
 
 import safe qualified CMM.AST as AST
 import safe CMM.AST.Annot (Annot, Annotation(Annot))
 import safe CMM.AST.GetName (GetName, getName)
-import safe CMM.AST.Variables.State
-  ( Collector
-  , CollectorState)
+import safe CMM.AST.Variables.State (Collector, CollectorState)
 import safe qualified CMM.AST.Variables.State as State
 import safe CMM.Data.Generics ((<*|*>))
 import safe CMM.Inference.TypeKind
@@ -101,24 +99,28 @@ addCommonCases go =
           gmapM go formal *> State.addVarTrivial formal Star
     goDecl =
       \case
-        decl@(Annot AST.ConstDecl {} (_ :: SourcePos)) -> State.addVarTrivial decl Star
+        decl@(Annot AST.ConstDecl {} (_ :: SourcePos)) ->
+          State.addVarTrivial decl Star
         decl@(Annot (AST.TypedefDecl _ names) (_ :: SourcePos)) ->
           decl <$ traverse_ (`State.addTAlias` GenericType) names
         decl -> gmapM go decl
     goImport =
       \case
-        (import' :: Annot AST.Import SourcePos) -> State.addVarTrivial import' Star
+        (import' :: Annot AST.Import SourcePos) ->
+          State.addVarTrivial import' Star
     goRegisters =
       \case
         registers@(Annot (AST.Registers _ _ nameStrLits) (_ :: SourcePos)) ->
           registers <$ traverse_ (`State.addVar` Star) (fst <$> nameStrLits)
     goDatum =
       \case
-        datum@(Annot AST.DatumLabel {} (_ :: SourcePos)) -> State.addVarTrivial datum Star
+        datum@(Annot AST.DatumLabel {} (_ :: SourcePos)) ->
+          State.addVarTrivial datum Star
         datum -> gmapM go datum
     goStmt =
       \case
-        stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) -> State.addVarTrivial stmt Star
+        stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) ->
+          State.addVarTrivial stmt Star
         stmt -> gmapM go stmt
 
 -- | adds the cases specific to the global variable collecting
@@ -129,7 +131,7 @@ addGlobalCases go =
   where
     goClass =
       \case
-        class'@(Annot (AST.Class _ (Annot (AST.ParaName _ args) _ ) _ methods) (_ :: SourcePos)) -> do
+        class'@(Annot (AST.Class _ (Annot (AST.ParaName _ args) _) _ methods) (_ :: SourcePos)) -> do
           traverse_ addMethod methods
           class' <$
             State.addTClass
@@ -173,11 +175,13 @@ addSectionCases go = goProcedure <*|*> go
     goLabels = goStmt <*|*> goDatum <*|*> gmapM goLabels
     goStmt =
       \case
-        stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) -> State.addVarTrivial stmt Star
+        stmt@(Annot AST.LabelStmt {} (_ :: SourcePos)) ->
+          State.addVarTrivial stmt Star
         stmt -> gmapM go stmt
     goDatum =
       \case
-        datum@(Annot AST.DatumLabel {} (_ :: SourcePos)) -> State.addVarTrivial datum Star
+        datum@(Annot AST.DatumLabel {} (_ :: SourcePos)) ->
+          State.addVarTrivial datum Star
         datum -> gmapM go datum
 
 -- | Adds the case for collecting `AST.TAuto` variables

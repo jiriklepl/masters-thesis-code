@@ -8,8 +8,8 @@ import safe Control.Applicative (Applicative(liftA2), liftA3)
 import safe Data.Functor.Identity (runIdentity)
 import safe qualified Data.Kind as Kind
 
-import safe CMM.AST.Annot (Annot)
 import safe qualified CMM.AST as AST
+import safe CMM.AST.Annot (Annot)
 import safe CMM.Control.Applicative (liftA4, liftA6)
 
 type family Constraint hint a b :: Kind.Constraint
@@ -103,7 +103,8 @@ instance ( ASTmapCTX8 hint a b AST.Export AST.Expr AST.Import AST.Name AST.Pragm
 
 instance ASTmapCTX4 hint a b AST.FunDeps (AST.ParaName AST.Name) (AST.ParaName AST.Type) AST.ProcedureDecl =>
          ASTmap hint AST.Class a b where
-  astMapM _ f (AST.Class a b c d) = liftA4 AST.Class (traverse f a) (f b) (traverse f c) (traverse f d)
+  astMapM _ f (AST.Class a b c d) =
+    liftA4 AST.Class (traverse f a) (f b) (traverse f c) (traverse f d)
 
 instance ASTmapCTX2 hint a b (AST.ParaName AST.Type) AST.Procedure =>
          ASTmap hint AST.Instance a b where
@@ -118,12 +119,10 @@ instance (ASTmapCTX1 hint a b param, Space hint a b AST.Name) =>
          ASTmap hint (AST.ParaName param) a b where
   astMapM _ f (AST.ParaName a b) = liftA2 AST.ParaName (f a) (traverse f b)
 
-instance ASTmapCTX1 hint a b AST.FunDep =>
-         ASTmap hint AST.FunDeps a b where
+instance ASTmapCTX1 hint a b AST.FunDep => ASTmap hint AST.FunDeps a b where
   astMapM _ f (AST.FunDeps a) = AST.FunDeps <$> traverse f a
 
-instance ASTmapCTX1 hint a b AST.Name =>
-         ASTmap hint AST.FunDep a b where
+instance ASTmapCTX1 hint a b AST.Name => ASTmap hint AST.FunDep a b where
   astMapM _ f (AST.FunDep a b) = liftA2 AST.FunDep (traverse f a) (traverse f b)
 
 instance ASTmap hint AST.TargetDirective a b where
@@ -135,13 +134,16 @@ instance ASTmap hint AST.Import a b where
 instance ASTmap hint AST.Export a b where
   astMapM _ _ = trivial
 
-instance (ASTmapCTX3 hint a b AST.Init AST.Size AST.Type, Space hint a b AST.Name) =>
+instance ( ASTmapCTX3 hint a b AST.Init AST.Size AST.Type
+         , Space hint a b AST.Name
+         ) =>
          ASTmap hint AST.Datum a b where
   astMapM _ f =
     \case
       AST.DatumLabel a -> AST.DatumLabel <$> f a
       AST.DatumAlign a -> pure $ AST.DatumAlign a
-      AST.Datum a b c d -> liftA3 (AST.Datum a) (f b) (traverse f c) (traverse f d)
+      AST.Datum a b c d ->
+        liftA3 (AST.Datum a) (f b) (traverse f c) (traverse f d)
 
 instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Init a b where
   astMapM _ f =
@@ -150,7 +152,8 @@ instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Init a b where
       AST.StrInit a -> pure $ AST.StrInit a
       AST.Str16Init a -> pure $ AST.Str16Init a
 
-instance ASTmapCTX2 hint a b AST.Name AST.Type => ASTmap hint AST.Registers a b where
+instance ASTmapCTX2 hint a b AST.Name AST.Type =>
+         ASTmap hint AST.Registers a b where
   astMapM _ f =
     \case
       AST.Registers a b c ->
@@ -186,7 +189,9 @@ instance ASTmapCTX1 hint a b AST.ProcedureHeader =>
     \case
       AST.ProcedureDecl a -> AST.ProcedureDecl <$> f a
 
-instance (ASTmapCTX3 hint a b AST.Formal AST.Type AST.SemiFormal, Space hint a b AST.Name) =>
+instance ( ASTmapCTX3 hint a b AST.Formal AST.Type AST.SemiFormal
+         , Space hint a b AST.Name
+         ) =>
          ASTmap hint AST.ProcedureHeader a b where
   astMapM _ f =
     \case
@@ -243,12 +248,16 @@ instance ( ASTmapCTX9 hint a b AST.Actual AST.Arm AST.Body AST.CallAnnot AST.Exp
       AST.JumpStmt a b c d ->
         liftA4 AST.JumpStmt (pure a) (f b) (traverse f c) (traverse f d)
       AST.ReturnStmt a (Just (b, c)) d ->
-        liftA2 (AST.ReturnStmt a) (Just <$> liftA2 (,) (f b) (f c)) (traverse f d)
+        liftA2
+          (AST.ReturnStmt a)
+          (Just <$> liftA2 (,) (f b) (f c))
+          (traverse f d)
       AST.ReturnStmt a Nothing b -> AST.ReturnStmt a Nothing <$> traverse f b
       AST.LabelStmt a -> AST.LabelStmt <$> f a
       AST.ContStmt a b -> liftA2 AST.ContStmt (f a) (traverse f b)
       AST.GotoStmt a b -> liftA2 AST.GotoStmt (f a) (traverse f b)
-      AST.CutToStmt a b c -> liftA3 AST.CutToStmt (f a) (traverse f b) (traverse f c)
+      AST.CutToStmt a b c ->
+        liftA3 AST.CutToStmt (f a) (traverse f b) (traverse f c)
       AST.DroppedStmt a -> AST.DroppedStmt <$> f a
 
 instance Space hint a b AST.Name => ASTmap hint AST.KindName a b where
@@ -266,7 +275,9 @@ instance ASTmapCTX1 hint a b AST.Expr => ASTmap hint AST.Range a b where
     \case
       AST.Range a b -> liftA2 AST.Range (f a) (traverse f b)
 
-instance (ASTmapCTX3 hint a b AST.Asserts AST.Expr AST.Type, Space hint a b AST.Name) =>
+instance ( ASTmapCTX3 hint a b AST.Asserts AST.Expr AST.Type
+         , Space hint a b AST.Name
+         ) =>
          ASTmap hint AST.LValue a b where
   astMapM _ f =
     \case
@@ -288,7 +299,8 @@ instance ASTmapCTX1 hint a b AST.Name => ASTmap hint AST.Alias a b where
       AST.Reads a -> AST.Reads <$> traverse f a
       AST.Writes a -> AST.Writes <$> traverse f a
 
-instance ASTmapCTX2 hint a b AST.Flow AST.Alias => ASTmap hint AST.CallAnnot a b where
+instance ASTmapCTX2 hint a b AST.Flow AST.Alias =>
+         ASTmap hint AST.CallAnnot a b where
   astMapM _ f =
     \case
       AST.FlowAnnot a -> AST.FlowAnnot <$> f a
@@ -318,7 +330,7 @@ instance ( ASTmapCTX6 hint a b AST.Actual AST.Expr AST.Lit AST.LValue AST.Name A
 instance ASTmap hint AST.Lit a b where
   astMapM _ _ = trivial
 
-instance (ASTmapCTX2 hint a b  AST.ParaType AST.Type, Space hint a b AST.Name) =>
+instance (ASTmapCTX2 hint a b AST.ParaType AST.Type, Space hint a b AST.Name) =>
          ASTmap hint AST.Type a b where
   astMapM _ f =
     \case

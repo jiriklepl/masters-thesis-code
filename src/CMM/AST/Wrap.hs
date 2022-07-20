@@ -2,9 +2,11 @@
 
 module CMM.AST.Wrap where
 
+import safe Data.Data (Data)
+
+import safe Prettyprinter (Pretty(pretty))
+
 import safe qualified CMM.AST as AST
-import safe Data.Data ( Data )
-import safe Prettyprinter ( Pretty(pretty) )
 
 -- | Wraps an AST node to allow fpr multiple possible nodes to occupy the given place (used, for example, in errors, for convenience)
 data ASTWrapper a
@@ -49,43 +51,44 @@ data ASTWrapper a
 deriving instance Eq (ASTWrapper ())
 
 instance (Pretty (ASTWrapper a)) where
-  pretty = \case
-    WrapUnit unit -> pretty unit
-    WrappedTopLevel topLevel -> pretty topLevel
-    WrappedSection section ->  pretty section
-    WrappedDecl decl ->  pretty decl
-    WrappedClass class' ->  pretty class'
-    WrappedInstance instance' ->  pretty instance'
-    WrappedStruct struct ->  pretty struct
-    WrappedTargetDirective targetDirective ->  pretty targetDirective
-    WrappedImport import' ->  pretty import'
-    WrappedExport export ->  pretty export
-    WrappedDatum datum ->  pretty datum
-    WrappedInit init' ->  pretty init'
-    WrappedRegisters registers ->  pretty registers
-    WrappedSize size ->  pretty size
-    WrappedBody body ->  pretty body
-    WrappedBodyItem bodyItem ->  pretty bodyItem
-    WrappedProcedure procedure ->  pretty procedure
-    WrappedProcedureHeader procedureHeader ->  pretty procedureHeader
-    WrappedFormal formal ->  pretty formal
-    WrappedSemiFormal semiFormal ->  pretty semiFormal
-    WrappedActual actual ->  pretty actual
-    WrappedStmt stmt ->  pretty stmt
-    WrappedKindName kindName ->  pretty kindName
-    WrappedArm arm ->  pretty arm
-    WrappedRange range ->  pretty range
-    WrappedLValue lValue ->  pretty lValue
-    WrappedFlow flow ->  pretty flow
-    WrappedAlias alias ->  pretty alias
-    WrappedCallAnnot callAnnot ->  pretty callAnnot
-    WrappedTargets targets ->  pretty targets
-    WrappedExpr expr ->  pretty expr
-    WrappedLit lit ->  pretty lit
-    WrappedType type' ->  pretty type'
-    WrappedParaType paraType ->  pretty paraType
-    WrappedAsserts asserts ->  pretty asserts
-    WrappedPragma pragma ->  pretty pragma
+  pretty =
+    \case
+      WrapUnit unit -> pretty unit
+      WrappedTopLevel topLevel -> pretty topLevel
+      WrappedSection section -> pretty section
+      WrappedDecl decl -> pretty decl
+      WrappedClass class' -> pretty class'
+      WrappedInstance instance' -> pretty instance'
+      WrappedStruct struct -> pretty struct
+      WrappedTargetDirective targetDirective -> pretty targetDirective
+      WrappedImport import' -> pretty import'
+      WrappedExport export -> pretty export
+      WrappedDatum datum -> pretty datum
+      WrappedInit init' -> pretty init'
+      WrappedRegisters registers -> pretty registers
+      WrappedSize size -> pretty size
+      WrappedBody body -> pretty body
+      WrappedBodyItem bodyItem -> pretty bodyItem
+      WrappedProcedure procedure -> pretty procedure
+      WrappedProcedureHeader procedureHeader -> pretty procedureHeader
+      WrappedFormal formal -> pretty formal
+      WrappedSemiFormal semiFormal -> pretty semiFormal
+      WrappedActual actual -> pretty actual
+      WrappedStmt stmt -> pretty stmt
+      WrappedKindName kindName -> pretty kindName
+      WrappedArm arm -> pretty arm
+      WrappedRange range -> pretty range
+      WrappedLValue lValue -> pretty lValue
+      WrappedFlow flow -> pretty flow
+      WrappedAlias alias -> pretty alias
+      WrappedCallAnnot callAnnot -> pretty callAnnot
+      WrappedTargets targets -> pretty targets
+      WrappedExpr expr -> pretty expr
+      WrappedLit lit -> pretty lit
+      WrappedType type' -> pretty type'
+      WrappedParaType paraType -> pretty paraType
+      WrappedAsserts asserts -> pretty asserts
+      WrappedPragma pragma -> pretty pragma
 
 -- | Wraps the given node into a `ASTWrapper`
 class MakeWrapped n where

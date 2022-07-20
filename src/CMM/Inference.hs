@@ -11,27 +11,27 @@ This module defines the inference layer of the compiler.
 The most important function is `reduce` - it runs the whole type inference.
 Then, `reduceTrivial` contains most cases for constraint solving.
 -}
-
 module CMM.Inference where
 
 import safe Control.Applicative (Applicative(liftA2))
 import safe Control.Lens
-    ( Lens',
-      (+=),
-      Getter,
-      (^.),
-      use,
-      uses,
-      view,
-      (%=),
-      (%~),
-      (.=),
-      (.~),
-      both,
-      _1,
-      _2 )
+  ( Getter
+  , Lens'
+  , (%=)
+  , (%~)
+  , (+=)
+  , (.=)
+  , (.~)
+  , (^.)
+  , _1
+  , _2
+  , both
+  , use
+  , uses
+  , view
+  )
 import safe Control.Monad ((>=>), when)
-import safe Data.Bifunctor (second, Bifunctor (first))
+import safe Data.Bifunctor (Bifunctor(first), second)
 import safe Data.Data (Data(gmapT))
 import safe Data.Foldable (Foldable(foldl'), for_, traverse_)
 import safe Data.Functor (($>), (<&>), void)
@@ -40,7 +40,7 @@ import safe qualified Data.Graph as Graph
 import safe Data.List (partition)
 import safe Data.Map (Map)
 import safe qualified Data.Map as Map
-import safe Data.Maybe (fromMaybe, fromJust)
+import safe Data.Maybe (fromJust, fromMaybe)
 import safe Data.PartialOrd (PartialOrd)
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
@@ -48,7 +48,6 @@ import safe Data.String (fromString)
 import safe Data.Text (Text)
 import safe Data.Tuple (swap)
 import safe Data.Tuple.Extra (dupe)
-
 
 import safe qualified CMM.Data.Bimap as Bimap
 import safe CMM.Data.Bounds
@@ -66,14 +65,16 @@ import safe CMM.Data.Ordered (Ordered(Ordered))
 import safe CMM.Data.OrderedBounds ()
 import safe CMM.Data.Trilean (trilean)
 import safe CMM.Data.Way (Way(Backward, Both, Forward))
+import safe CMM.Err.State (nullErrorState)
 import safe CMM.Inference.BuiltIn ()
 import safe CMM.Inference.DataKind (DataKind)
 import safe CMM.Inference.Fact
   ( Fact
   , Facts
   , FlatFact(ClassConstraint, ClassFact, ClassFunDeps, ConstEquality,
-         ConstnessBounds, FactComment, InstType, KindBounds, KindEquality,
-         Lock, OnRegister, SubConst, SubKind, SubType, TypingEquality, Equality)
+         ConstnessBounds, Equality, FactComment, InstType, KindBounds,
+         KindEquality, Lock, OnRegister, SubConst, SubKind, SubType,
+         TypingEquality)
   , FlatFacts
   , NestedFact(Fact, NestedFact)
   , Qual((:=>))
@@ -83,16 +84,17 @@ import safe CMM.Inference.Fact
   , kindEquality
   , subConst
   , subKind
-  , typingEquality
   , typeEquality
+  , typingEquality
   )
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.GetParent (GetParent(getParent))
-import safe CMM.Inference.HandleCounter (nextHandleCounter, handleCounter)
+import safe CMM.Inference.HandleCounter (handleCounter, nextHandleCounter)
+import safe CMM.Inference.Properties (Properties, consting, kinding, typing)
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe qualified CMM.Inference.State as State
-import safe CMM.Inference.State
-    ( InferencerState, Inferencer )
+import safe CMM.Inference.State (Inferencer, InferencerState)
+import safe qualified CMM.Inference.State.Impl as State
 import safe CMM.Inference.Subst
   ( Apply(apply)
   , ApplyShallow(applyShallow)
@@ -105,18 +107,7 @@ import safe CMM.Inference.Type
   , foldApp
   , unfoldApp
   )
-import safe CMM.Inference.TypeCompl
-  ( PrimType
-  , TypeCompl
-  )
-import safe CMM.Inference.Properties
-  ( Properties
-  , consting
-
-
-  , kinding
-  , typing
-  )
+import safe CMM.Inference.TypeCompl (PrimType, TypeCompl)
 import safe CMM.Inference.TypeKind (TypeKind(GenericType), getTypeKind)
 import safe CMM.Inference.TypeVar
   ( TypeVar(NoType, TypeVar, tVarId, tVarParent)
@@ -125,8 +116,6 @@ import safe CMM.Inference.TypeVar
 import safe CMM.Inference.Unify (instanceOf, unify, unifyFold, unifyLax)
 import safe CMM.Inference.Utils (trileanSeq)
 import safe CMM.Utils (HasCallStack, addPrefix, logicError, notYetImplemented)
-import safe qualified CMM.Inference.State.Impl as State
-import safe CMM.Err.State ( nullErrorState )
 
 -- | creates typing for the given primitive pattern,
 --   derived from typings of the immediate type subterms
@@ -170,7 +159,8 @@ pushTyping props props' = do
                   True -> fixIt
                   False -> fixSubs
               False -> fixSubs
-      safePropertiesUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
+      safePropertiesUpdate (_2 . typing %~ apply subst) >>=
+        flip when (void fixIt)
 
 fixAll :: Inferencer Bool
 fixAll = do
@@ -279,8 +269,7 @@ safePropertiesUpdate change = do
       goValues [] tSubst cSubst kSubst = return (tSubst, cSubst, kSubst)
       goValues ((props:props':propss):others) tSubst cSubst kSubst = do
         (tSubst', _) <-
-          apply tSubst (props ^. typing) `unify`
-          apply tSubst (props' ^. typing)
+          apply tSubst (props ^. typing) `unify` apply tSubst (props' ^. typing)
         (cSubst', _) <-
           apply cSubst (props ^. consting) `unifyLax`
           apply cSubst (props' ^. consting)
@@ -345,7 +334,8 @@ onCandidates [] _ _ = Nothing
 
 fixTypings :: Inferencer Bool
 fixTypings = do
-  types' <- uses State.renaming (fmap . apply) <*> uses State.primPatterns Bimap.toList
+  types' <-
+    uses State.renaming (fmap . apply) <*> uses State.primPatterns Bimap.toList
   let primPatterns' = Bimap.fromList types'
       collapsedKeys = mapCollect types'
       collapsedValues = mapCollect $ swap <$> types'
@@ -419,41 +409,46 @@ reduceTemplates (fact:facts) =
         apply subst t
       continue
     NestedFact (tVars :. [ClassFact name t] :=> nesteds) ->
-        State.lookupFunDep name >>= \case
-          Nothing -> goOtherwise
-          Just rules -> do
-            traverse_ go rules
-            continue
-            where class':args = unfoldApp t
-                  go rule = do
-                    tVars' <-
-                      const (State.freshTypeHelperWithHandle GenericType) `traverse`
-                      args
-                    let t' =
-                          foldApp $ class' :
-                          zipWith
-                            (uncurry chooseArg)
-                            (zip args (toType <$> tVars'))
-                            rule
-                        fs = zipWith typeEquality tVars' args
-                    State.addClassFact (fromString (trileanSeq rule) `addPrefix` name) $
-                      Set.fromList tVars' :.
-                      fs :=>
-                      t'
-                  chooseArg arg tVar = trilean arg tVar tVar
-      where
-        goOtherwise = State.lookupClassScheme name >>= \case
-          Nothing -> skip
-          Just (tVars' :. facts' :=> t') -> do
-            subst <- refresh tVars'
-            State.addClassFact name $ (tVars <> (apply subst `Set.map` tVars')) :.
-              ((t `typeEquality` apply subst t') :
-               reverseFacts [f | Fact f <- nesteds] <>
-               apply subst facts') :=>
-              t
-            subst' <- refresh tVars
-            reduceTemplates $
-              (Fact <$> typeEquality (subst `apply` t') (subst' `apply` t) : flattenFacts (subst' `apply` nesteds)) <> facts <> (Fact <$> reverseFacts (apply subst <$> facts'))
+      State.lookupFunDep name >>= \case
+        Nothing -> goOtherwise
+        Just rules -> do
+          traverse_ go rules
+          continue
+          where class':args = unfoldApp t
+                go rule = do
+                  tVars' <-
+                    const (State.freshTypeHelperWithHandle GenericType) `traverse`
+                    args
+                  let t' =
+                        foldApp $ class' :
+                        zipWith
+                          (uncurry chooseArg)
+                          (zip args (toType <$> tVars'))
+                          rule
+                      fs = zipWith typeEquality tVars' args
+                  State.addClassFact
+                    (fromString (trileanSeq rule) `addPrefix` name) $
+                    Set.fromList tVars' :.
+                    fs :=>
+                    t'
+                chooseArg arg tVar = trilean arg tVar tVar
+      where goOtherwise =
+              State.lookupClassScheme name >>= \case
+                Nothing -> skip
+                Just (tVars' :. facts' :=> t') -> do
+                  subst <- refresh tVars'
+                  State.addClassFact name $
+                    (tVars <> (apply subst `Set.map` tVars')) :.
+                    ((t `typeEquality` apply subst t') :
+                     reverseFacts [f | Fact f <- nesteds] <>
+                     apply subst facts') :=>
+                    t
+                  subst' <- refresh tVars
+                  reduceTemplates $
+                    (Fact <$> typeEquality (subst `apply` t') (subst' `apply` t) :
+                     flattenFacts (subst' `apply` nesteds)) <>
+                    facts <>
+                    (Fact <$> reverseFacts (apply subst <$> facts'))
     Fact (ClassFunDeps name rules) -> do
       State.addFunDeps name rules
       continue
@@ -530,7 +525,8 @@ reduceTrivial (fact:facts) =
         [ClassFact {}] -> skip
         _ -> do
           (change, nesteds') <- wrapParent facts' $ reduceTrivial nesteds
-          fmap (first (change ||)) . skipWith . NestedFact $ tVars :. facts' :=> nesteds'
+          fmap (first (change ||)) . skipWith . NestedFact $ tVars :. facts' :=>
+            nesteds'
     _ -> skip
   where
     skip = skipWith fact
@@ -544,52 +540,51 @@ reduceConstraint (fact:facts) =
   case fact of
     Fact (ClassConstraint name t) ->
       State.lookupFunDep name >>= \case
-          Nothing -> goOtherwise
-          Just rules -> do
-            State.currentFunDeps += 1
-            current <- use State.currentFunDeps
-            max' <- use State.maxFunDeps
-            if current < max'
-              then continueWith facts'
-              else return (False, facts' <> facts)
-            where
-              facts' = fmap go rules
-              go rule =
-                    Fact $
-                    classConstraint
-                      (fromString (trileanSeq rule) `addPrefix` name)
-                      t
-      where
-        goOtherwise = State.lookupFact name >>= \case
-          Nothing -> skip
-          Just schemes' -> do
-            tType <- simplify t >>= State.getTyping
-            let go accum =
-                  \case
-                    (tVars :. fs :=> t'):others -> do
-                      tType' <- simplify t' >>= State.getTyping
-                      if tType `instanceOf` tType'
-                        then do
-                          subst <- refresh tVars
-                          let freshT = subst `apply` t'
-                              newFacts =
-                                typeEquality t freshT : (apply subst <$> fs)
-                          go (fmap Fact newFacts : accum) others
-                        else go accum others
-                    [] ->
-                      case accum of
-                        h:_ -> continueWith h
-                        _ -> skip
-            go mempty schemes'
+        Nothing -> goOtherwise
+        Just rules -> do
+          State.currentFunDeps += 1
+          current <- use State.currentFunDeps
+          max' <- use State.maxFunDeps
+          if current < max'
+            then continueWith facts'
+            else return (False, facts' <> facts)
+          where facts' = fmap go rules
+                go rule =
+                  Fact $
+                  classConstraint
+                    (fromString (trileanSeq rule) `addPrefix` name)
+                    t
+      where goOtherwise =
+              State.lookupFact name >>= \case
+                Nothing -> skip
+                Just schemes' -> do
+                  tType <- simplify t >>= State.getTyping
+                  let go accum =
+                        \case
+                          (tVars :. fs :=> t'):others -> do
+                            tType' <- simplify t' >>= State.getTyping
+                            if tType `instanceOf` tType'
+                              then do
+                                subst <- refresh tVars
+                                let freshT = subst `apply` t'
+                                    newFacts =
+                                      typeEquality t freshT :
+                                      (apply subst <$> fs)
+                                go (fmap Fact newFacts : accum) others
+                              else go accum others
+                          [] ->
+                            case accum of
+                              h:_ -> continueWith h
+                              _ -> skip
+                  go mempty schemes'
     Fact (ClassFact name t) ->
       State.lookupClassScheme name >>= \case
         Nothing -> skip
         Just (tVars :. facts' :=> t') -> do
           subst <- refresh tVars
           State.addClassFact name $ mempty :. [] :=> t
-          continueWith $
-            Fact <$> typeEquality t (subst `apply` t') :
-             (apply subst <$> facts')
+          continueWith $ Fact <$> typeEquality t (subst `apply` t') :
+            (apply subst <$> facts')
     NestedFact (tVars :. facts' :=> nesteds) -> do
       (changed, nesteds') <- wrapParent facts' $ reduceConstraint nesteds
       (_1 %~ (|| changed)) <$>
@@ -605,7 +600,8 @@ reduceMany :: Facts -> Inferencer (Bool, Facts)
 reduceMany = repeatStep reduceTrivial >=> reduceTemplates . snd >=> go
   where
     go facts = do
-      result@(change, facts') <- repeatStep reduceTrivial facts >>= reduceConstraint . snd
+      result@(change, facts') <-
+        repeatStep reduceTrivial facts >>= reduceConstraint . snd
       if change
         then go facts'
         else return result
@@ -638,7 +634,8 @@ minimizeSubs parent pTypeVars = do
   constBounds <- use State.constingBounds
   kindings <- uses State.subKinding (transformMap pTypeKindings)
   kindBounds <- use State.kindingBounds
-  let (cSubsts, cRest) = minimizeInner parent pTypeConstings constBounds constings
+  let (cSubsts, cRest) =
+        minimizeInner parent pTypeConstings constBounds constings
       cSubst = foldTVarSubsts cSubsts
       (kSubsts, kRest) = minimizeInner parent pTypeKindings kindBounds kindings
       kSubst = foldTVarSubsts kSubsts
@@ -686,7 +683,8 @@ minimizeInner ::
 minimizeInner parent pTypeThings boundsMap subGraph =
   let scc =
         Graph.stronglyConnCompR $
-        (\(from, to) -> (from `State.readBoundsFrom` boundsMap, from, Set.toList to)) <$>
+        (\(from, to) ->
+           (from `State.readBoundsFrom` boundsMap, from, Set.toList to)) <$>
         subGraph
       depends = getDepends scc mempty
       clusters =
@@ -724,7 +722,8 @@ minimizeInner parent pTypeThings boundsMap subGraph =
               then Set.singleton tVar'
               else mempty
         relevant tVar' =
-          not . isTrivialOrAbsurd $ State.readBoundsFrom tVar' boundsMap <> bounds
+          not . isTrivialOrAbsurd $ State.readBoundsFrom tVar' boundsMap <>
+          bounds
     getDepends _ _ = logicError
 
 -- | helper function for minimization of bounds
@@ -740,11 +739,10 @@ minimizeBounds what tVar = do
 freeSubtypeVars :: Set TypeVar -> Inferencer ([TypeVar], [TypeVar])
 freeSubtypeVars ts = do
   parent <- getParent
-  let
-    isFreeSubtypeVar tIngs with tVar@TypeVar {} =
-      not (tVar `Map.member` with) && tVarParent tVar == parent &&
-      not (tVar `Set.member` tIngs)
-    isFreeSubtypeVar _ _ NoType = False
+  let isFreeSubtypeVar tIngs with tVar@TypeVar {} =
+        not (tVar `Map.member` with) && tVarParent tVar == parent &&
+        not (tVar `Set.member` tIngs)
+      isFreeSubtypeVar _ _ NoType = False
   (consts, kinds) <- uses State.typeProps $ unzip . fmap mineSubs . Bimap.elems
   subConsts <- use State.subConsting
   subKinds <- use State.subKinding
@@ -769,14 +767,18 @@ floatSubs ts = do
   kindBounds <- use State.kindingBounds
   Set.intersection consts kinds `for_` \tVar -> do
     tVar' <- makeFloated tVar
-    State.constingBounds %= Map.insert tVar' (tVar `State.readBoundsFrom` constBounds)
-    State.kindingBounds %= Map.insert tVar' (tVar `State.readBoundsFrom` kindBounds)
+    State.constingBounds %=
+      Map.insert tVar' (tVar `State.readBoundsFrom` constBounds)
+    State.kindingBounds %=
+      Map.insert tVar' (tVar `State.readBoundsFrom` kindBounds)
   Set.difference consts kinds `for_` \tVar -> do
     tVar' <- makeFloated tVar
-    State.constingBounds %= Map.insert tVar' (tVar `State.readBoundsFrom` constBounds)
+    State.constingBounds %=
+      Map.insert tVar' (tVar `State.readBoundsFrom` constBounds)
   Set.difference kinds consts `for_` \tVar -> do
     tVar' <- makeFloated tVar
-    State.kindingBounds %= Map.insert tVar' (tVar `State.readBoundsFrom` kindBounds)
+    State.kindingBounds %=
+      Map.insert tVar' (tVar `State.readBoundsFrom` kindBounds)
   where
     makeFloated tVar = do
       int <- nextHandleCounter
@@ -803,36 +805,46 @@ toUnifsComponent (Fact (InstType (VarType scheme) inst):others) =
       let facts' = Fact . apply instSubst <$> facts
           t' = instSubst `apply` t
       ((Fact (inst `Equality` t') : facts') <>) <$> toUnifsComponent others
-    Nothing -> (Fact (VarType scheme `Equality` inst) :) <$> toUnifsComponent others
+    Nothing ->
+      (Fact (VarType scheme `Equality` inst) :) <$> toUnifsComponent others
 toUnifsComponent (fact:others) = (fact :) <$> toUnifsComponent others
 
 closeScheme :: Facts -> Set TypeVar -> Inferencer Facts
 closeScheme facts tVars = do
   let tVarsList = Set.toList tVars
   parent <- getParent
-  relevantVars <- Set.toList . mappend (freeTypeVars facts) . Set.unions <$> traverse State.collectPrimeTVarsAll tVarsList
+  relevantVars <-
+    Set.toList . mappend (freeTypeVars facts) . Set.unions <$>
+    traverse State.collectPrimeTVarsAll tVarsList
   relevantTypes <- traverse State.reconstruct relevantVars
   constings <- traverse State.getConsting relevantVars
   kindings <- traverse State.getKinding relevantVars
-  primPatterns <- liftA2 (zip3 relevantVars) (traverse State.reconstruct relevantVars) (traverse State.getTyping relevantVars)
+  primPatterns <-
+    liftA2
+      (zip3 relevantVars)
+      (traverse State.reconstruct relevantVars)
+      (traverse State.getTyping relevantVars)
   let toTrivialDeps = fmap $ second Set.singleton . dupe
   subConsts <-
     uses State.subConsting $ filter (presentIn tVarsList) .
     (toTrivialDeps constings <>) .
     Map.toList
   subKinds <-
-    uses State.subKinding $ filter (presentIn tVarsList) . (toTrivialDeps kindings <>) .
+    uses State.subKinding $ filter (presentIn tVarsList) .
+    (toTrivialDeps kindings <>) .
     Map.toList
   let constingsSubst = Map.fromList $ zip constings relevantTypes
       constingFacts =
         [ constEquality t' t
-        | (t', t) <- zip (constingsSubst `apply` fmap toType constings) relevantTypes
+        | (t', t) <-
+            zip (constingsSubst `apply` fmap toType constings) relevantTypes
         , t' /= t
         ]
       kindingsSubst = Map.fromList $ zip kindings relevantTypes
       kindingFacts =
         [ kindEquality t' t
-        | (t', t) <- zip (kindingsSubst `apply` fmap toType kindings) relevantTypes
+        | (t', t) <-
+            zip (kindingsSubst `apply` fmap toType kindings) relevantTypes
         , t' /= t
         ]
   constFacts <-
@@ -863,7 +875,8 @@ closeScheme facts tVars = do
        let (filtered, rest) =
              partition
                (any
-                  ((`Set.member` Set.fromList relevantVars) `fOr` parentedBy parent `fOr`
+                  ((`Set.member` Set.fromList relevantVars) `fOr`
+                   parentedBy parent `fOr`
                    (`Set.member` tVars)) .
                 freeTypeVars .
                 view _1)
@@ -874,13 +887,13 @@ closeScheme facts tVars = do
         | (t, t'', t') <- primPatterns
         , let useFilter =
                 (`Set.member` freeTypeVars t'') `fOr` parentedBy parent `fOr`
-                   (`Set.member` tVars) `fOr` (`Set.member` freeTypeVars facts')
+                (`Set.member` tVars) `fOr`
+                (`Set.member` freeTypeVars facts')
         , toType t /= t'
         , useFilter t
         ]
       facts' =
-        determineFacts <> constingFacts <> constFacts <>
-        kindingFacts <>
+        determineFacts <> constingFacts <> constFacts <> kindingFacts <>
         kindFacts
   tVars `for_` \tVar -> do
     t <- State.reconstruct tVar
@@ -946,7 +959,8 @@ closeSCCs facts (scc:others) =
         (<> fmap rePar facts) .
         concat
       parents' <- uses State.renaming ((<$> parents) . apply)
-      boundBySignatureVars <- Set.unions <$> State.collectPrimeTVarsAll `traverse` parents'
+      boundBySignatureVars <-
+        Set.unions <$> State.collectPrimeTVarsAll `traverse` parents'
       minimizeSubs parent boundBySignatureVars
       minimizeFree boundBySignatureVars
       _ <- fixAll
@@ -993,12 +1007,12 @@ collectCounts = foldr countIn mempty
       \case
         NestedFact (_ :. [Equality (VarType tVar) _] :=> _) ->
           Map.insertWith (+) tVar 1
-        NestedFact (_ :. [Equality {}] :=> _) ->
-          logicError
+        NestedFact (_ :. [Equality {}] :=> _) -> logicError
         _ -> id
 
 collectPairs :: Way -> Int -> Map TypeVar (Set TypeVar) -> [(TypeVar, TypeVar)]
-collectPairs way propss from = pairs <&> both %~ \i -> fromJust $ i `Map.lookup` varMap
+collectPairs way propss from =
+  pairs <&> both %~ \i -> fromJust $ i `Map.lookup` varMap
   where
     edges = concat ((\(f, t) -> (f, ) <$> Set.toList t) <$> Map.toList from)
     varMap =

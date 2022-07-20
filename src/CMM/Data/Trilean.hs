@@ -2,7 +2,7 @@
 
 module CMM.Data.Trilean where
 
-import Prelude (Eq, Show, Ord, Read, Bounded(minBound,maxBound), Bool)
+import safe Prelude (Bool, Bounded(maxBound, minBound), Eq, Ord, Read, Show)
 
 import safe qualified Data.Bool as B
 import safe Data.Data (Data)

@@ -8,7 +8,6 @@ Maintainer  : jiriklepl@seznam.cz
 
 This module contains various utilities used in other modules
 -}
-
 module CMM.Utils where
 
 import safe Control.Monad (unless, when)
@@ -17,16 +16,15 @@ import safe Data.Maybe (isJust)
 import safe Data.String (IsString)
 import safe qualified Data.Text as T
 import safe Data.Text (Text)
-
 #ifdef USE_GHC_STACK
 import safe qualified GHC.Stack
+
 type HasCallStack = GHC.Stack.HasCallStack
 #else
 class HasCallStack
 
 instance HasCallStack
 #endif
-
 -- | used to separate the prefix from the rest of the name
 prefixSeparator :: Char
 prefixSeparator = '$'

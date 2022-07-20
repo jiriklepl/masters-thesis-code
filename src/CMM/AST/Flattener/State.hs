@@ -1,41 +1,44 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-
 module CMM.AST.Flattener.State where
 
 import safe Control.Lens
-    ( use, uses, (%=), (+=), (.=), makeFieldsNoPrefix, (<&>) )
-import safe Control.Monad.State ( State )
+  ( (%=)
+  , (+=)
+  , (.=)
+  , (<&>)
+  , makeFieldsNoPrefix
+  , use
+  , uses
+  )
+import safe Control.Monad.State (State)
+import safe Data.Foldable (for_)
 import safe Data.Map (Map)
-import safe Data.Text (Text)
-import safe qualified Data.Text as T
 import safe qualified Data.Map as Map
+import safe Data.Maybe (fromMaybe)
 import safe qualified Data.Set as Set
 import safe Data.Set (Set)
-import safe Data.Foldable ( for_ )
-import safe Data.Maybe ( fromMaybe )
+import safe Data.Text (Text)
+import safe qualified Data.Text as T
 
-import safe CMM.AST ( Name(Name) )
-import safe CMM.Utils ( addPrefix )
+import safe CMM.AST (Name(Name))
+import safe CMM.Utils (addPrefix)
 
 -- | contains the state of the flattener
-data FlattenerState
-  = FlattenerState
+data FlattenerState =
+  FlattenerState
     { _branchIdProps :: Int -- ^ the counter of if statements, used to name each's labels uniquely
     , _contractorMap :: Map Text Text -- ^ the map of all contractors (references to resource props) to the respective objects
     , _contractIdProps :: Int -- ^ the counter of the resource props, used to name each uniquely
     }
-    deriving (Show)
+  deriving (Show)
 
 -- | initiates the state of a flattener
 initFlattenerState :: FlattenerState
 initFlattenerState =
   FlattenerState
-    { _branchIdProps = 0
-    , _contractIdProps = 0
-    , _contractorMap = mempty
-    }
+    {_branchIdProps = 0, _contractIdProps = 0, _contractorMap = mempty}
 
 type Flattener = State FlattenerState
 
@@ -59,7 +62,7 @@ freshContract = do
 -- Registers a list of contractors to the given resource object's name
 registerContractors :: [Text] -> Text -> Flattener ()
 registerContractors contractors contract = do
-  (contract:contractors) `for_` \contractor ->
+  (contract : contractors) `for_` \contractor ->
     contractorMap %= Map.insert contractor contract
 
 getContract :: Text -> Flattener Text
@@ -88,5 +91,3 @@ helperName = Name . addPrefix flattenerPrefix . T.pack
 
 flattenerPrefix :: Text
 flattenerPrefix = "F"
-
-
