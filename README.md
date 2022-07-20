@@ -64,7 +64,7 @@ When reading the source files of the program, we suggest using Haskell Language 
 
 ### Development requirements
 
-The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without and warnings and the script `.\run_examples.sh` should compile all files and succesfully interpret them by `llc`.
+The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings and the script `.\run_examples.sh` should compile all files and succesfully interpret them by `llc`.
 
 ### Project outline
 
