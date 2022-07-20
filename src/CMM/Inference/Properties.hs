@@ -10,7 +10,6 @@ import safe Data.Data (Data)
 import safe Prettyprinter (Pretty(pretty), (<+>), braces, parens)
 
 import safe CMM.Inference.Type (ToType(toType), Type(VarType))
-import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.TypeVar (ToTypeVar(toTypeVar), TypeVar)
 import safe CMM.Pretty (constingSymbol, kindingSymbol, typingSymbol)
 
@@ -21,7 +20,6 @@ data Properties =
     , _typing :: Type
     , _consting :: TypeVar
     , _kinding :: TypeVar
-    , _annot :: TypeAnnot
     }
   deriving (Show, Data)
 
@@ -46,23 +44,21 @@ instance Pretty Properties where
                  , _typing = typing
                  , _consting = consting
                  , _kinding = kinding
-                 , _annot = annot
                  } ->
         braces $
         pretty tId <+>
         parens (typingSymbol <+> "~" <+> pretty typing) <+>
         parens (constingSymbol <+> "~" <+> pretty consting) <+>
-        parens (kindingSymbol <+> "~" <+> pretty kinding) <+> pretty annot
+        parens (kindingSymbol <+> "~" <+> pretty kinding)
 
 -- | initializes a type properties from the given type variable and the given annotation
-initProperties :: TypeAnnot -> TypeVar -> Properties
-initProperties annotation tVar =
+initProperties :: TypeVar -> Properties
+initProperties tVar =
   Properties
     { _identifier = tVar
     , _typing = VarType tVar
     , _consting = tVar
     , _kinding = tVar
-    , _annot = annotation
     }
 
 -- | returns the identifier of the given type properties

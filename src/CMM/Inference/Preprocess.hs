@@ -22,7 +22,6 @@ import safe qualified Data.Map as Map
 import safe Data.Maybe (fromJust)
 import safe qualified Data.Set as Set
 import safe Data.Text (Text)
-import safe qualified Data.Text as T
 import safe Data.Traversable (for)
 import safe Data.Tuple.Extra (uncurry3)
 
@@ -386,7 +385,7 @@ preprocessParaName looker kind (Annot (AST.ParaName name params) annot) = do
   let name' = preprocessTrivial name
   params' <- traverse preprocessParam params
   class' <- looker $ getName name'
-  props <- State.freshNamedASTProperties (getName name) annot kind
+  props <- State.freshTypeHelper kind
   let constraint = foldApp $ toType class' : fmap toType params'
   State.storeFact $ props `typeEquality` constraint
   return
@@ -405,14 +404,14 @@ instance Preprocess AST.Export a b where
     purePreprocess props export
 
 instance Preprocess AST.Type a b where
-  preprocessImpl annot t =
+  preprocessImpl _ t =
     case t of
       AST.TBits int -> trivialCase $ makeTBitsType int
       AST.TName name -> do
         hole <- State.lookupTCon name
         purePreprocess hole t
       AST.TAuto Nothing -> do
-        props <- State.freshASTGeneric annot
+        props <- State.freshGeneric
         purePreprocess (SimpleElaboration props) t
       AST.TAuto (Just name) -> do
         hole <- State.lookupTVar name
@@ -421,7 +420,7 @@ instance Preprocess AST.Type a b where
         parType' <- preprocess parType
         return (getElaboration parType', AST.TPar parType')
       AST.TPtr t' -> do
-        ptr <- State.freshASTStar annot
+        ptr <- State.freshStar
         t'' <- preprocess t'
         State.storeFact $ ptr `typeEquality` makeAddrType t''
         return (SimpleElaboration ptr, AST.TPtr t'')
@@ -430,15 +429,15 @@ instance Preprocess AST.Type a b where
       AST.TLabel -> trivialCase makeLabelType
       where
         trivialCase type' = do
-          props <- State.freshASTStar annot
+          props <- State.freshStar
           State.storeFact $ props `typeEquality` type'
           purePreprocess (SimpleElaboration props) t
 
 instance Preprocess AST.ParaType a b where
-  preprocessImpl annot (AST.ParaType type' types') = do
+  preprocessImpl _ (AST.ParaType type' types') = do
     type'' <- preprocess type'
     types'' <- traverse preprocess types'
-    props <- State.freshASTGeneric annot
+    props <- State.freshGeneric
     State.storeFact . typeEquality props . foldApp $ toType type'' : fmap toType types''
     return (SimpleElaboration props, AST.ParaType type'' types'')
 
@@ -515,7 +514,7 @@ preprocessProcedureHeaderImpl (AST.ProcedureHeader mConv name formals mTypes `An
   mTypes' `for_` \types -> do
     retProps <- State.getCurrentReturn
     retType'@(~(TupleType retVars)) <-
-      doOutsideCtx $ makeTuple <$> traverse State.freshASTStar (fromJust mTypes)
+      doOutsideCtx $ makeTuple <$> traverse (const State.freshStar) (fromJust mTypes)
     State.storeFact $ retProps `typeEquality` retType'
     case mConv of
       Just (AST.Foreign (AST.StrLit conv))
@@ -611,10 +610,9 @@ instance Preprocess AST.Stmt a b where
         return (EmptyElaboration, preprocessTrivial stmt)
       AST.CallStmt names mConv expr actuals mTargets annots
        -> do
-        retTypes <- names `for` \name -> State.freshNamedASTStar (getName name) name
+        retTypes <- names `for` const State.freshStar
         argTypes <-
-          zip [0 :: Int ..] actuals `for` \(num, actual) ->
-            State.freshNamedASTStar (T.pack $ "actual" <> show num) actual
+          zip [0 :: Int ..] actuals `for` const State.freshStar
         names' <- preprocessT names
         expr' <- preprocess expr
         actuals' <- preprocessT actuals
@@ -632,7 +630,7 @@ instance Preprocess AST.Stmt a b where
        -> do
         actuals' <- preprocessT actuals
         retType@(~(TupleType retVars)) <-
-          doOutsideCtx $ makeTuple <$> traverse State.freshASTStar actuals
+          doOutsideCtx $ makeTuple <$> traverse (const State.freshStar) actuals
         zipWithM_ ((State.storeFact .) . subType) retVars actuals'
         State.getCtxMConv >>= \case
           Just (AST.Foreign (AST.StrLit conv))
@@ -671,9 +669,9 @@ doOutsideCtx :: Preprocessor a -> Preprocessor a
 doOutsideCtx action = State.popTopContext >>= (action <*) . State.pushContext
 
 instance Preprocess AST.KindName a b where
-  preprocessImpl annot (AST.KindName mKind name) = do
+  preprocessImpl _ (AST.KindName mKind name) = do
     nameType <- State.lookupVar name
-    props <- State.freshNamedASTStar (getName name) annot
+    props <- State.freshStar
     maybeKindUnif mKind props nameType
     return (SimpleElaboration props, AST.KindName mKind (preprocessTrivial name))
 
@@ -684,8 +682,8 @@ instance Preprocess AST.Targets a b where
   preprocessImpl = notImplemented
 
 instance Preprocess AST.Lit a b where
-  preprocessImpl annot lit = do
-    props <- State.freshASTStar annot
+  preprocessImpl _ lit = do
+    props <- State.freshStar
     State.storeFact . (`minKindConstraint` props) $
       case lit of
         AST.LitInt {} -> integerKind
@@ -695,9 +693,9 @@ instance Preprocess AST.Lit a b where
     purePreprocess (SimpleElaboration props) lit
 
 instance Preprocess AST.Actual a b where
-  preprocessImpl annot (AST.Actual mKind expr) = do
+  preprocessImpl _ (AST.Actual mKind expr) = do
     expr' <- preprocess expr
-    props <- State.freshASTStar annot
+    props <- State.freshStar
     maybeKindUnif mKind props expr'
     return (SimpleElaboration props, AST.Actual mKind expr')
 
@@ -708,11 +706,11 @@ unionizeTypes =
     tVar:tVars -> traverse_ (State.storeFact . typeEquality tVar) tVars
 
 instance Preprocess AST.Init a b where
-  preprocessImpl annot =
+  preprocessImpl _ =
     \case
       AST.ExprInit exprs -> do
         exprs' <- preprocessT exprs
-        props <- State.freshASTStar annot
+        props <- State.freshStar
         State.storeFacts $ constExprConstraint <$> exprs'
         State.storeFacts $ (`subType` props) <$> exprs'
         return (SimpleElaboration props, AST.ExprInit exprs')
@@ -739,7 +737,7 @@ preprocessDatumsImpl ::
   -> [Annotation AST.Datum a]
   -> Preprocessor [(Elaboration, AST.Datum b)]
 preprocessDatumsImpl _ [] = return []
-preprocessDatumsImpl cache ((Annot datum annot):others) =
+preprocessDatumsImpl cache ((Annot datum _):others) =
   case datum of
     AST.DatumLabel name -> do
       hole <-
@@ -813,7 +811,7 @@ preprocessDatumsImpl cache ((Annot datum annot):others) =
           unionizeTypes $ hole : cache
           (result :) <$> preprocessDatumsImpl [] others
       where goGeneral = do
-              props <- State.freshASTStar annot
+              props <- State.freshStar
               type'' <- preprocess type'
               mSize' <- traverse preprocess mSize
               mInit' <- traverse preprocess mInit
@@ -846,12 +844,12 @@ instance Preprocess AST.LValue a b where
               EmptyElaboration -> do
                 let name = getName lvName
                 registerASTError annot $ LVNotFound  name
-                props <- State.freshNamedASTStar name annot
+                props <- State.freshStar
                 purePreprocess (SimpleElaboration props) lvName
               hole -> hole `purePreprocess` lvName
           scheme -> do
-            inst <- State.freshNamedASTStar (getName lvName) annot
-            props <- State.freshNamedASTStar (getName lvName) annot
+            inst <- State.freshStar
+            props <- State.freshStar
             State.storeFacts
               [ scheme `instType` inst
               , props `typeEquality` makeAddrType inst
@@ -863,7 +861,7 @@ instance Preprocess AST.LValue a b where
             purePreprocess (props `LVInstElaboration` eHandle scheme) lvName
       AST.LVRef Nothing expr mAsserts -> do
         expr' <- preprocess expr
-        props <- State.freshASTStar annot
+        props <- State.freshStar
         let mAsserts' = (withElaboration EmptyElaboration <$>) <$> mAsserts
         State.storeFacts
           [ expr' `typeEquality` makeAddrType props
@@ -879,7 +877,7 @@ instance Preprocess AST.LValue a b where
         return (getElaboration type'', AST.LVRef (Just type'') expr' mAsserts')
 
 instance Preprocess AST.Expr a b where
-  preprocessImpl annot
+  preprocessImpl _
    =
     \case
       AST.MemberExpr struct field ->
@@ -909,7 +907,7 @@ instance Preprocess AST.Expr a b where
             return
               ( MethodElaboration props (eHandle scheme) inst
               , AST.MemberExpr struct' $ preprocessTrivial field)
-            where makeHandle = State.freshNamedASTStar (getName field) annot
+            where makeHandle = State.freshStar
       AST.ParExpr expr -> AST.ParExpr `preprocessInherit` expr
       AST.LVExpr lvalue -> AST.LVExpr `preprocessInherit` lvalue
       AST.BinOpExpr op left right

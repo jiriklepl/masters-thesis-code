@@ -704,7 +704,7 @@ monomorphizeMethod scheme inst = do
   where
     go set = do
       set' <- Set.toList set `for` \item -> monomorphizeMethodInner item inst
-      return . first head $ oneRight set'
+      return . first head $ oneRight set' -- succeed if only one instance matched
 
 recallField :: TypeVar
   -> TypeVar
@@ -733,7 +733,7 @@ monomorphizeField scheme inst =
       map'' <-
         Map.toList map' `for` \(item, struct) ->
           monomorphizeFieldInner item inst struct
-      return . first head $ oneRight map''
+      return . first head $ oneRight map'' -- succeed if only one instance matched
 
 instantiationError :: Monad m =>
   Type

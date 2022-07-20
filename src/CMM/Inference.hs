@@ -89,11 +89,6 @@ import safe CMM.Inference.Fact
 import safe CMM.Inference.FreeTypeVars (freeTypeVars)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter (nextHandleCounter, handleCounter)
-import safe CMM.Inference.Preprocess.Elaboration
-  ( HasElaboration(getElaboration)
-  , Elaboration(EmptyElaboration, LVInstElaboration, MemberElaboration,
-         MethodElaboration, SimpleElaboration)
-  )
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe qualified CMM.Inference.State as State
 import safe CMM.Inference.State
@@ -117,7 +112,7 @@ import safe CMM.Inference.TypeCompl
 import safe CMM.Inference.Properties
   ( Properties
   , consting
-  , propsId
+
 
   , kinding
   , typing
@@ -133,12 +128,15 @@ import safe CMM.Utils (HasCallStack, addPrefix, logicError, notYetImplemented)
 import safe qualified CMM.Inference.State.Impl as State
 import safe CMM.Err.State ( nullErrorState )
 
+-- | creates typing for the given primitive pattern,
+--   derived from typings of the immediate type subterms
 createTyping :: PrimType -> Inferencer (TypeCompl Type)
 createTyping primType = do
   props <- use State.typeProps
   let oneLevel t = maybe (VarType t) (view typing) (t `Bimap.lookup` props)
   return $ oneLevel <$> primType
 
+-- | simplifies a given type into a representant type variable
 simplify :: HasCallStack => Type -> Inferencer TypeVar
 simplify =
   \case
@@ -157,6 +155,7 @@ simplify =
             return tVar
           Just tVar -> return tVar
 
+-- | unifies the given typings (constitutes an occurs check)
 pushTyping :: Properties -> Properties -> Inferencer ()
 pushTyping props props' = do
   let t = props ^. typing
@@ -165,32 +164,17 @@ pushTyping props props' = do
     Left errs -> State.addUnificationErrors errs
     Right (subst, _) -> do
       let fixIt = do
-            fixTypize >>= \case
+            fixTypings >>= \case
               True ->
-                fixHandlize >>= \case
+                fixProperties >>= \case
                   True -> fixIt
                   False -> fixSubs
               False -> fixSubs
-      safeHandlizeUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
-
-mineAST :: (HasElaboration a, Foldable n) => n a -> Inferencer ()
-mineAST = traverse_ (addPropss . getElaboration)
-  where
-    addProps props = State.typeProps %= Bimap.insert (propsId props) props
-    addPropss =
-      \case
-        EmptyElaboration -> return ()
-        SimpleElaboration props -> addProps props
-        LVInstElaboration props props' -> addProps props *> addProps props'
-        MethodElaboration props props' props'' ->
-          addProps props *> addProps props' *> addProps props''
-        MemberElaboration props classProps propss propss' ->
-          addProps props *> traverse_ addProps propss *> traverse_ (addProps . snd) classProps *>
-          traverse_ addProps propss'
+      safePropertiesUpdate (_2 . typing %~ apply subst) >>= flip when (void fixIt)
 
 fixAll :: Inferencer Bool
 fixAll = do
-  results <- sequence [fixTypize, fixHandlize, fixSubs]
+  results <- sequence [fixTypings, fixProperties, fixSubs]
   if or results
     then True <$ fixAll
     else return False
@@ -269,7 +253,7 @@ fixSubs = do
   subst' <- fixBoth State.subConsting State.constingBounds
   if null subst && null subst'
     then return False
-    else safeHandlizeUpdate $ (_2 . kinding %~ apply subst) .
+    else safePropertiesUpdate $ (_2 . kinding %~ apply subst) .
          (_2 . consting %~ apply subst')
 
 unsafeTypizeUpdate ::
@@ -285,9 +269,9 @@ unsafeHandlizeUpdate change =
 isSingleton :: Set a -> Bool
 isSingleton = (== 1) . Set.size
 
-safeHandlizeUpdate ::
+safePropertiesUpdate ::
      ((TypeVar, Properties) -> (TypeVar, Properties)) -> Inferencer Bool
-safeHandlizeUpdate change = do
+safePropertiesUpdate change = do
   propss' <- uses State.typeProps ((change <$>) . Bimap.toList)
   let typeProps' = Bimap.fromList propss'
       collapsedKeys = mapCollect propss'
@@ -341,13 +325,13 @@ safeHandlizeUpdate change = do
           fixSubGraph True State.subKinding kSubst
           fixBounds True State.constingBounds cSubst
           fixBounds True State.kindingBounds kSubst
-          (True <$) . safeHandlizeUpdate $ apply subst .
+          (True <$) . safePropertiesUpdate $ apply subst .
             (_2 . typing %~ apply tSubst) .
             (_2 . consting %~ applyShallow cSubst) .
             (_2 . kinding %~ applyShallow kSubst)
 
-fixHandlize :: Inferencer Bool
-fixHandlize = uses State.renaming apply >>= safeHandlizeUpdate
+fixProperties :: Inferencer Bool
+fixProperties = uses State.renaming apply >>= safePropertiesUpdate
 
 mapCollect :: (Ord a, Ord b) => [(a, b)] -> Map a (Set b)
 mapCollect = Map.fromListWith mappend . fmap (_2 %~ Set.singleton)
@@ -359,8 +343,8 @@ onCandidates (candidate:candidates) lookup' database =
     Nothing -> onCandidates candidates lookup' database
 onCandidates [] _ _ = Nothing
 
-fixTypize :: Inferencer Bool
-fixTypize = do
+fixTypings :: Inferencer Bool
+fixTypings = do
   types' <- uses State.renaming (fmap . apply) <*> uses State.typings Bimap.toList
   let typings' = Bimap.fromList types'
       collapsedKeys = mapCollect types'
@@ -393,7 +377,7 @@ fixTypize = do
           (mempty :: Subst TypeVar) >>=
         goKeys (Set.toList . snd <$> Map.toList collapsedKeys)
       State.renaming %= apply subst
-      True <$ fixTypize
+      True <$ fixTypings
 
 fixFacts :: Facts -> Inferencer Facts
 fixFacts facts = uses State.renaming $ flip fmap facts . apply
@@ -673,7 +657,7 @@ minimizeSubs parent pTypeVars = do
       | otherwise -> State.subKinding %= Map.insert tVar limits
     Nothing -> return ()
   void $
-    safeHandlizeUpdate
+    safePropertiesUpdate
       ((_2 . consting %~ apply cSubst) . (_2 . kinding %~ apply kSubst))
   where
     transformMap pTypeThings =

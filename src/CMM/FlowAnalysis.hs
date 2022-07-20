@@ -5,7 +5,7 @@ Module      : CMM.FlowAnalysis
 Description : Flow analysis
 Maintainer  : jiriklepl@seznam.cz
 
-This module contains the definition of the flow analysis performed after blockifying.
+This module contains the definition of the flow analysis performed after blockifying (most notably, live-range analysis).
 -}
 
 module CMM.FlowAnalysis
@@ -35,6 +35,7 @@ import safe CMM.Utils (doWhile, hasPrefix)
 import safe Data.Maybe ( fromJust )
 import safe Data.Functor ( (<&>) )
 
+-- | analyzes the flow of the given procedure (with a blockifier state)
 analyzeFlow :: GetPos a => Annot Procedure a -> Blockifier ()
 analyzeFlow procedure@(Annot _ _)
  = do

@@ -198,9 +198,6 @@ cradle:
     - path: "src/CMM/Inference/Type.hs"
       component: "Compiler:exe:Compiler"
 
-    - path: "src/CMM/Inference/TypeAnnot.hs"
-      component: "Compiler:exe:Compiler"
-
     - path: "src/CMM/Inference/TypeCompl.hs"
       component: "Compiler:exe:Compiler"
 
@@ -220,9 +217,6 @@ cradle:
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Inference/Utils.hs"
-      component: "Compiler:exe:Compiler"
-
-    - path: "src/CMM/Lens.hs"
       component: "Compiler:exe:Compiler"
 
     - path: "src/CMM/Lexer.hs"

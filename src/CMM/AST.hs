@@ -51,6 +51,7 @@ import safe CMM.Pretty
 import safe CMM.Utils (backQuote, HasCallStack)
 import safe qualified CMM.Lexer.Token as T
 
+-- | This AST node represents the whole compilation unit (program)
 newtype Unit a =
   Unit [Annot TopLevel a]
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -62,6 +63,8 @@ instance Pretty (Unit a) where
     \case
       Unit topLevels -> vsep $ pretty <$> topLevels
 
+-- | AST node for a top-level definition,
+--   extended with `TopClass`, `TopInstance` and `TopStruct` constructors
 data TopLevel a
   = TopSection StrLit [Annot Section a]
   | TopDecl (Annot Decl a)
@@ -83,6 +86,7 @@ instance Pretty (TopLevel a) where
       TopInstance instance' -> pretty instance'
       TopStruct struct -> pretty struct
 
+-- | AST node for a data section (for initialized and uninitialized data)
 data Section a
   = SecDecl (Annot Decl a)
   | SecProcedure (Annot Procedure a)
@@ -101,6 +105,7 @@ instance Pretty (Section a) where
       SecSpan left right sections ->
         pretty left <+> pretty right <+> bracesBlock sections
 
+-- | AST node for a declaration (global or local)
 data Decl a
   = ImportDecl [Annot Import a] -- at least one
   | ExportDecl [Annot Export a] -- at least one
@@ -130,12 +135,13 @@ instance Pretty (Decl a) where
       TargetDecl targetDirectives ->
         T.targetName <+> hsep (pretty <$> targetDirectives) <> semi
 
+-- | AST node for a typeclass - specific to CHMMM
 data Class a =
   Class
-    [Annot (ParaName Type) a]
-    (Annot (ParaName Name) a)
-    (Maybe (Annot FunDeps a))
-    [Annot ProcedureDecl a]
+    [Annot (ParaName Type) a] -- ^ superclasses
+    (Annot (ParaName Name) a) -- ^ name and type signature of the class
+    (Maybe (Annot FunDeps a)) -- ^ functional dependencies
+    [Annot ProcedureDecl a] -- ^ methods
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Class ())
@@ -154,11 +160,12 @@ instance Pretty (Class a) where
             | Just funDeps <- mFunDeps = space <> pipe <+> pretty funDeps
             | otherwise = mempty
 
+-- | AST node for a typeclass instance - specific to CHMMM
 data Instance a =
   Instance
-    [Annot (ParaName Type) a]
-    (Annot (ParaName Type) a)
-    [Annot Procedure a]
+    [Annot (ParaName Type) a] -- ^ superclasses
+    (Annot (ParaName Type) a) -- ^ name and type signature of the instance
+    [Annot Procedure a] -- ^ method instances
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Instance ())
@@ -172,8 +179,11 @@ instance Pretty (Instance a) where
         commaPretty paraNames <+>
         darrow <+> pretty paraName <+> bracesBlock methods
 
+-- | AST node for structs (record types) - specific to CHMMM
 data Struct a =
-  Struct (Annot (ParaName Name) a) [Annot Datum a]
+  Struct
+    (Annot (ParaName Name) a) -- ^ name and type signature of the struct
+    [Annot Datum a] -- ^ data (labels and fields)
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Struct ())
@@ -184,6 +194,7 @@ instance Pretty (Struct a) where
       Struct paraName datums ->
         T.structName <+> pretty paraName <+> inBraces (prettyDatums datums)
 
+-- | AST node for a type signature
 data ParaName param a =
   ParaName (Name a) [Annot param a]
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -196,8 +207,9 @@ instance Pretty (param a) => Pretty (ParaName param a) where
       ParaName name [] -> pretty name
       ParaName name types -> pretty name <+> hsep (pretty <$> types)
 
+-- | AST node for a functional dependency set - specific to CHMMM
 newtype FunDeps a =
-  FunDeps [Annot FunDep a]
+  FunDeps [Annot FunDep a] -- ^ functional dependencies in the given FD set
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (FunDeps ())
@@ -206,9 +218,10 @@ instance Pretty (FunDeps a) where
   pretty = \case
     FunDeps funDeps -> commaPretty funDeps
 
+-- | AST node for a functional dependency (From -> To) - specific to CHMMM
 data FunDep a = FunDep
-  { fdFrom :: [Annot Name a]
-  , fdTo :: [Annot Name a]
+  { fdFrom :: [Annot Name a] -- ^ (type variables) the assumptions of the given dependency
+  , fdTo :: [Annot Name a] -- ^ (type variables) the results of the given dependency
   }
   deriving (Show, Functor, Foldable, Traversable, Data)
 
@@ -225,6 +238,7 @@ instance Pretty (FunDep a) where
           | null fdTo = mempty
           | otherwise = space <> hsepPretty fdTo
 
+-- | AST node for a target directive
 data TargetDirective a
   = MemSize Int
   | ByteOrder Endian
@@ -245,6 +259,7 @@ instance Pretty (TargetDirective a) where
       PointerSize int -> T.pointersizeName <+> pretty int
       WordSize int -> T.wordsizeName <+> pretty int
 
+-- | AST node for an import
 data Import a =
   Import (Maybe StrLit) (Name a)
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
@@ -255,6 +270,7 @@ instance Pretty (Import a) where
       Import (Just string) name -> pretty string <+> T.asName <+> pretty name
       Import Nothing name -> pretty name
 
+-- | AST node for an export
 data Export a =
   Export (Name a) (Maybe StrLit)
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
@@ -265,6 +281,7 @@ instance Pretty (Export a) where
       Export name (Just string) -> pretty name <+> T.asName <+> pretty string
       Export name Nothing -> pretty name
 
+-- | AST node for an endian directive
 data Endian
   = Little
   | Big
@@ -276,6 +293,7 @@ instance Pretty Endian where
       Little -> T.littleName
       Big -> T.bigName
 
+-- | AST node for a datum
 data Datum a
   = DatumLabel (Name a)
   | DatumAlign Int
@@ -303,6 +321,7 @@ prettyDatums (datum:others) =
       | null others -> pretty datum
       | otherwise -> pretty datum <> line <> prettyDatums others
 
+-- | AST node for an initializer
 data Init a
   = ExprInit [Annot Expr a]
   | StrInit StrLit
@@ -318,6 +337,7 @@ instance Pretty (Init a) where
       StrInit string -> pretty string
       Str16Init string -> T.unicodeName <> parens (dquotes $ pretty string)
 
+-- | AST node for a register pack
 data Registers a =
   Registers (Maybe Kind) (Annot Type a) [(Annot Name a, Maybe StrLit)] -- at least one
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -335,6 +355,7 @@ instance Pretty (Registers a) where
           | (name, mString) <- nameStringPairs
           ]
 
+-- | AST node for a size specifier
 newtype Size a =
   Size (Maybe (Annot Expr a))
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -346,6 +367,7 @@ instance Pretty (Size a) where
     \case
       Size mExpr -> brackets $ maybe mempty pretty mExpr
 
+-- | AST node for a body (procedure body, if statement body, etc.)
 newtype Body a =
   Body [Annot BodyItem a]
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -357,6 +379,7 @@ instance Pretty (Body a) where
     \case
       Body bodyItems -> bracesBlock bodyItems
 
+-- | AST node for a body item
 data BodyItem a
   = BodyDecl (Annot Decl a)
   | BodyStackDecl (Annot StackDecl a)
@@ -372,6 +395,7 @@ instance Pretty (BodyItem a) where
       BodyStackDecl stackDecl -> pretty stackDecl
       BodyStmt stmt -> pretty stmt
 
+-- | AST node for a procedure definition
 data Procedure a =
   Procedure (Annot ProcedureHeader a) (Annot Body a)
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -383,6 +407,8 @@ instance Pretty (Procedure a) where
     \case
       Procedure header body -> pretty header <+> pretty body
 
+-- | AST node for a procedure declaration - specific to CHMMM
+--   (used solely for method definitions)
 newtype ProcedureDecl a =
   ProcedureDecl (Annot ProcedureHeader a)
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -394,12 +420,14 @@ instance Pretty (ProcedureDecl a) where
     \case
       ProcedureDecl header -> pretty header <> semi
 
+-- | AST node for a procedure header
+--   extended with `SemiFormal`
 data ProcedureHeader a =
   ProcedureHeader
     (Maybe Conv)
     (Name a)
     [Annot Formal a]
-    (Maybe [Annot SemiFormal a])
+    (Maybe [Annot SemiFormal a]) -- ^ specifies the return types
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (ProcedureHeader ())
@@ -416,6 +444,7 @@ instance Pretty (ProcedureHeader a) where
                   Just [] -> mempty <+> arrow
                   Just types -> mempty <+> arrow <+> commaPretty types
 
+-- | AST node for a formal argument
 data Formal a =
   Formal (Maybe Kind) Bool (Annot Type a) (Name a)
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -430,8 +459,11 @@ instance Pretty (Formal a) where
         ifTrue invar (T.invariantName <> space) <> pretty type' <+>
         pretty name
 
+-- | AST node for a semiformal argument (a return type) - specific to CHMMM
 data SemiFormal a =
-  SemiFormal (Maybe Kind) (Annot Type a)
+  SemiFormal
+    (Maybe Kind) -- ^ kind specification
+    (Annot Type a) -- ^ the type of the semiformal (there is no name)
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (SemiFormal ())
@@ -441,6 +473,7 @@ instance Pretty (SemiFormal a) where
     \case
       SemiFormal mKind type' -> maybeSpacedR mKind <> pretty type'
 
+-- | AST node for an actual argument
 data Actual a =
   Actual (Maybe Kind) (Annot Expr a)
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -452,6 +485,7 @@ instance Pretty (Actual a) where
     \case
       Actual mKind expr -> maybeSpacedR mKind <> pretty expr
 
+-- | AST node for a kind specification
 newtype Kind =
   Kind StrLit
   deriving (Show, Data, Eq)
@@ -461,6 +495,7 @@ instance Pretty Kind where
     \case
       Kind string -> pretty string
 
+-- | AST node for a stackdata block
 newtype StackDecl a =
   StackDecl [Annot Datum a]
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -472,6 +507,8 @@ instance Pretty (StackDecl a) where
     \case
       StackDecl datums -> T.stackdataName <+> inBraces (prettyDatums datums)
 
+-- | AST node for a statement
+--   extended with `DroppedStmt`
 data Stmt a
   = EmptyStmt
   | IfStmt (Annot Expr a) (Annot Body a) (Maybe (Annot Body a))
@@ -499,7 +536,9 @@ data Stmt a
   | ContStmt (Name a) [Annot KindName a]
   | GotoStmt (Annot Expr a) (Maybe (Annot Targets a))
   | CutToStmt (Annot Expr a) [Annot Actual a] [Annot Flow a]
-  | DroppedStmt (Name a)
+  | DroppedStmt (Name a) -- ^ dropped statement that a part of
+                         --   the control flow does not constitute
+                         --   a certain automatic management action
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Stmt ())
@@ -565,6 +604,7 @@ prettyCallStmtRest =
       hsep (pretty <$> flowOrAliases) <> semi
     _ -> error "`prettyCallStmtRest` is implemented only for call statements"
 
+-- | AST node for a name with a kind specifier
 data KindName a =
   KindName (Maybe Kind) (Name a)
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
@@ -574,6 +614,7 @@ instance Pretty (KindName a) where
     \case
       KindName mKind name -> maybeSpacedR mKind <> pretty name
 
+-- | AST node for a switch arm
 data Arm a =
   Arm [Annot Range a] (Annot Body a)
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -585,6 +626,7 @@ instance Pretty (Arm a) where
     \case
       Arm ranges body -> T.caseName <+> commaPretty ranges <> colon <+> pretty body
 
+-- | AST node for a switch arm range
 data Range a =
   Range (Annot Expr a) (Maybe (Annot Expr a))
   deriving (Show, Functor, Foldable, Traversable, Data)
@@ -597,6 +639,8 @@ instance Pretty (Range a) where
       Range left Nothing -> pretty left
       Range left (Just right) -> pretty left <+> ddot <+> pretty right
 
+-- | AST node for an lvalue reference
+--   the `LVRef` is modified by making the type optional
 data LValue a
   = LVName (Name a)
   | LVRef (Maybe (Annot Type a)) (Annot Expr a) (Maybe (Annot Asserts a))
@@ -614,6 +658,7 @@ instance Pretty (LValue a) where
           (pretty expr <>
            maybe mempty (\asserts -> space <> pretty asserts) mAsserts)
 
+-- | AST node for a flow assertion
 data Flow a
   = AlsoCutsTo [Annot Name a] -- at least one
   | AlsoUnwindsTo [Annot Name a] -- at least one
@@ -631,6 +676,7 @@ instance Pretty (Flow a) where
       AlsoAborts -> T.alsoName <+> T.abortsName
       NeverReturns -> T.neverName <+> T.returnsName
 
+-- | AST node for an alias assertion
 data Alias a
   = Reads [Annot Name a]
   | Writes [Annot Name a]
@@ -642,6 +688,7 @@ instance Pretty (Alias a) where
       Reads names -> T.readsName <+> commaPretty names
       Writes names -> T.writesName <+> commaPretty names
 
+-- | AST node for a call annotation (contains an assertion)
 data CallAnnot a
   = FlowAnnot (Annot Flow a)
   | AliasAnnot (Annot Alias a)
@@ -655,6 +702,7 @@ instance Pretty (CallAnnot a) where
       AliasAnnot alias -> pretty alias
       FlowAnnot flow -> pretty flow
 
+-- | AST node for a targets assertion
 newtype Targets a =
   Targets [Annot Name a]
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
@@ -664,6 +712,8 @@ instance Pretty (Targets a) where
     \case
       Targets names -> T.targetsName <+> commaPretty names
 
+-- | AST node for an expression
+--   extended by `MemberExpr` (struct->field) for field accessors
 data Expr a
   = LitExpr (Annot Lit a) (Maybe (Annot Type a))
   | LVExpr (Annot LValue a)
@@ -673,7 +723,9 @@ data Expr a
   | NegExpr (Annot Expr a)
   | InfixExpr (Name a) (Annot Expr a) (Annot Expr a)
   | PrefixExpr (Name a) [Annot Actual a]
-  | MemberExpr (Annot Expr a) (Annot Name a)
+  | MemberExpr
+    (Annot Expr a) -- ^ expression that evaluates to a struct
+    (Annot Name a) -- ^ field name
   deriving (Show, Functor, Foldable, Traversable, Data)
 
 deriving instance Eq (Expr ())
@@ -694,6 +746,7 @@ instance Pretty (Expr a) where
         "%" <> pretty name <> parens (commaPretty actuals)
       MemberExpr expr field -> pretty expr <> arrow <> pretty field
 
+-- | AST node for a literal
 data Lit a
   = LitInt Int
   | LitFloat Float
@@ -707,15 +760,17 @@ instance Pretty (Lit a) where
       LitFloat float -> pretty float
       LitChar char -> squotes $ pretty char
 
+-- | AST node for a type
+--   extended with `TAuto`, `TPtr`, `TVoid`, `TBool`, `TLabel` and `TPar`
 data Type a
   = TBits Int
   | TName (Name a)
   | TAuto (Maybe (Name a))
-  | TPtr (Annot Type a)
-  | TVoid
-  | TBool
-  | TLabel
-  | TPar (Annot ParaType a)
+  | TPtr (Annot Type a) -- ^ pointer type derived from the given type
+  | TVoid -- ^ void type
+  | TBool -- ^ bool type (for results of conditionals)
+  | TLabel -- ^ label type for label statements
+  | TPar (Annot ParaType a) -- ^ parametrized type
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
 
 instance Pretty (Type a) where
@@ -730,6 +785,7 @@ instance Pretty (Type a) where
       TLabel -> T.labelName
       TPar paraType -> parens $ pretty paraType
 
+-- | AST node for a parametrized type - specific to CHMMM
 data ParaType a =
   ParaType (Annot Type a) [Annot Type a]
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
@@ -739,6 +795,7 @@ instance Pretty (ParaType a) where
     \case
       ParaType type' types -> hsep $ pretty <$> (type' : types)
 
+-- | AST node for a call convention
 newtype Conv =
   Foreign StrLit
   deriving (Show, Data, Eq)
@@ -748,6 +805,7 @@ instance Pretty Conv where
     \case
       Foreign string -> T.foreignName <+> pretty string
 
+-- | AST node for in-assertions and align-assertions
 data Asserts a
   = AlignAssert Int [Annot Name a]
   | InAssert [Annot Name a] (Maybe Int) -- at least one (Name a)
@@ -761,6 +819,7 @@ instance Pretty (Asserts a) where
         T.alignedName <+> pretty int <+> T.inName <+> commaPretty names
       InAssert names mInt -> T.inName <+> commaPretty names <> maybeSpacedL mInt
 
+-- | AST node for a binary operator
 data Op
   = AddOp
   | SubOp
@@ -800,6 +859,7 @@ instance Pretty Op where
       GeOp -> ">="
       LeOp -> "<="
 
+-- | AST node for an identifier
 newtype Name a =
   Name Text
   deriving (Show, Functor, Foldable, Traversable, Data, Eq)
@@ -809,6 +869,7 @@ instance Pretty (Name a) where
     \case
       Name name -> pretty name
 
+-- | AST node for a string literal
 newtype StrLit =
   StrLit Text
   deriving (Show, Data, Eq)
@@ -818,6 +879,7 @@ instance Pretty StrLit where
     \case
       StrLit string -> pretty $ show string
 
+-- | AST node for a pragma
 data Pragma a
   deriving (Functor, Foldable, Traversable, Data) -- NOTE: the manual does not specify at all
 

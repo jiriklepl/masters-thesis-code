@@ -5,7 +5,6 @@ module CMM.Inference.HandleCounter where
 import safe Control.Lens ( use, (+=), Lens' )
 import safe Control.Monad.State (MonadState)
 
-import safe CMM.Inference.TypeAnnot (TypeAnnot)
 import safe CMM.Inference.Properties (Properties, initProperties)
 import safe CMM.Inference.TypeKind (TypeKind)
 import safe CMM.Inference.TypeVar (TypeVar, typeVarIdLast)
@@ -21,12 +20,11 @@ class a ~ Int =>
 nextHandleCounter :: (MonadState s m, HasHandleCounter s a) => m Int
 nextHandleCounter = handleCounter += 1 >> use handleCounter
 
--- takes handle annotation, type kind and a parent type variable and returns a fresh type handle
-freshAnnotatedTypeHelperWithParent ::
+-- takes type kind and a parent type variable and returns a fresh type handle
+freshTypeHelperWithParent ::
      (MonadState s m, HasHandleCounter s Int)
-  => TypeAnnot
-  -> TypeKind
+  => TypeKind
   -> TypeVar
   -> m Properties
-freshAnnotatedTypeHelperWithParent annot tKind parent =
-  initProperties annot . typeVarIdLast tKind parent <$> nextHandleCounter
+freshTypeHelperWithParent tKind parent =
+  initProperties . typeVarIdLast tKind parent <$> nextHandleCounter

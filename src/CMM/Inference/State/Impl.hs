@@ -23,11 +23,10 @@ import safe CMM.Inference.Fact (Scheme)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
   ( HasHandleCounter(handleCounter)
-  , freshAnnotatedTypeHelperWithParent
+  , freshTypeHelperWithParent
   )
 import safe CMM.Inference.Refresh (Refresh(refresh))
 import safe CMM.Inference.Type (Type)
-import safe CMM.Inference.TypeAnnot (TypeAnnot(NoTypeAnnot, TypeInst))
 import safe CMM.Inference.TypeCompl (PrimType)
 import safe CMM.Inference.Properties (Properties, propsId, initProperties)
 import safe CMM.Inference.TypeKind (HasTypeKind(getTypeKind), TypeKind)
@@ -107,23 +106,20 @@ instance Refresh Inferencer where
   refresh tVars =
     sequence $
     Map.fromSet
-      (\tVar -> freshAnnotatedTypeHelper (TypeInst tVar) $ getTypeKind tVar)
+      (freshTypeHelper . getTypeKind)
       tVars
 
-freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Inferencer TypeVar
-freshAnnotatedTypeHelper annot tKind = do
-  props <- getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
+freshTypeHelper :: TypeKind -> Inferencer TypeVar
+freshTypeHelper tKind = do
+  props <- getParent >>= freshTypeHelperWithParent tKind
   let tVar = propsId props
   typeProps %= Bimap.insert tVar props
   return tVar
-
-freshTypeHelper :: TypeKind -> Inferencer TypeVar
-freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
 
 freshTypeHelperWithHandle :: TypeKind -> Inferencer TypeVar
 freshTypeHelperWithHandle kind = freshTypeHelper kind >>= typePropsTVar
 
 typePropsTVar :: TypeVar -> Inferencer TypeVar
 typePropsTVar tVar = do
-  typeProps %= Bimap.insert tVar (initProperties NoTypeAnnot tVar)
+  typeProps %= Bimap.insert tVar (initProperties tVar)
   return tVar

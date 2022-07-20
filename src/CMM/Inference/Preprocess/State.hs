@@ -85,12 +85,7 @@ import safe CMM.Inference.Preprocess.State.Impl
   , currentContext
   , currentParent
   , facts
-  , freshASTGeneric
-  , freshASTStar
-  , freshASTProperties
   , freshGeneric
-  , freshNamedASTStar
-  , freshNamedASTProperties
   , freshStar
   , freshTypeHelper
   , funcElabVariables
@@ -241,9 +236,7 @@ openProc collector = do
   typeVariables .= reverse ((tVars' <> h) : t)
 
 declVars :: Map Text (SourcePos, TypeKind) -> Preprocessor (Map Text Properties)
-declVars =
-  Map.traverseWithKey
-    (\name (pos, kind) -> freshNamedASTProperties name pos kind)
+declVars = traverse $ freshTypeHelper . snd
 
 endProc :: Preprocessor (Facts, Elaboration)
 endProc = do

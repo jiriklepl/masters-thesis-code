@@ -124,7 +124,6 @@ executable Compiler
                        CMM.Inference.State.Impl,
                        CMM.Inference.Subst,
                        CMM.Inference.Type,
-                       CMM.Inference.TypeAnnot,
                        CMM.Inference.TypeCompl,
                        CMM.Inference.Properties,
                        CMM.Inference.TypeKind,

@@ -75,6 +75,7 @@ translType holed t = case t of
       VoidType -> Just AST.TVoid
 
 instance FillElabs n where
+  -- | fills elaborations in the given AST node (all types are replaced with AST representations of types stored in their elaborations)
   fillHoles n@(_ `Annot` (_ :: annot)) = go n
     where
       go :: Data d => d -> Inferencer d

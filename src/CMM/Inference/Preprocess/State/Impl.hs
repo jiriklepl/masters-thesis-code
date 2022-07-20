@@ -14,7 +14,7 @@ import safe CMM.Inference.Fact (Facts)
 import safe CMM.Inference.GetParent (GetParent(getParent))
 import safe CMM.Inference.HandleCounter
   ( HasHandleCounter(handleCounter)
-  , freshAnnotatedTypeHelperWithParent
+  , freshTypeHelperWithParent
   )
 import safe CMM.Inference.Preprocess.ClassData (ClassData)
 import safe CMM.Inference.Preprocess.Context (Context(GlobalCtx))
@@ -23,16 +23,12 @@ import safe CMM.Inference.Preprocess.Elaboration
   , safeElabHandle
   )
 import safe CMM.Inference.Refresh (Refresh(refresh))
-import safe CMM.Inference.TypeAnnot
-  ( TypeAnnot(NoTypeAnnot, TypeAST, TypeInst, TypeNamedAST)
-  )
 import safe CMM.Inference.Properties (Properties, propsId)
 import safe CMM.Inference.TypeKind
   ( HasTypeKind(getTypeKind)
   , TypeKind(GenericType, Star)
   )
 import safe CMM.Inference.TypeVar (TypeVar(NoType))
-import safe CMM.Parser.GetPos (GetPos(getPos))
 import safe CMM.Err.State (ErrorState, HasErrorState(errorState))
 import CMM.Options (Options(Options))
 
@@ -92,40 +88,12 @@ instance Refresh Preprocessor where
   refresh tVars =
     sequence $
     Map.fromSet
-      (\tVar ->
-         fmap propsId . freshAnnotatedTypeHelper (TypeInst tVar) $
-         getTypeKind tVar)
+      (fmap propsId . freshTypeHelper . getTypeKind)
       tVars
 
 -- | Gets the properties of the current context
 getCtxHandle :: Preprocessor (Maybe Properties)
 getCtxHandle = uses currentContext (safeElabHandle . getElaboration . head)
-
--- | Creates a fresh type variable of the kind `tKind` annotated with the given `name` and the source position of the given `node`
-freshNamedASTProperties ::
-     GetPos n => Text -> n -> TypeKind -> Preprocessor Properties
-freshNamedASTProperties name node =
-  freshAnnotatedTypeHelper . TypeNamedAST name $ getPos node
-
--- | Generates a new type properties with AST annotation and the given type kind
-freshASTProperties :: GetPos n => n -> TypeKind -> Preprocessor Properties
-freshASTProperties node = freshAnnotatedTypeHelper . TypeAST $ getPos node
-
--- | Generates a new type properties with no annotation
-freshTypeHelper :: TypeKind -> Preprocessor Properties
-freshTypeHelper = freshAnnotatedTypeHelper NoTypeAnnot
-
--- | Generates a new type properties type-kinded `Star` with AST annotation and name annotation
-freshNamedASTStar :: GetPos n => Text -> n -> Preprocessor Properties
-freshNamedASTStar name node = freshNamedASTProperties name node Star
-
--- | Generates a new type properties type-kinded `Star` with AST annotation
-freshASTStar :: GetPos n => n -> Preprocessor Properties
-freshASTStar = (`freshASTProperties` Star)
-
--- | Generates a new type properties type-kinded `GenericType` with AST annotation
-freshASTGeneric :: GetPos n => n -> Preprocessor Properties
-freshASTGeneric = (`freshASTProperties` GenericType)
 
 -- | Generates a new type properties type-kinded `Star` with no annotation
 freshStar :: Preprocessor Properties
@@ -135,7 +103,7 @@ freshStar = freshTypeHelper Star
 freshGeneric :: Preprocessor Properties
 freshGeneric = freshTypeHelper GenericType
 
--- | Generates a new type properties with the given annotation and the given type kind
-freshAnnotatedTypeHelper :: TypeAnnot -> TypeKind -> Preprocessor Properties
-freshAnnotatedTypeHelper annot tKind = do
-  getParent >>= freshAnnotatedTypeHelperWithParent annot tKind
+-- | Generates a new type properties with the given type kind
+freshTypeHelper :: TypeKind -> Preprocessor Properties
+freshTypeHelper tKind = do
+  getParent >>= freshTypeHelperWithParent tKind

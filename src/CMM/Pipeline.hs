@@ -39,7 +39,7 @@ import safe CMM.Data.Nullable ( Nullable(nullVal) )
 import safe Prettyprinter ( Pretty(pretty), (<+>) )
 import safe CMM.Inference.Preprocess ( Preprocess(preprocess) )
 import safe CMM.Inference.Fact ( Facts, Fact )
-import safe CMM.Inference ( mineAST, reduce )
+import safe CMM.Inference ( reduce )
 import safe CMM.Inference.State.Impl ( initInferencer )
 import safe CMM.Monomorphize ( Monomorphize(monomorphize) )
 import safe CMM.Parser.GetPos ( GetPos )
@@ -151,7 +151,7 @@ runInferMono options ast = do
   if preprocessSrc options
     then return (prepAST, Left pState, errState)
     else do
-      ((),iState, errState') <- inferencer options{handleStart=view handleCounter pState} prepAST facts'
+      ((),iState, errState') <- inferencer options{handleStart=view handleCounter pState} facts'
       (monoAST, (iState', _)) <- monomorphizer options iState prepAST
       (ast', iState'', errState'') <- postprocessor iState' monoAST
       return (ast', Right iState'', errState <> errState' <> errState'')
@@ -200,13 +200,12 @@ preprocessor settings ast = wrapStandardLayout $
       uses facts $ (ast',) . reverse . head
 
 -- | runs the inferencer
-inferencer :: HasElaboration a => Options -> Annot Unit a -> Facts
+inferencer :: Options -> Facts
   -> Either String ((), InferencerState, ErrorState)
-inferencer settings ast fs = wrapStandardLayout $
+inferencer settings fs = wrapStandardLayout $
   action `runState` initInferencer settings
   where
     action = do
-      mineAST ast
       fs' <- snd <$> reduce fs
       if null fs'
         then return ()
