@@ -20,6 +20,7 @@ import safe Prettyprinter ( Pretty(pretty), (<+>))
 import safe CMM.Err.IsError (IsError)
 import safe CMM.Err.Severity (Severity (InfoLevel, WarningLevel, ErrorLevel))
 
+-- | Represents an error, has some severity and then the content error object
 data Error where
   Error
     :: forall err . IsError err =>

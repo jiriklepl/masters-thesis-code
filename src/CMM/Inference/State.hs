@@ -94,14 +94,14 @@ getTyping tVar = view typing <$> getProps tVar
 -- | returns the leaf type variables from the reconstructed definition of the type represented by the given type variable
 collectPrimeTVars :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVars tVar =
-  uses State.typings (Bimap.lookup tVar) >>= \case
+  uses State.primPatterns (Bimap.lookup tVar) >>= \case
     Just primType -> fold <$> traverse collectPrimeTVars primType
     Nothing -> return $ Set.singleton tVar
 
 -- | returns the type variables representing EACH subterm in the reconstructed definition of the type represented by the given type variable
 collectPrimeTVarsAll :: TypeVar -> Inferencer (Set TypeVar)
 collectPrimeTVarsAll tVar =
-  uses State.typings (Bimap.lookup tVar) >>= \case
+  uses State.primPatterns (Bimap.lookup tVar) >>= \case
     Just primType ->
       Set.insert tVar . fold <$> traverse collectPrimeTVarsAll primType
     Nothing -> return $ Set.singleton tVar
@@ -258,7 +258,7 @@ fromOldName tVar = uses State.renaming (`apply` tVar)
 -- | reconstructs a type from the given type variable
 reconstruct :: TypeVar -> Inferencer Type
 reconstruct tVar =
-  uses State.typings (Bimap.lookup tVar) >>= \case
+  uses State.primPatterns (Bimap.lookup tVar) >>= \case
     Just primType -> ComplType <$> traverse reconstruct primType
     Nothing -> return $ VarType tVar
 

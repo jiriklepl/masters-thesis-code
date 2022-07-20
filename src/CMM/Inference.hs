@@ -146,10 +146,10 @@ simplify =
         Nothing -> State.typePropsTVar tVar
     ComplType complType ->
       traverse simplify complType >>= \primType ->
-        uses State.typings (primType `Bimap.lookupR`) >>= \case
+        uses State.primPatterns (primType `Bimap.lookupR`) >>= \case
           Nothing -> do
             tVar <- State.freshTypeHelperWithHandle $ getTypeKind primType
-            State.typings %= Bimap.insert tVar primType
+            State.primPatterns %= Bimap.insert tVar primType
             t <- createTyping primType
             State.typeProps %= Bimap.adjust (typing .~ ComplType t) tVar
             return tVar
@@ -259,7 +259,7 @@ fixSubs = do
 unsafeTypizeUpdate ::
      ((TypeVar, PrimType) -> (TypeVar, PrimType)) -> Inferencer ()
 unsafeTypizeUpdate change =
-  State.typings %= Bimap.fromList . (change <$>) . Bimap.toList
+  State.primPatterns %= Bimap.fromList . (change <$>) . Bimap.toList
 
 unsafeHandlizeUpdate ::
      ((TypeVar, Properties) -> (TypeVar, Properties)) -> Inferencer ()
@@ -345,8 +345,8 @@ onCandidates [] _ _ = Nothing
 
 fixTypings :: Inferencer Bool
 fixTypings = do
-  types' <- uses State.renaming (fmap . apply) <*> uses State.typings Bimap.toList
-  let typings' = Bimap.fromList types'
+  types' <- uses State.renaming (fmap . apply) <*> uses State.primPatterns Bimap.toList
+  let primPatterns' = Bimap.fromList types'
       collapsedKeys = mapCollect types'
       collapsedValues = mapCollect $ swap <$> types'
       goValues [] subst = return subst
@@ -367,7 +367,7 @@ fixTypings = do
           Right (subst', _) ->
             goKeys ((tVar' : tVars) : others) $ subst' `apply` subst
       goKeys (_:others) subst = goKeys others subst
-  State.typings .= typings'
+  State.primPatterns .= primPatterns'
   if all isSingleton collapsedKeys && all isSingleton collapsedValues
     then return False
     else do
@@ -814,7 +814,7 @@ closeScheme facts tVars = do
   relevantTypes <- traverse State.reconstruct relevantVars
   constings <- traverse State.getConsting relevantVars
   kindings <- traverse State.getKinding relevantVars
-  typings <- liftA2 (zip3 relevantVars) (traverse State.reconstruct relevantVars) (traverse State.getTyping relevantVars)
+  primPatterns <- liftA2 (zip3 relevantVars) (traverse State.reconstruct relevantVars) (traverse State.getTyping relevantVars)
   let toTrivialDeps = fmap $ second Set.singleton . dupe
   subConsts <-
     uses State.subConsting $ filter (presentIn tVarsList) .
@@ -871,7 +871,7 @@ closeScheme facts tVars = do
        return (view _2 <$> filtered, (Fact . view _2 <$> rest) <> others)
   let typingFacts =
         [ typingEquality t t'
-        | (t, t'', t') <- typings
+        | (t, t'', t') <- primPatterns
         , let useFilter =
                 (`Set.member` freeTypeVars t'') `fOr` parentedBy parent `fOr`
                    (`Set.member` tVars) `fOr` (`Set.member` freeTypeVars facts')
@@ -933,7 +933,7 @@ closeSCCs facts (scc:others) =
           parent = head parents
           rePar :: Data d => d -> d
           rePar = reParent parent (Set.fromList parents)
-      State.typings %= Bimap.fromList . rePar . Bimap.toList
+      State.primPatterns %= Bimap.fromList . rePar . Bimap.toList
       State.typeProps %= Bimap.fromList . rePar . Bimap.toList
       State.subConsting %= rePar
       State.constingBounds %= rePar

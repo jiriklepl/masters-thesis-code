@@ -97,6 +97,7 @@ addName :: GetName n => n -> Text -> Text
 addName name = mappend ("_M" <> getName name <> "_$")
 
 instance Mangle n where
+  -- | mangles the name in the given AST node and its subterms, changing procedure names according to their types
   mangle n@(_ `Annot` (_ :: annot)) = go n
     where
       go :: Data d => d -> Inferencer d

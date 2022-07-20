@@ -28,38 +28,37 @@
 - [x] Flattener
   - [x] fallthrough should be made explicit
 
-- [ ] add haddock comments
-  - [ ] CMM
-    - [ ] AST
-      - [ ] Annot
+- [x] add haddock comments
+  - [x] CMM
+    - [x] AST
+      - [x] Annot
       - [x] BlockAnnot
         - [x] State
       - [x] Blockifier
       - [x] Flattener
       - [x] GetName
-      - [~] Maps
+      - [x] Maps
       - [x] Utils
       - [x] Variables
     - [x] Control
       - [x] Applicative
-    - [~] FlowAnalysis
-    - [ ] Inference
+    - [x] FlowAnalysis
+    - [x] Inference
       - [x] BuiltIn
-      - [ ] Preprocess
+      - [x] Preprocess
         - [x] State
-      - [ ] State
-      - [ ] Type
-    - [ ] Lens
-    - [ ] Lexer
-    - [ ] Parser
-      - [ ] GetPos
-    - [ ] Pretty
-    - [ ] Translator
-      - [ ] State
-    - [ ] Utils
+      - [x] State
+      - [x] Type
+    - [x] Lexer
+    - [x] Parser
+      - [x] GetPos
+    - [x] Pretty
+    - [x] Translator
+      - [x] State
+    - [x] Utils
 
-  - [ ] ParserTest
-  - [ ] QuasiQuotes
+  - [x] ParserTest
+  - [x] QuasiQuotes
 
 - [x] Inference preprocessing
   - [x] check whether all `subType`s and `instType`s follow the correct order

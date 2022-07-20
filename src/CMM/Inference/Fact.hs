@@ -76,7 +76,7 @@ data FlatFact a
   = SubType a a
   -- ^ Specifies that the left-hand operand is a super-type of the right-hand operand
   | Equality a a
-  -- ^ TODO binds the type to a type
+  -- ^ Specifies that the given operands represent the same type
   | TypingEquality a a
   -- ^ states that the type follows a certain typing
   | FactComment Text
@@ -88,20 +88,21 @@ data FlatFact a
   | OnRegister Text a
   -- ^ states that the type variable stores its data to a certain register
   | SubKind a a
-  -- ^ TODO superKind; subKind
+  -- ^ Specifies that the left-hand operand has a more generic kind than that of the right-hand operand
   | KindEquality a a
   | SubConst a a
-  -- ^ TODO superConst; subConst
+  -- ^ Specifies that the left-hand operand has a more generic constness than that of the right-hand operand
   | ConstEquality a a
   | Lock a
   | InstType a a
-  -- ^ TODO polytype; monotype
+  -- ^ Specifies that the left-hand operand is instanced into the right-hand operand
   | ClassConstraint Text a
-  -- ^ TODO
+  -- ^ A class constraint with typeclass of the given name on the given type representing an unsolved instance
   | ClassFact Text a
-  -- ^ TODO
+  -- ^ A class fact with typeclass of the given name on the given type representing a concrete instance (witness)
   | ClassFunDeps Text [[Trilean]]
-  -- ^ TODO: False = from, True = to, Unknown = invariant
+  -- ^ A name giving a typeclass and a list of lists of trileans representing the function dependency sets for the given class
+  -- ^ encoding: False = from, True = to, Unknown = invariant
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable, Data)
 
 instance (Pretty a, Pretty DataKind) => Pretty (FlatFact a) where

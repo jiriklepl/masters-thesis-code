@@ -145,6 +145,7 @@
 			"Trilean",
 			"Trivials",
 			"tupled",
+			"typeclass",
 			"typize",
 			"udiv",
 			"uncurry",

@@ -108,6 +108,7 @@ reThrowM f a = do
   f' `reThrow` a
 
 class Monomorphize n a where
+  -- | runs the monomorphization on the given node (expecting a `Unit` and its subterms)
   monomorphize ::
        (GetPos a, HasElaboration a)
     => Subst Type.Type

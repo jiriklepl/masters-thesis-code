@@ -66,7 +66,8 @@ import safe LLVM.IRBuilder.Internal.SnocList ( SnocList(SnocList) )
 import safe LLVM.Pretty ( ppllvm )
 import safe Control.Monad ( when )
 import safe CMM.Translator.State ( TranslState, initTranslState )
-import CMM.Pretty (prettyShow)
+import safe CMM.Pretty (prettyShow)
+import safe CMM.AST.BlockAnnot (BlockAnnot)
 
 newtype PipelineError
   = InferenceIncomplete Facts
@@ -113,6 +114,10 @@ runAll fileName options contents = do
   ast <- parser fileName tokens
   runParsed options ast
 
+runParsed ::
+  Options
+  -> Annot Unit SourcePos
+  -> Either String (String, ErrorState)
 runParsed options ast
   | prettify options = return (prettyShow ast, nullVal)
   | monoSrc options = do
@@ -124,18 +129,32 @@ runParsed options ast
   | otherwise = runFlattened options ast'
     where ast' = flattener ast
 
+runFlattened ::
+  Options
+  -> Annot Unit SourcePos
+  -> Either String (String, ErrorState)
 runFlattened options ast = do
   (ast', bState, errState) <- blockifier ast
   if blockifySrc options
     then return (show ast', errState)
     else second (errState <>) <$> runBlockified options bState ast'
 
+runBlockified ::
+  Options
+  -> BlockifierState
+  -> Annot Unit (SourcePos, BlockAnnot)
+  -> Either String (String, ErrorState)
 runBlockified options bState ast = do
   (ast', ~(Right iState), errState) <- runInferMono options ast
   if preprocessSrc options
     then return (show ast', errState)
     else second (errState <>) <$> runMonomorphized options bState iState ast'
 
+runMonomorphized :: Options
+  -> BlockifierState
+  -> InferencerState
+  -> Annot Unit ((SourcePos, BlockAnnot), Elaboration)
+  -> Either String (String, ErrorState)
 runMonomorphized options bState iState ast =
   if noTransl options
     then return (prettyShow ast, nullVal) -- prettyprint flattened and monomorphized source

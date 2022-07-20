@@ -35,6 +35,7 @@ import safe Options.Applicative
       ParserInfo )
 
 
+-- | Program options
 data Options = Options
   { monoSrc      :: Bool
   , prettify      :: Bool

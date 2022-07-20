@@ -19,14 +19,14 @@ import safe CMM.AST.Blockifier.State (BlockifierState, allFlow, allData, allBloc
 
 data TranslState =
   TranslState
-    { _controlFlow :: [(Int, Int)] -- We need the control flow to create the phi nodes
-    , _blockData :: BlockData -- We need the block data to create the phi nodes
-    , _blocksTable :: Map Int Text -- All GOTOs etc call blocks by their names
-    , _errorState :: ErrorState
-    , _offSets :: Map Int Int
-    , _inferState :: InferencerState
-    , _records :: Map Text L.Operand
-    , _structs :: Map Text ([(Text, Int)], [L.Type])
+    { _controlFlow :: [(Int, Int)] -- ^ We need the control flow to create the phi nodes
+    , _blockData :: BlockData -- ^ We need the block data to create the phi nodes
+    , _blocksTable :: Map Int Text -- ^ All GOTOs etc call blocks by their names
+    , _errorState :: ErrorState -- ^ The errors generated during translation
+    , _offSets :: Map Int Int -- ^ For each entry point of a procedure, the count of the procedure's basic blocks
+    , _inferState :: InferencerState -- ^ Inferencer state
+    , _records :: Map Text L.Operand -- ^ Mapping from names to stack-allocated objects represented by operands
+    , _structs :: Map Text ([(Text, Int)], [L.Type]) -- ^ For each struct, contains pairs ([(fieldAlias,fieldIndex)], [field])
     }
 
 makeFieldsNoPrefix ''TranslState

@@ -101,6 +101,7 @@ class TranslAssumps a m =>
   | m n -> b
   , b -> m
   where
+  -- | translates the given AST node to llvm (emitted monadically)
   translate :: Annot n a -> b
 
 instance TranslAssumps a m =>
@@ -294,7 +295,7 @@ instance TranslAssumps a m =>
     AST.SwitchStmt {} -> notYetImplemented
     AST.SpanStmt {} -> notYetImplemented
     AST.AssignStmt lvalues exprs -> do
-      assigns <- catMaybes <$> zipWithM translPair lvalues exprs -- TODO: error (check if modifiable)
+      assigns <- catMaybes <$> zipWithM translPair lvalues exprs
       let vars' = Map.fromList assigns <> vars
       return vars'
       where
