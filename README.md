@@ -7,7 +7,7 @@ It is a proof-of-concept implementation for a modified version of the C-- langua
 ## Dependencies
 
 - cabal (version 3.2+; preferably version 3.6.2 acquired through ghcup)
-- ghc (version 8.8.4 - 8.10.7; preferably version 8.10.7 acquired through ghcup)
+- ghc (version 8.8.4 - 9.0.2; preferably version 8.10.7 acquired through ghcup)
 - llc (version 12+; preferably version 12)
 
 ## Building
@@ -38,7 +38,7 @@ For running the examples (tests):
 #   represent incorrect inputs
 ```
 
-For more information, try:
+For more information:
 
 ```sh
 cabal run Compiler -- -h
@@ -58,13 +58,17 @@ The source code is documented with Haddock. You can build the HTML documentation
 cabal haddock Compiler
 ```
 
-This command is quite verbose, but its output ends with the location of the index file of the documentation (it should be somewhere in the `dist-newstyle` folder).
+This command is quite verbose but its output ends with the location of the index file of the generated documentation (it should be somewhere in the `dist-newstyle` folder).
 
 When reading the source files of the program, we suggest using Haskell Language Server (HLS), which parses the documentation comments and makes the documentation more easily accessible.
 
+### Development requirements
+
+The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings. The script `.\run_examples.sh` should compile all example files and succesfully interpret them by `llc`.
+
 ### Project outline
 
-The project contains many modules documented with Haddock of varying significance, here we list the main ones:
+The project contains many modules of varying significance documented with Haddock, here we list the main ones:
 
 - `CMM.Pipeline`: contains the high-level logic of the compiler and wrappers for the main phases of the compiler pipeline
 - `CMM.Lexer`: contains the definition of the tokenization phase
