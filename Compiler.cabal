@@ -177,7 +177,6 @@ Test-Suite parser-testsuite
                        CMM.Inference.Arity,
                        CMM.Inference.Preprocess.Elaboration,
                        CMM.Inference.Type,
-                       CMM.Inference.TypeAnnot,
                        CMM.Inference.TypeCompl,
                        CMM.Inference.Properties,
                        CMM.Inference.TypeKind,
