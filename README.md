@@ -30,25 +30,29 @@ For general use:
 cabal run Compiler -- [options...] input_file
 ```
 
-For running the examples (tests):
-
-```sh
-./run_examples.sh
-# the examples that contain "-bad-" in their name
-#   represent incorrect inputs
-```
-
-For more information:
-
-```sh
-cabal run Compiler -- -h
-```
-
 For `/dev/stdout` output, use:
 
 ```sh
 cabal run Compiler -- -o - input_file
 ```
+
+### User documentation
+
+The usage of the compiler is explained by the standardized `--help`:
+
+```sh
+cabal run Compiler -- -h
+```
+
+### Testing examples
+
+For running the testing examples in the folder `examples/`:
+
+```sh
+./run_examples.sh
+```
+
+Some of the examples test the compiler for invalid input, which will cause several error messages to be printed out during the process.
 
 ## Development documentation
 
@@ -58,13 +62,13 @@ The source code is documented with Haddock. You can build the HTML documentation
 cabal haddock Compiler
 ```
 
-This command is quite verbose but its output ends with the location of the index file of the generated documentation (it should be somewhere in the `dist-newstyle` folder).
+This command is quite verbose but its output ends with the location of the index file of the generated documentation (it should be somewhere in the `dist-newstyle` folder, most likely in `dist-newstyle/build/<arch>/<ghc-version>/Compiler-0.1.0.0/x/Compiler/doc/html/Compiler/Compiler/index.html`).
 
 When reading the source files of the program, we suggest using Haskell Language Server (HLS), which parses the documentation comments and makes the documentation more easily accessible.
 
-### Development requirements
+## Code style and testing
 
-The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings. The script `.\run_examples.sh` should compile all example files and succesfully interpret them by `llc`.
+The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings. The script `.\run_examples.sh` should compile all example files and successfully interpret them by `llc`.
 
 ### Project outline
 

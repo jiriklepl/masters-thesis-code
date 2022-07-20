@@ -59,11 +59,19 @@ options =
      short 'm' <>
      help "Monomorphize the source without any flattening or blockifying") <*>
   switch (long "pretty" <> short 'p' <> help "Run as a prettyprinter") <*>
-  switch (long "no_translation" <> short 'n' <> help "Do not translate to llvm") <*>
-  switch (long "flatten" <> short 'f' <> help "Print the flattened AST") <*>
-  switch (long "blockify" <> short 'b' <> help "Print the IR after blockifying") <*>
   switch
-    (long "preprocess" <> short 'P' <> help "Print the IR after preprocessing") <*>
+    (long "no_translation" <>
+     short 'n' <>
+     help
+       "Do not translate to llvm, print the chmmm representation of the monomorphized code") <*>
+  switch
+    (long "flatten" <> short 'f' <> help "Print the flattened AST and stop") <*>
+  switch
+    (long "blockify" <>
+     short 'b' <> help "Print the IR after blockifying and stop") <*>
+  switch
+    (long "preprocess" <>
+     short 'P' <> help "Print the IR after preprocessing and stop") <*>
   strOption
     (long "output" <>
      short 'o' <>
