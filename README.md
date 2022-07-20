@@ -58,7 +58,7 @@ The source code is documented with Haddock. You can build the HTML documentation
 cabal haddock Compiler
 ```
 
-This command is quite verbose, but its output ends with the location of the index file of the documentation (it should be somewhere in the `dist-newstyle` folder).
+This command is quite verbose but its output ends with the location of the index file of the generated documentation (it should be somewhere in the `dist-newstyle` folder).
 
 When reading the source files of the program, we suggest using Haskell Language Server (HLS), which parses the documentation comments and makes the documentation more easily accessible.
 
