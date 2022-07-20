@@ -12,6 +12,15 @@ It is a proof-of-concept implementation for a modified version of the C-- langua
 
 ## Building
 
+To get the repository:
+
+```sh
+git clone https://github.com/jiriklepl/masters-thesis-code.git
+cd masters-thesis-code
+```
+
+To build the project:
+
 ```sh
 git submodule init
 git submodule update
