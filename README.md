@@ -66,10 +66,6 @@ This command is quite verbose but its output ends with the location of the index
 
 When reading the source files of the program, we suggest using Haskell Language Server (HLS), which parses the documentation comments and makes the documentation more easily accessible.
 
-## Code style and testing
-
-The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings. The script `.\run_examples.sh` should compile all example files and successfully interpret them by `llc`.
-
 ### Project outline
 
 The project contains many modules of varying significance documented with Haddock, here we list the main ones:
@@ -87,3 +83,7 @@ The project contains many modules of varying significance documented with Haddoc
 - `CMM.Monomorphize`: contains the definition of the function `monomorphize`, which monomorphizes the given program represented by elaborated AST. It uses the `InferencerState` to interpret each type
 - `CMM.FillElabs`, `CMM.Mangle`: these two modules define the postprocessing of monomorphized code - filling-in concrete types in place of type variables according and name-mangling of monomorphic copies of polymorphic top-level definitions
 - `CMM.Translator`: contains the definition of the function `translate`, which performs the translation phase on an elaborated and blockified AST - emission of the LLVM assembly. It uses `BlockifierState` and `InferencerState` to interpret the control flow and types, respectively
+
+## Code style and testing
+
+The source files are formatted by `hindent` and checked by `hlint` (should not produce any hints). The source should compile without warnings. The script `.\run_examples.sh` should compile all example files and successfully interpret them by `llc`.
