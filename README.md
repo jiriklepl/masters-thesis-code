@@ -10,6 +10,11 @@ It is a proof-of-concept implementation for a modified version of the C-- langua
 - ghc (version 8.8.4 - 9.0.2; preferably version 8.10.7 acquired through ghcup)
 - llc (version 12+; preferably version 12)
 
+Two modified cabal packages included as git submodules in the `vendor` directory:
+
+- llvm-hs-pure from [https://github.com/jiriklepl/llvm-hs](https://github.com/jiriklepl/llvm-hs), modified version of [https://github.com/llvm-hs/llvm-hs](https://github.com/llvm-hs/llvm-hs)
+- llvm-hs-pretty from [https://github.com/jiriklepl/llvm-hs-pretty](https://github.com/jiriklepl/llvm-hs-pretty), modified version of [https://github.com/llvm-hs/llvm-hs-pretty](https://github.com/llvm-hs/llvm-hs-pretty)
+
 ## Building
 
 To get the repository:
@@ -92,6 +97,8 @@ The project contains many modules of varying significance documented with Haddoc
 - `CMM.Monomorphize`: contains the definition of the function `monomorphize`, which monomorphizes the given program represented by elaborated AST. It uses the `InferencerState` to interpret each type
 - `CMM.FillElabs`, `CMM.Mangle`: these two modules define the postprocessing of monomorphized code - filling-in concrete types in place of type variables according and name-mangling of monomorphic copies of polymorphic top-level definitions
 - `CMM.Translator`: contains the definition of the function `translate`, which performs the translation phase on an elaborated and blockified AST - emission of the LLVM assembly. It uses `BlockifierState` and `InferencerState` to interpret the control flow and types, respectively
+
+Modules `LLVM.*` in directory `vendor/*` are from modified versions of packages llvm-hs-pure and llvm-hs-pretty
 
 ## Code style and testing
 
