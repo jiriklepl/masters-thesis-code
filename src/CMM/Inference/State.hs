@@ -150,7 +150,7 @@ pushConstBounds props bounds =
 
 -- | "locks" the given type variable (just marking it as "locked" - can be done only once for each type variable)
 lock :: (ToType a, HasCallStack) => a -> TypeVar -> Inferencer ()
-lock parent tVar = State.lockedVars %= Map.insertWith msg tVar tParent -- TODO msg
+lock parent tVar = State.lockedVars %= Map.insertWith msg tVar tParent
   where
     tParent = toType parent
     msg new old =
@@ -239,7 +239,7 @@ addClassScheme name scheme =
     tVars :. _ :=> t -> do
       lockVars t tVars
       scheme' <- sanitizeClosed scheme t
-      State.classSchemes %= Map.insertWith msg name scheme' -- TODO msg
+      State.classSchemes %= Map.insertWith msg name scheme'
   where
     msg new old =
       error $
